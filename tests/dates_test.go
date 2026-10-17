@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // dates: time (lifelog_meta.instants and .days, D10) — instants, local days and their round-trip CHECKs, why `IS`
@@ -90,9 +90,9 @@ func exactTimeBoundaries(s *S) {
 	c.must("BEGIN IMMEDIATE")
 	for _, v := range vectors {
 		typ, value, want := v[1], v[2], v[3] == "yes"
-		accepted := core.IsDay(value)
+		accepted := text.IsDay(value)
 		if typ == "instant" {
-			accepted = core.IsInstant(value)
+			accepted = text.IsInstant(value)
 		}
 		s.K(fmt.Sprintf("writer exact %s %q agrees with vector", typ, value), accepted == want)
 		queries := map[string]string{}

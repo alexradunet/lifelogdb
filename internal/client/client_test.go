@@ -13,8 +13,9 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func wait(t *testing.T, ch <-chan struct{}) {
@@ -82,9 +83,9 @@ func TestClientCancellation(t *testing.T) {
 					case "GET":
 						_, err = c.Get(ctx, "/")
 					case "POST":
-						_, err = c.Do(ctx, api.Action{Method: "POST", Href: "/"}, nil)
+						_, err = c.Do(ctx, siren.Action{Method: "POST", Href: "/"}, nil)
 					default:
-						_, err = c.DoFiles(ctx, api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+						_, err = c.DoFiles(ctx, siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
 					}
 					result <- err
 				}()
@@ -129,15 +130,7 @@ func TestClientCancellationQueuedWrite(t *testing.T) {
 }
 
 func testQueuedWrite(t *testing.T, remote bool) {
-	path := filepath.Join(t.TempDir(), "synthetic.db")
-	if err := db.Init(t.Context(), path); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer d.Close()
+	d := dbtest.New(t)
 	held, release, finished := make(chan struct{}), make(chan struct{}), make(chan error, 1)
 	go func() {
 		finished <- d.Write(context.Background(), func(*sql.Tx) error { close(held); <-release; return nil })
@@ -172,7 +165,7 @@ func testQueuedWrite(t *testing.T, remote bool) {
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		_, err := c.Do(ctx, api.Action{Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{{Name: "day", In: "path"}, {Name: "text"}}}, map[string]string{"day": "2026-10-05", "text": "synthetic queued"})
+		_, err := c.Do(ctx, siren.Action{Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{{Name: "day", In: "path"}, {Name: "text"}}}, map[string]string{"day": "2026-10-05", "text": "synthetic queued"})
 		result <- err
 	}()
 	wait(t, entered)
@@ -208,7 +201,7 @@ func TestClientCancellationEarlyRefusal(t *testing.T) {
 	c := InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403); w.Write([]byte(`{}`)) }), "cli")
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.DoFiles(context.Background(), api.Action{Method: "POST", Href: "/", Fields: []api.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+		_, err := c.DoFiles(context.Background(), siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
 		done <- err
 	}()
 	select {

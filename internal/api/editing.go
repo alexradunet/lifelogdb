@@ -2,47 +2,13 @@ package api
 
 import (
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 
-	"lifelog/internal/core"
+	"lifelog/internal/api/siren"
 )
 
-// Editing (docs/plans/091-the-browser-for-daily-use.md): the names after [[ as a resource, a body rendered as the
-// browser shows it saved, and an editor as tall as its body.
-
-// maxTitles is the most names one read of /titles answers.
-const maxTitles = 20
-
-// titles is GET /titles?prefix=&limit=: the names of live pages that start with the prefix, in key order.
-func (h *server) titles(r *http.Request) (*Entity, error) {
-	q := r.URL.Query()
-	prefix := q.Get("prefix")
-	if err := required(url.Values{"prefix": {strings.TrimSpace(prefix)}}, "prefix"); err != nil {
-		return nil, err
-	}
-	limit := 10
-	if s := q.Get("limit"); s != "" {
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 1 || n > maxTitles {
-			return nil, core.Invalid("limit must be 1 to %d", maxTitles)
-		}
-		limit = n
-	}
-	ms, err := h.s.TitlesByPrefix(r.Context(), prefix, limit)
-	if err != nil {
-		return nil, err
-	}
-	self := "/titles?" + url.Values{"prefix": {prefix}, "limit": {strconv.Itoa(limit)}}.Encode()
-	e := &Entity{Class: []string{"titles"}, Title: "Titles that start with " + prefix,
-		Properties: map[string]any{"prefix": prefix, "limit": limit, "titles": ms},
-		Links:      []Link{link("self", self, "Titles"), link("index", "/", "Home")}}
-	for _, m := range ms {
-		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(m.PageID), Title: m.Title, Class: []string{m.Type}})
-	}
-	return e, nil
-}
+// Editing (docs/plans/091-the-browser-for-daily-use.md): a body rendered as the browser shows it saved, and an
+// editor as tall as its body.
 
 // render is POST /render: a page that shows the field body (or text, a capture's) as its page will show it saved,
 // the Preview of a form that writes a body, opened in a new tab so the form keeps its words. It writes nothing. It
@@ -51,8 +17,7 @@ func (h *server) titles(r *http.Request) (*Entity, error) {
 func (h *server) render(w http.ResponseWriter, r *http.Request) {
 	v, err := form(r)
 	if err != nil {
-		e, status := errorEntity(err)
-		writeEntity(w, r, status, e)
+		writeError(w, r, err)
 		return
 	}
 	body := v.Get("body")
@@ -60,13 +25,13 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 		body = v.Get("text")
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	renderHTML(w, r, http.StatusOK, &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": body}}, nil)
+	answer(w, r, http.StatusOK, &siren.Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": body}}, frame{pageOnly: true})
 }
 
 // saveBody is the save-body of a page, its body and version filled. Its textarea is as tall as the body, 12 to 40
 // lines, so a long page is edited without a scroll inside a small box.
-func saveBodyAction(id int64, body, version string) Action {
+func saveBodyAction(id int64, body, version string) siren.Action {
 	a := action("save-body", idParam(id), map[string]any{"body": body, "version": version})
-	a.field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
+	a.Field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
 	return a
 }

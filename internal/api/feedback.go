@@ -22,14 +22,7 @@ type feedbackReceipt struct {
 type feedbackStore struct {
 	mu      sync.Mutex
 	entries map[string]feedbackReceipt
-	now     func() time.Time
-}
-
-func (s *feedbackStore) clock() time.Time {
-	if s.now != nil {
-		return s.now()
-	}
-	return time.Now()
+	now     func() time.Time // the clock of the receipts: the server gives the store's (core.Store.Now)
 }
 
 func (s *feedbackStore) put(destination string, result any) string {
@@ -57,15 +50,11 @@ func (s *feedbackStore) put(destination string, result any) string {
 	token := hex.EncodeToString(random[:])
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.clock()
+	now := s.now()
 	if s.entries == nil {
 		s.entries = make(map[string]feedbackReceipt)
 	}
-	for key, r := range s.entries {
-		if !now.Before(r.expires) {
-			delete(s.entries, key)
-		}
-	}
+	s.prune(now)
 	if len(s.entries) >= feedbackEntries {
 		var oldest string
 		var expiry time.Time
@@ -86,18 +75,22 @@ func (s *feedbackStore) put(destination string, result any) string {
 func (s *feedbackStore) take(path, token string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.clock()
-	for key, r := range s.entries {
-		if !now.Before(r.expires) {
-			delete(s.entries, key)
-		}
-	}
+	s.prune(s.now())
 	r, ok := s.entries[token]
 	if !ok || r.path != path {
 		return ""
 	}
 	delete(s.entries, token)
 	return r.text
+}
+
+// prune deletes the receipts that expired at now. The caller holds mu.
+func (s *feedbackStore) prune(now time.Time) {
+	for key, r := range s.entries {
+		if !now.Before(r.expires) {
+			delete(s.entries, key)
+		}
+	}
 }
 
 // move gives the receipt for path to destination, the page a browser is sent to instead (the page of a metric opens
@@ -110,7 +103,7 @@ func (s *feedbackStore) move(token, path, destination string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, ok := s.entries[token]
-	if !ok || r.path != path || !s.clock().Before(r.expires) {
+	if !ok || r.path != path || !s.now().Before(r.expires) {
 		return false
 	}
 	r.path = u.Path

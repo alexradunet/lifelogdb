@@ -1,7 +1,8 @@
 package api_test
 
 import (
-	"errors"
+	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -10,39 +11,34 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // The owner's snapshot action, from the client and from a browser form; refused to an agent.
 func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	dir := t.TempDir()
-	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
+	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
 	agent := client.InProcess(h, "agent:lmstudio")
-	root := must(owner.Get(t.Context(), "/"))
+	root := apitest.Must(t)(owner.Get(t.Context(), "/"))
 	if _, _, err := (&core.Store{DB: d}).Capture(t.Context(), "cli", "2031-08-01", "a row to copy", nil); err != nil {
 		t.Fatal(err)
 	}
-	action := find(root, "snapshot")
-	if action.Name == "" || !action.Owner {
+	action := apitest.Action(t, root, "snapshot")
+	if !action.Owner {
 		t.Fatalf("the root offers the owner the snapshot action: %+v", action)
 	}
 
-	first := must(owner.Do(t.Context(), action, nil))
+	first := apitest.Must(t)(owner.Do(t.Context(), action, nil))
 	props := first.Properties.(map[string]any)
 	path, _ := props["snapshot"].(string)
-	today := time.Now().Format("2006-01-02")
+	today := "2026-10-02" // the day of the store's clock
 	if filepath.Dir(path) != dir || filepath.Base(path) != "life-"+today+".db" {
 		t.Fatalf("snapshot path %q: want life-%s.db in %s", path, today, dir)
 	}
@@ -52,18 +48,18 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	if check, _ := props["restore_check"].(map[string]any); check["ok"] != true {
 		t.Fatalf("restore check: %v", props["restore_check"])
 	}
-	if first.Result == nil || hrefOf(first, "self") != "/" {
-		t.Fatalf("the answer carries the result and points home: result=%v self=%q", first.Result, hrefOf(first, "self"))
+	if first.Result == nil || apitest.Href(first, "self") != "/" {
+		t.Fatalf("the answer carries the result and points home: result=%v self=%q", first.Result, apitest.Href(first, "self"))
 	}
-	second := must(owner.Do(t.Context(), action, nil))
+	second := apitest.Must(t)(owner.Do(t.Context(), action, nil))
 	again, _ := second.Properties.(map[string]any)["snapshot"].(string)
-	if again == path || !strings.HasPrefix(filepath.Base(again), "life-"+today+"T") {
-		t.Fatalf("a second snapshot the same day: %q", again)
+	if filepath.Base(again) != "life-"+today+"T143005.db" {
+		t.Fatalf("a second snapshot the same day: %q, want life-%sT143005.db", again, today)
 	}
 
 	// An agent is refused and writes nothing.
 	before, _ := os.ReadDir(dir)
-	if _, err := agent.Do(t.Context(), action, nil); !clientStatus(err, 403) {
+	if _, err := agent.Do(t.Context(), action, nil); apitest.Status(err) != 403 {
 		t.Fatalf("agent: %v", err)
 	}
 	after, _ := os.ReadDir(dir)
@@ -72,7 +68,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	}
 
 	// A browser form is answered home with the path as feedback. The second file is removed first: a third
-	// snapshot within the same second would find its time-named file in use, a refusal of its own.
+	// snapshot at the same instant of the clock would find its time-named file in use, a refusal of its own.
 	if err := os.Remove(again); err != nil {
 		t.Fatal(err)
 	}
@@ -100,36 +96,78 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 // kept (the check does not delete), and the answer names it with the code restore_check_failed
 // (docs/plans/098-the-codebase-made-cohesive.md).
 func TestASnapshotThatFailsItsRestoreCheckIsAnError(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	dir := t.TempDir()
-	h := api.New(&core.Store{DB: d, SnapshotDir: dir})
+	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC})
 	owner := client.InProcess(h, "cli")
-	root := must(owner.Get(t.Context(), "/"))
-	must(owner.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "Walk"}))
+	root := apitest.Must(t)(owner.Get(t.Context(), "/"))
+	apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "Walk"}))
 	// Deliberate damage, past the writer and the DDL: a correction of a reading of another metric, written with its
 	// trigger dropped. The semantic integrity check reports it, in the live file and in every copy of it.
-	must(owner.Do(t.Context(), find(root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-01", "value": "1"}))
+	apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Walk", "day": "2026-10-01", "value": "1"}))
 	withoutTrigger(t, d.W, "measurements_supersede_metric", `INSERT INTO measurements(metric_id, day, value, supersedes_id, source, created_at)
 		SELECT 1, '2026-10-01', 3, (SELECT id FROM measurements LIMIT 1), 'cli', strftime('%Y-%m-%dT%H:%M:%fZ','now')`)
-	e, err := owner.Do(t.Context(), find(root, "snapshot"), nil)
-	var ce *client.Error
-	if !errors.As(err, &ce) || ce.Status != 500 {
+	e, err := owner.Do(t.Context(), apitest.Action(t, root, "snapshot"), nil)
+	if apitest.Status(err) != 500 {
 		t.Fatalf("a failed restore check answers 500, got %v", err)
 	}
 	props, _ := e.Properties.(map[string]any)
 	if props["code"] != "restore_check_failed" {
 		t.Errorf("code = %v, want restore_check_failed", props["code"])
 	}
-	today := time.Now().Format("2006-01-02")
-	if _, err := os.Stat(filepath.Join(dir, "life-"+today+".db")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "life-2026-10-02.db")); err != nil {
 		t.Errorf("the snapshot is kept although its check failed: %v", err)
 	}
+}
+
+// TestOnlyARefusedSnapshotIsSnapshotRefused: 422 snapshot_refused is for a refusal that core reports, here a folder
+// inside a git work tree. A snapshot whose time ran out is a 504 timeout, and one that fails for another cause (its
+// request cancelled) is a 500 internal, as every other route answers them. A 504 keeps the text of its cause; a 500
+// says only "internal error". None of them leaves a file.
+func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
+	d := dbtest.New(t)
+	snapshot := func(t *testing.T, ctx context.Context, dir string, status int, code string) (message string) {
+		t.Helper()
+		req := httptest.NewRequestWithContext(ctx, "POST", "/snapshots", nil)
+		rec := httptest.NewRecorder()
+		api.New(&core.Store{DB: d, SnapshotDir: dir}).ServeHTTP(rec, req)
+		var e siren.Entity
+		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
+			t.Fatalf("the answer is not an entity: %v: %s", err, rec.Body.String())
+		}
+		if got := props(&e)["code"]; rec.Code != status || got != code {
+			t.Errorf("answer %d %v, want %d %s: %s", rec.Code, got, status, code, rec.Body.String())
+		}
+		if files, err := os.ReadDir(dir); err != nil || len(files) != 0 {
+			t.Errorf("the snapshot folder after the error: %d files, %v", len(files), err)
+		}
+		message, _ = props(&e)["message"].(string)
+		return message
+	}
+	t.Run("a refusal", func(t *testing.T) {
+		repo := t.TempDir()
+		if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(repo, "backups")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		snapshot(t, t.Context(), dir, 422, "snapshot_refused")
+	})
+	t.Run("a timeout", func(t *testing.T) {
+		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+		defer cancel()
+		if msg := snapshot(t, ctx, t.TempDir(), 504, "timeout"); msg == "internal error" || !strings.Contains(msg, context.DeadlineExceeded.Error()) {
+			t.Errorf("the message of a 504 is %q, want the text of its cause (%s)", msg, context.DeadlineExceeded)
+		}
+	})
+	t.Run("a failure", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		if msg := snapshot(t, ctx, t.TempDir(), 500, "internal"); msg != "internal error" {
+			t.Errorf("the message of a 500 is %q, want internal error", msg)
+		}
+	})
 }

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -9,12 +10,21 @@ import (
 	"lifelog/internal/db"
 )
 
-// Snapshot takes a dated copy of the database at from into dir and runs its restore check (docs/cookbook/take-a-
+// TakeSnapshot is the owner's snapshot action (docs/plans/082-snapshot-in-the-catalog.md): a dated copy of the
+// database in SnapshotDir, or beside the database when none is set, and its restore check (docs/cookbook/take-a-
 // snapshot.md, D25): the four integrity checks on a connection whose Close skips PRAGMA optimize, so the file is left
-// as written. The path is returned with the check; an error names what refused (a folder inside a git work tree,
-// a name in use) or what failed.
-func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, *IntegrityResult, error) {
-	path, err := db.Snapshot(ctx, from, dir, now)
+// as written. The path is returned with the check. A refusal of the folder or the name (db.ErrRefused: no folder,
+// a folder inside a git work tree, a name in use) is a 422 with the code snapshot_refused; any other error is a
+// failure.
+func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *IntegrityResult, error) {
+	dir := s.SnapshotDir
+	if dir == "" {
+		dir = filepath.Dir(s.DB.Path())
+	}
+	path, err := db.Snapshot(ctx, s.DB.Path(), dir, now)
+	if errors.Is(err, db.ErrRefused) {
+		return "", nil, &Error{Status: 422, Msg: err.Error(), Code: "snapshot_refused", Err: err}
+	}
 	if err != nil {
 		return "", nil, err
 	}
@@ -22,20 +32,19 @@ func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, *In
 	if err != nil {
 		return path, nil, fmt.Errorf("the snapshot %s cannot be checked: %w", path, err)
 	}
-	defer d.Close()
-	res, err := (&Store{DB: d}).Integrity(ctx)
+	res, err := restoreCheck(ctx, d)
 	if err != nil {
 		return path, nil, fmt.Errorf("the restore check of %s: %w", path, err)
 	}
 	return path, res, nil
 }
 
-// TakeSnapshot is the owner's snapshot action (docs/plans/082-snapshot-in-the-catalog.md): the file lands in
-// SnapshotDir, or beside the database when none is set.
-func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *IntegrityResult, error) {
-	dir := s.SnapshotDir
-	if dir == "" {
-		dir = filepath.Dir(s.DB.Path())
+// restoreCheck runs the integrity checks on the open snapshot d, then closes it. A Close that fails is an error of the
+// check: the copy is then not known to be left as written.
+func restoreCheck(ctx context.Context, d *db.DB) (*IntegrityResult, error) {
+	res, err := (&Store{DB: d}).Integrity(ctx)
+	if err := errors.Join(err, d.Close()); err != nil {
+		return nil, err
 	}
-	return Snapshot(ctx, s.DB.Path(), dir, now)
+	return res, nil
 }

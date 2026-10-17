@@ -60,37 +60,43 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
   the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
   An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`, `snapshot_refused`, `restore_check_failed`,
-  `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. The lists `/days`,
+  `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. A fault of the server (500
+  `internal`) says only "internal error": the server's log has the cause. The lists `/days`,
   `/browse` and `/search` take `limit` (1–500) and `offset` and link `next` and `prev`
   ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
-  person, place, metric, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
+  person, place, metric, search, lists; `internal/api/view/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it
   changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
   to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
   list. A value that is not a plain path is ignored, and a JSON client never follows it
-  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
-- **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a field
-  of 2 to 5 short options a `fieldset` of radio buttons), a card is an `article`, a callout an `aside`, an error a
+  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). A form with an id sends it in `form` (not a field of any
+  action either), so a page that draws one action in several forms (New metric) shows a refusal in the form that
+  was sent and in no other.
+- **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a flag,
+  the options 0 and 1 in a field that the action does not require, one checkbox that sends 1 or nothing; a field of 2
+  to 5 short options a `fieldset` of radio buttons; a `pages` field with `options` a text input with a `datalist` of
+  those titles, so the reader can also type a new title), a card is an `article`, a callout an `aside`, an error a
   `role="alert"`, a series a `table` with a header row, a write's result and the search an open or a modal `dialog`,
-  the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows
-  the same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser
-  lets a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find. What a
-  template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
-  one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
-  error's `code` its first words, so no view decides any of them by an action's or a field's name.
+  the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows the
+  same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser lets
+  a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find, but the id of a
+  `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's name).
+  What a template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an
+  owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
+  title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
   glance: the five newest day pages. A day carries its mood and the `save-body` of its day page, so the day view
   edits in place. These are properties and actions of the entities, so every client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
   page, its first line, its mood and its readings, and every other thing that names the day: a
   birthday or a death each year, a place, a page or a file; under the calendar, Day by
   day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
-  and the catalog action `open-day` goes to a day by its date. The handler reads
-  today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
-  in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its readings
-  against the week before) and `/years/{YYYY}` the year (twelve months);
+  and the catalog action `open-day` goes to a day by its date, or to today with no date or the word
+  `today`. The handler reads today from one clock, which a test fixes. The day and the root carry `on_this_day`, the
+  day pages of the same date in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its
+  readings against the week before) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
   the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The
@@ -113,8 +119,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   bound in Hearthwood, the materials of the owner's Balaur design system
   ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are
   wood, and everything written is parchment with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
-  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen and
-  the word "overdue", teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
+  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen,
+  teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
   daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
   material sets its own text through aliases (`--text`, `--text-link`, …), and a test holds every text pair at
@@ -153,10 +159,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
   sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
-  readings of the 14 days through it), so a reading's tile has its unit and its line; a series shows its next 5
-  later slots on its own page.
-  `GET /styleguide` is the style page: every component in every state, drawn on synthetic words, with the file each
-  lives in. It is presentation, like `/render`: it is not in the catalog and it reads nothing from the database.
+  readings of the 14 days through it), so a reading's tile has its unit and its line.
+  `GET /styleguide` is the style page: every component in every state, with the file each lives in, drawn by the real
+  templates on synthetic words. It is presentation, like `/render`: it is not in the catalog and it reads nothing
+  from the database.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: two shortcuts (Today, Add to
   today) and a share target that posts shared text into Capture
   (`POST /days/today/capture`, where `today` is the local day). There is no service worker, since the server is the owner's own. A public listener
@@ -328,7 +334,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
   **token**: `--token-file PATH` (one line of at least 32 characters; the command line never carries the secret) or
   `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. The default bind becomes `0.0.0.0:7777`
-  and `--addr` may name any numeric IP of this machine. Every request must carry `Authorization: Bearer <token>` or
+  and `--addr` may name any numeric IP of this machine, in brackets only when it is IPv6. Every request must carry `Authorization: Bearer <token>` or
   the cookie `/login` sets; one without is answered 401 with nothing of the database, and a browser is sent to
   `/login`. The `Host` check is dropped: it kept an unauthenticated local server from a DNS-rebinding page, and the
   token defeats that page on its own; absolute-form targets stay refused. A token holder is the owner: owner-only
@@ -344,22 +350,22 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
 ## Layout
 
-| path | what |
-|---|---|
-| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) |
-| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema |
-| `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
-| `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files |
-| `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
-| `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
-| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards |
-| `internal/client` | the hypermedia client (in-process or remote) |
-| `internal/mcp` | the catalog as MCP tools (the tool list is `internal/client`'s) |
-| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
-| `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
-| `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |
-| `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) |
-| `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) |
+| path | what | test it at |
+|---|---|---|
+| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
+| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test | `db.Init` and `db.Open` on a file in `t.TempDir()` |
+| `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, the parse of a day and an instant, the markers that a plain-text line cuts (`BlockMark`) and the marks of a match in a snippet of the search (`SnippetOpen`, `SnippetClose`); tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) | the pure functions with table tests, and the vectors of the contract page (`TestWikilinkVectors`, `TestTitleKeyVectors`) |
+| `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files | `core.Store` on `dbtest.New`, with a fixed `Clock` for a test of today |
+| `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata | `preview.Make` and `preview.Check` on pictures that the test makes |
+| `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones | `photo.Read` on the photos of `phototest`; `FuzzRead` |
+| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types, the `Lifelog-Source` header, the JSON writer and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test | `api.New` on a store, through `apitest.Fresh`, or `apitest.FreshOn` for a store with a fixed clock; a test inside package `api` cannot import `apitest` (an import cycle), so it makes its store with `dbtest.New`; the pure functions of the handler (`backOf`, `errorEntity`, `browseQueryOf`) with table tests; `view.Draw` and the pure functions of `view` with table tests |
+| `internal/client` | the hypermedia client, transport only: in-process or remote; of this module it imports only `siren`, so it builds no `core`, no `db` and no SQLite | `client.InProcess` and `client.Remote` on one handler: `TestTheTwoTransportsGiveEqualAnswers` |
+| `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool; it imports `client` and `siren`, and no `api` | `mcp.New` on a client of `apitest.Fresh`; the columns `mcp` and `mcp-remote` of the parity table |
+| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder |
+| `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
+| `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` | `TestSchemaCopyIsCurrent` (`internal/db`) |
+| `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
+| `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) | the contract suites `TestSuites` and the mutants `TestMutants`, on the DDL of `docs/` |
 
 ## Checks
 
@@ -373,6 +379,25 @@ Action JSON and URL-encoded bodies are limited to 20 MiB of encoded data; JSON
 must contain exactly one object. Multipart uploads allow up to 64 parts, 16 MiB
 per text field and 16 MiB total text (including unknown or repeated fields),
 and at most one original and one preview part. A supplied preview may be up to
-64 MiB. Over-limit requests return HTTP 413 without writing. Originals are
-hashed as streams without a total size limit; originals above the 64 MiB picture
+64 MiB. Over-limit requests return HTTP 413 without writing; after a JSON or
+URL-encoded body over the limit, the server also closes an HTTP/1.1 connection (over
+HTTP/2 it resets the stream, and the connection stays open). Originals are hashed as streams without a total size limit; originals above the 64 MiB picture
 budget are kept without an automatically generated preview.
+
+## Engineering references
+
+These primary sources inform the application policies of [AGENTS.md](AGENTS.md); they do not override this
+repository's database contract or turn optional techniques into universal Go rules.
+
+- Go: [review comments](https://go.dev/wiki/CodeReviewComments), [module layout](https://go.dev/doc/modules/layout),
+  [error wrapping and API boundaries](https://go.dev/blog/go1.13-errors), [context](https://pkg.go.dev/context).
+- Testing: [test review comments](https://go.dev/wiki/TestComments), [testing APIs](https://pkg.go.dev/testing),
+  [fuzzing](https://go.dev/doc/security/fuzz/), [synctest](https://pkg.go.dev/testing/synctest),
+  [race detector and prerequisites](https://go.dev/doc/articles/race_detector).
+- Tools: [Staticcheck](https://staticcheck.dev/docs/),
+  [govulncheck and its limitations](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
+- Measurement: [benchmark loops](https://go.dev/blog/testing-b-loop),
+  [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), [profiling](https://go.dev/doc/diagnostics),
+  [SQLite performance methodology](https://sqlite.org/cpu.html), [query-plan caveats](https://sqlite.org/eqp.html).
+- Model-based testing: [stateful reference-model example](https://hypothesis.readthedocs.io/en/latest/stateful.html)
+  (the technique, not a Python dependency).

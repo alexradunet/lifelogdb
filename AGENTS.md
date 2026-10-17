@@ -47,8 +47,12 @@ fast feedback**. Safeguards should catch failures, not create ceremony.
   expanding scope. Contract changes follow the existing process below; routine implementation fixes need no new RFC.
 - Prefer the smallest understandable solution. Do not add layers, frameworks, generic repositories, configuration
   knobs or speculative extension points for hypothetical needs. Do not reorganize working code just for uniformity.
-- Keep application engineering guidance here and application decisions in [README.md](README.md); the database
-  contract remains language-neutral in `docs/`. Explain non-obvious reasons and constraints, not what the syntax does.
+- Keep application engineering guidance here, and its rules for synthetic workloads and performance evidence in
+  [tests/README.md](tests/README.md). Keep application decisions and the
+  [engineering references](README.md#engineering-references) in [README.md](README.md). The database contract remains
+  language-neutral in `docs/`, and each of its conventions has its home there; the
+  [checklist of the conventions](#conventions-every-writer-and-every-ddl-change-preserves) here only links those
+  homes. Explain non-obvious reasons and constraints, not what the syntax does.
 - **Write in Simplified Technical English** (ASD-STE100), in every page, comment, commit message and conversation:
   short sentences with one idea each, the active voice, one approved word for one meaning, no synonyms for variety,
   no idioms. The reader fifty years from now may not have English as a first language.
@@ -90,7 +94,8 @@ not external services or private files.
 - Extended lifetime/stress, fuzz and benchmark runs may take 10–30 minutes and are explicit, not part of every edit.
   Run the relevant extended checks for changes to the behavior they exercise; reserve the whole set for scheduled or
   pre-release validation when available. Keep representative correctness cases in the baseline. Document a runner's
-  invocation when implementing it; specifying a workload here does not mean that runner exists or has passed.
+  invocation when implementing it; specifying a workload in
+  [the suite guide](tests/README.md#synthetic-personas-and-scale) does not mean that runner exists or has passed.
 
 ## The owner's live database in this folder
 
@@ -226,51 +231,9 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   percentage, test-count or one-test-per-function quota. Never weaken assertions, skip a failure, bless changed snapshots
   or add retries just to get green. An incorrect test can change with evidence of the intended contract. Treat flakes
   as defects. Contract-rule mutants remain governed by the documentation rules below.
-
-## Synthetic personas and scale
-
-When adding generators, use these agreed workloads. They exercise existing capabilities, not new schema requirements
-or a promise of performance. Generate from scratch, never from private exports or supposedly anonymized records.
-
-| persona | behavior to exercise |
-|---|---|
-| daily journaler | decades of day pages, people, places, links, search and edits |
-| measurement-heavy user | dense readings, habits, corrections, retractions and historical queries |
-| mixed-media keeper | notes, long transcripts, document text and selected photo previews |
-| messy importer | overlapping imports, duplicates, Unicode, malformed inputs, interruption and retries |
-
-- **Small:** representative cases of all four personas for routine correctness tests. **Lifetime:** a 50-year mixed
-  workload with 20 measurements/day, 3 files/day and about 4,000 imported notes in addition to day pages. **Stress:**
-  explicitly increased density, long text, high-degree links and import bursts; record the parameters, not just "large".
-- Make the logical dataset reproducible: fixed calendar anchor, seeds, generator version, operation order, payload-size
-  distributions and known answers. Include gaps, bursts, popular and rare links/terms, corrections and backdated data,
-  not just uniform append-only rows. On failure report the scenario, seed and operation; reduce it to a small regression.
-- Exercise end-to-end workflows and persisted results, not just successful bulk insertion. Keep a simple independent
-  oracle for expected queries/state. Label accelerated SQL loaders and compare manageable equivalent scenarios against
-  writer-built fixtures. Do not claim a direct-SQL load measures application import throughput.
-- Keep generators, small fixtures and regression inputs in git, not generated databases. Build databases in temporary
-  or explicitly selected ignored scratch storage with cleanup. Keep large preview-heavy runs opt-in and report disk
-  requirements; use valid synthetic payloads with representative sizes. Metadata-only runs are useful but must be
-  labeled: tiny repeated blobs do not establish realistic preview/storage scale.
-
-## Performance evidence, not speculative optimization
-
-- Measure important workflows at small and lifetime sizes: capture/save, day view, search/backlinks, historical
-  measurements, imports and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
-  before adding caches, indexes or concurrency; contract/schema changes still need the normal evidence and approval.
-- Keep fixture construction and correctness-oracle work outside timed query operations. Prefer `for b.Loop()` for new
-  Go benchmarks; report allocations. Fully consume results and check errors. Define whether preparation, commit,
-  decoding or preview creation is included. Reset mutable state outside timing or measure an explicitly bounded growth
-  trace; repeated iterations must not silently turn writes into no-ops or change the workload.
-- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. Every benchmark runs
-  with `go test ./... -run '^$' -bench . -benchmem -count=10`; none exists today (the import's went with it, plan 089).
-- Record scenario/seed, revision, Go and SQLite/driver versions, OS, hardware/storage, connection/maintenance settings
-  and cache conditions. Report latency, allocations, import throughput and storage (database, WAL/SHM and relevant
-  temporary files). Go allocation counts are not total process memory. Label warm versus fresh-process runs; do not
-  call a reopened database a cold-disk measurement without controlling the OS cache.
-- Use query plans and work counts to investigate scaling, not brittle exact `EXPLAIN QUERY PLAN` text assertions.
-  No universal wall-clock CI gate: introduce a hard budget only for an agreed usability requirement on a defined
-  environment. The 50-year workload is a test envelope, not evidence that any implementation already meets it.
+- **Synthetic workloads and performance evidence.** A generator, a scale run, a benchmark or an optimization follows
+  the [synthetic personas and scale](tests/README.md#synthetic-personas-and-scale) and the
+  [performance evidence](tests/README.md#performance-evidence-not-speculative-optimization) of the suite guide.
 
 ## Editing the docs
 
@@ -313,36 +276,28 @@ or a promise of performance. Generate from scratch, never from private exports o
 
 ## Conventions every writer and every DDL change preserves
 
-Their homes are in `docs/`; this list is the checklist, not the rule.
+Their homes are in `docs/`; this list is the checklist, not the rule. Each item names only the homes of its rules: a
+table and a `lifelog_meta` key are in [schema.sql](docs/schema/schema.sql).
 
-- **Time** (`lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md)): UTC ISO-8601 instants and local-day TEXT columns with round-trip CHECKs
-  (`date(x) IS x`, `strftime(...) IS x` — the `IS` matters).
-- **Identity and provenance**: follow the `entities`, `entity_names`, typed-extension and `lifelog_meta.source`
-  rules in [schema.sql](docs/schema/schema.sql), with the insert conventions in
-  [a person or a place](docs/cookbook/person-or-place.md) and [imports](docs/contract/imports.md).
+- **Time**: `lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md).
+- **Identity and provenance**: the tables `entities` and `entity_names`, the typed extensions and
+  `lifelog_meta.source`; [a person or a place](docs/cookbook/person-or-place.md); [imports](docs/contract/imports.md).
   Review owned names, direct typed foreign keys, stable identity and provenance together.
-- **No deletes** (`lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md)): tombstones (BEFORE DELETE triggers);
-  only `links` rows are deleted.
-- **Append-only facts**: measurements. A reading is corrected with `supersedes_id` and retracted with a
-  NULL value (D7).
-- **Imports**: `ON CONFLICT … DO NOTHING`, never `OR IGNORE` / `OR REPLACE` ([imports](docs/contract/imports.md)).
-- **CHECKs**: every one NAMED (`CONSTRAINT <table>_<rule> CHECK …`), using only functions the minimum
-  SQLite has (`lifelog_meta.sqlite`) — no math functions, even where a build has them.
-- **Links**: a closed, endpoint-typed `link_kinds` registry (D8).
-- **Names and journal identity**: use [titles and wikilinks](docs/contract/titles-and-wikilinks.md), its vectors,
-  and [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
+- **No deletes**: `lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md).
+- **Append-only facts**: [D7](docs/decisions/D07-measurements.md),
+  [correct a measurement](docs/cookbook/correct-a-measurement.md).
+- **Imports**: [imports](docs/contract/imports.md), `lifelog_meta.writers`.
+- **CHECKs**: [the schema page](docs/schema/README.md), [D13](docs/decisions/D13-migrations-and-freeze.md),
+  `lifelog_meta.sqlite`.
+- **Links**: the table `link_kinds`, `lifelog_meta.typed_links`, [D8](docs/decisions/D08-entities-and-links.md).
+- **Names and journal identity**: [titles and wikilinks](docs/contract/titles-and-wikilinks.md),
+  [D5](docs/decisions/D05-pages-and-day-pages.md). Check preferred-name changes, retained aliases and journal
   reservations against those rules. Spans and sessions follow [D22](docs/decisions/D22-events.md);
   habits follow [D24](docs/decisions/D24-habits.md).
-- **Connections** ([connection setup](docs/contract/connections.md)): one writing application per file; per connection
-  `PRAGMA foreign_keys=ON`, `recursive_triggers=ON`, `synchronous=FULL`, `trusted_schema=OFF` (the first three read back and refused
-  if wrong); SQLite ≥ 3.51.3 for writers; every write transaction starts with `BEGIN IMMEDIATE`; the driver opens
-  no transactions of its own. Readers open the file read-only (`mode=ro`, never `immutable=1`) and set
-  `trusted_schema=OFF` too;
-  exploration tools (Datasette) likewise, and nothing that edits rows is pointed at it.
-- **The wikilink save contract**: implement [titles and wikilinks](docs/contract/titles-and-wikilinks.md) and
-  [save a body](docs/cookbook/save-a-body.md), including reference resolution, target savepoints, set equality,
-  invalid targets, tags and ordinary REDIRECT prose. Keep the contract's vectors as their sole specification.
-- **Integrity**: the four [integrity checks](docs/contract/integrity-checks.md).
+- **Connections**: [connection setup](docs/contract/connections.md), `lifelog_meta.writers` and `.sqlite`.
+- **The wikilink save contract**: [titles and wikilinks](docs/contract/titles-and-wikilinks.md),
+  [save a body](docs/cookbook/save-a-body.md), [D19](docs/decisions/D19-wikilink-save-contract.md).
+- **Integrity**: [integrity checks](docs/contract/integrity-checks.md).
 - **Privacy**: `life.db` with its `-wal`/`-shm`, and every snapshot of it, never in git (health data, private notes and pictures cannot be scrubbed from history; `.gitignore` covers `*.db`, `*.db-journal`
   and `/import/`). Never commit a real vault, real notes or real data as a fixture:
   tests use synthetic data only.
@@ -355,21 +310,3 @@ executed by a suite in `tests/`, not assumed. If you add such a claim, write the
 the claim and mark it *executed* (the word means that a suite runs it). A suite must not depend on
 accidents of one SQLite build (page layout, compile options): it finds what it needs, or says plainly
 what it requires.
-
-## Engineering references
-
-These primary sources inform the application policies above; they do not override this repository's database contract
-or turn optional techniques into universal Go rules.
-
-- Go: [review comments](https://go.dev/wiki/CodeReviewComments), [module layout](https://go.dev/doc/modules/layout),
-  [error wrapping and API boundaries](https://go.dev/blog/go1.13-errors), [context](https://pkg.go.dev/context).
-- Testing: [test review comments](https://go.dev/wiki/TestComments), [testing APIs](https://pkg.go.dev/testing),
-  [fuzzing](https://go.dev/doc/security/fuzz/), [synctest](https://pkg.go.dev/testing/synctest),
-  [race detector and prerequisites](https://go.dev/doc/articles/race_detector).
-- Tools: [Staticcheck](https://staticcheck.dev/docs/),
-  [govulncheck and its limitations](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
-- Measurement: [benchmark loops](https://go.dev/blog/testing-b-loop),
-  [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat), [profiling](https://go.dev/doc/diagnostics),
-  [SQLite performance methodology](https://sqlite.org/cpu.html), [query-plan caveats](https://sqlite.org/eqp.html).
-- Model-based testing: [stateful reference-model example](https://hypothesis.readthedocs.io/en/latest/stateful.html)
-  (the technique, not a Python dependency).

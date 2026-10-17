@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"lifelog/internal/photo"
+	"lifelog/internal/photo/phototest"
 )
 
 // halves is a w×h picture, its left half red and its right half blue, with noise so it compresses like a photo.
@@ -39,23 +40,6 @@ func encodeJPEG(t *testing.T, m image.Image) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
-}
-
-// withOrientation splices an APP1 Exif segment with orientation o (big-endian TIFF) after a JPEG's SOI marker.
-func withOrientation(j []byte, o uint16) []byte {
-	tiff := []byte("MM\x00\x2a\x00\x00\x00\x08") // header, IFD0 at 8
-	tiff = binary.BigEndian.AppendUint16(tiff, 1)
-	tiff = binary.BigEndian.AppendUint16(tiff, 0x0112)
-	tiff = binary.BigEndian.AppendUint16(tiff, 3) // SHORT
-	tiff = binary.BigEndian.AppendUint32(tiff, 1)
-	tiff = binary.BigEndian.AppendUint16(tiff, o)
-	tiff = append(tiff, 0, 0, 0, 0, 0, 0) // value padding, next IFD = 0
-	seg := append([]byte("Exif\x00\x00"), tiff...)
-	app1 := binary.BigEndian.AppendUint16([]byte{0xFF, 0xE1}, uint16(len(seg)+2))
-	out := append([]byte{}, j[:2]...)
-	out = append(out, app1...)
-	out = append(out, seg...)
-	return append(out, j[2:]...)
 }
 
 func decode(t *testing.T, b []byte) image.Image {
@@ -94,13 +78,13 @@ func TestMakeTurnsAJPEGUpright(t *testing.T) {
 	if photo.Read(src).Orientation != 1 {
 		t.Fatal("a JPEG without EXIF has orientation 1")
 	}
-	for o, want := range map[uint16][2]string{
+	for o, want := range map[int][2]string{
 		6: {"red", "blue"}, // a quarter clockwise: the left half goes to the top
 		8: {"blue", "red"}, // a quarter counter-clockwise: the left half goes to the bottom
 		3: {"blue", "red"}, // half a turn: the left half goes to the right
 	} {
-		j := withOrientation(src, o)
-		if got := photo.Read(j).Orientation; got != int(o) {
+		j := phototest.WithExif(src, photo.Meta{Orientation: o}, false)
+		if got := photo.Read(j).Orientation; got != o {
 			t.Fatalf("orientation %d read as %d", o, got)
 		}
 		b, err := Make(j)

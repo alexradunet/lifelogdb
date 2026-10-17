@@ -4,11 +4,13 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
+	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // recentDays is how many of the newest day pages the root shows.
@@ -54,9 +56,9 @@ func (h *server) onThisDay(ctx context.Context, day string) ([]recentDay, error)
 
 // The root is today at a glance (docs/plans/091-the-browser-for-daily-use.md): the newest day pages, and every
 // action that starts something.
-func (h *server) root(r *http.Request) (*Entity, error) {
+func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	ctx := r.Context()
-	today := h.localDay()
+	today := h.s.Today()
 	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
 	if err != nil {
 		return nil, err
@@ -73,14 +75,14 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	actions := []Action{
+	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
-	return &Entity{
+	return &siren.Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
-		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
+		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
 			link("browse", "/browse", "Browse"), link("categories", "/browse", "Categories"), link("people", "/browse?kind=person", "People"),
 			link("places", "/browse?kind=place", "Places"), link("media", "/browse?kind=media", "Media"), link("files", "/browse?kind=document", "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"), link("actions", "/actions", "All actions"),
@@ -90,9 +92,21 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	}, nil
 }
 
-func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.localDay())} }
+func (h *server) today(*http.Request) (*siren.Entity, error) {
+	return nil, redirect{siren.DayHref(h.s.Today())}
+}
 
-func (h *server) days(r *http.Request) (*Entity, error) {
+// dayNamed is the day that a path or a field names. The word "today" is today: the local day of the store's clock, the
+// day that GET /days/today redirects to. capture and open-day read their day through it, so the word has one meaning
+// in the API. Any other value comes back as it is, and the handler checks it.
+func (h *server) dayNamed(day string) string {
+	if day == "today" {
+		return h.s.Today()
+	}
+	return day
+}
+
+func (h *server) days(r *http.Request) (*siren.Entity, error) {
 	limit, offset, err := pageOf(r, 60)
 	if err != nil {
 		return nil, err
@@ -101,10 +115,10 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Entity{Class: []string{"days"}, Title: "Days", Links: []Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
+	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
 	days = paged(e, days, "/days", nil, limit, offset)
 	for _, d := range days {
-		e.Entities = append(e.Entities, link("item", dayHref(d.Title), d.Title))
+		e.Entities = append(e.Entities, link("item", siren.DayHref(d.Title), d.Title))
 	}
 	return e, nil
 }
@@ -121,17 +135,17 @@ type dayView struct {
 	Today     string      `json:"today"`
 }
 
-func (h *server) day(r *http.Request) (*Entity, error) {
+func (h *server) day(r *http.Request) (*siren.Entity, error) {
 	return h.dayEntity(r.Context(), r.PathValue("day"))
 }
 
 // dayEntity is the resource /days/{day} serves.
-func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
+func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, error) {
 	d, err := h.s.Day(ctx, day)
 	if err != nil {
 		return nil, err
 	}
-	today := h.localDay()
+	today := h.s.Today()
 	moods, err := h.s.Moods(ctx, day, day)
 	if err != nil {
 		return nil, err
@@ -152,16 +166,22 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, _ := dayOf(day)
-	e := &Entity{
+	t, _ := text.ParseDay(day)
+	e := &siren.Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
-		Links: []Link{link("self", dayHref(day), day), link("prev", dayHref(t.AddDate(0, 0, -1).Format(time.DateOnly)), "Previous day"),
-			link("next", dayHref(t.AddDate(0, 0, 1).Format(time.DateOnly)), "Next day"), link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"),
-			link("month", monthHref(t), t.Format(layoutMonth))},
-		Actions: []Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
+		Links:   []siren.Link{link("self", siren.DayHref(day), day)},
+		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
+	// A link leads only to a page that answers: 0000-01-01 has no day before it, and 9999-12-31 none after it.
+	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); text.IsDay(prev) {
+		e.Links = append(e.Links, link("prev", siren.DayHref(prev), "Previous day"))
+	}
+	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); text.IsDay(next) {
+		e.Links = append(e.Links, link("next", siren.DayHref(next), "Next day"))
+	}
+	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", siren.MonthHref(t), t.Format(layoutMonth)))
 	if d.PageID != 0 {
-		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))
+		e.Links = append(e.Links, link("page", siren.PageHref(d.PageID), "The day page"))
 		p, err := h.s.PageByID(ctx, d.PageID)
 		if err != nil {
 			return nil, err
@@ -169,13 +189,13 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
 	for _, m := range d.Readings {
-		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
+		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Metric+" "+view.Num(m.Value)))
 	}
 	return e, nil
 }
 
-func (h *server) capture(r *http.Request, src string) (*Entity, error) {
-	v, err := form(r)
+func (h *server) capture(r *http.Request, act spec, src string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}
@@ -183,10 +203,7 @@ func (h *server) capture(r *http.Request, src string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	day := r.PathValue("day")
-	if day == "today" { // the share target of the manifest cannot know the day
-		day = h.localDay()
-	}
+	day := h.dayNamed(r.PathValue("day")) // the share target of the manifest cannot know the day: it sends the word
 	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
 	if err != nil {
 		return nil, err

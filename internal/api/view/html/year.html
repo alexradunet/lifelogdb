@@ -1,0 +1,17 @@
+{{/* The year (docs/plans/097-the-almanac-reflects.md): twelve months, each drawn as the sidebar draws its month. A day
+     with a page is tinted and today is framed. A month name opens its calendar. */}}
+{{define "year"}}{{template "head" .}}
+{{$y := .Props}}
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>
+<p class="sub">{{if ne .Title (yearOf .Today)}}<a href="/years/current">This year</a>{{end}}<a href="/days/today">Today</a></p></div>
+<div class="tools">
+{{- with .Link "prev"}}
+{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous year, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
+{{- with .Link "next"}}
+{{template "step" (dict "href" . "rel" "next" "label" (printf "Next year, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
+{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+</div></header>
+
+<div class="year">{{range $y.months}}{{template "monthbox" (dict "href" (printf "/months/%s" .month) "name" (monthName .month) "written" .written "days" .days "today" $.Today)}}{{end}}</div>
+<p class="sub"><span class="meta">{{count $y.written "day" "days"}} written</span><span class="meta">{{count $y.readings "reading" "readings"}}</span></p>
+{{template "foot" .}}{{end}}

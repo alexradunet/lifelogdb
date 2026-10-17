@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"lifelog/internal/text"
 )
 
 // The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md): what names a day, over a window of
@@ -29,9 +31,9 @@ func checkCalendarWindow(from, through string) error {
 // calendarDays are the days from from through through; nil for a window that is not one. It stops one day after the
 // bound, so the caller can see the window is too long without walking it.
 func calendarDays(from, through string) []time.Time {
-	first, err1 := time.Parse(time.DateOnly, from)
-	last, err2 := time.Parse(time.DateOnly, through)
-	if err1 != nil || err2 != nil {
+	first, ok1 := text.ParseDay(from)
+	last, ok2 := text.ParseDay(through)
+	if !ok1 || !ok2 {
 		return nil
 	}
 	var out []time.Time
@@ -79,19 +81,7 @@ func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay i
 		) WHERE r <= :cap
 		ORDER BY day, rank, sortkey, id`,
 		sql.Named("from", from), sql.Named("through", through), sql.Named("cap", pagesPerDay))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []Dated{}
-	for rows.Next() {
-		var d Dated
-		if err := rows.Scan(&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages); err != nil {
-			return nil, err
-		}
-		out = append(out, d)
-	}
-	return out, rows.Err()
+	return list(rows, err, func(d *Dated) []any { return []any{&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages} })
 }
 
 // Anniversary is a live person's birth day or death day (Kind birthday or death), or its day in a later year, on Day
@@ -135,17 +125,10 @@ func (s *Store) Anniversaries(ctx context.Context, from, through string) ([]Anni
 		 WHERE substr(p.birth_day, 6) IN (SELECT value FROM json_each(:set))
 		    OR substr(p.death_day, 6) IN (SELECT value FROM json_each(:set))
 		 ORDER BY e.preferred_name_key, e.id`, sql.Named("set", string(set)))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	out := []Anniversary{}
-	for rows.Next() {
-		var id int64
-		var title, birth, death string
-		if err := rows.Scan(&id, &title, &birth, &death); err != nil {
-			return nil, err
-		}
+	var id int64
+	var title, birth, death string
+	if err := each(rows, err, []any{&id, &title, &birth, &death}, func() {
 		for _, k := range []struct{ kind, date string }{{"birthday", birth}, {"death", death}} {
 			if k.date == "" {
 				continue
@@ -159,8 +142,7 @@ func (s *Store) Anniversaries(ctx context.Context, from, through string) ([]Anni
 				out = append(out, Anniversary{Day: day, Kind: k.kind, ID: id, Title: title, Years: y1 - y0})
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
+	}); err != nil {
 		return nil, err
 	}
 	// by day, a birthday before a death; the order of the titles stays inside each

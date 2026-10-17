@@ -23,34 +23,51 @@ func LoopbackAddress(authority string) (string, error) {
 }
 
 func loopbackAuthority(authority string, allowZero bool) (string, int, bool) {
+	host, ip, port, ok := authorityOf(authority)
+	if !ok || (!allowZero && port == 0) || (ip.IsValid() && !ip.Unmap().IsLoopback()) {
+		return "", 0, false
+	}
+	return host, port, true
+}
+
+// authorityOf parses the host:port of a serve address or of a request, with no DNS and no service names. The host is
+// localhost in any ASCII case, or a numeric IP with no zone; ip is the zero Addr for localhost. The port is decimal
+// digits, 0–65535.
+func authorityOf(authority string) (host string, ip netip.Addr, port int, ok bool) {
 	host, text, err := net.SplitHostPort(authority)
 	if err != nil || host == "" || text == "" {
-		return "", 0, false
+		return "", netip.Addr{}, 0, false
 	}
 	for _, c := range text {
 		if c < '0' || c > '9' {
-			return "", 0, false
+			return "", netip.Addr{}, 0, false
 		}
 	}
-	port, err := strconv.ParseUint(text, 10, 16)
-	if err != nil || (!allowZero && port == 0) {
-		return "", 0, false
+	p, err := strconv.ParseUint(text, 10, 16)
+	if err != nil {
+		return "", netip.Addr{}, 0, false
 	}
 	if strings.ToLower(host) == "localhost" {
 		if strings.HasPrefix(authority, "[") {
-			return "", 0, false
+			return "", netip.Addr{}, 0, false
 		}
-		return host, int(port), true
+		return host, netip.Addr{}, int(p), true
 	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil || ip.Zone() != "" || !ip.Unmap().IsLoopback() {
-		return "", 0, false
+	ip, err = netip.ParseAddr(host)
+	if err != nil || ip.Zone() != "" {
+		return "", netip.Addr{}, 0, false
 	}
 	// Brackets belong only to IPv6 literals, not IPv4 or names.
 	if strings.HasPrefix(authority, "[") != ip.Is6() {
-		return "", 0, false
+		return "", netip.Addr{}, 0, false
 	}
-	return host, int(port), true
+	return host, ip, int(p), true
+}
+
+// absoluteForm reports a request target in absolute form (GET http://host/path). Go then replaces Host with the
+// authority of the target. No proxy deployment is supported, so both listeners refuse it instead of trusting it.
+func absoluteForm(r *http.Request) bool {
+	return r.URL == nil || r.URL.IsAbs() || r.URL.Host != ""
 }
 
 // NetworkAuthority wraps only socket serving; api.New remains usable by the
@@ -68,10 +85,8 @@ func NetworkAuthority(addr net.Addr, next http.Handler) (http.Handler, error) {
 			authority += ":80"
 		}
 		_, requestPort, allowed := loopbackAuthority(authority, false)
-		// Go replaces Host with the absolute request-target's authority. No proxy
-		// deployment is supported, so reject absolute-form instead of trusting it.
-		if !allowed || requestPort != port || r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
-			refuse(w, r, http.StatusForbidden, "HTTP authority refused", "")
+		if !allowed || requestPort != port || absoluteForm(r) {
+			writeError(w, r, authorityRefusal())
 			return
 		}
 		next.ServeHTTP(w, r)

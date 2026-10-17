@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 )
 
@@ -62,39 +61,25 @@ SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, &r.Invali
 // Integrity runs the checks: SQLite's own two, the semantic checks of idChecks, and the full-text index's.
 func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	r := &IntegrityResult{IntegrityCheck: []string{}}
-	if err := s.integrityRead(ctx, "integrity_check", `PRAGMA integrity_check`, func(rows *sql.Rows) error {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			return err
-		}
+	var line string
+	if err := s.integrityRead(ctx, "integrity_check", `PRAGMA integrity_check`, []any{&line}, func() {
 		r.IntegrityCheck = append(r.IntegrityCheck, line)
-		return nil
 	}); err != nil {
 		return nil, err
 	}
-	if err := s.integrityRead(ctx, "foreign_key_check", `PRAGMA foreign_key_check`, func(rows *sql.Rows) error {
-		var table, parent string
-		var rowID sql.NullInt64 // WITHOUT ROWID tables report NULL.
-		var foreignKey int64
-		if err := rows.Scan(&table, &rowID, &parent, &foreignKey); err != nil {
-			return err
-		}
+	var table, parent string
+	var rowID sql.NullInt64 // WITHOUT ROWID tables report NULL.
+	var foreignKey int64
+	if err := s.integrityRead(ctx, "foreign_key_check", `PRAGMA foreign_key_check`, []any{&table, &rowID, &parent, &foreignKey}, func() {
 		r.ForeignKeys++
-		return nil
 	}); err != nil {
 		return nil, err
 	}
 	semanticOK := true
 	for _, c := range r.idChecks() {
 		*c.dst = []int64{}
-		if err := s.integrityRead(ctx, c.name, c.query, func(rows *sql.Rows) error {
-			var id int64
-			if err := rows.Scan(&id); err != nil {
-				return err
-			}
-			*c.dst = append(*c.dst, id)
-			return nil
-		}); err != nil {
+		var id int64
+		if err := s.integrityRead(ctx, c.name, c.query, []any{&id}, func() { *c.dst = append(*c.dst, id) }); err != nil {
 			return nil, err
 		}
 		semanticOK = semanticOK && len(*c.dst) == 0
@@ -109,22 +94,12 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	return r, nil
 }
 
-// integrityRead distinguishes an incomplete check from a completed diagnostic result.
-func (s *Store) integrityRead(ctx context.Context, check, query string, scan func(*sql.Rows) error) (err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("%s: %w", check, err)
-		}
-	}()
+// integrityRead reads every row of one check into dst and runs row, as each does. Its error names the check, so an
+// incomplete check is not taken for a completed diagnostic result.
+func (s *Store) integrityRead(ctx context.Context, check, query string, dst []any, row func()) error {
 	rows, err := s.DB.R.QueryContext(ctx, query)
-	if err != nil {
-		return err
+	if err := each(rows, err, dst, row); err != nil {
+		return fmt.Errorf("%s: %w", check, err)
 	}
-	defer func() { err = errors.Join(err, rows.Close()) }()
-	for rows.Next() {
-		if err := scan(rows); err != nil {
-			return err
-		}
-	}
-	return rows.Err()
+	return nil
 }

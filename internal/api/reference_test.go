@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 // TestAPIReferenceMatchesTheCode keeps API.md true: every property table of a class names exactly the paths the
@@ -33,14 +33,13 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}},
 		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}},
 		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
-		"titles":                    map[string]any{"prefix": "", "limit": 0, "titles": []core.TitleMatch{}},
 		"page, person, place, file": core.Page{},
 		"measurement":               core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "categories": []string{}, "all_history": false,
 			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
 		"metrics":    map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
 		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
-		"tombstoned": map[string]any{"kind": "", "ids": []int64{}, "count": 0},
+		"tombstoned": map[string]any{"ids": []int64{}, "count": 0},
 		"filed":      map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
 		"integrity":  core.IntegrityResult{},
 		"result":     map[string]any{"title": "", "sha256": "", "mime": "", "picture": false},
@@ -68,7 +67,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		}
 	}
 	for section := range documented {
-		if _, ok := shapes[section]; !ok && section != "errors" && section != "import, …" && section != "actions" {
+		if _, ok := shapes[section]; !ok && section != "errors" && section != "actions" {
 			t.Errorf("API.md section %q is not checked here: add its shape", section)
 		}
 	}
@@ -85,7 +84,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"},
 		{"integrity", "/integrity"},
-		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"}, {"titles", "/titles?prefix=s"},
+		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]
@@ -226,15 +225,7 @@ func walkType(prefix string, t reflect.Type, out map[string]bool) {
 // fixture is a database with one of everything the routes show, and the hrefs of the pages made.
 func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
 	ctx := t.Context()
 	ids := map[string]string{}
@@ -261,7 +252,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["file"] = fmt.Sprintf("/pages/%d", kept.ID)
-	if _, err := s.RegisterMetric(ctx, "cli", "Weight", "kg", "morning"); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg", Note: "morning"}); err != nil {
 		t.Fatal(err)
 	}
 	mid, err := s.Record(ctx, "cli", core.Reading{Metric: "Weight", Day: "2031-05-01", Value: 70})
@@ -269,7 +260,7 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["measurement"] = fmt.Sprintf("/measurements/%d", mid)
-	if _, err := s.RegisterMetric(ctx, "cli", "Walk", "", "1 = done"); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Walk", Note: "1 = done"}); err != nil {
 		t.Fatal(err)
 	}
 	h := New(s)

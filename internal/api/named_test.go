@@ -4,22 +4,24 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/apitest"
 )
 
 // TestPeopleListCarriesItsMentions: the rows of the people list of Browse say how many pages link to each person and
 // the newest day page among them, in the order of the item links. The sheet says it in words.
 func TestPeopleListCarriesItsMentions(t *testing.T) {
-	c, h := freshOn(t, "2026-10-12") // the day the words are read against: a day of this year has no year
-	root := must(c.Get(t.Context(), "/"))
-	catalog := must(c.Get(t.Context(), "/actions"))
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the day the words are read against: a day of this year has no year
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	catalog := apitest.Must(t)(c.Get(t.Context(), "/actions"))
 	for _, name := range []string{"Ana", "Sam", "Zed"} {
-		must(c.Do(t.Context(), find(root, "create-person"), map[string]string{"title": name}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-person"), map[string]string{"title": name}))
 	}
-	must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": "2026-10-05", "text": "Lunch with [[Ana]]"}))
-	must(c.Do(t.Context(), find(catalog, "capture"), map[string]string{"day": "2026-10-09", "text": "Walk with [[Ana]] and [[Sam]]"}))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "[[Ana]] came"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, catalog, "capture"), map[string]string{"day": "2026-10-05", "text": "Lunch with [[Ana]]"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, catalog, "capture"), map[string]string{"day": "2026-10-09", "text": "Walk with [[Ana]] and [[Sam]]"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "[[Ana]] came"}))
 
-	list := must(c.Get(t.Context(), "/browse?kind=person"))
+	list := apitest.Must(t)(c.Get(t.Context(), "/browse?kind=person"))
 	rows, _ := list.Properties.(map[string]any)["rows"].([]any)
 	type want struct {
 		title    string
@@ -45,7 +47,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 		t.Errorf("a person with no day page has last_day: %v", rows[2])
 	}
 
-	body := page(t, h, "/browse?kind=person")
+	body := browse(t, h, "/browse?kind=person")
 	for _, s := range []string{
 		"mentioned on 3 pages, last Fri 9 Oct",
 		"mentioned on 1 page, last Fri 9 Oct",
@@ -62,59 +64,59 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 // that picture's preview in its row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
 // neither, even when its page embeds a picture.
 func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
+	root := apitest.Must(t)(c.Get(ctx, "/"))
 	jpg, _ := jpegFile(t, "ana.jpg", 40, 30)
-	photo := must(c.DoFiles(ctx, find(root, "add-file"), map[string]string{"title": "Ana face.jpg"}, map[string]string{"original": jpg}))
-	ana := must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Ana"}))
-	must(c.Do(ctx, find(ana, "save-body"), map[string]string{"body": "![[Ana face.jpg]]\n\nMet at school."}))
-	must(c.Do(ctx, find(root, "create-person"), map[string]string{"title": "Sam"}))
-	lake := must(c.Do(ctx, find(root, "create-place"), map[string]string{"title": "Lake"}))
-	must(c.Do(ctx, find(lake, "save-body"), map[string]string{"body": "![[Ana face.jpg]]"}))
+	photo := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Ana face.jpg"}, map[string]string{"original": jpg}))
+	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "![[Ana face.jpg]]\n\nMet at school."}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Sam"}))
+	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, lake, "save-body"), map[string]string{"body": "![[Ana face.jpg]]"}))
 
-	rows, _ := props(must(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
+	rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
 	if len(rows) != 2 {
 		t.Fatalf("rows = %v, want Ana and Sam", rows)
 	}
-	want := hrefOf(photo, "preview")
+	want := apitest.Href(photo, "preview")
 	if got := str(rows[0].(map[string]any)["picture"]); want == "" || got != want {
 		t.Errorf("Ana's picture = %q, want %q", got, want)
 	}
 	if _, has := rows[1].(map[string]any)["picture"]; has {
 		t.Errorf("Sam has a picture: %v", rows[1])
 	}
-	body := page(t, h, "/browse?kind=person")
+	body := browse(t, h, "/browse?kind=person")
 	for _, s := range []string{`<img class="face-picture" src="` + want + `" alt="" loading="lazy">`, `<span class="face-picture" aria-hidden="true">`} {
 		if !strings.Contains(body, s) {
 			t.Errorf("the people sheet lacks %q", s)
 		}
 	}
-	places, _ := props(must(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
+	places, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
 	if len(places) != 1 || places[0].(map[string]any)["picture"] != nil {
 		t.Errorf("the places rows = %v, want Lake with no picture", places)
 	}
-	if body := page(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) {
+	if body := browse(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) {
 		t.Errorf("the places sheet draws a picture of a face")
 	}
 }
 
 // TestMentionsHaveNoDayWhenNoDayPageLinks: a page that is not a day page gives a count and no last day.
 func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
-	c, h := freshOn(t, "2026-10-12") // the day the words are read against: a day of this year has no year
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "create-place"), map[string]string{"title": "Lake"}))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
-	must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
-	if body := page(t, h, "/browse?kind=place"); !strings.Contains(body, "mentioned on 2 pages</span>") {
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the day the words are read against: a day of this year has no year
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
+	if body := browse(t, h, "/browse?kind=place"); !strings.Contains(body, "mentioned on 2 pages</span>") {
 		t.Errorf("the places sheet lacks the count without a day:\n%.2000s", body)
 	}
 }
 
 // TestDaysHaveNoRows: the list of the days is its item links alone; the lists of Browse carry rows.
 func TestDaysHaveNoRows(t *testing.T) {
-	c, _ := fresh(t)
-	if props, _ := must(c.Get(t.Context(), "/days")).Properties.(map[string]any); props["rows"] != nil {
+	c, _, _ := apitest.Fresh(t, "cli")
+	if props, _ := apitest.Must(t)(c.Get(t.Context(), "/days")).Properties.(map[string]any); props["rows"] != nil {
 		t.Errorf("GET /days has rows: %v", props["rows"])
 	}
 }

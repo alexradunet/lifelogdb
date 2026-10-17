@@ -7,7 +7,6 @@ package agentic
 import (
 	"bytes"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+
+	"lifelog/internal/api/siren"
 )
 
 //go:embed templates
@@ -85,12 +86,10 @@ func Files(p Paths) (map[string][]byte, error) {
 	}
 	server := func(agent string) []string { return []string{"mcp", "--agent", agent, "--db", p.DB} }
 	var err2 error
+	// jsonFile is v as the JSON of the API, with an indent of two spaces.
 	jsonFile := func(v any) []byte {
 		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		enc.SetEscapeHTML(false)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(v); err != nil {
+		if err := siren.WriteJSON(&b, v, "  "); err != nil {
 			err2 = err
 		}
 		return b.Bytes()

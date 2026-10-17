@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"modernc.org/sqlite"
 )
 
 func TestSchemaCopyIsCurrent(t *testing.T) {
@@ -142,6 +144,21 @@ func writeFile(t *testing.T, p string, b []byte) {
 	}
 }
 
+// replaceReservedFile removes the reserved file at p and writes b at p, as another process can do. It returns false
+// when Windows refuses the remove: the reservation holds its file open without FILE_SHARE_DELETE, so on Windows no
+// other file can take the path.
+func replaceReservedFile(t *testing.T, p string, b []byte) bool {
+	t.Helper()
+	if err := os.Remove(p); err != nil {
+		if runtime.GOOS == "windows" {
+			return false
+		}
+		t.Fatal(err)
+	}
+	writeFile(t, p, b)
+	return true
+}
+
 func createForeignSQLiteFile(t *testing.T, p string) {
 	t.Helper()
 	d, err := sql.Open("sqlite", p)
@@ -242,15 +259,19 @@ func TestInitApplyFailurePreservesReplacement(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	replacement := []byte("replacement created after reservation\n")
 	applyErr := errors.New("controlled apply failure")
+	replaced := false
 	err := initWith(p, func(*sql.DB) error {
-		if err := os.Remove(p); err != nil {
-			t.Fatal(err)
-		}
-		writeFile(t, p, replacement)
+		replaced = replaceReservedFile(t, p, replacement)
 		return applyErr
 	})
 	if err == nil || !strings.Contains(err.Error(), applyErr.Error()) {
 		t.Fatalf("initWith error = %v, want controlled apply failure", err)
+	}
+	if !replaced {
+		if _, err := os.Lstat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("failed owned reservation remains: %v", err)
+		}
+		return
 	}
 	got, err := os.ReadFile(p)
 	if err != nil {
@@ -274,6 +295,161 @@ func TestReservedCleanupWithoutIdentityPreservesPath(t *testing.T) {
 	}
 	if !bytes.Equal(got, want) {
 		t.Fatalf("path with unknown identity changed to %q", got)
+	}
+}
+
+// TestAFailedInitRemovesTheWALOfItsFile: SQLite keeps the WAL of a database and its index (PATH-wal and PATH-shm)
+// when its close cannot checkpoint. A cancelled Init interrupts SQLite, and the close then keeps the two. A WAL left
+// beside the path goes into the next database at the path: a copy put back there reads the pages of the WAL. So the
+// cleanup of a failed Init removes the two with its file, and only the two of its own file:
+//   - SQLite wrote the file, so the file is not empty: the two go with the file. The test makes the close of SQLite
+//     keep them with SQLITE_FCNTL_PERSIST_WAL, which gives the files of an interrupted close each time.
+//   - Another file took the path: the WAL and the index there stay.
+//   - The file is empty: SQLite did not read it, so a WAL beside it is not the WAL of this file, and it stays.
+//   - SQLite deletes a WAL beside an empty file when it reads the file: so a WAL beside a file that SQLite wrote is
+//     the WAL of this file.
+//   - The WAL or the index cannot go: the file stays with them, so no WAL stays alone at the path.
+func TestAFailedInitRemovesTheWALOfItsFile(t *testing.T) {
+	failure := errors.New("controlled apply failure")
+	// gone reports whether no file is at p.
+	gone := func(t *testing.T, p string) bool {
+		t.Helper()
+		_, err := os.Lstat(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		return err != nil
+	}
+	// keepTheWAL writes a table into the database of w, at p, in WAL mode. It makes the close of SQLite keep the WAL
+	// and its index, closes w, and returns the WAL.
+	keepTheWAL := func(t *testing.T, w *sql.DB, p string) []byte {
+		t.Helper()
+		c, err := w.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.ExecContext(t.Context(), "PRAGMA journal_mode = WAL; CREATE TABLE kept(x)"); err != nil {
+			t.Fatal(err)
+		}
+		err = c.Raw(func(dc any) error {
+			fc, ok := dc.(interface {
+				FileControlPersistWAL(string, int) (int, error)
+			})
+			if !ok {
+				return errors.New("the driver cannot keep the WAL")
+			}
+			_, err := fc.FileControlPersistWAL("main", 1)
+			return err
+		})
+		if err := errors.Join(err, c.Close(), w.Close()); err != nil {
+			t.Fatal(err)
+		}
+		wal, err := os.ReadFile(p + "-wal")
+		if err != nil || len(wal) <= 32 || gone(t, p+"-shm") {
+			t.Fatalf("SQLite did not keep the WAL (%d bytes, %v) and its index at its close", len(wal), err)
+		}
+		return wal
+	}
+	t.Run("the WAL of the file goes with the file", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		err := initWith(p, func(w *sql.DB) error {
+			keepTheWAL(t, w, p)
+			return failure
+		})
+		if !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		for _, name := range []string{p, p + "-wal", p + "-shm"} {
+			if !gone(t, name) {
+				t.Errorf("the cleanup left %s", name)
+			}
+		}
+	})
+	t.Run("another file took the path", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		theirs := map[string][]byte{p: []byte("another database\n"), p + "-wal": []byte("its WAL\n"), p + "-shm": []byte("its index\n")}
+		replaced := false
+		err := initWith(p, func(w *sql.DB) error {
+			keepTheWAL(t, w, p)
+			if replaced = replaceReservedFile(t, p, theirs[p]); replaced {
+				writeFile(t, p+"-wal", theirs[p+"-wal"])
+				writeFile(t, p+"-shm", theirs[p+"-shm"])
+			}
+			return failure
+		})
+		if !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		for name, want := range theirs {
+			got, err := os.ReadFile(name)
+			switch {
+			case !replaced && !gone(t, name):
+				t.Errorf("the reservation held its path, and the cleanup left %s", name)
+			case replaced && (err != nil || !bytes.Equal(got, want)):
+				t.Errorf("%s: %q %v, want the file of the other database", name, got, err)
+			}
+		}
+	})
+	t.Run("a WAL beside an empty file", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "life.db")
+		stale := []byte("a WAL of no database\n")
+		writeFile(t, p+"-wal", stale)
+		if err := initWith(p, func(*sql.DB) error { return failure }); !errors.Is(err, failure) {
+			t.Fatalf("initWith = %v, want the failure", err)
+		}
+		if got, err := os.ReadFile(p + "-wal"); !gone(t, p) || err != nil || !bytes.Equal(got, stale) {
+			t.Errorf("the cleanup changed a WAL that SQLite did not open: %q %v", got, err)
+		}
+	})
+	t.Run("SQLite deletes a WAL beside an empty file", func(t *testing.T) {
+		dir := t.TempDir()
+		q := filepath.Join(dir, "other.db")
+		w, err := sql.Open("lifelog", dsn(q, false))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wal := keepTheWAL(t, w, q)
+		p := filepath.Join(dir, "life.db")
+		writeFile(t, p+"-wal", wal)
+		if err := Init(t.Context(), p); err != nil {
+			t.Fatal(err)
+		}
+		if !gone(t, p+"-wal") {
+			t.Error("SQLite kept the WAL of another database beside a new file")
+		}
+		d, err := Open(t.Context(), p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n int
+		err = d.R.QueryRowContext(t.Context(), "SELECT count(*) FROM sqlite_schema WHERE name = 'kept'").Scan(&n)
+		if err := errors.Join(err, d.Close()); err != nil || n != 0 {
+			t.Errorf("the new database has the table of the other WAL: %d, %v", n, err)
+		}
+	})
+	for _, side := range []string{"-wal", "-shm"} {
+		t.Run("a "+side+" that cannot go", func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "life.db")
+			err := initWith(p, func(w *sql.DB) error {
+				// SQLite writes the file, in its first journal mode: no WAL.
+				if _, err := w.ExecContext(t.Context(), "PRAGMA user_version = 7"); err != nil {
+					t.Fatal(err)
+				}
+				if err := w.Close(); err != nil {
+					t.Fatal(err)
+				}
+				// A folder that is not empty cannot be removed, on Linux and on Windows.
+				writeFile(t, filepath.Join(p+side, "inside"), nil)
+				return failure
+			})
+			var refused *os.PathError
+			if !errors.Is(err, failure) || !errors.As(err, &refused) || refused.Path != p+side {
+				t.Fatalf("initWith = %v, want the failure and the error of %s", err, p+side)
+			}
+			if gone(t, p) || gone(t, p+side) {
+				t.Errorf("the cleanup removed the file or its %s, and it could not remove the %s", side, side)
+			}
+		})
 	}
 }
 
@@ -566,11 +742,132 @@ func TestSnapshotDestinationErrors(t *testing.T) {
 			t.Errorf("refusal left artifact %s", entry.Name())
 		}
 	}
+	// A .git folder above the destination: the destination is inside that work tree.
+	backups := filepath.Join(root, "repo", "backups")
+	for _, dir := range []string{filepath.Join(root, "repo", ".git"), backups} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Snapshot(t.Context(), live, backups, time.Now()); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("a destination under a .git folder: %v, want the refusal", err)
+	}
+	if entries, err := os.ReadDir(backups); err != nil || len(entries) != 0 {
+		t.Errorf("the refusal left %v (%v)", entries, err)
+	}
 	after, err := os.ReadFile(live)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(before, after) {
 		t.Error("destination error changed source")
+	}
+}
+
+// TestCheckSnapshotDirTellsARefusalFromAFault: a folder that is not there, a file and a path under a file are the
+// refusal "no folder". A folder that the process cannot reach is a fault: its parent has no permission to search, so
+// the folder can exist, and the error is not ErrRefused.
+func TestCheckSnapshotDirTellsARefusalFromAFault(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(root, "missing"), file, filepath.Join(file, "under")} {
+		if _, err := CheckSnapshotDir(dir); !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "no folder") {
+			t.Errorf("CheckSnapshotDir(%s) = %v, want the refusal no folder", dir, err)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder mode does not stop a search on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root searches a folder with no permission")
+	}
+	locked := filepath.Join(root, "locked")
+	inside := filepath.Join(locked, "snapshots")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(locked, 0o755); err != nil {
+			t.Error(err)
+		}
+	})
+	_, err := CheckSnapshotDir(inside)
+	if err == nil || errors.Is(err, ErrRefused) || !errors.Is(err, os.ErrPermission) {
+		t.Errorf("CheckSnapshotDir of a folder under a parent with no permission = %v, want a permission fault, not a refusal", err)
+	}
+}
+
+// TestWriteReportsAFailedRollback: when fn fails and the rollback fails too, Write returns both errors in a
+// RollbackError. The caller then knows that the transaction was not rolled back. Here fn commits by itself before it
+// fails, so the rollback finds no open transaction.
+func TestWriteReportsAFailedRollback(t *testing.T) {
+	d := Fresh(t)
+	failed := errors.New("fn failed")
+	err := d.Write(t.Context(), func(tx *sql.Tx) error {
+		if _, err := tx.Exec("COMMIT"); err != nil {
+			return err
+		}
+		return failed
+	})
+	var rollback *sqlite.Error
+	var both *RollbackError
+	if !errors.Is(err, failed) || !errors.As(err, &rollback) || !errors.As(err, &both) {
+		t.Fatalf("Write = %v, want a RollbackError with the error of fn and the SQLite error of the rollback", err)
+	}
+	if err := d.Write(t.Context(), func(*sql.Tx) error { return nil }); err != nil {
+		t.Errorf("the writer is not usable after the failed rollback: %v", err)
+	}
+}
+
+// TestCancelledWriteReportsOnlyTheCancellation: when the context is cancelled, database/sql rolls the transaction
+// back. Write's own rollback then finds it done, and that is not a failure to report.
+func TestCancelledWriteReportsOnlyTheCancellation(t *testing.T) {
+	d := Fresh(t)
+	opCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	err := d.Write(opCtx, func(tx *sql.Tx) error {
+		cancel()
+		// Wait until database/sql has rolled the transaction back.
+		for {
+			_, err := tx.ExecContext(context.Background(), "SELECT 1")
+			if errors.Is(err, sql.ErrTxDone) {
+				return opCtx.Err()
+			}
+			if err != nil {
+				return err
+			}
+		}
+	})
+	if !errors.Is(err, context.Canceled) || errors.Is(err, sql.ErrTxDone) {
+		t.Errorf("Write = %v, want the cancellation alone", err)
+	}
+}
+
+// TestCloseReportsAFailedOptimize: Close returns the error of PRAGMA optimize, and it still closes the readers.
+func TestCloseReportsAFailedOptimize(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "life.db")
+	if err := Init(t.Context(), p); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Open(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate damage: with the writer closed first, PRAGMA optimize cannot run.
+	if err := d.W.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err == nil {
+		t.Error("Close = nil, want the error of PRAGMA optimize")
+	}
+	if err := d.R.PingContext(t.Context()); err == nil {
+		t.Error("the readers are open after Close")
 	}
 }

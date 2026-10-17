@@ -23,11 +23,13 @@ like a date but is none of these: ask the owner.
    are not valid titles). Tell the owner both.
 6. People and places. List each person the note names, and each place where the owner was. `find` each one, then
    propose one line each:
-   - an existing person or place: "link about NAME?" or "link at PLACE?"
-   - a new one: "new person NAME, and link about?" or "new place PLACE, and link at?"
+   - a place that exists: "link at PLACE?"
+   - a plain page of that title (a `[[link]]` made it): "make NAME a person?" or "make PLACE a place, and link at?"
+   - no page: "new person NAME?" or "new place PLACE, and link at?"
 
-   Write only what the owner approves: `create_person` or `create_place`, then `link` from the day page (`about` for
-   a person, `at` for a place). Never a person for a role ("the dentist"), never a place for a common noun.
+   Write only what the owner approves: `promote`, `create_person` or `create_place`, then for a place `link` from
+   the day page with the kind `at`. A day page links a person only by a `[[link]]` in its text, and the text stays as
+   the note writes it. Never a person for a role ("the dentist"), never a place for a common noun.
 
 ## A topic note
 
@@ -46,3 +48,5 @@ like a date but is none of these: ask the owner.
 - An embedded attachment (`![[scan.pdf]]`) makes an empty page of that name. When the owner later keeps the file
   (skill `lifelog-keep-photos`), the file becomes that page.
 - A table of dated values (bloodwork): import the note first, then `record` each reading the owner wants kept.
+  `record` needs a metric that exists (`get` `/metrics` lists them). Only the owner registers a new metric: ask the
+  owner, for example to run `lifelog do register-metric name=NAME unit=UNIT`.

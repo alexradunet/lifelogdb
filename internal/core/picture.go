@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"strconv"
 
 	"lifelog/internal/text"
@@ -41,20 +40,10 @@ func firstPictures(ctx context.Context, q interface {
 		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
 		  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
 		 WHERE n.name_key IN (SELECT value FROM json_each(?))`, string(arg))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	byKey := map[string]int64{}
-	for rows.Next() {
-		var k string
-		var id int64
-		if err := rows.Scan(&k, &id); err != nil {
-			return nil, err
-		}
-		byKey[k] = id
-	}
-	if err := rows.Err(); err != nil {
+	var key string
+	var file int64
+	if err := each(rows, err, []any{&key, &file}, func() { byKey[key] = file }); err != nil {
 		return nil, err
 	}
 	for i, ks := range titles {
@@ -70,22 +59,17 @@ func firstPictures(ctx context.Context, q interface {
 
 // SetPicture keeps a photo as a file and makes it the page's picture. day names a new file when f has no title:
 // "<page> <day>.jpg", with a number when that title is taken.
-func (s *Store) SetPicture(ctx context.Context, source string, id int64, day string, f FileIn) (k Kept, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { k, e = t.SetPicture(id, day, f); return })
-	if err != nil {
-		k = Kept{}
-	}
-	return
+func (s *Store) SetPicture(ctx context.Context, source string, id int64, day string, f FileIn) (Kept, error) {
+	return alone(s, ctx, source, func(t *Tx) (Kept, error) { return t.setPicture(id, day, f) })
 }
 
 // SetPictureOf makes a kept file, named by its title, the page's picture.
-func (s *Store) SetPictureOf(ctx context.Context, source string, id int64, title string) (r Sync, err error) {
-	err = s.Do(ctx, source, func(t *Tx) (e error) { r, e = t.SetPictureOf(id, title); return })
-	return
+func (s *Store) SetPictureOf(ctx context.Context, source string, id int64, title string) (Sync, error) {
+	return alone(s, ctx, source, func(t *Tx) (Sync, error) { return t.setPictureOf(id, title) })
 }
 
-// SetPicture is Store.SetPicture in t.
-func (t *Tx) SetPicture(id int64, day string, f FileIn) (Kept, error) {
+// setPicture is Store.SetPicture in t.
+func (t *Tx) setPicture(id int64, day string, f FileIn) (Kept, error) {
 	page, err := t.livePage(id)
 	if err != nil {
 		return Kept{}, err
@@ -93,9 +77,9 @@ func (t *Tx) SetPicture(id int64, day string, f FileIn) (Kept, error) {
 	if f.Preview == nil {
 		return Kept{}, Invalid("a picture: send a JPEG, PNG or GIF, or a preview of it")
 	}
-	f.UnknownCaptureDay, f.Day, f.Taken = true, "", ""
+	f.unknownCaptureDay, f.Day, f.Taken = true, "", ""
 	if f.Title == "" {
-		if f.Title, err = t.freePictureTitle(page, day, f.MIME); err != nil {
+		if f.Title, err = t.freePictureTitle(page.Title, day, f.MIME); err != nil {
 			return Kept{}, err
 		}
 	}
@@ -108,14 +92,17 @@ func (t *Tx) SetPicture(id int64, day string, f FileIn) (Kept, error) {
 		return Kept{}, err
 	}
 	sync, err := t.showFirst(id, k.ID, title)
+	if err != nil {
+		return Kept{}, err
+	}
 	if sync != nil {
 		k.Sync = sync
 	}
-	return k, err
+	return k, nil
 }
 
-// SetPictureOf is Store.SetPictureOf in t.
-func (t *Tx) SetPictureOf(id int64, title string) (Sync, error) {
+// setPictureOf is Store.SetPictureOf in t.
+func (t *Tx) setPictureOf(id int64, title string) (Sync, error) {
 	if _, err := t.livePage(id); err != nil {
 		return Sync{}, err
 	}
@@ -133,27 +120,10 @@ func (t *Tx) SetPictureOf(id int64, title string) (Sync, error) {
 		return Sync{}, Invalid("%q is not a kept picture: keep it first (add-file)", title)
 	}
 	sync, err := t.showFirst(id, p.ID, p.Title)
-	if sync == nil {
+	if err != nil || sync == nil {
 		return Sync{}, err
 	}
-	return *sync, err
-}
-
-// livePage is the title of a live page: a missing page is 404, a deleted one 409.
-func (t *Tx) livePage(id int64) (string, error) {
-	var title string
-	var deleted bool
-	err := t.tx.QueryRowContext(t.ctx, `SELECT n.title, e.deleted_at IS NOT NULL FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&title, &deleted)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return "", NotFound("no page %d", id)
-	case err != nil:
-		return "", err
-	case deleted:
-		return "", Conflict("page %d is deleted: revive it first", id)
-	}
-	return title, nil
+	return *sync, nil
 }
 
 // freePictureTitle is "<page> <day><ext>", or "<page> <day> 2<ext>" and on when a page has that name.

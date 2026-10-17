@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"modernc.org/sqlite"
@@ -233,67 +234,110 @@ func initWith(path string, apply func(*sql.DB) error) error {
 	}
 	// Seed-only statistics make later bulk capture choose scans as the file grows.
 	// Let ordinary connection-close maintenance collect statistics from real data.
-	return w.Close()
+	// Close SQLite first: on Linux, the close of a descriptor drops every lock that the process holds on the file.
+	// A close that fails returns its error and keeps the file, with the schema in it: the cleanup cannot remove a
+	// path after the close, because only the open file shows that the path still names it (reserveDatabasePath).
+	return errors.Join(w.Close(), reserved.Close())
 }
 
-func reserveDatabasePath(path string) (os.FileInfo, error) {
+// reserveDatabasePath creates path, which must not exist, and returns the new file open. The caller keeps the file
+// open until its work on path ends: then it closes the file, or gives it to removeReservedDatabasePath. An open file
+// keeps its identity. On Linux its inode stays in use, so the file system cannot give the inode number to a new file
+// (ext4 gives the number of a removed file to the next new file). On Windows no other handle can remove or rename
+// the file, because Go opens it without FILE_SHARE_DELETE; the share modes of this handle and of SQLite's handle
+// allow each other.
+func reserveDatabasePath(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 	if err != nil {
 		if os.IsExist(err) {
-			return nil, fmt.Errorf("%s already exists", path)
+			return nil, refusal(path + " already exists")
 		}
 		return nil, fmt.Errorf("reserving %s: %w", path, err)
 	}
-	info, statErr := f.Stat()
-	closeErr := f.Close()
-	if statErr != nil {
-		return nil, errors.Join(fmt.Errorf("stat reserved database %s: %w", path, statErr), closeErr)
-	}
-	if closeErr != nil {
-		return nil, errors.Join(fmt.Errorf("closing reserved database %s: %w", path, closeErr), removeReservedDatabasePath(path, info))
-	}
-	return info, nil
+	return f, nil
 }
 
-func removeReservedDatabasePath(path string, reserved os.FileInfo) error {
+// removeReservedDatabasePath closes the reserved file and removes path if path still names that file. It compares
+// the two while the file is open, so os.SameFile cannot take another file for it (see reserveDatabasePath). It also
+// removes the WAL of the file and its index, path-wal and path-shm, when SQLite wrote the file.
+func removeReservedDatabasePath(path string, reserved *os.File) error {
 	if reserved == nil {
 		return nil
 	}
+	held, err := reserved.Stat()
+	if err != nil {
+		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), reserved.Close())
+	}
 	current, err := os.Lstat(path)
 	if err != nil {
+		closeErr := reserved.Close()
 		if os.IsNotExist(err) {
-			return nil
+			return closeErr
 		}
-		return fmt.Errorf("checking reserved database %s for cleanup: %w", path, err)
+		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), closeErr)
 	}
-	if !os.SameFile(reserved, current) {
-		return nil
+	if !os.SameFile(held, current) {
+		return reserved.Close()
 	}
+	// SQLite keeps the WAL and its index at its close when it cannot checkpoint, as after an interrupt. A WAL left
+	// beside the path goes into the next database there. The two are of this file only when SQLite wrote the file:
+	// SQLite reads a new file while it is empty, and it then deletes a WAL beside it. They go before the file, and
+	// while the handle is still open: on Windows the handle keeps any other process from removing or renaming the
+	// file, so the path still names it. On Linux another process that does not use Init can still change the path.
+	if held.Size() > 0 {
+		for _, side := range []string{path + "-wal", path + "-shm"} {
+			if err := os.Remove(side); err != nil && !errors.Is(err, os.ErrNotExist) {
+				// The file stays with its WAL, so that no WAL stays alone at the path.
+				return errors.Join(fmt.Errorf("removing %s of failed database %s: %w", side, path, err), reserved.Close())
+			}
+		}
+	}
+	// Windows does not remove a file while a handle holds it, so the handle closes before the remove.
+	closeErr := reserved.Close()
 	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("removing failed database %s: %w", path, err)
+		return errors.Join(fmt.Errorf("removing failed database %s: %w", path, err), closeErr)
 	}
-	return nil
+	return closeErr
 }
 
+// Close runs PRAGMA optimize on the writer, except on a snapshot under its restore check, and then closes the
+// readers and the writer. It closes them also when the optimize fails, and returns every error. Close has no
+// caller's context: it runs at the end, often after a signal cancelled the operation's context, and the optimize
+// must run then too. busy_timeout limits its wait for the lock.
 func (d *DB) Close() error {
+	var optimize error
 	if !d.keep {
-		d.W.Exec("PRAGMA optimize")
+		if _, err := d.W.ExecContext(context.Background(), "PRAGMA optimize"); err != nil {
+			optimize = fmt.Errorf("PRAGMA optimize: %w", err)
+		}
 	}
-	return errors.Join(d.R.Close(), d.W.Close())
+	return errors.Join(optimize, d.R.Close(), d.W.Close())
 }
 
-// Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil.
+// Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil. When fn fails and the rollback
+// fails too, Write returns a *RollbackError with both errors: the transaction can then still be open, or kept in part.
 func (d *DB) Write(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := d.W.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		// ErrTxDone: database/sql rolled the transaction back already, because ctx was cancelled.
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			return &RollbackError{Err: err, Rollback: rerr}
+		}
 		return err
 	}
 	return tx.Commit()
 }
+
+// RollbackError is the error of a Write, or of a savepoint inside one, whose fn failed and whose rollback failed too.
+// Err is the error of fn and Rollback the error of the rollback; errors.Is and errors.As find both. A caller must not
+// read it as the error of fn alone: the transaction can still be open, or kept in part.
+type RollbackError struct{ Err, Rollback error }
+
+func (e *RollbackError) Error() string   { return e.Err.Error() + "\nrollback: " + e.Rollback.Error() }
+func (e *RollbackError) Unwrap() []error { return []error{e.Err, e.Rollback} }
 
 // Copy writes a copy of a life.db to a new file through a read-only connection (docs/contract/imports.md step 1:
 // VACUUM INTO). It refuses an existing target.
@@ -333,8 +377,21 @@ func copyWith(from, to string, copy func(*sql.DB) error) error {
 	if err := errors.Join(copyErr, r.Close()); err != nil {
 		return errors.Join(err, removeReservedDatabasePath(to, reserved))
 	}
-	return nil
+	// A close that fails returns its error and keeps the copy that VACUUM INTO wrote, as initWith keeps its file.
+	// Snapshot returns the path with the error.
+	return reserved.Close()
 }
+
+// ErrRefused is the cause of a refusal: the caller asks for what cannot be, and nothing failed. A snapshot folder
+// that is not a folder or is inside a git work tree, and a database file that exists already, are refusals.
+// errors.Is tells a refusal from a failure (a disk, a permission, a context that ran out).
+var ErrRefused = errors.New("refused")
+
+// refusal is an error whose cause is ErrRefused, with its own message.
+type refusal string
+
+func (r refusal) Error() string { return string(r) }
+func (refusal) Unwrap() error   { return ErrRefused }
 
 // Snapshot takes a snapshot of a life.db into dir (docs/cookbook/take-a-snapshot.md, D25): a Copy named by the local
 // day of now, life-YYYY-MM-DD.db, or life-YYYY-MM-DDTHHMMSS.db when the day has one already. It never overwrites a
@@ -362,8 +419,14 @@ func CheckSnapshotDir(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("no folder %s for the snapshot", dir)
+	// Only a path that is not a folder is the refusal: a folder the process cannot reach (a permission, a disk) is
+	// a fault.
+	fi, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || err == nil && !fi.IsDir():
+		return "", refusal(fmt.Sprintf("no folder %s for the snapshot", dir))
+	case err != nil:
+		return "", fmt.Errorf("check snapshot folder %s: %w", dir, err)
 	}
 	physical, err := snapshotPhysicalDir(dir)
 	if err != nil {
@@ -375,8 +438,8 @@ func CheckSnapshotDir(dir string) (string, error) {
 			return "", fmt.Errorf("check snapshot folder %s: %w", candidate, err)
 		}
 		if repo != "" {
-			return "", fmt.Errorf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
-				"which git history cannot forget; choose a folder outside it", candidate, repo)
+			return "", refusal(fmt.Sprintf("%s is inside the git work tree %s: a snapshot holds health data and private notes, "+
+				"which git history cannot forget; choose a folder outside it", candidate, repo))
 		}
 	}
 	return physical, nil

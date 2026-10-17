@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -29,10 +30,23 @@ func requestLimit(msg string) error {
 	return &core.Error{Status: http.StatusRequestEntityTooLarge, Msg: msg}
 }
 
-// form reads an action's fields: urlencoded (what a browser and the CLI send) or a JSON object.
+// limitBody gives the body of a request that is not a multipart form the limit maxRequestBody. The limit has the
+// ResponseWriter of the server, so the server closes the connection after it answers a body that is larger, and
+// reads no other request from it. A multipart form has the limits of parseFileForm and no limit as a whole, because
+// an original has none.
+func limitBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" && r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// form reads an action's fields: urlencoded (what a browser and the CLI send) or a JSON object. The body has the limit
+// of limitBody.
 func form(r *http.Request) (url.Values, error) {
 	defer r.Body.Close()
-	r.Body = http.MaxBytesReader(nil, r.Body, maxRequestBody)
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if ct == "application/json" {
 		var m map[string]any
@@ -69,11 +83,26 @@ func form(r *http.Request) (url.Values, error) {
 	return r.Form, nil
 }
 
-// required refuses a request that leaves one of the named fields empty.
-func required(v url.Values, names ...string) error {
-	for _, n := range names {
-		if v.Get(n) == "" {
-			return core.Invalid("missing field %s", n)
+// fieldsOf reads the fields of the catalog action act: the query of a GET, the form of a POST. It refuses a request
+// that leaves a required field empty (required).
+func fieldsOf(r *http.Request, act spec) (url.Values, error) {
+	if act.Method == "GET" {
+		v := r.URL.Query()
+		return v, required(v, act)
+	}
+	v, err := form(r)
+	if err != nil {
+		return nil, err
+	}
+	return v, required(v, act)
+}
+
+// required refuses values that leave a required field of the action s empty. The catalog is the one list of the
+// fields an action requires. A path field is not in the values: the route gives it.
+func required(v url.Values, s spec) error {
+	for _, f := range s.Fields {
+		if f.Required && f.In != "path" && v.Get(f.Name) == "" {
+			return core.Invalid("missing field %s", f.Name)
 		}
 	}
 	return nil
@@ -88,30 +117,18 @@ func idOf(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-// idForm is the opening of a write on a resource: the {id} of the path, the fields of the body, and the ones the
-// action cannot do without.
-func idForm(r *http.Request, names ...string) (int64, url.Values, error) {
+// idForm is the opening of a write on a resource: the {id} of the path, and the fields of the action act (fieldsOf).
+func idForm(r *http.Request, act spec) (int64, url.Values, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return 0, nil, err
 	}
-	v, err := form(r)
-	if err != nil {
-		return 0, nil, err
-	}
-	return id, v, required(v, names...)
+	v, err := fieldsOf(r, act)
+	return id, v, err
 }
 
 // idParam is the path parameter of an action on the resource with this id.
 func idParam(id int64) map[string]string { return map[string]string{"id": strconv.FormatInt(id, 10)} }
-
-// boolField is a 0/1 field's value for a flag.
-func boolField(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
 
 // number is a field's value as a number, nil when the field is empty.
 func number(v url.Values, name string) (*float64, error) {
@@ -124,18 +141,6 @@ func number(v url.Values, name string) (*float64, error) {
 		return nil, core.Invalid("%s %q is not a number", name, s)
 	}
 	return &f, nil
-}
-
-// optionalID is a field's value as an id, 0 when the field is empty.
-func optionalID(v url.Values, name string) (int64, error) {
-	if v.Get(name) == "" {
-		return 0, nil
-	}
-	id, err := strconv.ParseInt(v.Get(name), 10, 64)
-	if err != nil {
-		return 0, core.Invalid("%s must be an exact integer id", name)
-	}
-	return id, nil
 }
 
 // flag is a 0/1 field: false when it is empty.
@@ -174,7 +179,7 @@ func pageOf(r *http.Request, def int) (limit, offset int, err error) {
 
 // paged trims a read of limit+1 rows to the page, records limit and offset in the properties and adds the next
 // and prev links; path and q are the list's own address.
-func paged[T any](e *Entity, rows []T, path string, q url.Values, limit, offset int) []T {
+func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, offset int) []T {
 	more := len(rows) > limit
 	if more {
 		rows = rows[:limit]

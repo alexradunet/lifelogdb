@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -44,11 +45,11 @@ func named(s *S) {
 	if len(integrityStatements) != 8 {
 		stop("unexpected integrity statement count")
 	}
-	s.K("a named person missing its extension is found by the semantic query", c.n("SELECT count(*) FROM people WHERE id=?", half) == 0 && contains(c.col(integrityStatements[2]), ids(half)))
+	s.K("a named person missing its extension is found by the semantic query", c.n("SELECT count(*) FROM people WHERE id=?", half) == 0 && slices.Contains(c.col(integrityStatements[2]), ids(half)))
 	s.K("a death before the birth is refused", err(c.tryx("UPDATE people SET birth_day='2000-01-02', death_day='2000-01-01' WHERE id=?", c.named("person", ""))))
 	cols := func(t string) []string { return c.col("select name from pragma_table_info(?)", t) }
-	s.K("people keep name, and have no nickname and no note", contains(cols("people"), "name") && !contains(cols("people"), "nickname") && !contains(cols("people"), "note"))
-	s.K("entities has no page_id column", !contains(cols("entities"), "page_id"))
+	s.K("people keep name, and have no nickname and no note", slices.Contains(cols("people"), "name") && !slices.Contains(cols("people"), "nickname") && !slices.Contains(cols("people"), "note"))
+	s.K("entities has no page_id column", !slices.Contains(cols("entities"), "page_id"))
 	// promotion and its limits
 	c = s.fresh()
 	g := c.page("Ana")
@@ -130,7 +131,7 @@ func named(s *S) {
 			c.tryx("ROLLBACK")
 		}
 		s.K("the promotion block turns it into a person, one id", promotionErr == nil && c.tab("select e.entity_type, pe.name from entities e join people pe using(id) where id=?", gid) == "person|Ana Example", promotionErr)
-		s.K("...and the old day page already names her, no re-save needed (cookbook/days-that-name)", eq(c.col(s.d.Block("days-that-name"), P{"entity_id": gid}), []string{"2026-09-30"}))
+		s.K("...and the old day page already names her, no re-save needed (cookbook/days-that-name)", slices.Equal(c.col(s.d.Block("days-that-name"), P{"entity_id": gid}), []string{"2026-09-30"}))
 		s.K("promoting a page that is already a person changes no row, and the people insert fails", c.tryx(promo[1], P{"ghost_id": gid}) == "OK" &&
 			c.n("select changes()") == 0 && err(c.tryx(promo[2], P{"ghost_id": gid})))
 		pl := c.named("place", "Lisbon")
@@ -170,11 +171,12 @@ func named(s *S) {
 		for _, r := range rows {
 			out = append(out, val(r[0])+"|"+val(r[2])+"|"+val(r[3]))
 		}
-		return sorted(out)
+		return slices.Sorted(slices.Values(out))
 	}
 	cluj := c.n("select entity_id from entity_names where name_key='cluj'")
-	s.K("cookbook/everything-about finds the day pages and the page that name him, and what his page links to", eq(arkSet(ark),
-		sorted([]string{"wikilink|" + ids(m1) + "|in", "wikilink|" + ids(m3) + "|in", "wikilink|" + ids(wiki) + "|in", "wikilink|" + ids(cluj) + "|out"})), tab(ark))
+	s.K("cookbook/everything-about finds the day pages and the page that name him, and what his page links to", slices.Equal(arkSet(ark),
+		slices.Sorted(slices.Values([]string{"wikilink|" + ids(m1) + "|in", "wikilink|" + ids(m3) + "|in", "wikilink|" + ids(wiki) + "|in", "wikilink|" + ids(cluj) + "|out"}))),
+		tab(ark))
 	typo := false
 	for _, r := range ark {
 		typo = typo || r[2] == m4
@@ -182,14 +184,14 @@ func named(s *S) {
 	s.K("...and not the typo", !typo)
 	s.K("cookbook/everything-about is two legs (the third leg through a separate page is gone)", strings.Count(s.d.Block("everything-about"), "UNION ALL") == 1)
 	q := s.d.Block("days-that-name")
-	s.K("cookbook/days-that-name lists the day pages only, newest day first", eq(c.col(q, P{"entity_id": bod}), []string{"2026-09-30", "2026-09-28"}))
+	s.K("cookbook/days-that-name lists the day pages only, newest day first", slices.Equal(c.col(q, P{"entity_id": bod}), []string{"2026-09-30", "2026-09-28"}))
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", m3)
-	s.K("...and drops a tombstoned day", eq(c.col(q, P{"entity_id": bod}), []string{"2026-09-28"}))
+	s.K("...and drops a tombstoned day", slices.Equal(c.col(q, P{"entity_id": bod}), []string{"2026-09-28"}))
 
 	renameID, renameErr := c.store().Rename(context.Background(), "ui", bod, "Bob S")
 	s.K("a preferred-handle rename retains the person and original incident prose", renameErr == nil && renameID == bod && c.str("SELECT body FROM entities WHERE id=?", m1) == "Today I met [[Bob Sample]] and went with him for a coffee", renameErr)
 	c.capture("Called [[Bob S]] and [[Bob Sample]]", "2026-10-02")
-	s.K("both owned names resolve directly, without adopting another owner's typo", eq(c.col(q, P{"entity_id": bod}), []string{"2026-10-02", "2026-09-28"}) && c.n("SELECT count(*) FROM links WHERE from_id=? AND to_id=?", m4, bod) == 0)
+	s.K("both owned names resolve directly, without adopting another owner's typo", slices.Equal(c.col(q, P{"entity_id": bod}), []string{"2026-10-02", "2026-09-28"}) && c.n("SELECT count(*) FROM links WHERE from_id=? AND to_id=?", m4, bod) == 0)
 
 	bl := c.rows(s.d.Block("backlinks"), P{"page_id": bod})
 	var blTitles []string
@@ -197,7 +199,7 @@ func named(s *S) {
 		blTitles = append(blTitles, val(r[3]))
 	}
 	s.K("cookbook/backlinks labels the backlinks of a person by title, a day page by its day, and counts the day that used both owned aliases",
-		eq(sorted(blTitles), sorted([]string{"Coffee spots", "2026-09-28", "2026-10-02"})), tab(bl))
+		slices.Equal(slices.Sorted(slices.Values(blTitles)), slices.Sorted(slices.Values([]string{"Coffee spots", "2026-09-28", "2026-10-02"}))), tab(bl))
 	wl := "select from_id, to_id from links where kind='wikilink' order by 1, 2"
 	before := c.tab(wl)
 	c.must("UPDATE people SET name='Bob S.' WHERE id=?", bod)
@@ -246,9 +248,9 @@ func named(s *S) {
 	gdead := c.page("Tombstoned ghost")
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", gdead)
 	gh2 := c.col("select id from ghost_pages")
-	s.K("ghost_pages leaves a page younger than 30 days alone", !contains(gh2, ids(gnew)), gh2)
-	s.K("ghost_pages leaves a tombstoned page alone", !contains(gh2, ids(gdead)), gh2)
-	s.K("ghost_pages lists the real ghost and none of the person or place pages, and not a page a rename points at", eq(gh, []string{"Typo page"}), gh)
+	s.K("ghost_pages leaves a page younger than 30 days alone", !slices.Contains(gh2, ids(gnew)), gh2)
+	s.K("ghost_pages leaves a tombstoned page alone", !slices.Contains(gh2, ids(gdead)), gh2)
+	s.K("ghost_pages lists the real ghost and none of the person or place pages, and not a page a rename points at", slices.Equal(gh, []string{"Typo page"}), gh)
 }
 
 // window is up to n items of xs from i.

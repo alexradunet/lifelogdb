@@ -1,8 +1,12 @@
 package core
 
 import (
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 // TestSetPictureKeepsThePhotoAndShowsItFirst: a new photo is kept as a file with no day and no place, and its embed
@@ -10,7 +14,7 @@ import (
 // is named by its title. A title taken that day gets a number.
 func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +81,7 @@ func TestSetPictureKeepsThePhotoAndShowsItFirst(t *testing.T) {
 // not a kept picture are refused, and nothing is written.
 func TestSetPictureRefuses(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -129,11 +133,67 @@ func TestSetPictureRefuses(t *testing.T) {
 	}
 }
 
+// TestSetPictureOfAnyTypeKeepsNoDay: a picture is kept with no day, also when its type is not image/*: a PDF sent with
+// a preview. keep gives no day of its own only to an image/* type, so setPicture sets unknownCaptureDay itself.
+func TestSetPictureOfAnyTypeKeepsNoDay(t *testing.T) {
+	s := fresh(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := s.SetPicture(ctx, "cli", ana, "2026-10-15", FileIn{SHA256: sha('a'), MIME: "application/pdf", Preview: phototest.JPEG(8, 8)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var null bool
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT day IS NULL FROM entities WHERE id = ?`, k.ID).Scan(&null); err != nil || !null {
+		t.Errorf("the picture's day is NULL: %v, %v; want true", null, err)
+	}
+	if k.Day != "" || k.Embedded {
+		t.Errorf("the picture got a day of its own: %+v", k)
+	}
+}
+
+// TestRefusedSetPictureOfReturnsNoSync: when the write of SetPictureOf rolls back, the answer is a zero Sync, not
+// the links of a body that was never saved. A temporary trigger refuses the last statement of the body's link sync:
+// the delete of a link that the new body does not name.
+func TestRefusedSetPictureOfReturnsNoSync(t *testing.T) {
+	s := fresh(t)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bo, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)}); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate damage: a wikilink that Ana's empty body does not name, so the link sync deletes it.
+	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', '2026-10-16T00:00:00.000Z', 'cli')`, ana, bo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.ExecContext(ctx, `CREATE TEMP TRIGGER refuse_link_delete BEFORE DELETE ON links BEGIN SELECT RAISE(ABORT, 'the test refuses the delete'); END`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.SetPictureOf(ctx, "cli", ana, "Ana.jpg")
+	if status(err) != 422 {
+		t.Fatalf("SetPictureOf = %v (status %d), want the 422 of the refused delete", err, status(err))
+	}
+	if !reflect.DeepEqual(r, Sync{}) {
+		t.Errorf("a refused SetPictureOf returned %+v, want a zero Sync", r)
+	}
+	if p, err := s.PageByID(ctx, ana); err != nil || p.Body != "" {
+		t.Errorf("Ana's body = %q, %v, want it empty: the write rolled back", p.Body, err)
+	}
+}
+
 // TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture: a title that names a plain page is skipped, a person
 // with no embed has no picture, and every person gets the file of their own first picture.
 func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 	s := fresh(t)
-	pic := smallJPEG(t)
+	pic := phototest.JPEG(8, 8)
 	a, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -172,5 +232,48 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 		if r.Picture != want[r.Title] {
 			t.Errorf("%s: Picture = %d, want %d", r.Title, r.Picture, want[r.Title])
 		}
+	}
+}
+
+// TestATxPictureThatFailsReturnsNoResult: the Tx methods setPicture and setPictureOf return no result with an error,
+// also when the save of the body failed after its links were synced, so a write that goes on after the error has no
+// result to report. A temporary trigger refuses the delete of a stray wikilink row: the save of the body then fails at
+// its last step. The write is rolled back at the end.
+func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
+	s := fresh(t)
+	pic := phototest.JPEG(8, 8)
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stray, err := s.CreatePerson(ctx, "cli", "Stray", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Ana.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: pic}); err != nil {
+		t.Fatal(err)
+	}
+	end := errors.New("the test ends the write")
+	err = s.Do(ctx, "cli", func(tx *Tx) error {
+		if _, err := tx.tx.ExecContext(tx.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source)
+			VALUES (?, ?, 'wikilink', '2026-10-16T00:00:00.000Z', 'cli')`, ana, stray); err != nil {
+			return err
+		}
+		if _, err := tx.tx.ExecContext(tx.ctx, `CREATE TEMP TRIGGER refuse_a_link_delete BEFORE DELETE ON links
+			BEGIN SELECT RAISE(ABORT, 'synthetic fault'); END`); err != nil {
+			return err
+		}
+		k, err := tx.setPicture(ana, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: pic})
+		if err == nil || !reflect.DeepEqual(k, Kept{}) {
+			t.Errorf("SetPicture = %+v, %v; want no result and the fault", k, err)
+		}
+		r, err := tx.setPictureOf(ana, "Ana.jpg")
+		if err == nil || !reflect.DeepEqual(r, Sync{}) {
+			t.Errorf("SetPictureOf = %+v, %v; want no result and the fault", r, err)
+		}
+		return end
+	})
+	if !errors.Is(err, end) {
+		t.Errorf("Do = %v, want the end of the test", err)
 	}
 }

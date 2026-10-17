@@ -1,10 +1,13 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"strings"
 	"testing"
+
+	"lifelog/internal/photo/phototest"
 )
 
 // browseFixture writes, through the writer, one of each kind in and out of the categories Family, Cousins (under
@@ -48,7 +51,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		ids[f.Title] = k.ID
 	}
 	for _, m := range [][2]string{{"Weight", "kg"}, {"Walk", ""}} {
-		_, err := s.RegisterMetric(ctx, "cli", m[0], m[1], "")
+		_, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m[0], Unit: m[1]})
 		check(err)
 		id, err := s.PageID(ctx, m[0])
 		check(err)
@@ -348,7 +351,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 		}
 	}
 	for _, m := range []string{"commits", "Weight"} {
-		if _, err := s.RegisterMetric(ctx, "cli", m, "", ""); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -402,5 +405,207 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 	}
 	if got := titles(s.PlainPages(ctx, Scope{Unfiled: true}, 50, 0)); got != "beta,Delta" {
 		t.Errorf("not filed: %q", got)
+	}
+}
+
+// TestBrowseKindsGivesACopy: a caller that changes the list BrowseKinds gives does not change the next list, which
+// is the order of the chips of Browse.
+func TestBrowseKindsGivesACopy(t *testing.T) {
+	kinds := BrowseKinds()
+	kinds[0] = "task"
+	if got := strings.Join(BrowseKinds(), ","); got != "page,person,place,media,document,metric" {
+		t.Errorf("BrowseKinds() = %s after a caller changed its copy, want page,person,place,media,document,metric", got)
+	}
+}
+
+// TestMediaKindsGivesACopy: a caller that changes the list MediaKinds gives does not change the next list, or the
+// condition isMedia that the reads of Browse use.
+func TestMediaKindsGivesACopy(t *testing.T) {
+	kinds := MediaKinds()
+	kinds[0] = "text"
+	if got := strings.Join(MediaKinds(), ","); got != "image,video,audio" {
+		t.Errorf("MediaKinds() = %s after a caller changed its copy, want image,video,audio", got)
+	}
+	if want := mediaKind + ` IN ('image', 'video', 'audio')`; isMedia != want {
+		t.Errorf("isMedia = %s, want %s", isMedia, want)
+	}
+}
+
+func TestReadersPage(t *testing.T) {
+	s := fresh(t)
+	ctx := context.Background()
+	for i := 1; i <= 5; i++ {
+		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i), ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := s.Capture(ctx, "cli", fmt.Sprintf("2031-04-%02d", i), fmt.Sprintf("pageword [[Missing %d]]", i), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(es []Edge) string {
+		var out []string
+		for _, e := range es {
+			out = append(out, e.Title)
+		}
+		return strings.Join(out, ",")
+	}
+	// Hand-counted: five places by title, five days newest first, five ghosts oldest first, five hits.
+	for _, tc := range []struct {
+		name          string
+		limit, offset int
+		want          string
+	}{
+		{"places first two", 2, 0, "Place 1,Place 2"}, {"places middle", 2, 2, "Place 3,Place 4"}, {"places last", 2, 4, "Place 5"}, {"places past", 2, 5, ""}, {"places all", 10, 0, "Place 1,Place 2,Place 3,Place 4,Place 5"},
+	} {
+		got, err := s.NamedMentions(ctx, "place", Scope{}, tc.limit, tc.offset)
+		var list []string
+		for _, r := range got {
+			list = append(list, r.Title)
+		}
+		if err != nil || strings.Join(list, ",") != tc.want {
+			t.Errorf("%s: %q %v", tc.name, list, err)
+		}
+	}
+	if got, err := s.RecentDays(ctx, 2, 1); err != nil || titles(got) != "2031-04-04,2031-04-03" {
+		t.Errorf("days: %q %v", titles(got), err)
+	}
+	// The linked targets are not ghosts (a ghost has no link). Five empty pages of their own, inserted by direct SQL
+	// with an old created_at (bulk setup: ghost_pages wants them older than 30 days, and created_at never changes),
+	// are.
+	err := s.Do(ctx, "cli", func(tx *Tx) error {
+		for i := 1; i <= 5; i++ {
+			var id int64
+			at := fmt.Sprintf("2000-01-01T00:00:0%d.000Z", i)
+			if err := tx.tx.QueryRowContext(ctx, `INSERT INTO entities(entity_type, preferred_name_key, body, created_at, updated_at, source)
+			    VALUES ('page', ?, '', ?, ?, 'cli') RETURNING id`, fmt.Sprintf("ghost %d", i), at, at).Scan(&id); err != nil {
+				return err
+			}
+			if _, err := tx.tx.ExecContext(ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, fmt.Sprintf("Ghost %d", i), fmt.Sprintf("ghost %d", i)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if none, err := s.Ghosts(ctx, 10, 0); err != nil || len(none) != 5 {
+		t.Fatalf("ghosts: %+v %v", none, err)
+	}
+	ghosts, err := s.Ghosts(ctx, 2, 3)
+	if err != nil || len(ghosts) != 2 || ghosts[0].Title != "Ghost 4" || ghosts[1].Title != "Ghost 5" {
+		t.Errorf("ghosts page: %+v %v", ghosts, err)
+	}
+	hits, err := s.Search(ctx, "pageword", 2, 4)
+	if err != nil || len(hits) != 1 {
+		t.Errorf("search: %+v %v", hits, err)
+	}
+	all, err := s.Search(ctx, "pageword", 10, 0)
+	if err != nil || len(all) != 5 {
+		t.Errorf("search all: %+v %v", all, err)
+	}
+}
+
+// TestNamedMentionsCountLivePagesAndTheNewestDay: a person is mentioned once by each live page that links to it.
+// A tombstoned page does not count, and only a day page gives the last day. The order is by title.
+func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
+	s := fresh(t)
+	for _, name := range []string{"Sam", "Ana", "Zed"} {
+		if _, err := s.CreatePerson(ctx, "cli", name, "", "", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-05", "Lunch with [[Ana]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-10-09", "Walk with [[Ana]] and [[Sam]]", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Trip", "[[Ana]] came", ""); err != nil {
+		t.Fatal(err)
+	}
+	gone, _, err := s.CreatePage(ctx, "cli", "Old note", "[[Sam]] was there", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ana: two day pages and Trip. Sam: one day page (the tombstoned page does not count). Zed: none.
+	want := []struct {
+		title    string
+		mentions int
+		lastDay  string
+	}{{"Ana", 3, "2026-10-09"}, {"Sam", 1, "2026-10-09"}, {"Zed", 0, ""}}
+	if len(got) != len(want) {
+		t.Fatalf("NamedMentions = %+v, want %d rows", got, len(want))
+	}
+	for i, w := range want {
+		if got[i].Title != w.title || got[i].Mentions != w.mentions || got[i].LastDay != w.lastDay {
+			t.Errorf("row %d = %+v, want %+v", i, got[i], w)
+		}
+	}
+
+	second, err := s.NamedMentions(ctx, "person", Scope{}, 1, 1)
+	if err != nil || len(second) != 1 || second[0].Title != "Sam" {
+		t.Errorf("NamedMentions(1, 1) = %+v, %v, want Sam", second, err)
+	}
+}
+
+// TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds: a person's picture is the first file its body embeds
+// that keeps a preview and is live. A file with no preview, a tombstoned file and a plain [[link]] are passed over.
+func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
+	s := fresh(t)
+	pic := phototest.JPEG(8, 8)
+	keep := func(title, mime string, c byte, preview []byte) int64 {
+		t.Helper()
+		k, err := s.AddFile(ctx, "cli", FileIn{Title: title, SHA256: sha(c), MIME: mime, Day: "2026-10-01", Preview: preview})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return k.ID
+	}
+	keep("Notes.pdf", "application/pdf", 'a', nil)
+	face := keep("Ana face.jpg", "image/jpeg", 'b', pic)
+	keep("Beach.jpg", "image/jpeg", 'c', pic)
+	gone := keep("Old face.jpg", "image/jpeg", 'd', pic)
+	bodies := map[string]string{
+		"Ana": "![[Notes.pdf]] Met at school.\n\n![[Ana face.jpg]]\n\n![[Beach.jpg]]",
+		"Sam": "![[Old face.jpg]] and [[Beach.jpg]], a link and not an embed",
+		"Zed": "",
+	}
+	for _, name := range []string{"Ana", "Sam", "Zed"} {
+		id, err := s.CreatePerson(ctx, "cli", name, "", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bodies[name] != "" {
+			if _, err := s.SaveBody(ctx, "cli", id, bodies[name], "1"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if err := s.Tombstone(ctx, "cli", gone); err != nil { // after the save, which revives a page it links
+		t.Fatal(err)
+	}
+
+	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int64{"Ana": face, "Sam": 0, "Zed": 0}
+	if len(got) != len(want) {
+		t.Fatalf("NamedMentions = %+v, want %d rows", got, len(want))
+	}
+	for _, r := range got {
+		if r.Picture != want[r.Title] {
+			t.Errorf("%s: picture %d, want %d", r.Title, r.Picture, want[r.Title])
+		}
 	}
 }

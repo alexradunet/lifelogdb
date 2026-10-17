@@ -10,7 +10,7 @@ a temporary folder and discards them.
 go test ./tests                                  # every suite and every mutant
 go test -short ./tests                           # the suites without the mutants
 go test ./tests -run 'TestSuites/pages' -v       # one suite, with its count of expectations
-go test ./tests -run 'TestMutants/.*habits' -v   # the mutants of one suite
+go test ./tests -run 'TestMutants/.*facts' -v    # the mutants of one suite
 LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender   # + render every mermaid diagram (needs mmdc + a Chromium)
 ```
 
@@ -31,16 +31,16 @@ the document (a broken block makes a later step impossible) reports that as one 
 | file | suite | subject |
 |---|---|---|
 | `dates_test.go` | `dates` | instants, local days, the round-trip CHECKs and why `IS`, the zone (lifelog_meta.instants and .days, D10) |
-| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units, notes and task labels, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail/habit identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained capture references |
+| `schema_safeguards_test.go`, `schema_bounds_test.go` | `schema-safeguards` | NUL-free constrained text; the bounds of import keys, person names, units and notes, with the empty-key incident; a tombstone never precedes creation; `entities.body` last; the atomic Mood seed; no `OR IGNORE`/`OR REPLACE` in a trigger; immutable typed-detail identities and entity creation evidence; rowid-alias atomicity; Unicode search distinctions; cleanup excludes retained capture references |
 | `schema_adversarial_test.go` | `schema-adversarial` | Skipped duplicate validation limits; statement ABORT versus caller transaction rollback |
 | `graph_model_test.go` | `graph-model`, `FuzzGraphTransitions` | Independent directed graph model, NULL/empty notes, self-links, retry/edit/delete sequences, which endpoints a change advances (the page a link leaves, none for a wikilink's insert or delete), savepoint and transaction rollback, typed batch refusal and read-only reopen |
-| `temporal_model_test.go` | `temporal-model` | Recursive lifecycle reads, independent correction-chain cutoff model, bounded calendar/deadline model with persisted overrides, tombstones, recurrence ends and extreme years |
+| `temporal_model_test.go` | `temporal-model` | Recursive category reads (cookbook/metrics-by-category) across tombstones, revivals, an alternate path and a cycle; an independent correction-chain model at clock cutoffs (cookbook/metric-series) |
 | `storage_resilience_test.go` | `storage-resilience` | FTS term-position equality across trigger reordering, rejected edits, rollback, reopen and rebuild; WAL reader body/index snapshot isolation and checkpoint release |
 | `connection_fixture_test.go` | `TestSchemaFixtureUsesLiteralFilename` | Literal URI-sensitive filenames in isolated schema fixtures and read-only reopen |
 | `identity_fixture_test.go` | `TestCanonicalIdentityFixtureOwnershipAndRollback` | The canonical identity fixture: a named entity owns its name, and a refused insert rolls the whole identity back |
 | `id_guards_test.go` | `id-guards` | file-backed declared/rowid/_rowid_/oid identity guards; forbidden combined edits, no-ops, revisions, FTS and reopen controls |
 | `name_grammar_test.go` | `name-grammar` | documented raw/NFC addressability vectors under mutation; canonical key and bracket-storage probes, separate from production pipeline tests |
-| `identity_test.go`, `revisions_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` and the edit revisions: creation is not an edit, a link advances only the page it leaves (schema.sql, D8, D10, D11, D12) |
+| `identity_test.go` | `identity` | the supertype and its composite FKs, ids by `RETURNING`, `source` on every row, no hard deletes, `updated_at` and the edit revisions: creation is not an edit, a link advances only the page it leaves (schema.sql, D8, D10, D11, D12) |
 | `names_test.go` | `names`, `name-ownership` | mandatory deferred preferred ownership; direct reserved names and immutable owner/key/id; actual alias/preferred/spelling/body FTS maintenance and journal-name reservations |
 | `named_test.go` | `named` | a person or a place is a page: one id, promotion, cookbook/person-or-place, cookbook/days-that-name and cookbook/everything-about run literally, two Sams (D16, D20) |
 | `files_test.go` | `files` | a file is a page: one id, the hash, type and preview of the original and their CHECKs (`IS` for the JPEG bytes: `substr` of an empty blob is NULL), what never changes, never deleted, the graph (an embed, a caption, `about`, `part-of`, refused redirect), a ghost promoted, cookbook/keep-a-file as a writer runs it (D9) |
@@ -50,11 +50,11 @@ the document (a broken block makes a later step impossible) reports that as one 
 | `facts_test.go` | `facts`, `measurement-query-plan` | metrics and measurements: append-only, supersede, retract, finite values, never `OR IGNORE`/`OR REPLACE` (D7); categories as pages and cookbook/metrics-by-category (D26); the independent query-plan suite retains the 20,000-reading index-use and count probe plus retained-reference access paths and the day and backlink lookups (`entities_day`, `links_to`) |
 | `journal_test.go` | `journal` | `entities.is_journal`, the one stored definition of a journal day page, with its SQLite premises (a CHECK and a trigger's NEW/OLD read a generated column); the day page and capture (cookbook/capture), the cookbook/day-view day view (a page is "(edited)" by its revision, not by comparing clocks), the days that name someone (cookbook/days-that-name), where I was (cookbook/where-was-i), observed habits and birthdays kept distinct from explicit planning (D5, D15, D16, D22, D23) |
 | `writers_test.go` | `writers` | the `BEGIN IMMEDIATE` race with real concurrent connections, pragmas, read-only readers and their `trusted_schema=OFF`, a hardened connection (contract/connections) |
-| `integrity_test.go`, `semantic_integrity_test.go` | `integrity`, `physical-integrity` | semantic ownership, correction cycles, habit validity, journal names, FK and FTS damage on small files; an independent fixture of 3,000 synthetic pages for zeroed pages, truncation, live-index damage and changed body bytes |
+| `integrity_test.go` | `integrity`, `physical-integrity` | semantic ownership, correction cycles, journal names, FK and FTS damage on small files; an independent fixture of 3,000 synthetic pages for zeroed pages, truncation, live-index damage and changed body bytes |
 | `imports_test.go` | `imports` | the import block of contract/imports on 1 000 CSV rows, and its traps |
 | `snapshots_test.go` | `snapshots` | cookbook/take-a-snapshot on a live file: `VACUUM INTO` through a read-only connection while the writer writes, its target, the restore check left byte for byte, the restore and the old `-wal` beside it (D25) |
-| `evolution_test.go`, `evolution_compatibility_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, reader compatibility, comments inside statements (D13, D17, architecture/non-goals) |
-| `cookbook_test.go`, `cookbook_measurements_test.go` | `cookbook` | measurement lifecycle and recorded-time cutoffs; every cookbook block prepares and runs, on a plain and on a hardened connection; every block that only reads runs on a reader (`mode=ro`, `trusted_schema=OFF`) |
+| `evolution_test.go` | `evolution` | named CHECKs, widening, partial dates, the tokenizer switch, reader compatibility, comments inside statements (D13, D17, architecture/non-goals) |
+| `cookbook_test.go` | `cookbook` | measurement lifecycle and recorded-time cutoffs; every cookbook block prepares and runs, on a plain and on a hardened connection; every block that only reads runs on a reader (`mode=ro`, `trusted_schema=OFF`) |
 | `document_test.go` | `document` | the 2075 test, the rules live in the file, the tree holds together (one record per decision, every relative link and anchor resolves, every page reachable from `docs/README.md`), the totals in `schema/README.md` |
 | `diagrams_test.go` | `diagrams` | the seven mermaid diagrams say what the DDL says (keys, relationships, the link map, the correction story) |
 | `wikilinks_test.go` | `doc-save-contract` | the save contract as the docs print it: the vector table of contract/titles-and-wikilinks, cookbook/save-a-body run literally (and equal to a writer's own save after 400 random edits), cookbook/backlinks |
@@ -70,16 +70,27 @@ The wikilink suites read them from the page (with the boundary cases the line un
 writer's extraction (`internal/text`) and its save (`internal/core`); `internal/text` has its own tests against the
 same table. Every save path here runs against the DDL under test, so a mutant of `schema.sql` reaches it.
 Boundary probes roll back every case, including unexpected success under a mutant.
-Run a bounded campaign explicitly with
-`go test ./internal/core -run '^$' -fuzz '^FuzzTaskCalendarWindow$' -fuzztime=20s -parallel=2`.
+
+**What the suites take from the writer.** The suites keep their own kit (`kit_test.go`), not the writer's
+`dbtest`: they build every database from the `schema.sql` under test, and a mutant changes that file, where the writer
+embeds its own copy. They import four packages of the writer, each for one reason, and no other:
+
+| package | why |
+|---|---|
+| `internal/text` | the rules that the contract gives a writer to compute: the title predicate, `title_key`, the wikilinks and the `#tags`; and the writer's checks of a day and an instant |
+| `internal/core` | the writer's own save (a body, a capture, a kept file), run on the DDL under test |
+| `internal/db` | the type that `core.Store` writes through, around the suite's own connection |
+| `internal/photo/phototest` | the synthetic JPEG of a file's preview: the DDL checks that a preview starts with the bytes of a JPEG |
+
+The suites do not reach the API, the CLI or the MCP server: what they check is the docs.
 
 The graph model runs three deterministic 160-operation sequences in the baseline. Its separate fuzz target accepts
 minimizable byte-encoded operations, caps each input at 64 transitions, and creates a fresh hardened file for every
 input. Seeds run normally; a campaign is explicit:
 `go test ./tests -run '^$' -fuzz '^FuzzGraphTransitions$' -fuzztime=30s -parallel=2`.
-The temporal model compares 40 correction chains at 17 clock cutoffs with independent insertion-order histories,
-and deadline results with an anchor-generated calendar oracle. These bounded models supplement the contract's literal
-vectors and rule mutants; agreement does not prove every possible input or SQLite version correct.
+The temporal model compares 40 correction chains at 17 clock cutoffs with independent insertion-order histories.
+These bounded models supplement the contract's literal vectors and rule mutants; agreement does not prove every
+possible input or SQLite version correct.
 
 **Fixture ownership.** Semantic fact and integrity mutants run their small behavior fixtures; the baseline
 `measurement-query-plan` and `physical-integrity` suites own the large query-plan and byte-corruption fixtures.
@@ -108,6 +119,47 @@ Run `go test ./internal/db -run '^TestFilesystemWriteFailure$' -count=1` to exer
 child-local file-size limits that produce actual `SQLITE_IOERR_WRITE` errors, followed by
 transaction rollback, reopen/retry and failed snapshot cleanup. This runs in the Linux baseline;
 it does not simulate disk exhaustion, sync failures, torn writes or power loss.
+
+## The coverage map
+
+The coverage map shows which statements the tests of every package reach, the process of `lifelog` included. It is a
+map, not a score ([AGENTS.md](../AGENTS.md)). The tests of `cmd/lifelog` run the CLI in-process; only
+`TestExecutableServeDrainsActiveRequest` runs the program, because an interrupt needs a process. That test builds the
+program with `go build -cover` and gives it the coverage folder of its test binary as `GOCOVERDIR`. So one folder
+gets the coverage of every test binary and of the process, and `covdata` merges it:
+
+```
+dir=$(mktemp -d)
+go test -cover -coverpkg=./... ./... -args -test.gocoverdir=$dir
+go tool covdata textfmt -i=$dir -o $dir/cover.txt
+go tool cover -func=$dir/cover.txt            # or -html=$dir/cover.txt
+```
+
+## Synthetic personas and scale
+
+When adding generators, use these agreed workloads. They exercise existing capabilities, not new schema requirements
+or a promise of performance. Generate from scratch, never from private exports or supposedly anonymized records.
+
+| persona | behavior to exercise |
+|---|---|
+| daily journaler | decades of day pages, people, places, links, search and edits |
+| measurement-heavy user | dense readings, habits, corrections, retractions and historical queries |
+| mixed-media keeper | notes, long transcripts, document text and selected photo previews |
+| messy importer | overlapping imports, duplicates, Unicode, malformed inputs, interruption and retries |
+
+- **Small:** representative cases of all four personas for routine correctness tests. **Lifetime:** a 50-year mixed
+  workload with 20 measurements/day, 3 files/day and about 4,000 imported notes in addition to day pages. **Stress:**
+  explicitly increased density, long text, high-degree links and import bursts; record the parameters, not just "large".
+- Make the logical dataset reproducible: fixed calendar anchor, seeds, generator version, operation order, payload-size
+  distributions and known answers. Include gaps, bursts, popular and rare links/terms, corrections and backdated data,
+  not just uniform append-only rows. On failure report the scenario, seed and operation; reduce it to a small regression.
+- Exercise end-to-end workflows and persisted results, not just successful bulk insertion. Keep a simple independent
+  oracle for expected queries/state. Label accelerated SQL loaders and compare manageable equivalent scenarios against
+  writer-built fixtures. Do not claim a direct-SQL load measures application import throughput.
+- Keep generators, small fixtures and regression inputs in git, not generated databases. Build databases in temporary
+  or explicitly selected ignored scratch storage with cleanup. Keep large preview-heavy runs opt-in and report disk
+  requirements; use valid synthetic payloads with representative sizes. Metadata-only runs are useful but must be
+  labeled: tiny repeated blobs do not establish realistic preview/storage scale.
 
 ## Synthetic scale runner
 
@@ -149,8 +201,27 @@ correctness, not lifetime storage capacity. Do not run large preview profiles wi
 The report includes Go/SQLite/driver/revision, OS/architecture/CPU, operator-supplied storage details, writer
 pragmas, Go allocation deltas, raw timing samples and database/WAL/SHM/copy sizes. Fixture construction is timed
 separately from capture/save, day view, rare search, popular backlinks, historical metric series and keyed root
-replay. The latter measures `core.Record` retries, **not** workspace import throughput. Capture/save includes
+replay. The latter measures `core.Record` retries, **not** the throughput of an import. Capture/save includes
 commit; each sample performs a real new capture/edit. Queries are warm after fixture validation. Snapshot and
 copy/open restore each run once, regardless of `-samples`; restored contents and integrity are checked outside
-timing. Reopening a file is not a cold-disk benchmark, and Go allocation counts are not total process memory.
-Compare repeated reports under the same environment; there is no universal wall-clock pass/fail threshold.
+timing. Compare repeated reports under the same environment, and read them by the rules of
+[performance evidence](#performance-evidence-not-speculative-optimization).
+
+## Performance evidence, not speculative optimization
+
+- Measure important workflows at small and lifetime sizes: capture/save, day view, search/backlinks, historical
+  measurements, imports and snapshot/restore. Check correctness as well as cost. Establish reproducible baselines
+  before adding caches, indexes or concurrency; contract/schema changes still need the normal evidence and approval.
+- Keep fixture construction and correctness-oracle work outside timed query operations. Prefer `for b.Loop()` for new
+  Go benchmarks; report allocations. Fully consume results and check errors. Define whether preparation, commit,
+  decoding or preview creation is included. Reset mutable state outside timing or measure an explicitly bounded growth
+  trace; repeated iterations must not silently turn writes into no-ops or change the workload.
+- Compare repeated samples with `benchstat`, not one run; profile with `pprof` before optimizing. Every benchmark runs
+  with `go test ./... -run '^$' -bench . -benchmem -count=10`; none exists today (the import's went with it, plan 089).
+- Record scenario/seed, revision, Go and SQLite/driver versions, OS, hardware/storage, connection/maintenance settings
+  and cache conditions. Report latency, allocations, import throughput and storage (database, WAL/SHM and relevant
+  temporary files). Go allocation counts are not total process memory. Label warm versus fresh-process runs; do not
+  call a reopened database a cold-disk measurement without controlling the OS cache.
+- Use query plans and work counts to investigate scaling, not brittle exact `EXPLAIN QUERY PLAN` text assertions.
+  No universal wall-clock CI gate: introduce a hard budget only for an agreed usability requirement on a defined
+  environment. The 50-year workload is a test envelope, not evidence that any implementation already meets it.

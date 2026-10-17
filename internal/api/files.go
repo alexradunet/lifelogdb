@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/photo"
 	"lifelog/internal/preview"
@@ -28,19 +29,22 @@ const (
 )
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
-func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
-	in, dry, err := fileForm(r)
+func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, error) {
+	in, dry, sent, err := parseFileForm(r, act)
 	if err != nil {
 		return nil, err
+	}
+	if !sent {
+		return nil, core.Invalid("send the original, or its sha256 and mime")
 	}
 	if dry {
 		k, err := h.s.TryAddFile(r.Context(), src, in)
 		if err != nil {
 			return nil, err
 		}
-		return &Entity{Class: []string{"result", "dry-run"}, Title: "Dry run: nothing written",
+		return &siren.Entity{Class: []string{"result", "dry-run"}, Title: "Dry run: nothing written",
 			Properties: map[string]any{"title": in.Title, "sha256": in.SHA256, "mime": in.MIME, "picture": in.Preview != nil},
-			Result:     k, Links: []Link{link("index", "/", "Home")}}, nil
+			Result:     k, Links: []siren.Link{link("index", "/", "Home")}}, nil
 	}
 	k, err := h.s.AddFile(r.Context(), src, in)
 	if err != nil {
@@ -49,59 +53,43 @@ func (h *server) addFile(r *http.Request, src string) (*Entity, error) {
 	return withResult(h.pageEntity(r.Context(), k.ID))(k)
 }
 
-// fileForm reads an add-file request. Multipart (a browser, the CLI): the original is streamed through SHA-256 and
-// never stored; a picture the writer reads is held, up to maxPicture, to make the preview from. Url-encoded or JSON
-// (an agent that hashed the file itself): sha256 and mime, and no picture.
-func fileForm(r *http.Request) (core.FileIn, bool, error) {
-	in, dry, sent, err := readFileForm(r)
-	if err == nil && !sent {
-		err = core.Invalid("send the original, or its sha256 and mime")
-	}
-	return in, dry, err
-}
-
-// readFileForm is fileForm, and whether a file was sent at all: a multipart form with the file input left empty and
-// no sha256 sent none, and is not refused here.
-func readFileForm(r *http.Request) (core.FileIn, bool, bool, error) {
-	in, dry, err := parseFileForm(r)
-	if errors.Is(err, errNoFile) {
-		return in, false, false, nil
-	}
-	return in, dry, err == nil, err
-}
-
-var errNoFile = errors.New("no file sent")
-
-func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
-	bad := func(msg string) (core.FileIn, bool, error) {
-		return core.FileIn{}, false, core.Invalid("%s", msg)
+// parseFileForm reads a request of the action act (add-file or set-picture): its fields, refused as fieldsOf refuses
+// them, and sent, which says whether a file was sent. Multipart (a browser, the CLI): the original is streamed through
+// SHA-256 and never stored; a picture the writer reads is held, up to maxPicture, to make the preview from. A multipart
+// form with the file input left empty and no sha256 and no mime sends no file, and is not refused here: the caller
+// decides. Url-encoded or JSON (an agent that hashed the file itself): sha256 and mime, and no picture.
+func parseFileForm(r *http.Request, act spec) (in core.FileIn, dry, sent bool, err error) {
+	bad := func(msg string) (core.FileIn, bool, bool, error) {
+		return core.FileIn{}, false, false, core.Invalid("%s", msg)
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
-		v, err := form(r)
+		v, err := fieldsOf(r, act)
 		if err != nil {
-			return core.FileIn{}, false, err
+			return core.FileIn{}, false, false, err
 		}
-		if err := required(v, "title", "sha256", "mime"); err != nil {
-			return core.FileIn{}, false, err
+		if v.Get("sha256") == "" || v.Get("mime") == "" {
+			return bad("send the original, or its sha256 and mime")
 		}
 		dry, err := flag(v, "dry_run")
-		return core.FileIn{UnknownCaptureDay: strings.HasPrefix(core.NormalMIME(v.Get("mime")), "image/") && v.Get("day") == "", Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, err
+		return core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}, dry, true, err
 	}
 	defer r.Body.Close()
 	mr, err := r.MultipartReader()
 	if err != nil {
 		return bad("the form: " + err.Error())
 	}
-	vals := map[string]string{}
+	vals := url.Values{}
 	// Only accepted, bounded text is retained: the transcript for browser error recovery, and the page to return to.
 	r.PostForm = make(url.Values)
 	var sum, typ string
 	var picture, given []byte
 	var meta photo.Meta
-	sent := false
+	original := false
 	parts, textBytes := 0, 0
 	seen := map[string]bool{}
-	overflow := func(msg string) (core.FileIn, bool, error) { return core.FileIn{}, false, requestLimit(msg) }
+	overflow := func(msg string) (core.FileIn, bool, bool, error) {
+		return core.FileIn{}, false, false, requestLimit(msg)
+	}
 	for {
 		part, err := mr.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -125,7 +113,7 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 		case (name == "original" || name == "preview") && part.FileName() == "": // a file input left empty
 			_, err = io.Copy(io.Discard, part)
 		case name == "original":
-			sent = true
+			original = true
 			sum, typ, picture, meta, err = readOriginal(part)
 		case name == "preview":
 			given, err = io.ReadAll(io.LimitReader(part, maxPicture+1))
@@ -141,9 +129,9 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 				b, err = io.ReadAll(limited)
 				n = int64(len(b))
 				if err == nil && n <= maxField && textBytes+len(b) <= maxMultipartText {
-					vals[key] = string(b)
+					vals.Set(key, string(b))
 					if key == "body" || key == "back" { // the browser's recovery and the page it returns to
-						r.PostForm.Set(key, vals[key])
+						r.PostForm.Set(key, vals.Get(key))
 					}
 				}
 			} else {
@@ -160,17 +148,20 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 			return bad("the form: " + err.Error())
 		}
 	}
-	in := core.FileIn{Title: vals["title"], Category: vals["category"], SHA256: vals["sha256"], MIME: vals["mime"], Body: vals["body"], Day: vals["day"], Taken: meta.Day()}
+	if err := required(vals, act); err != nil {
+		return core.FileIn{}, false, false, err
+	}
+	in = core.FileIn{Title: vals.Get("title"), Category: vals.Get("category"), SHA256: vals.Get("sha256"), MIME: vals.Get("mime"), Body: vals.Get("body"), Day: vals.Get("day"), Taken: meta.Day()}
 	switch {
-	case sent && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), sum):
+	case original && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), sum):
 		return bad("the sha256 sent is not the original's (" + sum + ")")
-	case sent:
+	case original:
 		in.SHA256 = sum
 		if in.MIME == "" {
 			in.MIME = typ
 		}
-	case in.SHA256 == "" && in.MIME == "":
-		return in, false, errNoFile
+	case in.SHA256 == "" && in.MIME == "": // no file sent: the dry_run field is not read
+		return in, false, false, nil
 	case in.SHA256 == "" || in.MIME == "":
 		return bad("send the original, or its sha256 and mime")
 	}
@@ -184,12 +175,11 @@ func parseFileForm(r *http.Request) (core.FileIn, bool, error) {
 		}
 		in.Preview = p
 	}
-	in.UnknownCaptureDay = strings.HasPrefix(core.NormalMIME(in.MIME), "image/") && in.Day == "" && in.Taken == ""
-	dry, err := flagValue("dry_run", vals["dry_run"])
-	return in, dry, err
+	dry, err = flagValue("dry_run", vals.Get("dry_run"))
+	return in, dry, true, err
 }
 
-// fileTextFields are the multipart names fileForm retains as text; any other name is dropped unread.
+// fileTextFields are the multipart names parseFileForm retains as text; any other name is dropped unread.
 var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "category", "dry_run", "back"}
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a
@@ -204,7 +194,7 @@ func readOriginal(part *multipart.Part) (sum, typ string, picture []byte, meta p
 	}
 	head = head[:n]
 	h.Write(head)
-	typ = MimeOf(part.FileName(), head)
+	typ = mimeOf(part.FileName(), head)
 	held := &capped{max: maxPicture}
 	first := &prefix{max: maxMeta}
 	first.Write(head)
@@ -254,7 +244,7 @@ func (c *capped) Write(p []byte) (int, error) {
 }
 
 // picture serves the JPEG a file page keeps, 404 when there is none.
-// A cache that is not empty is sent as Cache-Control.
+// A cache that is not empty is sent as Cache-Control. A failed write is logged, as answer does.
 func picture(get func(*http.Request) ([]byte, error), cache string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := get(r)
@@ -262,8 +252,7 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 			err = core.NotFound("this page keeps no picture")
 		}
 		if err != nil { // the error entity, as every other route answers
-			e, status := errorEntity(err)
-			writeEntity(w, r, status, e)
+			writeError(w, r, err)
 			return
 		}
 		if cache != "" {
@@ -271,24 +260,26 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
 		w.Header().Set("Content-Length", strconv.Itoa(len(b)))
-		w.Write(b)
+		if _, err := w.Write(b); err != nil {
+			logFault(r, "the picture was not sent", err)
+		}
 	}
 }
 
 // setPicture makes a photo a page's picture (core.SetPicture): a new photo sent as original, or a kept file named by
 // title. It answers with the page.
-func (h *server) setPicture(r *http.Request, src string) (*Entity, error) {
+func (h *server) setPicture(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
 	}
 	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
-		in, _, sent, err := readFileForm(r)
+		in, _, sent, err := parseFileForm(r, act)
 		if err != nil {
 			return nil, err
 		}
 		if sent {
-			k, err := h.s.SetPicture(r.Context(), src, id, h.localDay(), in)
+			k, err := h.s.SetPicture(r.Context(), src, id, h.s.Today(), in)
 			if err != nil {
 				return nil, err
 			}
@@ -296,14 +287,14 @@ func (h *server) setPicture(r *http.Request, src string) (*Entity, error) {
 		}
 		return h.setPictureOf(r, src, id, in.Title)
 	}
-	v, err := form(r)
+	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
 	}
 	return h.setPictureOf(r, src, id, v.Get("title"))
 }
 
-func (h *server) setPictureOf(r *http.Request, src string, id int64, title string) (*Entity, error) {
+func (h *server) setPictureOf(r *http.Request, src string, id int64, title string) (*siren.Entity, error) {
 	if title == "" {
 		return nil, core.Invalid("title: a kept picture's title, or send a new photo as original")
 	}

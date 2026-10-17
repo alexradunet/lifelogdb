@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,7 +35,12 @@ func (*integrityConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("unexpected prepare")
 }
 func (*integrityConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
-func (*integrityConn) Close() error              { return nil }
+func (c *integrityConn) Close() error {
+	if c.c.fault == "conn-close" {
+		return errIntegrityFault
+	}
+	return nil
+}
 
 var errIntegrityFault = errors.New("synthetic integrity execution failure")
 
@@ -222,5 +228,158 @@ func TestIntegrityDiagnostics(t *testing.T) {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
+	}
+}
+
+func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {
+	s := fresh(t)
+	category, _, err := s.CreatePage(ctx, "cli", "Damaged category", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
+		t.Fatal(err)
+	}
+	metric, err := s.PageID(ctx, "Weight")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Link(ctx, "cli", metric, category, "part-of", ""); err != nil {
+		t.Fatal(err)
+	}
+	var edge int64
+	if err := s.DB.R.QueryRow(`SELECT id FROM links WHERE from_id=? AND to_id=? AND kind='part-of'`, metric, category).Scan(&edge); err != nil {
+		t.Fatal(err)
+	}
+	clean, err := s.Integrity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !clean.OK {
+		t.Fatalf("clean setup: %+v", clean)
+	}
+	// Deliberate damage bypasses only the guard in this disposable fixture.
+	if _, err := s.DB.W.Exec(`DROP TRIGGER entities_endpoint_types; UPDATE entities SET entity_type='place' WHERE id=?`, category); err != nil {
+		t.Fatal(err)
+	}
+	damaged, err := s.Integrity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if damaged.OK || damaged.ForeignKeys != 0 || len(damaged.OrphanEntities) != 0 || !damaged.FullTextIndexOK || len(damaged.InvalidTypedLinks) != 1 || damaged.InvalidTypedLinks[0] != edge {
+		t.Fatalf("damage diagnostics: %+v", damaged)
+	}
+}
+
+func TestIntegrityDetectsDeliberatePreferredOwnerDamage(t *testing.T) {
+	s := fresh(t)
+	id, _, err := s.CreatePage(ctx, "cli", "Owner", "prose", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deliberate external damage only: same pooled connection, FK disabled for this write.
+	if _, err := s.DB.W.Exec(`PRAGMA foreign_keys=OFF; UPDATE entities SET preferred_name_key='mood' WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Integrity(ctx)
+	if err != nil || r.OK || !reflect.DeepEqual(r.OrphanEntities, []int64{id}) {
+		t.Fatalf("independent preferred-owner diagnostic: %+v %v", r, err)
+	}
+}
+
+func TestIntegrityDetectsRestoredGuardSemanticDamage(t *testing.T) {
+	for _, damage := range []string{"correction cycle", "journal alias", "journal owner"} {
+		t.Run(damage, func(t *testing.T) {
+			s := fresh(t)
+			exec := func(q string, args ...any) {
+				t.Helper()
+				if _, err := s.DB.W.ExecContext(ctx, q, args...); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bypass := func(trigger string, change func()) {
+				t.Helper()
+				var definition string
+				if err := s.DB.R.QueryRowContext(ctx, "SELECT sql FROM sqlite_schema WHERE type='trigger' AND name=?", trigger).Scan(&definition); err != nil {
+					t.Fatal(err)
+				}
+				exec("DROP TRIGGER " + trigger)
+				change()
+				exec(definition)
+			}
+			page := func(name string) int64 {
+				t.Helper()
+				id, _, err := s.CreatePage(ctx, "cli", name, "", "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return id
+			}
+			switch damage {
+			case "correction cycle":
+				root, err := s.Record(ctx, "cli", Reading{Metric: "Mood", Day: "2026-10-01", Value: 3})
+				if err != nil {
+					t.Fatal(err)
+				}
+				value := 4.0
+				child, err := s.Correct(ctx, "cli", root, &value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				bypass("measurements_no_update", func() { exec("UPDATE measurements SET supersedes_id=? WHERE id=?", child, root) })
+			case "journal alias":
+				id := page("2026-10-01")
+				bypass("entity_names_day_insert", func() { exec("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,'Extra','extra')", id) })
+			case "journal owner":
+				id := page("Ordinary")
+				bypass("entity_names_day_insert", func() {
+					exec("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,'2026-10-01','2026-10-01')", id)
+				})
+			}
+			got, err := s.Integrity(ctx)
+			if err != nil || got.OK || got.ForeignKeys != 0 || !got.FullTextIndexOK || len(got.IntegrityCheck) != 1 || got.IntegrityCheck[0] != "ok" {
+				t.Fatalf("semantic damage with its guards restored must be reported independently of structural checks: %+v, %v", got, err)
+			}
+			var diagnostic []int64
+			want := 1
+			switch damage {
+			case "correction cycle":
+				diagnostic, want = got.InvalidMeasurementChains, 2
+			case "journal alias", "journal owner":
+				diagnostic = got.InvalidJournalNames
+			}
+			if len(diagnostic) != want {
+				t.Fatalf("%s diagnostic IDs=%v; want %d", damage, diagnostic, want)
+			}
+		})
+	}
+}
+
+// The measurement-corrections check finds a correction of another metric even when the trigger that refuses it is
+// gone: the semantic query does not trust the triggers of the file it checks.
+func TestIntegrityDetectsACorrectionOfAnotherMetric(t *testing.T) {
+	s := fresh(t)
+	for _, name := range []string{"Steps", "Floors"} {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: name, Unit: "count"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root, err := s.Record(ctx, "cli", Reading{Metric: "Steps", Day: "2020-01-02", Value: 4000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.Exec("DROP TRIGGER measurements_supersede_metric"); err != nil {
+		t.Fatal(err)
+	}
+	var damaged int64
+	if err := s.DB.W.QueryRow(`INSERT INTO measurements(metric_id,day,value,supersedes_id,source,created_at) SELECT (SELECT entity_id FROM entity_names WHERE name_key='floors'),'2020-01-02',3,?,'ui',`+nowSQL+` RETURNING id`, root).Scan(&damaged); err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.Integrity(ctx)
+	if err != nil || result.OK || result.ForeignKeys != 0 || !result.FullTextIndexOK || len(result.InvalidMeasurementCorrections) != 1 || result.InvalidMeasurementCorrections[0] != damaged {
+		t.Fatalf("correction damage: %+v %v", result, err)
 	}
 }

@@ -11,7 +11,26 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
 )
+
+// TestLoopbackAddress: the address of a local serve is a numeric loopback IP or localhost, which binds to 127.0.0.1, and
+// a numeric port. Any other address is refused with "serve address": no DNS, no service name, no zone, brackets only
+// around an IPv6 address.
+func TestLoopbackAddress(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"127.0.0.1:7777", "127.0.0.1:7777"}, {"127.2.3.4:0", "127.2.3.4:0"}, {"localhost:0", "127.0.0.1:0"}, {"LOCALHOST:7777", "127.0.0.1:7777"}, {"[::1]:0", "[::1]:0"},
+	} {
+		if got, err := api.LoopbackAddress(tc.input); err != nil || got != tc.want {
+			t.Errorf("LoopbackAddress(%q) = %q, %v; want %q", tc.input, got, err, tc.want)
+		}
+	}
+	for _, addr := range []string{"", ":7777", "0.0.0.0:7777", "[::]:7777", "192.0.2.1:7777", "custom.invalid:7777", "localhoſt:7777", "localhost:http", "localhost:65536", "localhost:-1", "localhost:+1", "localhost.", "[::1%zone]:7777", "[localhost]:7777", "127.0.0.1", "localhost:"} {
+		if got, err := api.LoopbackAddress(addr); err == nil || !strings.Contains(err.Error(), "serve address") {
+			t.Errorf("LoopbackAddress(%q) = %q, %v; want the refusal", addr, got, err)
+		}
+	}
+}
 
 func TestHTTPAuthority(t *testing.T) {
 	for _, bind := range []string{"127.0.0.1:0", "[::1]:0"} {
@@ -122,7 +141,7 @@ func TestHTTPAuthority(t *testing.T) {
 }
 
 func TestHTTPAuthorityOriginsAndInProcess(t *testing.T) {
-	c, h := fresh(t)
+	c, h, _ := apitest.Fresh(t, "cli")
 	if _, err := c.Get(t.Context(), "/actions"); err != nil {
 		t.Fatal(err)
 	}

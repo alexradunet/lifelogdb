@@ -8,21 +8,22 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestTheMonthIsACalendar: each day of a month, whether it has a live day page, its first line and its mood; the
 // months around it, across a year; the current month; and a month that is not one.
 func TestTheMonthIsACalendar(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	capture := func(day string, v map[string]string) {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), v))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), v))
 	}
 	capture("2031-05-01", map[string]string{"text": "May day: a walk by the lake.", "mood": "4"})
 	capture("2031-05-14", map[string]string{"mood": "3"})
 	capture("2031-05-31", map[string]string{"text": "The last day."})
-	gone := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/2031-05-20")), "capture"), map[string]string{"text": "Scratch"}))
-	must(c.Do(t.Context(), find(must(c.Get(t.Context(), hrefOf(gone, "page"))), "tombstone"), nil))
+	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-20")), "capture"), map[string]string{"text": "Scratch"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(gone, "page"))), "tombstone"), nil))
 
 	for _, tc := range []struct {
 		month, title, prev, next string
@@ -35,10 +36,10 @@ func TestTheMonthIsACalendar(t *testing.T) {
 		{"2031-12", "December 2031", "/months/2031-11", "/months/2032-01", 31},
 		{"2031-01", "January 2031", "/months/2030-12", "/months/2031-02", 31},
 	} {
-		m := must(c.Get(t.Context(), "/months/"+tc.month))
+		m := apitest.Must(t)(c.Get(t.Context(), "/months/"+tc.month))
 		days := props(m)["days"].([]any)
-		if m.Title != tc.title || hrefOf(m, "prev") != tc.prev || hrefOf(m, "next") != tc.next || len(days) != tc.days {
-			t.Errorf("%s: %q, prev %q, next %q, %d days", tc.month, m.Title, hrefOf(m, "prev"), hrefOf(m, "next"), len(days))
+		if m.Title != tc.title || apitest.Href(m, "prev") != tc.prev || apitest.Href(m, "next") != tc.next || len(days) != tc.days {
+			t.Errorf("%s: %q, prev %q, next %q, %d days", tc.month, m.Title, apitest.Href(m, "prev"), apitest.Href(m, "next"), len(days))
 		}
 		if first := days[0].(map[string]any)["day"]; first != tc.month+"-01" {
 			t.Errorf("%s starts on %v", tc.month, first)
@@ -48,7 +49,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 		}
 	}
 
-	may := props(must(c.Get(t.Context(), "/months/2031-05")))
+	may := props(apitest.Must(t)(c.Get(t.Context(), "/months/2031-05")))
 	var marked []string
 	for _, d := range may["days"].([]any) {
 		m := d.(map[string]any)
@@ -65,7 +66,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 
 	for _, bad := range []string{"2031-13", "2031-5", "x", "2031-05-01"} {
-		if _, err := c.Get(t.Context(), "/months/"+bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/months/"+bad); apitest.Status(err) != 422 {
 			t.Errorf("/months/%s: %v", bad, err)
 		}
 	}
@@ -91,23 +92,26 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 }
 
+// TestOpenDayGoesToTheDay: open-day goes to the day it names, and to today when it names no day or names the word
+// "today", as GET /days/today does. An empty day is today.
 func TestOpenDayGoesToTheDay(t *testing.T) {
-	c, h := freshOn(t, fixedToday)
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	for _, tc := range []struct {
-		day  string
-		code int
+		query, to string // to: the day of the redirect, "" for a refusal
 	}{
-		{"2031-05-14", http.StatusSeeOther}, {"1999-12-31", http.StatusSeeOther},
-		{"2031-02-30", http.StatusUnprocessableEntity}, {"x", http.StatusUnprocessableEntity}, {"", http.StatusUnprocessableEntity},
+		{"?day=2031-04-30", "2031-04-30"}, {"?day=1999-12-31", "1999-12-31"},
+		{"", fixedToday}, {"?day=", fixedToday},
+		{"?day=today", fixedToday}, {"?day=2031-02-30", ""}, {"?day=x", ""},
 	} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", "/days/go?day="+tc.day, nil))
-		if rec.Code != tc.code || tc.code == http.StatusSeeOther && rec.Header().Get("Location") != "/days/"+tc.day {
-			t.Errorf("open-day %q: %d %q", tc.day, rec.Code, rec.Header().Get("Location"))
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/days/go"+tc.query, nil))
+		code, to := rec.Code, rec.Header().Get("Location")
+		if tc.to != "" && (code != http.StatusSeeOther || to != "/days/"+tc.to) || tc.to == "" && code != http.StatusUnprocessableEntity {
+			t.Errorf("GET /days/go%s: %d %q, want %q", tc.query, code, to, tc.to)
 		}
 	}
 	// The catalog action, as every client sends it, opens the day.
-	day := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "open-day"), map[string]string{"day": "2031-04-30"}))
+	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "open-day"), map[string]string{"day": "2031-04-30"}))
 	if day.Title != "2031-04-30" || day.Class[0] != "day" {
 		t.Errorf("open-day through the client: %s %v", day.Title, day.Class)
 	}
@@ -117,29 +121,29 @@ func TestOpenDayGoesToTheDay(t *testing.T) {
 // day what names it, written through the catalog as every client writes it, and the browser draws the cells and Day by
 // day. The expected items are worked out by hand.
 func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
-	c, h := freshOn(t, fixedToday) // 2031-05-14
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14
 	ctx := t.Context()
-	root := must(c.Get(ctx, "/"))
-	do := func(e *api.Entity, action string, v map[string]string) *api.Entity {
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	do := func(e *siren.Entity, action string, v map[string]string) *siren.Entity {
 		t.Helper()
-		return must(c.Do(ctx, find(e, action), v))
+		return apitest.Must(t)(c.Do(ctx, apitest.Action(t, e, action), v))
 	}
 
-	day := do(must(c.Get(ctx, "/days/2031-05-14")), "capture", map[string]string{"text": "A walk by the lake.", "mood": "4"})
+	day := do(apitest.Must(t)(c.Get(ctx, "/days/2031-05-14")), "capture", map[string]string{"text": "A walk by the lake.", "mood": "4"})
 	do(root, "register-metric", map[string]string{"name": "weight", "unit": "kg"})
-	do(must(c.Get(ctx, "/")), "record", map[string]string{"metric": "weight", "day": "2031-05-14", "value": "80"})
+	do(apitest.Must(t)(c.Get(ctx, "/")), "record", map[string]string{"metric": "weight", "day": "2031-05-14", "value": "80"})
 
 	do(root, "create-person", map[string]string{"title": "Ana", "birth_day": "1990-05-14"})
 	do(root, "create-person", map[string]string{"title": "Ion", "birth_day": "1930-03-01", "death_day": "2020-05-21"})
 
 	do(root, "create-place", map[string]string{"title": "Lake Park"})
-	do(must(c.Get(ctx, hrefOf(day, "page"))), "link", map[string]string{"to": "Lake Park", "kind": "at"})
+	do(apitest.Must(t)(c.Get(ctx, apitest.Href(day, "page"))), "link", map[string]string{"to": "Lake Park", "kind": "at"})
 	do(root, "add-file", map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("a", 64), "mime": "application/pdf", "day": "2031-05-14"})
 	for i := 1; i <= 21; i++ {
 		do(root, "add-file", map[string]string{"title": fmt.Sprintf("Import %02d.pdf", i), "sha256": fmt.Sprintf("%064x", i), "mime": "application/pdf", "day": "2031-05-20"})
 	}
 
-	month := must(c.Get(ctx, "/months/2031-05"))
+	month := apitest.Must(t)(c.Get(ctx, "/months/2031-05"))
 	got, extra := map[string][]string{}, map[string]string{}
 	for _, d := range props(month)["days"].([]any) {
 		m := d.(map[string]any)
@@ -183,7 +187,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	}
 	// The week of 20 May has the same days.
 	y, w := time.Date(2031, 5, 20, 0, 0, 0, 0, time.UTC).ISOWeek()
-	week := props(must(c.Get(ctx, fmt.Sprintf("/weeks/%04d-W%02d", y, w))))
+	week := props(apitest.Must(t)(c.Get(ctx, fmt.Sprintf("/weeks/%04d-W%02d", y, w))))
 	for _, d := range week["days"].([]any) {
 		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 20 || fmt.Sprint(m["more_pages"]) != "1") {
 			t.Errorf("the week's 20 May: %d items, more %v", len(anyItems(m["items"])), m["more_pages"])
@@ -209,7 +213,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	}
 
 	// A month with nothing says so: a fresh file's.
-	_, none := freshOn(t, fixedToday)
+	_, none, _ := apitest.FreshOn(t, "cli", fixedToday)
 	empty := browse(t, none, "/months/2031-08")
 	for _, s := range []string{"No page, place or birthday has a day in August 2031."} {
 		if !strings.Contains(empty, s) {
@@ -226,4 +230,30 @@ func anyItems(v any) []map[string]any {
 		out = append(out, x.(map[string]any))
 	}
 	return out
+}
+
+// TestTheFirstMonthOfTheDaysIsACalendar: January 0000 holds the first day that a date can name. Its calendar has its
+// 31 days, a day page on its first day and a reading on its third day.
+func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/0000-01-01")), "capture"), map[string]string{"text": "The first day."}))
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": "0000-01-03", "value": "70"}))
+	m, err := c.Get(t.Context(), "/months/0000-01")
+	if err != nil {
+		t.Fatalf("/months/0000-01: %v", err)
+	}
+	days := props(m)["days"].([]any)
+	if m.Title != "January 0000" || len(days) != 31 {
+		t.Fatalf("%q, %d days", m.Title, len(days))
+	}
+	first, third := days[0].(map[string]any), days[2].(map[string]any)
+	if first["day"] != "0000-01-01" || first["page"] != true || first["first_line"] != "The first day." {
+		t.Errorf("the first day: %v", first)
+	}
+	if third["day"] != "0000-01-03" || third["page"] != false || said(third["readings"]) != "1" {
+		t.Errorf("the third day: %v", third)
+	}
+	browse(t, h, "/months/0000-01")
 }

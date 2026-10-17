@@ -2,15 +2,15 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
-// glanceDays is how many days, the day itself the last, a reading's trend covers.
-const glanceDays = 14
-
-// trend is a metric read on a day: its unit, and its current unassociated readings of the glanceDays days through
+// trend is a metric read on a day: its unit, and its current unassociated readings of the GlanceDays days through
 // the day, oldest first (the series of the cookbook).
 type trend struct {
 	Metric   string       `json:"metric"`
@@ -47,14 +47,11 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	for _, m := range ms {
 		units[m.Name] = m.Unit
 	}
-	t, err := time.Parse(time.DateOnly, day)
-	if err != nil {
-		return nil, err
+	t, ok := text.ParseDay(day)
+	if !ok {
+		return nil, fmt.Errorf("the trends of %q: not a day", day)
 	}
-	from := t.AddDate(0, 0, -glanceDays).Format(time.DateOnly) // a series is (from, to]
-	if !core.IsDay(from) {
-		from = "0000-01-01" // the first days a date can name: the trend starts the day after
-	}
+	from := seriesFrom(t.AddDate(0, 0, -view.GlanceDays)) // a series is (from, to]
 	for _, name := range names {
 		rows, err := h.s.Series(ctx, name, from, day)
 		if err != nil {
@@ -67,4 +64,13 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 		out = append(out, tr)
 	}
 	return out, nil
+}
+
+// seriesFrom is the from of a series (from, to] that starts the day after t: t as a day, or no lower bound ("") when
+// t is before the first day that a date can name.
+func seriesFrom(t time.Time) string {
+	if from := t.Format(time.DateOnly); text.IsDay(from) {
+		return from
+	}
+	return ""
 }

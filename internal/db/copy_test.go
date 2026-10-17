@@ -96,24 +96,21 @@ func TestCopyReservationFailureAndCleanup(t *testing.T) {
 			dest := filepath.Join(t.TempDir(), "copy.db")
 			want := []byte("replacement file")
 			copyErr := errors.New("controlled copy failure")
+			replaced := false
 			err := copyWith(source, dest, func(*sql.DB) error {
 				// A competing copy must be refused before its SQLite connection opens.
 				if err := Copy(t.Context(), source, dest); err == nil {
 					t.Error("competing copy accepted the reserved destination")
 				}
 				if replacement {
-					// Preserve the old inode so the filesystem cannot reuse it for the sentinel.
-					if err := os.Rename(dest, dest+".reserved"); err != nil {
-						t.Fatal(err)
-					}
-					writeFile(t, dest, want)
+					replaced = replaceReservedFile(t, dest, want)
 				}
 				return copyErr
 			})
 			if !errors.Is(err, copyErr) {
 				t.Fatalf("copy error = %v; want controlled copy failure", err)
 			}
-			if !replacement {
+			if !replaced {
 				if _, err := os.Lstat(dest); !errors.Is(err, os.ErrNotExist) {
 					t.Fatalf("failed copy left its reservation: %v", err)
 				}

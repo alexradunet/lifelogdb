@@ -5,14 +5,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters
@@ -20,17 +20,9 @@ const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters
 // publicHandler is the API behind the public guard, with one allowed browser origin.
 func publicHandler(t *testing.T, o api.PublicOptions) (http.Handler, *core.Store) {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
+	d := dbtest.New(t)
 	s := &core.Store{DB: d}
-	h, err := api.Public(api.New(s, o.Origins...), o)
+	h, err := api.Public(s, o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +171,7 @@ func TestPublicAllowedOrigins(t *testing.T) {
 	// Preflight from the allowed origin.
 	rec := request(h, "OPTIONS", "/pages", "", map[string]string{"Origin": app, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type"})
 	if rec.Code != 204 || rec.Header().Get("Access-Control-Allow-Origin") != app || !strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), "Authorization") ||
-		!strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), api.SourceHeader) || !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "POST") || rec.Header().Get("Vary") != "Origin" {
+		!strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), siren.SourceHeader) || !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "POST") || rec.Header().Get("Vary") != "Origin" {
 		t.Fatalf("preflight: %d %v", rec.Code, rec.Header())
 	}
 	// Preflight from another origin: refused, no CORS headers.
@@ -229,7 +221,7 @@ func TestPublicRemoteClientParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var capture api.Action
+	var capture siren.Action
 	for _, a := range catalog {
 		if a.Name == "capture" {
 			capture = a
@@ -248,30 +240,33 @@ func TestPublicRemoteClientParity(t *testing.T) {
 }
 
 func TestPublicOptionsValidation(t *testing.T) {
-	h := http.NotFoundHandler()
+	_, s := publicHandler(t, api.PublicOptions{Token: testToken})
 	for _, token := range []string{"", "short", strings.Repeat("x", 31), testToken + "\n", "line one line two\nline three abcdefghijklmnop"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: token}); err == nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: token}); err == nil {
 			t.Errorf("token %q accepted", token)
 		}
 	}
 	for _, origin := range []string{"", "app.example", "https://app.example/", "https://app.example/path", "https://user@app.example", "ftp://app.example", "https://app.example?x=1", "https://"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err == nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err == nil {
 			t.Errorf("origin %q accepted", origin)
 		}
 	}
 	for _, origin := range []string{"https://app.example", "http://localhost:3000", "http://192.168.1.20:8080", "http://[::1]:3000"} {
-		if _, err := api.Public(h, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err != nil {
+		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err != nil {
 			t.Errorf("origin %q refused: %v", origin, err)
 		}
 	}
 	for _, tc := range []struct{ in, want string }{
 		{"0.0.0.0:7777", "0.0.0.0:7777"}, {"[::]:7777", "[::]:7777"}, {"192.0.2.1:0", "192.0.2.1:0"}, {"localhost:7777", "127.0.0.1:7777"}, {"127.0.0.1:7777", "127.0.0.1:7777"},
+		{"LOCALHOST:7777", "127.0.0.1:7777"}, {"[0:0::1]:007", "[::1]:7"},
 	} {
 		if got, err := api.PublicAddress(tc.in); err != nil || got != tc.want {
 			t.Errorf("PublicAddress(%q)=%q,%v want %q", tc.in, got, err, tc.want)
 		}
 	}
-	for _, in := range []string{"", ":7777", "custom.invalid:7777", "0.0.0.0:http", "0.0.0.0:65536", "0.0.0.0:-1", "0.0.0.0:+1", "0.0.0.0", "[fe80::1%eth0]:7777"} {
+	// The parse is the one of LoopbackAddress: brackets only around an IPv6 address, and localhost in ASCII letters only.
+	for _, in := range []string{"", ":7777", "custom.invalid:7777", "0.0.0.0:http", "0.0.0.0:65536", "0.0.0.0:-1", "0.0.0.0:+1", "0.0.0.0", "[fe80::1%eth0]:7777",
+		"[192.0.2.1]:7777", "[0.0.0.0]:7777", "[localhost]:7777", "localhoſt:7777", "::1:7777"} {
 		if got, err := api.PublicAddress(in); err == nil {
 			t.Errorf("PublicAddress(%q)=%q accepted", in, got)
 		}

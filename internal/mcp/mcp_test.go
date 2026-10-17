@@ -6,22 +6,22 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
-	"lifelog/internal/core"
-	"lifelog/internal/db"
 )
 
-// The find tools are MCP tools; the owner-only actions are not.
-func TestFindTools(t *testing.T) {
+// TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
+// owner's, with get and get_day, each once; the browser's preview is not a tool; browse, get_day and get are marked
+// reads. The tool open_day opens a day, as get_day does in the parity table: get_day is the action open-day under a
+// second name. The built-in tool get reads what no action reads: a month and a day with its trends.
+func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
 	if err != nil {
@@ -59,6 +59,9 @@ func TestFindTools(t *testing.T) {
 			t.Fatalf("duplicate MCP tool %q", tool.Name)
 		}
 		seen[tool.Name] = true
+		if (tool.Name == "browse" || tool.Name == "get_day" || tool.Name == "get") && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+			t.Errorf("%s is not marked a read: %+v", tool.Name, tool.Annotations)
+		}
 	}
 	for _, name := range []string{"find", "get", "get_day", "open_day"} {
 		if !seen[name] {
@@ -74,30 +77,23 @@ func TestFindTools(t *testing.T) {
 	}
 	owner := 0
 	for _, a := range actions {
+		if seen[toolName(a.Name)] == a.Owner {
+			t.Errorf("action %s (owner %v): the MCP tool %s is listed %v", a.Name, a.Owner, toolName(a.Name), seen[toolName(a.Name)])
+		}
 		if a.Owner {
 			owner++
-			if seen[client.ToolName(a.Name)] {
-				t.Fatalf("owner-only action %q was exposed as an MCP tool", a.Name)
-			}
 		}
 	}
 	if owner == 0 {
 		t.Fatal("the catalog has no owner-only action: the check has nothing to check")
 	}
 
-	page := callTool(t, ctx, session, "find", map[string]any{"title": "Ana"})
-	if page.Title != "Ana" || href(page, "self") == "" {
-		t.Fatalf("find returned %+v", page)
-	}
-	// The browser's calendar and its "go to a day" are on this surface too (docs/plans/091-the-browser-for-daily-use.md).
 	if day := callTool(t, ctx, session, "open_day", map[string]any{"day": "2031-05-14"}); day.Title != "2031-05-14" {
-		t.Fatalf("open_day returned %+v", day)
+		t.Fatalf("open_day 2031-05-14 returned %+v", day)
 	}
+	// The browser's calendar is on this surface too (docs/plans/091-the-browser-for-daily-use.md).
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)
-	}
-	if titles := callTool(t, ctx, session, "get", map[string]any{"href": "/titles?prefix=an"}); len(titles.Entities) != 1 || titles.Entities[0].Title != "Ana" {
-		t.Fatalf("get /titles returned %+v", titles)
 	}
 	// A day's trends are on this surface too (docs/plans/093-words-phone-and-today.md).
 	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil {
@@ -107,39 +103,18 @@ func TestFindTools(t *testing.T) {
 
 func mcpTestClient(t *testing.T) *client.Client {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), p); err != nil {
-		t.Fatal(err)
-	}
-	d, err := db.Open(t.Context(), p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	handler := api.New(&core.Store{DB: d})
-	owner := client.InProcess(handler, "cli")
+	owner, handler, _ := apitest.Fresh(t, "cli")
 	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
-		must(owner.Do(t.Context(), actionByName(t, must(owner.Get(t.Context(), "/")), "register-metric"), fields))
+		apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, apitest.Must(t)(owner.Get(t.Context(), "/")), "register-metric"), fields))
 	}
 	c := client.InProcess(handler, "agent:test")
-	if _, err := c.Do(t.Context(), actionByName(t, must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
+	if _, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
 		t.Fatal(err)
 	}
 	return c
 }
 
-func actionByName(t *testing.T, e *api.Entity, name string) api.Action {
-	t.Helper()
-	for _, a := range e.Actions {
-		if a.Name == name {
-			return a
-		}
-	}
-	t.Fatalf("%s not found in %v", name, e.Actions)
-	return api.Action{}
-}
-
-func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *api.Entity {
+func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *siren.Entity {
 	t.Helper()
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
@@ -155,27 +130,11 @@ func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, 
 	if !ok {
 		t.Fatalf("%s returned %T content", name, res.Content[0])
 	}
-	var e api.Entity
+	var e siren.Entity
 	if err := json.Unmarshal([]byte(text.Text), &e); err != nil {
 		t.Fatalf("%s returned non-entity JSON %q: %v", name, text.Text, err)
 	}
 	return &e
-}
-
-func must(e *api.Entity, err error) *api.Entity {
-	if err != nil {
-		panic(err)
-	}
-	return e
-}
-
-func href(e *api.Entity, rel string) string {
-	for _, l := range e.Links {
-		if len(l.Rel) > 0 && l.Rel[0] == rel {
-			return l.Href
-		}
-	}
-	return ""
 }
 
 func numericSession(t *testing.T, c *client.Client) (*mcpsdk.ClientSession, context.Context) {
@@ -251,11 +210,11 @@ func TestMCPNumericArguments(t *testing.T) {
 	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.siren+json")
 		if r.URL.Path == "/actions" {
-			json.NewEncoder(w).Encode(api.Entity{Actions: actions})
+			json.NewEncoder(w).Encode(siren.Entity{Actions: actions})
 			return
 		}
 		paths = append(paths, r.URL.Path)
-		json.NewEncoder(w).Encode(api.Entity{})
+		json.NewEncoder(w).Encode(siren.Entity{})
 	}), "agent:test")
 	session, ctx := numericSession(t, c)
 	// A number is sent as its JSON text: the API's own parser is the one rule for an id, on this surface as on the
@@ -360,9 +319,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			})
 			c := client.InProcess(handler, "agent:test")
 			if remote {
-				srv := httptest.NewServer(handler)
-				defer srv.Close()
-				c = client.Remote(srv.URL, "agent:test", "")
+				c = apitest.Remote(t, handler, "agent:test")
 			}
 			session, ctx := numericSession(t, c)
 			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})
@@ -377,7 +334,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			}
 			decoder := json.NewDecoder(strings.NewReader(text))
 			decoder.UseNumber()
-			var entity api.Entity
+			var entity siren.Entity
 			if err := decoder.Decode(&entity); err != nil {
 				t.Fatal(err)
 			}

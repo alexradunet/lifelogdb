@@ -1,0 +1,149 @@
+{{/* The style page (docs/plans/097-the-almanac-reflects.md): every component of the Almanac in every state, on
+     synthetic words. A component that a template of its own draws (leaf, mood, step, form, boxed, body-editor,
+     reading-link, add-reading, onthisday, weekdays, monthbox, readings, metric-cards, pager) is drawn here by that
+     template, on the synthetic properties and actions of styleEntity (assets.go), so the page cannot drift from the
+     pages it shows; what a page draws inline is drawn here as that page draws it. It reads nothing from the
+     database. Its forms send to this page by GET, and the POST of the + Add fold answers 405: no form changes
+     anything. Its links lead where the real templates lead. Each group has an h2 that names the component and the
+     file it lives in. */}}
+{{define "styleguide"}}{{template "head" .}}
+{{$p := .Props}}{{$d := $p.day}}{{$s := $p.series}}{{$parts := .StyleParts}}{{$r := $parts.Series}}
+<div class="styleguide">
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1>
+<p class="sub">Every component of the Almanac in every state. The words are synthetic. This page reads nothing from the database.</p></div></header>
+
+<section class="guide" aria-label="The leaf and the head of a day">
+<h2>The leaf and the head of a day (app.css, day.html, layout.html)</h2>
+<div class="page-head day-head">
+<div class="day-title">{{template "leaf" $d.day}}
+<div class="what"><p class="specimen-title">{{weekday $d.day}}{{template "mood" $d.mood}}</p>
+<p class="sub"><a class="date" href="/styleguide">week {{week $d.day}}</a><span class="tag open">today</span></p></div></div>
+<div class="tools">
+{{template "step" (dict "href" "/styleguide" "rel" "prev" "label" (printf "Previous day, %s" (shortDay (addDays $d.day -1))) "text" (shortDay (addDays $d.day -1)))}}
+{{template "step" (dict "href" "/styleguide" "rel" "next" "label" (printf "Next day, %s" (shortDay (addDays $d.day 1))) "text" (shortDay (addDays $d.day 1)))}}
+</div>
+</div>
+</section>
+
+<section class="guide" aria-label="The sheet and its margin">
+<h2>The sheet and its margin (app.css, day.html, metrics.html, layout.html)</h2>
+<div class="sheet-margin">
+<div class="sheet">
+<section class="journal" aria-label="Journal">
+<div class="panel-head"><h2>Journal</h2></div>
+<div class="prose journal-text">{{markdown $d.journal}}</div>
+</section>
+
+{{with .Action "capture"}}<section class="capture" aria-label="Capture">
+<h2>Add to today</h2>
+{{template "form" (form . "button" "Add" "placeholder" "text=What happened? Who was there?")}}
+</section>{{end}}
+
+{{template "body-editor" (dict "action" (.Action "save-body") "back" "/styleguide" "summary" "Edit the day page")}}
+</div>
+
+<div class="margin">
+{{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
+
+<section class="group" aria-label="Readings">
+<div class="panel-head"><h2>Readings</h2></div>
+<div class="readings">{{range $parts.Tiles}}<div class="reading-tile"><a class="name" href="/styleguide">{{.Metric}}</a>
+{{template "reading-link" (dict "id" .ID "value" .Value "unit" .Unit)}}
+{{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}
+{{template "add-reading" (dict "action" ($.Action "record") "metric" .Metric "unit" .Unit "day" $d.day "today" $p.today "back" "/styleguide")}}</div>{{end}}</div>
+</section>
+
+{{range $parts.Sections}}<details class="group metric-group" open><summary><h2>{{.Title}} <small>{{.Count}}</small></h2>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
+{{template "metric-cards" (dict "cards" .Cards "file" nil "view" $ "list" false)}}
+</details>{{end}}
+
+<section class="group" aria-label="Where"><h2>Where</h2>
+<ul class="plain"><li><a href="/styleguide">Lisbon</a></li></ul></section>
+</div>
+</div>
+</section>
+
+<section class="guide" aria-label="The buttons">
+<h2>The buttons (base.css, app.css)</h2>
+<div class="specimen">
+<button>A button</button>
+<button class="primary">The loud button</button>
+<button class="danger">A danger</button>
+<button class="small">Small</button>
+<form class="tiny" method="get" action="/styleguide"><button>Tiny</button></form>
+<a class="button primary rail-new" href="/styleguide">New</a>
+</div>
+<p class="desc">One loud button a screen. The wood slab is the sidebar's New.</p>
+</section>
+
+<section class="guide" aria-label="The fields">
+<h2>The fields (base.css, app.css, layout.html)</h2>
+{{template "form" (form (.Action "browse") "button" "Browse")}}
+{{template "boxed" (form (.Action "create-person"))}}
+<form method="get" action="/styleguide">
+<label><span>Mood of the day, in error</span><input type="number" name="mood-error" value="9" aria-invalid="true" aria-describedby="refused-sample"></label>
+</form>
+</section>
+
+<section class="guide" aria-label="The tags and the badges">
+<h2>The tags and the badges (app.css)</h2>
+<div class="specimen">
+<span class="tag">page</span><span class="tag open">today</span><span class="badge">edited</span><span class="owner">owner</span>
+</div>
+</section>
+
+<section class="guide" aria-label="The alerts and the toast">
+<h2>The alerts and the toast (app.css, layout.html)</h2>
+<div class="alert"><p><strong>Take care.</strong> A warning tells what the owner may want to check.</p></div>
+<div class="alert danger"><p><strong>Not done.</strong> A danger tells that nothing was saved.</p></div>
+<div class="alert" id="refused-sample" role="note"><p><strong>Not saved.</strong> The mood must be from 1 to 5.</p></div>
+<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2><p>Saved on Mon 12 Oct.</p><form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>
+</section>
+
+<section class="guide" aria-label="The search dialog">
+<h2>The search dialog, drawn open (app.css, layout.html)</h2>
+<dialog class="palette" open aria-label="Search">
+<form method="get" action="/styleguide"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
+<p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
+</dialog>
+</section>
+
+<section class="guide" aria-label="The calendars">
+<h2>The calendars (app.css, month.html, layout.html)</h2>
+<div class="scroll"><table class="calendar"><caption>A day with a page is tinted, with its first line. A day shows what has its date; Day by day, under the calendar, lists every one. Today has a frame.</caption>
+{{template "weekdays" false}}
+<tbody><tr><td class="written"><a href="/styleguide"><span class="n">12</span><span class="first">A walk with Sam</span><span class="items"><span class="item">Garden notes</span><span class="item">Lisbon <small>place</small></span></span><span class="marks" aria-hidden="true"><i></i><i></i></span><span class="meta">mood 4 · 2 readings</span></a></td><td aria-current="date"><a href="/styleguide"><span class="n">13</span><span class="items"><span class="item">Ana <small>birthday</small></span><span class="item">Ion <small>born</small></span><span class="item">Lake.jpg</span></span><span class="marks" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="more">and 2 more</span></a></td><td><a href="/styleguide"><span class="n">14</span></a></td><td><a href="/styleguide"><span class="n">15</span></a></td><td><a href="/styleguide"><span class="n">16</span></a></td><td><a href="/styleguide"><span class="n">17</span></a></td><td><a href="/styleguide"><span class="n">18</span></a></td></tr></tbody></table></div>
+<div class="sheet"><section aria-label="Day by day"><div class="panel-head"><h2>Day by day</h2></div>
+<section class="agenda-day" aria-label="Tue 13 Oct"><h3><a href="/styleguide">Tue 13 Oct</a></h3>
+<ul class="plain"><li><span class="tag">page</span> <a href="/styleguide">Garden notes</a></li><li><span class="tag">birthday</span> <a href="/styleguide">Ana</a> <small class="agenda-note">36 years</small></li><li><span class="tag">file</span> <a href="/styleguide">Lake.jpg</a></li></ul></section></section></div>
+{{with $p.month}}{{template "monthbox" (dict "href" "/styleguide" "name" .name "written" .written "days" .days "today" $p.today)}}{{end}}
+</section>
+
+<section class="guide" aria-label="The page of a metric">
+<h2>The page of a metric: Add a reading, the chart and a fold a year (base.css, app.css, metrics.html)</h2>
+<div class="sheet">
+{{with .Action "record"}}<section class="record" aria-label="Add a reading"><h2>Add a reading</h2>
+{{template "form" (form . "metric" "weight" "button" "Add" "more" "taken_at,tz,import_key" "placeholder" "value=kg")}}</section>{{end}}
+<section aria-label="Readings">
+<div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
+<p class="desc">All history through {{$.Date $s.to}}.</p>
+{{chart "" $s.to $s.readings}}
+{{range $r.Years}}<details class="readings-year"{{if .Open}} open{{end}}><summary><span class="year-name">{{.Year}}</span> <span class="meta">{{.Summary}}</span></summary>
+{{template "readings" (dict "v" $ "r" $r "rows" .Rows)}}</details>
+{{end}}</section>
+</div>
+</section>
+
+<section class="guide" aria-label="The pager, the empty state and the facts">
+<h2>The pager, the empty state and the facts (app.css, layout.html)</h2>
+{{template "pager" .}}
+<p class="empty">Nothing is written here yet. <a href="/styleguide">Add to today</a>.</p>
+{{$.Value $p.facts}}
+</section>
+
+<section class="guide" aria-label="The stitch">
+<h2>The stitch (base.css)</h2>
+<hr>
+</section>
+</div>
+{{template "foot" .}}{{end}}

@@ -3,74 +3,72 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
-	"time"
 
+	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 )
 
-// SourceHeader names the writer of a request's rows (lifelog_meta.source). Without it a browser form writes as
-// "ui" and any other client as "api".
-const SourceHeader = "Lifelog-Source"
-
+// server is the API on one store. The store's clock is the server's one clock: today is core.Store.Today, the words
+// for a time and the name of a snapshot are in the zone of core.Store.Local, and the life of a feedback receipt is
+// measured with core.Store.Now.
 type server struct {
 	s        *core.Store
 	feedback feedbackStore
-	localDay func() string  // the server's local day: what is due, overdue and today is read against it
-	zone     *time.Location // the zone of that day: a browser's words for a time use it
 	mux      *http.ServeMux // the routes: a refused browser form runs a GET of its page through it
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
-// call it in-process. trustedOrigins are the browser origins a public listener allows to write
-// (docs/plans/078-network-server.md); a local listener and the in-process client pass none.
-func New(s *core.Store, trustedOrigins ...string) http.Handler {
-	return NewOn(s, core.Today, time.Local, trustedOrigins...)
+// call it in-process. It trusts no browser origin other than its own. A public listener uses Public, which builds the
+// API with the origins that the owner allows (docs/plans/078-network-server.md). A test gives a store with a fixed
+// clock, so today is a fixed day and a time is written in fixed words.
+func New(s *core.Store) http.Handler {
+	return newOn(s, http.NewCrossOriginProtection())
 }
 
-// NewOn is New with the clock of the local day and its zone given: a test fixes them, so what is due, overdue and
-// today are read against a fixed day, and a time is written in fixed words.
-func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOrigins ...string) http.Handler {
-	h := &server{s: s, localDay: localDay, zone: zone}
+// newOn builds the API behind guard, which refuses a browser write from an origin that it does not trust. Public
+// gives the guard that trusts the allowed origins; New gives one that trusts no other origin.
+func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
+	h := newServer(s)
+	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, r, crossOriginRefusal())
+	}))
+	return guard.Handler(limitBody(h.mux))
+}
+
+// newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
+// not actions follow.
+func newServer(s *core.Store) *server {
+	h := &server{s: s, feedback: feedbackStore{now: s.Now}}
 	m := http.NewServeMux()
 	h.mux = m
-	get := func(p string, f func(*http.Request) (*Entity, error)) {
-		if ownerPath("GET", p) { // a read that holds the write lock is the owner's too
-			f = ownerOnlyGet(f)
-		}
-		m.HandleFunc("GET "+p, h.serve(f))
-	}
-	post := func(p string, f func(*http.Request, string) (*Entity, error)) {
-		if ownerPath("POST", p) { // the catalog says whose the action is; the route refuses an agent
-			f = ownerOnly(f)
-		}
-		m.HandleFunc("POST "+p, h.serve(func(r *http.Request) (*Entity, error) {
-			src, err := source(r)
-			if err != nil {
-				return nil, err
-			}
-			return f(r, src)
-		}))
-	}
-	get("/{$}", h.root)
-	get("/actions", h.actions)
-	get("/days", h.days)
-	get("/days/today", h.today)
-	get("/days/go", h.openDay)
-	get("/days/{day}", h.day)
-	get("/months/current", h.currentMonth)
-	get("/months/{month}", h.month)
-	get("/weeks/current", h.currentWeek)
-	get("/weeks/{week}", h.week)
-	get("/years/current", h.currentYear)
-	get("/years/{year}", h.year)
-	get("/pages", h.find)
-	get("/pages/{id}", h.page)
+	h.mount(m, catalog, map[string]actionFunc{
+		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "create-person": h.createPerson,
+		"create-place": h.createPlace, "add-file": h.addFile, "set-picture": h.setPicture, "promote": h.promote,
+		"tombstone": h.tombstone, "revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
+		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
+		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
+		"search": h.search, "browse": h.browse, "find": h.find, "open-day": h.openDay, "snapshot": h.snapshot,
+	})
+	// The routes that are not actions: the resources, the old lists, the editor's helpers and the files of the browser.
+	m.HandleFunc("GET /{$}", h.serve(h.root))
+	m.HandleFunc("GET /actions", h.serve(h.actions))
+	m.HandleFunc("GET /days", h.serve(h.days))
+	m.HandleFunc("GET /days/today", h.serve(h.today))
+	m.HandleFunc("GET /days/{day}", h.serve(h.day))
+	m.HandleFunc("GET /months/current", h.serve(h.currentMonth))
+	m.HandleFunc("GET /months/{month}", h.serve(h.month))
+	m.HandleFunc("GET /weeks/current", h.serve(h.currentWeek))
+	m.HandleFunc("GET /weeks/{week}", h.serve(h.week))
+	m.HandleFunc("GET /years/current", h.serve(h.currentYear))
+	m.HandleFunc("GET /years/{year}", h.serve(h.year))
+	m.HandleFunc("GET /pages/{id}", h.serve(h.page))
 	m.HandleFunc("GET /pages/{id}/preview", picture(func(r *http.Request) ([]byte, error) {
 		id, err := idOf(r)
 		if err != nil {
@@ -81,90 +79,33 @@ func NewOn(s *core.Store, localDay func() string, zone *time.Location, trustedOr
 	m.HandleFunc("GET /previews", picture(func(r *http.Request) ([]byte, error) {
 		return h.s.PreviewByTitle(r.Context(), r.URL.Query().Get("title"))
 	}, ""))
-	get("/metrics", h.metrics)
-	get("/metrics/{name}", h.series)
-	get("/measurements/{id}", h.measurement)
-	get("/browse", h.browse)
+	m.HandleFunc("GET /metrics", h.serve(h.metrics))
+	m.HandleFunc("GET /metrics/{name}", h.serve(h.series))
+	m.HandleFunc("GET /measurements/{id}", h.serve(h.measurement))
 	for path := range oldLists {
 		m.HandleFunc("GET "+path, func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, toBrowse(path, r.URL.Query()), http.StatusPermanentRedirect)
 		})
 	}
-	get("/search", h.search)
-	get("/titles", h.titles)
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /styleguide", h.styleguide)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
-	post("/days/{day}/capture", h.capture)
-	post("/pages", h.createPage)
-	post("/pages/{id}/body", h.saveBody)
-	post("/people", h.createPerson)
-	post("/places", h.createPlace)
-	post("/files", h.addFile)
-	post("/pages/{id}/picture", h.setPicture)
-	post("/pages/{id}/promote", h.promote)
-	post("/pages/{id}/tombstone", h.tombstone)
-	post("/pages/{id}/revive", h.revive)
-	post("/pages/tombstone", h.tombstoneMany("pages"))
-	post("/pages/file", h.filePages)
-	post("/pages/{id}/links", h.linkPages)
-	post("/pages/{id}/unlink", h.unlinkPages)
-	post("/measurements", h.record)
-	post("/measurements/{id}/correct", h.correct)
-	post("/measurements/{id}/retract", h.retract)
-	post("/pages/{id}/rename", h.rename)
-	post("/metrics", h.registerMetric)
-	post("/snapshots", h.snapshot)
-	get("/integrity", h.integrity)
-	guard := http.NewCrossOriginProtection()
-	for _, origin := range trustedOrigins {
-		if err := guard.AddTrustedOrigin(origin); err != nil {
-			panic(err) // Public checked every origin before New was called
-		}
-	}
-	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
-	}))
-	return guard.Handler(m)
+	return h
 }
 
-// oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
-// Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
-// routes of the same paths do not change.
-var oldLists = map[string]url.Values{
-	"/people":     {"kind": {"person"}},
-	"/places":     {"kind": {"place"}},
-	"/media":      {"kind": {"media"}},
-	"/files":      {"kind": {"document"}},
-	"/ghosts":     {"kind": {"page"}, "ghosts": {"1"}},
-	"/categories": {},
+// crossOriginRefusal is the refusal of a browser write from an origin that the server does not trust: the guard of
+// the API and the login forms of a public listener write it. Each call gives a new error, so no caller can change the
+// refusal of another.
+func crossOriginRefusal() error {
+	return &core.Error{Status: http.StatusForbidden, Msg: "cross-origin browser write refused", Code: "cross_origin"}
 }
 
-// toBrowse is the Browse address of a GET of an old list: its filters, and the limit, the offset and the asked form
-// (new) of the query. The kind of the media list (image, video, audio) is the field media of Browse.
-func toBrowse(path string, q url.Values) string {
-	v := url.Values{}
-	for k, vs := range oldLists[path] {
-		v[k] = slices.Clone(vs)
-	}
-	for _, k := range []string{"limit", "offset", "new"} {
-		if x, ok := q[k]; ok {
-			v[k] = x
-		}
-	}
-	if path == "/media" && q.Get("kind") != "" {
-		v.Set("media", q.Get("kind"))
-	}
-	return browseHref(v)
-}
-
-// refuse answers a request the guards turn away with the error entity, as every refusal is answered: status, a code
-// (the status's general name when code is "") and the message.
-func refuse(w http.ResponseWriter, r *http.Request, status int, msg, code string) {
-	e, status := errorEntity(&core.Error{Status: status, Msg: msg, Code: code})
-	writeEntity(w, r, status, e)
+// authorityRefusal is the refusal of a request whose authority the listener does not take: the local listener and the
+// public one write it. Each call gives a new error, as crossOriginRefusal does.
+func authorityRefusal() error {
+	return &core.Error{Status: http.StatusForbidden, Msg: "HTTP authority refused"}
 }
 
 // redirect is returned by a handler that answers with another resource's address.
@@ -172,29 +113,48 @@ type redirect struct{ to string }
 
 func (r redirect) Error() string { return "see " + r.to }
 
-// ownerOnly refuses an action that is the owner's alone to an agent (a model never registers a metric or approves).
-func ownerOnly(f func(*http.Request, string) (*Entity, error)) func(*http.Request, string) (*Entity, error) {
-	return func(r *http.Request, src string) (*Entity, error) {
-		if !core.IsOwner(src) {
-			return nil, core.Forbidden("this action is the owner's: an agent or an import may not run it")
+// actionFunc runs one action of the catalog. act is the action's row of the catalog, which mount gives: the handler
+// reads its fields with it (fieldsOf), so a handler does not write its own name. src is the writer of the request
+// (lifelog_meta.source); a read that is not the owner's alone gets "".
+type actionFunc func(r *http.Request, act spec, src string) (*siren.Entity, error)
+
+// mount gives each action of cat a route to its handler, with the method and the path of the action, and gives the
+// handler the action's row. An action that writes reads its writer. An Owner action reads its writer and refuses a
+// writer that is not the owner (an agent or an import). Any other read reads no writer, so its source header cannot
+// refuse it. mount panics when an action has no handler or a handler has no action: the server does not start when
+// the catalog and the routes disagree.
+func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionFunc) {
+	named := map[string]bool{}
+	for _, s := range cat {
+		named[s.Name] = true
+		if handlers[s.Name] == nil {
+			panic("api: the action " + s.Name + " has no handler")
 		}
-		return f(r, src)
+	}
+	for name := range handlers {
+		if !named[name] {
+			panic("api: the handler " + name + " has no action in the catalog")
+		}
+	}
+	for _, s := range cat {
+		f := handlers[s.Name]
+		m.HandleFunc(s.Method+" "+s.Path, h.serve(func(r *http.Request) (*siren.Entity, error) {
+			var src string
+			if s.Method != "GET" || s.Owner {
+				var err error
+				if src, err = source(r); err != nil {
+					return nil, err
+				}
+			}
+			if s.Owner && !isOwner(src) {
+				return nil, &core.Error{Status: http.StatusForbidden, Msg: "this action is the owner's: an agent or an import may not run it"}
+			}
+			return f(r, s, src)
+		}))
 	}
 }
 
-// ownerOnlyGet is ownerOnly for a GET route, which has no source parameter: it reads the source of the request.
-func ownerOnlyGet(f func(*http.Request) (*Entity, error)) func(*http.Request) (*Entity, error) {
-	owned := ownerOnly(func(r *http.Request, _ string) (*Entity, error) { return f(r) })
-	return func(r *http.Request) (*Entity, error) {
-		src, err := source(r)
-		if err != nil {
-			return nil, err
-		}
-		return owned(r, src)
-	}
-}
-
-func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc {
+func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		e, err := f(r)
 		status := http.StatusOK
@@ -204,7 +164,7 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 			http.Redirect(w, r, rd.to, http.StatusSeeOther)
 			return
 		case err != nil:
-			e, status = errorEntity(err)
+			e, status = errorEntity(r, err)
 			if h.refusedOnItsPage(w, r, e, status) {
 				return
 			}
@@ -228,36 +188,22 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		h.write(w, r, status, e)
+		answer(w, r, status, e, frame{shell: h.s})
 	}
 }
 
-// refusal is a refused browser form, carried in the context of the GET that draws the page the form came from
-// (docs/plans/097-the-almanac-reflects.md). renderHTML reads it: the page then shows the error and the form
-// as the owner filled it. shown is set when it did.
-type refusal struct {
-	entity *Entity    // the error entity
-	status int        // the error's status: the page answers with it
-	href   string     // the refused action's address
-	sent   url.Values // what the form sent
-	shown  bool
-}
-
-type refusalKey struct{}
-
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
 // did. The server runs its own GET of the back path through its routes, on the context and the headers of the POST,
-// and a refusal in the context tells renderHTML to add the alert and the sent values. The GET writes into a buffer:
-// when it does not draw a page (a 404, a redirect, a picture), nothing is sent from it and the plain error view
-// answers, as for a POST with no back path. The GET gets no body: only the refusal carries what the form sent.
-func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Entity, status int) bool {
+// and catches the entity that the route answers. answer then draws that entity with the refusal and the error's
+// status. When the GET answers with no entity, or with an error (a 404, a redirect, a picture), nothing is sent from
+// it and the plain error view answers, as for a POST with no back path. The GET gets no body: only the refusal
+// carries what the form sent.
+func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *siren.Entity, status int) bool {
 	back := backOf(r)
 	if r.Method != "POST" || !wantsHTML(r) || back == "" {
 		return false
 	}
-	rf := &refusal{entity: e, status: status, href: r.URL.Path, sent: r.PostForm}
-	ctx := context.WithValue(r.Context(), refusalKey{}, rf)
-	get, err := http.NewRequestWithContext(ctx, "GET", back, nil)
+	get, err := http.NewRequestWithContext(r.Context(), "GET", back, nil)
 	if err != nil {
 		return false
 	}
@@ -265,29 +211,32 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 	get.Header.Del("Content-Type")
 	get.Header.Del("Content-Length")
 	get.Host, get.RemoteAddr, get.TLS = r.Host, r.RemoteAddr, r.TLS
-	out := &pageBuffer{header: http.Header{}, status: http.StatusOK}
-	h.mux.ServeHTTP(out, get)
-	if !rf.shown {
+	page := &caught{header: http.Header{}}
+	h.mux.ServeHTTP(page, get)
+	if page.entity == nil || page.status >= 400 {
 		return false
 	}
-	for k, v := range out.header {
+	for k, v := range page.header {
 		w.Header()[k] = v
 	}
-	w.WriteHeader(out.status)
-	w.Write(out.body.Bytes())
+	w.Header().Set("Cache-Control", "no-store")
+	get.Pattern = r.Pattern // a fault of the answer is logged under the route of the POST that the client sent (logFault)
+	answer(w, get, status, page.entity, frame{shell: h.s, refused: &view.Refusal{Entity: e, Href: r.URL.Path, Sent: r.PostForm}})
 	return true
 }
 
-// pageBuffer holds what a handler writes, so the caller can send it or drop it.
-type pageBuffer struct {
+// caught takes the answer of the GET that refusedOnItsPage runs: answer gives it the entity and the status, not their
+// bytes, and the route's headers stay in header. A route that writes bytes of its own (a redirect, a picture, a 404
+// of the routes) leaves entity nil, and its bytes are dropped.
+type caught struct {
 	header http.Header
+	entity *siren.Entity
 	status int
-	body   bytes.Buffer
 }
 
-func (b *pageBuffer) Header() http.Header         { return b.header }
-func (b *pageBuffer) Write(p []byte) (int, error) { return b.body.Write(p) }
-func (b *pageBuffer) WriteHeader(status int)      { b.status = status }
+func (c *caught) Header() http.Header         { return c.header }
+func (c *caught) Write(p []byte) (int, error) { return len(p), nil }
+func (c *caught) WriteHeader(int)             {}
 
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048
@@ -310,10 +259,14 @@ func backOf(r *http.Request) string {
 	return b
 }
 
-// errorEntity is the one error representation: status, a code a client branches on, and the message.
-func errorEntity(err error) (*Entity, int) {
-	status, code := http.StatusInternalServerError, ""
-	e := &Entity{Class: []string{"error"}, Title: "Error", Links: []Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
+// errorEntity is the one error representation: status, a code a client branches on, and the message. An error that
+// core did not type (not a core.Error, not an ExistsError) is a fault of the server: a defect, or the disk or the
+// driver failed. Its text can name a file or show the driver, so the client gets the message "internal error", and
+// the server's log gets the cause (logFault). A cancelled request is not logged: its client went away, or the server
+// stopped it, and no fault caused it. A timeout keeps its text.
+func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
+	status, code, msg := http.StatusInternalServerError, "", err.Error()
+	e := &siren.Entity{Class: []string{"error"}, Title: "Error", Links: []siren.Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
 	var ce *core.Error
 	var ex *core.ExistsError
 	switch {
@@ -321,15 +274,32 @@ func errorEntity(err error) (*Entity, int) {
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
 		status, code = http.StatusConflict, "exists"
-		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: pageHref(ex.ID), Title: ex.Title})
+		e.Links = append(e.Links, siren.Link{Rel: []string{"existing"}, Href: siren.PageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
+	default:
+		msg = "internal error"
+		if !errors.Is(err, context.Canceled) {
+			logFault(r, "internal error", err)
+		}
 	}
 	if code == "" {
 		code = codeOf(status)
 	}
-	e.Properties = map[string]any{"status": status, "code": code, "message": err.Error()}
+	e.Properties = map[string]any{"status": status, "code": code, "message": msg}
 	return e, status
+}
+
+// logFault writes a fault of the server to the standard log, which the owner reads on the server's stderr: the route,
+// what failed and the cause. A client never gets the cause. The route is the pattern that the request matched, not
+// its path, because a path can name a metric or a title. A request that a guard answers before the routes has no
+// pattern: its method stands for the route.
+func logFault(r *http.Request, what string, err error) {
+	route := r.Pattern
+	if route == "" {
+		route = r.Method
+	}
+	log.Printf("lifelog: %s: %s: %v", route, what, err)
 }
 
 // codeOf is the general code of a status, for an error that names no more specific one.
@@ -355,18 +325,94 @@ func codeOf(status int) string {
 	return "internal"
 }
 
-// writeEntity answers with the entity as Siren JSON, or as a page when the client is a browser.
-func writeEntity(w http.ResponseWriter, r *http.Request, status int, e *Entity) {
-	if wantsHTML(r) {
-		renderHTML(w, r, status, e, nil)
+// writeError answers with the error entity of err, as JSON or as a page with no shell. The guards, the pictures and
+// /render use it. A route that serve wraps answers its error in serve: there a browser gets the page in the shell, or
+// the page that a refused form came from.
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	e, status := errorEntity(r, err)
+	answer(w, r, status, e, frame{})
+}
+
+// frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
+// page with no sidebar: the answer of a guard, of a picture's error and of a refusal before the routes.
+type frame struct {
+	shell    *core.Store   // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
+	refused  *view.Refusal // the refused form that the page shows; nil: none
+	pageOnly bool          // a page for every client, a program too: the answer is presentation and has no JSON form
+}
+
+// answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
+// JSON; a browser, and every client of a pageOnly frame, gets a page, and only then is the shell read. The GET that
+// refusedOnItsPage runs gets the entity itself (caught). The answer is held whole before its first byte, so a fault
+// found while it is made can still answer 500. A failed write is logged: the client went away, and nothing else can
+// be done.
+func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity, fr frame) {
+	if c, ok := w.(*caught); ok {
+		c.entity, c.status = e, status
 		return
 	}
-	w.Header().Set("Content-Type", "application/vnd.siren+json")
+	typ, b := "application/vnd.siren+json", []byte(nil)
+	if fr.pageOnly || wantsHTML(r) {
+		typ = "text/html; charset=utf-8"
+		status, b = pageAnswer(r, status, e, fr)
+	} else {
+		status, b = sirenAnswer(r, status, e)
+	}
+	w.Header().Set("Content-Type", typ)
 	w.WriteHeader(status)
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	enc.Encode(e)
+	if _, err := w.Write(b); err != nil {
+		logFault(r, "the answer was not sent", err)
+	}
+}
+
+// pageAnswer is the status and the HTML of the page of e. When the page cannot be drawn, a defect of this program,
+// the owner reads the cause in the log and a client never does: the page is DrawFailed, with 500.
+func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []byte) {
+	f := view.Facts{URL: r.URL}
+	if fr.shell != nil {
+		f.Shell = shellOf(r.Context(), fr.shell)
+	}
+	if status >= 400 && r.Method == "POST" {
+		f.Submitted = r.PostForm.Get("body")
+		if f.Submitted == "" {
+			f.Submitted = r.PostForm.Get("text")
+		}
+		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
+			f.Back = ref.RequestURI()
+		}
+	}
+	b, err := view.Draw(e, f, fr.refused)
+	if err != nil {
+		logFault(r, "the view "+view.TemplateOf(e)+" cannot be drawn", err)
+		return http.StatusInternalServerError, []byte(view.DrawFailed)
+	}
+	return status, b
+}
+
+// sirenAnswer is the status and the Siren JSON of e. A value that JSON cannot carry (a NaN, an infinity) is a fault
+// of this program: the answer is then the error entity of the fault, with 500.
+func sirenAnswer(r *http.Request, status int, e *siren.Entity) (int, []byte) {
+	b, err := sirenJSON(e)
+	if err == nil {
+		return status, b
+	}
+	e, status = errorEntity(r, fmt.Errorf("the answer cannot be encoded as JSON: %w", err))
+	if b, err = sirenJSON(e); err != nil { // the error entity holds a number and strings only: a defect
+		logFault(r, "the error cannot be encoded as JSON", err)
+		return status, nil
+	}
+	return status, b
+}
+
+// sirenJSON is the Siren JSON of e, indented, with no HTML escapes. The answer is held whole before its first byte,
+// as a page is. An entity is small: a list is paged, and this writer takes a body in a request of at most
+// maxRequestBody bytes.
+func sirenJSON(e *siren.Entity) ([]byte, error) {
+	var b bytes.Buffer
+	if err := siren.WriteJSON(&b, e, "  "); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 func wantsHTML(r *http.Request) bool {
@@ -375,7 +421,7 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func source(r *http.Request) (string, error) {
-	s := r.Header.Get(SourceHeader)
+	s := r.Header.Get(siren.SourceHeader)
 	switch {
 	case s != "":
 	case wantsHTML(r):
@@ -386,8 +432,14 @@ func source(r *http.Request) (string, error) {
 	return s, core.CheckSource(s)
 }
 
-func (h *server) actions(*http.Request) (*Entity, error) {
-	e := &Entity{Class: []string{"actions"}, Title: "Actions", Links: []Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
+// isOwner reports a writer that is the owner: not an agent (agent:*) and not an import (import:*). The owner-only
+// actions (register-metric, snapshot, integrity-check) are refused to any other writer, on every surface.
+func isOwner(source string) bool {
+	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
+}
+
+func (h *server) actions(*http.Request) (*siren.Entity, error) {
+	e := &siren.Entity{Class: []string{"actions"}, Title: "Actions", Links: []siren.Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
 	for _, s := range catalog {
 		e.Actions = append(e.Actions, templated(s))
 	}

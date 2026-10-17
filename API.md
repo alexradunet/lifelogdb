@@ -22,6 +22,9 @@ and this page disagree, so a property here is a property on the wire.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
   on this server.
+- **Preview:** `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page shows
+  it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's Preview,
+  a second button of a form that writes a body, which opens it in a new tab.
 
 ## The entity
 
@@ -39,7 +42,9 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 
 `GET /actions` is the catalog: every action with a templated `href` (`/pages/{id}/body`). A client fills the path
 fields and sends the rest as the form. An action is offered on a resource only where it is legal there, so a client
-that follows `actions` needs no rules of its own.
+that follows `actions` needs no rules of its own. A `required` field that is missing or empty is refused (422
+`invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`,
+or a `q` of blanks only, it answers with no hits ([search](#search)).
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
@@ -52,8 +57,8 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `no_model` (503: `ask` with no model configured), `model` (502: the model failed or did not answer), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
-| `message` | string | the text, for a person |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
+| `message` | string | the text, for a person; a fault of the server (500 `internal`) says only `internal error`, and the server's log has the cause |
 
 ## Pages of a list
 
@@ -105,8 +110,7 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 
 ### actions
 
-`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With an import workspace the
-import actions are included and the link `import` leads to its status.
+`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs.
 
 ### days
 
@@ -195,11 +199,13 @@ too), `media` and `document`.
 ### search
 
 `GET /search?q=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+With no `q`, or a `q` of blanks only (spaces, tabs, a no-break space or another Unicode space), the answer has the
+action `search` and no properties: a browser draws it as the page to search from.
 
 | property | type | meaning |
 |---|---|---|
 | `q` | string | the query |
-| `titles[]` | list | the live pages whose name key starts with the title key of `q`, at most 8, in key order: the rows of `GET /titles` |
+| `titles[]` | list | the live pages whose name key starts with the title key of `q` (as [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), at most 8, in key order |
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
 | `titles[].page_id` | integer | the page |
@@ -211,29 +217,11 @@ too), `media` and `document`.
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
-### titles
-
-`GET /titles?prefix=&limit=`: the names of live pages whose name key starts with the title key of `prefix` (as
-[titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), in key order: what an editor suggests
-after `[[`. `limit` is 1–20, default 10; an empty prefix is 422. Embedded: an `item` link to the page of each name,
-class its type. `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page
-shows it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's
-Preview, a second button of a form that writes a body, which opens it in a new tab.
-
-| property | type | meaning |
-|---|---|---|
-| `prefix` | string | the prefix, as sent |
-| `limit` | integer | at most this many names |
-| `titles[]` | list | the names, in key order |
-| `titles[].name` | string | the name that starts with the prefix: the page's title or one of its aliases |
-| `titles[].title` | string | the page's preferred title |
-| `titles[].page_id` | integer | the page |
-| `titles[].entity_type` | string | its type: `page`, `person`, `place`, `file`, … |
-
 ### day
 
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
-names, and a value that is not a day is 422). Links: `prev`, `next` (the neighbouring days), `month` (its calendar),
+names, or to today when `day` is absent, empty or the word `today`, and a value that is not a day is 422). Links:
+`prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
@@ -278,9 +266,9 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 ### month
 
 `GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
-of a month. Links: `prev`, `next` (the months before and after), `days` (the list of day pages). Embedded: a `day`
-link to each day of the month. Actions: `open-day`. Each day holds what names it
-([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
+of a month. Links: `prev`, `next` (the months before and after; 0000-01 has no `prev` and 9999-12 no `next`), `days`
+(the list of day pages). Embedded: a `day` link to each day of the month. Actions: `open-day`. Each day holds what
+names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 
 | property | type | meaning |
 |---|---|---|
@@ -303,16 +291,17 @@ link to each day of the month. Actions: `open-day`. Each day holds what names it
 
 `GET /weeks/{YYYY-Www}` (`/weeks/current` redirects to this week; a value that is not a week, or a week number the
 year does not have, is 422): a look back over an ISO 8601 week, Monday first. Links: `prev`, `next` (the weeks before
-and after), `month` (the month of the week's Thursday), `year` (the ISO year), `index`. Embedded: a `day` link to each
-day of the week. Actions: `open-day`.
+and after; 0000-W01 has no `prev` and 9999-W52 no `next`), `month` (the month of the week's Thursday), `year` (the ISO
+year; absent in the year 0000, which has no page), `index`. Embedded: a `day` link to each day of the week. Actions:
+`open-day`.
 
 | property | type | meaning |
 |---|---|---|
 | `week` | string | the week, `YYYY-Www` (the ISO year) |
 | `from` | day | the Monday |
-| `through` | day | the Sunday |
+| `through` | day | the Sunday; 9999-12-31, a Friday, in 9999-W52 |
 | `today` | day | this machine's local day |
-| `days[]` | list | the seven days, in order (as `days[]` of the month) |
+| `days[]` | list | the days from `from` through `through`, in order (as `days[]` of the month): seven, and five in 9999-W52 |
 | `days[].day` | day | the day |
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
@@ -334,8 +323,8 @@ day of the week. Actions: `open-day`.
 ### year
 
 `GET /years/{YYYY}` (`/years/current` redirects to this year; a value that is not a year, 0001 to 9999, is 422): the
-twelve months of a year. Links: `prev`, `next` (the years before and after), `index`. Embedded: a `month` link to each
-month. Actions: `open-day`.
+twelve months of a year. Links: `prev`, `next` (the years before and after; 0001 has no `prev` and 9999 no `next`),
+`index`. Embedded: a `month` link to each month. Actions: `open-day`.
 
 | property | type | meaning |
 |---|---|---|
@@ -355,7 +344,8 @@ month. Actions: `open-day`.
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
-what is legal: `save-body` (with the current `body` and `version` filled), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
+cannot empty a page), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-picture` (a person), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
@@ -363,7 +353,7 @@ live metric answers 303 to its series, the metric's one page, which carries this
 writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. `set-picture` (`POST /pages/{id}/picture`) puts `![[title]]` first in the body, unless that file is the page's
 picture already (the first live file with a preview that the body embeds). It takes a new photo as `original` (and
-`preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and no place and titled
+`preview` when the photo is not a JPEG, PNG or GIF), kept as a file with no day and titled
 `<page> <today>.jpg` (` 2`, ` 3`… when taken) unless `title` names it; its `result` is the kept shape. Or it takes
 the `title` of a kept file with a preview, and its `result` is the sync shape. A photo with no picture, or a title
 that is not a kept picture, is refused (422).
@@ -403,8 +393,8 @@ that is not a kept picture, is refused (422).
 ### measurement
 
 `GET /measurements/{id}`: one reading, current or not. Links: `day`, `series`, `supersedes` (what it corrects),
-`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`,
-`retract`. The properties are the reading's (above) and:
+`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`, with a new value,
+and `retract`: to remove a reading, retract it. The properties are the reading's (above) and:
 
 | property | type | meaning |
 |---|---|---|
@@ -466,7 +456,7 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
-[`file-pages`](#filed), `register-metric` (owner). A browser draws each metric as a card: its latest reading and the
+[`file-pages`](#filed) and `register-metric` (owner), each with the category titles as the options of `category`. A browser draws each metric as a card: its latest reading and the
 line of its recent readings ([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a
 page title, made when missing): one write makes the metric and files it. A refusal of either step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
 ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
@@ -535,8 +525,9 @@ The class of an answer that is not a resource: the `record` of a reading whose `
 
 `POST /snapshots` (the owner's action `snapshot`, refused to an `agent:*` writer): a dated copy of the database into
 the server's snapshot folder, then its restore check. The same two values are in `result`; `self` is `/`, so a
-browser form is answered home with them as feedback. A refusal (a folder inside a git work tree, a name in use) is
-422 `snapshot_refused`.
+browser form is answered home with them as feedback. A refusal (no folder, a folder inside a git work tree, a name in
+use) is 422 `snapshot_refused`. A copy that fails its restore check is kept and answered 500 `restore_check_failed`.
+A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 
 | property | type | meaning |
 |---|---|---|
@@ -563,7 +554,6 @@ returns to. `self` is `/`.
 
 | property | type | meaning |
 |---|---|---|
-| `kind` | string | `pages` |
 | `ids` | list | the ids named, each once, in the order sent |
 | `count` | integer | how many |
 
@@ -635,7 +625,7 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `day_sync.created` | list | |
 | `day_sync.revived` | list | |
 | `day_sync.skipped` | list | |
-| `day` | day | the day it was filed under |
+| `day` | day | its own day: the `day` sent, else the EXIF date of a photo; absent when it has neither, or when its page is deleted |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
 | `filed` | object | what filing it in `category` did, as [filed](#filed) says it; absent when no `category` was sent or its page is deleted |
 | `filed.category` | object | the category page; in a dry run that would make it, its `id` is 0 |

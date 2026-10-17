@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,12 +104,12 @@ func docSaveContract(s *S) {
 	s.K("A every row of the contract table parses, and there are at least 60", len(bad) == 0 && len(rows) >= 60, len(rows), bad)
 	var wrong []string
 	for _, v := range rows {
-		if got := targets(v.body); !eq(got, v.want) {
+		if got := targets(v.body); !slices.Equal(got, v.want) {
 			wrong = append(wrong, fmt.Sprintf("%q: got %q, want %q", v.body, got, v.want))
 		}
 	}
 	s.K("A every printed vector reproduces with the writer's extraction", len(rows) > 0 && len(wrong) == 0, wrong)
-	s.K("A 81 x ẞ beside 81 x ss (243 bytes, invalid) links ss, as the line under the table says", eq(targets("[["+esz+"]] [["+ss81+"]]"), []string{ss81}))
+	s.K("A 81 x ẞ beside 81 x ss (243 bytes, invalid) links ss, as the line under the table says", slices.Equal(targets("[["+esz+"]] [["+ss81+"]]"), []string{ss81}))
 	s.K("A the 240/241-byte and 80/81-CJK boundary under the table holds", len(targets("[["+a240+"]]")) == 1 && len(targets("[["+a241+"]]")) == 0 &&
 		len(targets("[["+j80+"]]")) == 1 && len(targets("[["+j81+"]]")) == 0)
 
@@ -148,7 +149,7 @@ func docSaveContract(s *S) {
 			c := s.fresh()
 			pid := docPage(c, v.body, "Vector body")
 			orph += c.n("select count(*) from entities e where not exists (select 1 from entity_names n where n.entity_id=e.id AND n.name_key=e.preferred_name_key)")
-			if got := c.linksOf(pid); !eq(got, sorted(v.want)) {
+			if got := c.linksOf(pid); !slices.Equal(got, slices.Sorted(slices.Values(v.want))) {
 				okv = false
 				differs = append(differs, fmt.Sprintf("%q: %q", v.body, got))
 			}
@@ -184,11 +185,11 @@ func docSaveContract(s *S) {
 		}
 		same := true
 		for i := range pa {
-			same = same && eq(ca.linksOf(pa[i]), cb.linksOf(pb[i]))
+			same = same && slices.Equal(ca.linksOf(pa[i]), cb.linksOf(pb[i]))
 		}
 		s.K("B the document's SQL equals the writer's own save after 400 random edits", same)
 		keys := "select name_key from entity_names order by 1"
-		s.K("B ...with the same set of pages", eq(ca.col(keys), cb.col(keys)))
+		s.K("B ...with the same set of pages", slices.Equal(ca.col(keys), cb.col(keys)))
 	}
 
 	// ---- C  retained names share one backlink endpoint.
@@ -206,7 +207,7 @@ func docSaveContract(s *S) {
 	for _, x := range r {
 		got = append(got, val(x[0])+"|"+val(x[2]))
 	}
-	s.K("C cookbook/backlinks keeps old-name mentions on the same identity", eq(sorted(got), sorted([]string{"wikilink|" + ids(mm), "wikilink|" + ids(dd)})), tab(r))
+	s.K("C cookbook/backlinks keeps old-name mentions on the same identity", slices.Equal(slices.Sorted(slices.Values(got)), slices.Sorted(slices.Values([]string{"wikilink|" + ids(mm), "wikilink|" + ids(dd)}))), tab(r))
 
 }
 
@@ -220,8 +221,8 @@ func saveContract(s *S) {
 	c := s.fresh()
 	pid, r := c.savePage("Diet: [[Health/Diet]], [[Re: plan]], [[Target|alias]], [[Good page]], #health #con #C", "")
 	s.K("P1a the page is saved although two targets are invalid", c.n("select count(*) from entities where id=?", pid) == 1)
-	s.K("P1b links = C, Good page, Target, health (#C is a valid one-letter tag)", eq(c.linksOf(pid), []string{"C", "Good page", "Target", "health"}), c.linksOf(pid))
-	s.K("P1c skipped (reported, not stored): Health/Diet, Re: plan, con", eq(sorted(r.Skipped), []string{"Health/Diet", "Re: plan", "con"}), r.Skipped)
+	s.K("P1b links = C, Good page, Target, health (#C is a valid one-letter tag)", slices.Equal(c.linksOf(pid), []string{"C", "Good page", "Target", "health"}), c.linksOf(pid))
+	s.K("P1c skipped (reported, not stored): Health/Diet, Re: plan, con", slices.Equal(slices.Sorted(slices.Values(r.Skipped)), []string{"Health/Diet", "Re: plan", "con"}), r.Skipped)
 	s.K("P1d no orphan entities row, DB consistent", orphans(c) == 0 && c.integrityOK())
 	s.K("P1e the body keeps the text verbatim", strings.HasPrefix(c.str("select body from entities where id=?", pid), "Diet: [[Health/Diet]]"))
 
@@ -237,7 +238,7 @@ func saveContract(s *S) {
 			c.must(st.commit)
 		})
 		s.K("P2a predicate off: the page is still committed", out == "OK" && c.n("select count(*) from entities where id=?", p2) == 1, out)
-		s.K("P2b predicate off: bad target skipped, good target linked", eq(c.linksOf(p2), []string{"fine"}) && contains(skipped, "Health/Diet"), c.linksOf(p2), skipped)
+		s.K("P2b predicate off: bad target skipped, good target linked", slices.Equal(c.linksOf(p2), []string{"fine"}) && slices.Contains(skipped, "Health/Diet"), c.linksOf(p2), skipped)
 		s.K("P2c predicate off: no orphan entities row", orphans(c) == 0, orphans(c))
 	} else {
 		s.K("P2 cookbook/save-a-body has one statement of each step", false, st.counts)
@@ -246,9 +247,9 @@ func saveContract(s *S) {
 	// P3 sync = set equality: adding, removing, re-saving
 	c = s.fresh()
 	pid, _ = c.savePage("[[A]] [[B]] #t", "")
-	s.K("P3a initial links A, B, t", eq(c.linksOf(pid), []string{"A", "B", "t"}))
+	s.K("P3a initial links A, B, t", slices.Equal(c.linksOf(pid), []string{"A", "B", "t"}))
 	c.editBody(pid, "[[A]] [[C]]")
-	s.K("P3b edit: B and t dropped, C added", eq(c.linksOf(pid), []string{"A", "C"}), c.linksOf(pid))
+	s.K("P3b edit: B and t dropped, C added", slices.Equal(c.linksOf(pid), []string{"A", "C"}), c.linksOf(pid))
 	n1 := c.tab("select count(*), max(id) from links")
 	c.editBody(pid, "[[A]] [[C]]")
 	n2 := c.tab("select count(*), max(id) from links")
@@ -263,14 +264,14 @@ func saveContract(s *S) {
 	wid := c.page("Diet")
 	c.must("COMMIT")
 	c.editBody(wid, "About [[Diet]] and [[diet]] and [[Food]]")
-	s.K("P4a a page never links to itself", eq(c.linksOf(wid), []string{"Food"}), c.linksOf(wid))
+	s.K("P4a a page never links to itself", slices.Equal(c.linksOf(wid), []string{"Food"}), c.linksOf(wid))
 	c.must("BEGIN IMMEDIATE")
 	old := c.pageW("Old diet", nil, "[[Food]] [[Stuff]]")
 	c.must("COMMIT")
 	c.editBody(old, "[[Food]] [[Stuff]]")
 	nBefore := len(c.linksOf(old))
 	c.editBody(old, "#REDIRECT [[Diet]]")
-	s.K("P4b REDIRECT is literal tag/text, not a stub", nBefore == 2 && eq(c.linksOf(old), []string{"Diet", "REDIRECT"}), c.linksOf(old))
+	s.K("P4b REDIRECT is literal tag/text, not a stub", nBefore == 2 && slices.Equal(c.linksOf(old), []string{"Diet", "REDIRECT"}), c.linksOf(old))
 	s.K("P4c redirect edges are not registered", strings.HasPrefix(c.link(old, wid, "redirect"), "ERR"))
 
 	// P5 tombstoned target is revived, not duplicated
@@ -280,7 +281,7 @@ func saveContract(s *S) {
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", jid)
 	pid2, _ := c.savePage("again [[JUNK]]", "")
 	s.K("P5a one page, revived", c.n("select count(*) from entity_names where name_key='junk'") == 1 && c.str("select deleted_at from entities where id=?", jid) == "None")
-	s.K("P5b both pages link to it", eq(c.linksOf(pid), []string{"Junk"}) && eq(c.linksOf(pid2), []string{"Junk"}))
+	s.K("P5b both pages link to it", slices.Equal(c.linksOf(pid), []string{"Junk"}) && slices.Equal(c.linksOf(pid2), []string{"Junk"}))
 
 	// P6 incremental == rebuild, over random edit sequences
 	frags := []string{"[[Alpha]]", "[[alpha|a]]", "#beta", "`[[code]]`", "[[Bad/Name]]", "```\n[[fence]]\n```", "[[Ünï]]", "[[UNÏ]]", "text", "#Beta", "[[Gamma delta]]", "#12", "[[CON]]", "#REDIRECTED"}
@@ -302,7 +303,7 @@ func saveContract(s *S) {
 	same := true
 	for _, p := range pgs {
 		q, _ := c2.savePage(c.str("select body from entities where id=?", p), "")
-		same = same && eq(c.linksOf(p), c2.linksOf(q))
+		same = same && slices.Equal(c.linksOf(p), c2.linksOf(q))
 	}
 	s.K("P6a incremental maintenance == rebuild from bodies (6 pages, 400 random edits)", same)
 	s.K("P6b no orphans, integrity ok after 400 edits", orphans(c) == 0 && c.integrityOK())
@@ -341,12 +342,12 @@ func saveContract(s *S) {
 	for _, v := range all {
 		c := s.fresh()
 		pid, _ := c.savePage(v.body, "")
-		if got := c.linksOf(pid); !eq(got, sorted(v.want)) {
+		if got := c.linksOf(pid); !slices.Equal(got, slices.Sorted(slices.Values(v.want))) {
 			okDB = false
 			differs = append(differs, fmt.Sprintf("%q: %q", v.body, got))
 		}
 		c.Close()
-		okText = okText && eq(targets(v.body), v.want)
+		okText = okText && slices.Equal(targets(v.body), v.want)
 	}
 	s.K(fmt.Sprintf("P8 all %d vectors give the same links through a real save", len(all)), okDB, differs)
 	s.K("P9 extraction vectors", okText)

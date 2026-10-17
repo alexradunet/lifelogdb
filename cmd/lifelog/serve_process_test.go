@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
 func TestExecutableServeDrainsActiveRequest(t *testing.T) {
@@ -27,14 +29,20 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	binary := filepath.Join(root, "lifelog")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if out, err := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
+	// -cover: the coverage map counts the process (tests/README.md).
+	if out, err := exec.CommandContext(ctx, "go", "build", "-cover", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	live := filepath.Join(root, "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--addr", "127.0.0.1:0")
+	// The program writes its coverage to GOCOVERDIR: the coverage folder of this test binary when a coverage run gives
+	// one (tests/README.md), else a folder that the test discards. With no GOCOVERDIR, a program built with -cover
+	// writes a warning to its stderr before the startup line.
+	coverDir := t.TempDir()
+	if f := flag.Lookup("test.gocoverdir"); f != nil && f.Value.String() != "" {
+		coverDir = f.Value.String()
+	}
+	cmd.Env = append(os.Environ(), "GOCOVERDIR="+coverDir)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -53,8 +61,8 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server startup: %q, %v", startup, err)
 	}
-	_, address, ok := strings.Cut(strings.TrimSpace(startup), " on http://")
-	if !ok {
+	scheme, address := servedAt(t, startup)
+	if scheme != "http" {
 		t.Fatalf("server startup: %q", startup)
 	}
 	connection, err := net.DialTimeout("tcp", address, 10*time.Second)

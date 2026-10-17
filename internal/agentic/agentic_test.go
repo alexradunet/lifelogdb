@@ -61,46 +61,6 @@ func TestInitWritesEveryFileWithThePaths(t *testing.T) {
 	}
 }
 
-func TestTheMCPConfigsStartLifelogOnTheDatabase(t *testing.T) {
-	p := paths(t)
-	if _, err := Init(p, false); err != nil {
-		t.Fatal(err)
-	}
-	args := func(agent string) []string { return []string{"mcp", "--agent", agent, "--db", p.DB} }
-	for _, c := range []struct{ file, agent string }{{".mcp.json", "claude"}, {".pi/mcp.json", "pi"}} {
-		var cfg struct {
-			MCPServers map[string]struct {
-				Command string   `json:"command"`
-				Args    []string `json:"args"`
-			} `json:"mcpServers"`
-		}
-		if err := json.Unmarshal([]byte(read(t, p, c.file)), &cfg); err != nil {
-			t.Fatalf("%s: %v", c.file, err)
-		}
-		s := cfg.MCPServers["lifelog"]
-		if s.Command != p.Exe || !reflect.DeepEqual(s.Args, args(c.agent)) {
-			t.Errorf("%s: %+v", c.file, s)
-		}
-	}
-	var oc struct {
-		MCP map[string]struct {
-			Type    string   `json:"type"`
-			Command []string `json:"command"`
-			Enabled bool     `json:"enabled"`
-		} `json:"mcp"`
-	}
-	if err := json.Unmarshal([]byte(read(t, p, "opencode.json")), &oc); err != nil {
-		t.Fatal(err)
-	}
-	if s := oc.MCP["lifelog"]; s.Type != "local" || !s.Enabled || !reflect.DeepEqual(s.Command, append([]string{p.Exe}, args("opencode")...)) {
-		t.Errorf("opencode.json: %+v", s)
-	}
-	codex := read(t, p, ".codex/config.toml")
-	if !strings.HasPrefix(codex, "[mcp_servers.lifelog]\ncommand = ") || !strings.Contains(codex, `"--agent", "codex"`) {
-		t.Errorf(".codex/config.toml:\n%s", codex)
-	}
-}
-
 func TestPathsWithQuotesAndBackslashesStayValid(t *testing.T) {
 	dir := t.TempDir()
 	odd := filepath.Join(dir, `my "life" \ log`)

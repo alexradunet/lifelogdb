@@ -30,7 +30,7 @@ func publicOptions(o opts) (*api.PublicOptions, error) {
 		}
 		return nil, nil
 	}
-	token := os.Getenv("LIFELOG_TOKEN")
+	token := o.token
 	if o.tokenFile != "" {
 		b, err := os.ReadFile(o.tokenFile)
 		if err != nil {
@@ -127,7 +127,10 @@ func prepareServe(o *opts) error {
 	return nil
 }
 
-// serve is lifelog serve: the handler on a socket, this machine only or --public, until an interrupt drains it.
+// serve is lifelog serve: the handler on a socket, this machine only or --public, until an interrupt drains it. serve
+// builds the handler of its listener itself: the local one takes only a request to its own loopback authority, and a
+// public one serves the API behind the token, the allowed origins and the login pages (api.Public). So no code in
+// another function decides what guards a public listener.
 func serve(ctx context.Context, e env, _ []string) error {
 	o, pub := e.o, e.o.pub
 	listener, err := net.Listen("tcp", o.addr)
@@ -138,9 +141,11 @@ func serve(ctx context.Context, e env, _ []string) error {
 	var networkHandler http.Handler
 	scheme, note := "http", ""
 	if pub == nil {
-		networkHandler, err = api.NetworkAuthority(listener.Addr(), e.handler)
+		networkHandler, err = api.NetworkAuthority(listener.Addr(), api.New(e.store))
 	} else {
-		networkHandler, err = api.Public(e.handler, *pub)
+		if networkHandler, err = api.Public(e.store, *pub); err != nil {
+			return err
+		}
 		note = " (public: token required; the token travels in clear, use a private network)"
 		if pub.TLS {
 			scheme, note = "https", " (public: token required)"
@@ -153,6 +158,6 @@ func serve(ctx context.Context, e env, _ []string) error {
 		return err
 	}
 	srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	fmt.Fprintf(os.Stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
+	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
 	return serveHTTP(ctx, srv, listener, 10*time.Second)
 }

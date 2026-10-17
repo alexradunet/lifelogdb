@@ -1,57 +1,69 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"lifelog/internal/db"
+	"lifelog/internal/db/dbtest"
 )
 
-// lifelog snapshot is the catalog's action in-process, --to choosing the folder.
+// lifelog snapshot is the catalog's action in-process, --to choosing the folder. The store's clock is fixed, so the
+// name of the snapshot does not depend on the day the test runs.
 func TestSnapshotCommandRunsTheAction(t *testing.T) {
-	live := filepath.Join(t.TempDir(), "life.db")
-	if err := db.Init(t.Context(), live); err != nil {
-		t.Fatal(err)
-	}
+	live := dbtest.File(t)
 	dir := t.TempDir()
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	e, stdout, _ := testEnv(t)
+	e.clock = func() time.Time { return time.Date(2031, 5, 14, 12, 0, 0, 0, time.Local) }
+	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", dir}); err != nil {
+		t.Fatalf("snapshot: %v\n%s", err, stdout)
 	}
-	old := os.Stdout
-	os.Stdout = write
-	runErr := runContext(context.Background(), opts{args: []string{"snapshot"}, db: live, to: dir, source: "cli"})
-	os.Stdout = old
-	write.Close()
-	out := make([]byte, 1<<16)
-	n, _ := read.Read(out)
-	read.Close()
-	if runErr != nil {
-		t.Fatalf("snapshot: %v\n%s", runErr, out[:n])
-	}
-	want := filepath.Join(dir, "life-"+time.Now().Format("2006-01-02")+".db")
+	want := filepath.Join(dir, "life-2031-05-14.db")
 	if _, err := os.Stat(want); err != nil {
-		t.Fatalf("no snapshot at %s: %v\n%s", want, err, out[:n])
+		t.Fatalf("no snapshot at %s: %v\n%s", want, err, stdout)
 	}
-	if !strings.Contains(string(out[:n]), `"ok": true`) {
-		t.Fatalf("the report lacks the restore check:\n%s", out[:n])
+	if !strings.Contains(stdout.String(), `"ok": true`) {
+		t.Fatalf("the report lacks the restore check:\n%s", stdout)
 	}
 	// Over --url the server's folder is the one.
-	err = runContext(context.Background(), opts{args: []string{"snapshot"}, url: "http://127.0.0.1:1", to: dir, source: "cli"})
+	err := runArgs(t.Context(), e, []string{"snapshot", "--url", "http://127.0.0.1:1", "--to", dir})
 	if err == nil || !strings.Contains(err.Error(), "drop --to") {
 		t.Fatalf("--url with --to: %v", err)
 	}
 	// serve refuses a snapshot folder that is not one, before it opens anything.
-	err = runContext(context.Background(), opts{args: []string{"serve"}, addr: "127.0.0.1:0", db: filepath.Join(t.TempDir(), "absent.db"), snapshots: filepath.Join(t.TempDir(), "missing")})
+	err = runArgs(t.Context(), e, []string{"serve", "--addr", "127.0.0.1:0", "--db", filepath.Join(t.TempDir(), "absent.db"), "--snapshots", filepath.Join(t.TempDir(), "missing")})
 	if err == nil || !strings.Contains(err.Error(), "no folder") {
 		t.Fatalf("serve --snapshots missing: %v", err)
 	}
-	o, err := parse([]string{"serve", "--snapshots", dir})
+	o, err := parse([]string{"serve", "--snapshots", dir}, noVars)
 	if err != nil || o.snapshots != dir {
 		t.Fatalf("parse: %+v %v", o, err)
+	}
+}
+
+// TestSnapshotCommandRefusesAGitWorkTree: snapshot --to a folder inside a git work tree is refused before anything
+// opens. --db names a file that is not there, so a command that opened it would fail with another error, and nothing
+// is written in the folder or at the path of --db.
+func TestSnapshotCommandRefusesAGitWorkTree(t *testing.T) {
+	root := t.TempDir()
+	live := filepath.Join(root, "absent.db")
+	backups := filepath.Join(root, "repo", "backups")
+	for _, dir := range []string{filepath.Join(root, "repo", ".git"), backups} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e, _, _ := testEnv(t)
+	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", backups}); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("snapshot --to inside a git work tree: %v, want the refusal", err)
+	}
+	if entries, err := os.ReadDir(backups); err != nil || len(entries) != 0 {
+		t.Errorf("the refused snapshot left %v (%v)", entries, err)
+	}
+	if _, err := os.Lstat(live); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the refused snapshot made %s: %v", live, err)
 	}
 }

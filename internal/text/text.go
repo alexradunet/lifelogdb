@@ -1,6 +1,7 @@
 // Package text computes what every writer must compute identically: the title predicate, title_key, and the
 // wikilinks and #tags a body names. The rules and their vectors live in docs/contract/titles-and-wikilinks.md;
-// this package implements them and states none of its own.
+// this package implements them and states none of its own. It also holds the plain forms that the writer and its
+// view both read (plain.go): a day and an instant that round-trip, and the marks of a line and of a snippet.
 package text
 
 import (
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -99,41 +101,48 @@ func asciiUpper(s string) string {
 // Candidates returns the titles a body names, in order of appearance, valid or not and not de-duplicated.
 func Candidates(body string) []string {
 	var out []string
-	for _, run := range textRuns(body) {
-		type hit struct {
-			pos   int
-			title string
-		}
-		var found []hit
-		blanked := []rune(run)
-		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
-			title, _, _ := strings.Cut(run[m[2]:m[3]], "|")
-			found = append(found, hit{m[0], strings.Trim(title, " ")})
-		}
-		// blank the wikilinks (by rune position) so their text is not re-read for tags
-		runeStarts := runeIndex(run)
-		for _, m := range wiki.FindAllStringIndex(run, -1) {
-			for i := runeStarts[m[0]]; i < runeStarts[m[1]]; i++ {
-				blanked[i] = ' '
+	for _, run := range textRuns(body, true) {
+		links := wiki.FindAllStringSubmatchIndex(run, -1)
+		// One walk over the run blanks the wikilinks, so that their text is not read again for tags. It also finds
+		// the position of each wikilink in characters, which is the unit of a tag's position.
+		blanked := make([]rune, 0, utf8.RuneCountInString(run))
+		linkAt := make([]int, len(links))
+		k := 0
+		for b, r := range run {
+			for k < len(links) && b >= links[k][1] {
+				k++
 			}
+			if k < len(links) && b >= links[k][0] {
+				if b == links[k][0] {
+					linkAt[k] = len(blanked)
+				}
+				r = ' '
+			}
+			blanked = append(blanked, r)
 		}
+		// The wikilinks and the tags are each in order of position: a merge puts them in one order.
+		k = 0
 		for _, t := range scanTags(blanked) {
 			if !namesPage(t.tag) {
 				continue
 			}
-			found = append(found, hit{runeToByte(run, t.pos), t.tag})
-		}
-		// stable sort by position (insertion sort; runs are short)
-		for i := 1; i < len(found); i++ {
-			for j := i; j > 0 && found[j].pos < found[j-1].pos; j-- {
-				found[j], found[j-1] = found[j-1], found[j]
+			for ; k < len(links) && linkAt[k] < t.pos; k++ {
+				out = append(out, linkTitle(run, links[k]))
 			}
+			out = append(out, t.tag)
 		}
-		for _, h := range found {
-			out = append(out, h.title)
+		for ; k < len(links); k++ {
+			out = append(out, linkTitle(run, links[k]))
 		}
 	}
 	return out
+}
+
+// linkTitle is the title of the wikilink at m, a match of wiki in run: the text before a |, without the spaces at
+// its ends.
+func linkTitle(run string, m []int) string {
+	title, _, _ := strings.Cut(run[m[2]:m[3]], "|")
+	return strings.Trim(title, " ")
 }
 
 // Targets returns the distinct valid targets as (key, first valid spelling) pairs in order, skipping ownKey,
@@ -166,10 +175,11 @@ func HasEmbed(body, title string) bool {
 	return false
 }
 
-// EmbeddedTitles returns valid rendered embed names before identity resolution.
+// EmbeddedTitles returns valid rendered embed names before identity resolution. The text of a link is not read: a
+// reader draws no embed inside a link, as HTML puts no link inside a link.
 func EmbeddedTitles(body string) []string {
 	var titles []string
-	for _, run := range renderedTextRuns(body) {
+	for _, run := range textRuns(body, false) {
 		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
 			if m[0] == 0 || run[m[0]-1] != '!' {
 				continue
@@ -184,45 +194,20 @@ func EmbeddedTitles(body string) []string {
 	return titles
 }
 
-func renderedTextRuns(body string) []string {
-	src := []byte(body)
-	doc := md.Parser().Parse(gtext.NewReader(src))
-	var runs []string
-	var walk func(ast.Node)
-	walk = func(parent ast.Node) {
-		for c := parent.FirstChild(); c != nil; {
-			switch node := c.(type) {
-			case *ast.Link, *ast.Image, *ast.AutoLink, *ast.CodeSpan, *ast.RawHTML,
-				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
-				c = c.NextSibling()
-			case *ast.Text:
-				var raw bytes.Buffer
-				for t := node; t != nil; t, _ = c.(*ast.Text) {
-					raw.Write(t.Segment.Value(src))
-					c = c.NextSibling()
-					if t.SoftLineBreak() || t.HardLineBreak() {
-						break
-					}
-				}
-				runs = append(runs, norm.NFC.String(string(util.ResolveEntityNames(util.ResolveNumericReferences(util.UnescapePunctuations(raw.Bytes()))))))
-			default:
-				walk(c)
-				c = c.NextSibling()
-			}
-		}
-	}
-	walk(doc)
-	return runs
-}
-
 // TagAt reads the #tag that starts s, where prev is the character before it ('\n' at the start of a line), by the
 // rules Candidates applies; n is its length in bytes, '#' included, and 0 when no tag naming a page starts there.
 func TagAt(prev rune, s string) (tag string, n int) {
 	if !strings.HasPrefix(s, "#") {
 		return "", 0
 	}
-	line, _, _ := strings.Cut(s, "\n")
-	for _, t := range scanTags(append([]rune{prev}, []rune(line)...)) {
+	// A tag has only tag characters and '-', so the scan reads s only to the first other character after the '#'. A
+	// renderer calls TagAt at each '#' of a line: a scan to the end of the line makes the work grow with the square
+	// of the number of tags.
+	end := len(s)
+	if i := strings.IndexFunc(s[1:], func(r rune) bool { return !tagChar(r) && r != '-' }); i >= 0 {
+		end = 1 + i
+	}
+	for _, t := range scanTags(append([]rune{prev}, []rune(s[:end])...)) {
 		if t.pos == 1 && namesPage(t.tag) {
 			return t.tag, 1 + len(t.tag)
 		}
@@ -282,32 +267,12 @@ func allDigits(s string) bool {
 	return true
 }
 
-func runeIndex(s string) map[int]int {
-	m := map[int]int{}
-	i := 0
-	for b := range s {
-		m[b] = i
-		i++
-	}
-	m[len(s)] = i
-	return m
-}
-
-func runeToByte(s string, pos int) int {
-	i := 0
-	for b := range s {
-		if i == pos {
-			return b
-		}
-		i++
-	}
-	return len(s)
-}
-
 // textRuns returns the CommonMark text of a body as runs of plain text, each NFC-normalised. A run is a maximal
 // sequence of adjacent text nodes inside one inline container, broken at line breaks and at any other inline
 // (emphasis, code span, link, raw HTML). Code spans, raw HTML, link destinations and image alt text are not read.
-func textRuns(body string) []string {
+// The text of a link is read only with linkText: a wikilink in the text of a link is a link of the graph (the
+// contract's vector `[see [[Diet]]](http://x)`), and an embed there is not drawn (EmbeddedTitles).
+func textRuns(body string, linkText bool) []string {
 	src := []byte(body)
 	doc := md.Parser().Parse(gtext.NewReader(src))
 	var runs []string
@@ -336,6 +301,12 @@ func textRuns(body string) []string {
 			case *ast.CodeSpan, *ast.Image, *ast.RawHTML, *ast.AutoLink,
 				*ast.CodeBlock, *ast.FencedCodeBlock, *ast.HTMLBlock:
 				flush()
+			case *ast.Link:
+				flush()
+				if linkText {
+					walk(c)
+					flush()
+				}
 			default:
 				flush()
 				walk(c)

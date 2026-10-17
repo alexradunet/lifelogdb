@@ -1,6 +1,7 @@
-// Package photo reads what a photo's metadata says about when and where it was taken
-// (docs/cookbook/place-of-a-photo.md): the EXIF of a JPEG (its APP1 segment) or of a HEIC (the Exif item of its meta
-// box). It reads bytes it is handed, never more: a caller holding only a file's head gets what the head holds.
+// Package photo reads what a photo's metadata says about when it was taken and its orientation
+// (docs/cookbook/keep-a-file.md): the EXIF of a JPEG (its APP1 segment) or of a HEIC (the Exif item of its meta box).
+// It does not read where a photo was taken: it does not read the GPS IFD (D21). It reads bytes it is handed, never
+// more: a caller holding only a file's head gets what the head holds.
 package photo
 
 import (

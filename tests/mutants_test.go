@@ -8,6 +8,7 @@ package tests
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -401,14 +402,14 @@ func TestMutants(t *testing.T) {
 // mutantKilled matches the exact expectation label, never formatted diagnostics.
 // A setup stop invalidates even an earlier intended failure.
 func mutantKilled(s *S, stopped, witness string) bool {
-	return witness != "" && stopped == "" && contains(s.failedLabels, witness)
+	return witness != "" && stopped == "" && slices.Contains(s.failedLabels, witness)
 }
 
 func TestMutantWitness(t *testing.T) {
 	t.Run("diagnostics are not identities", func(t *testing.T) {
 		s := &S{}
 		s.K("unrelated", false, "intended")
-		if mutantKilled(s, "", "intended") || !contains(s.failedLabels, "unrelated") {
+		if mutantKilled(s, "", "intended") || !slices.Contains(s.failedLabels, "unrelated") {
 			t.Fatal("formatted details credited as an assertion identity")
 		}
 	})

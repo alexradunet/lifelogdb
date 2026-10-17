@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -43,24 +43,17 @@ func CheckToken(t string) error {
 }
 
 // PublicAddress validates a --public serve address: any numeric IP of this machine (0.0.0.0 for all of them) or
-// localhost, with a numeric port. No DNS, no service names.
+// localhost, with a numeric port. No DNS, no service names. It parses the address as LoopbackAddress does.
 func PublicAddress(authority string) (string, error) {
-	host, text, err := net.SplitHostPort(authority)
-	if err != nil || host == "" || text == "" {
+	_, ip, port, ok := authorityOf(authority)
+	if !ok {
 		return "", fmt.Errorf("serve address %q: use a numeric IP (0.0.0.0 for every interface) or localhost and a numeric port (0–65535)", authority)
 	}
-	port, err := strconv.ParseUint(text, 10, 16)
-	if err != nil || strings.ContainsAny(text, "+-") {
-		return "", fmt.Errorf("serve address %q: the port must be numeric (0–65535)", authority)
+	host := "127.0.0.1" // localhost
+	if ip.IsValid() {
+		host = ip.String()
 	}
-	if strings.EqualFold(host, "localhost") {
-		return net.JoinHostPort("127.0.0.1", strconv.FormatUint(port, 10)), nil
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil || ip.Zone() != "" {
-		return "", fmt.Errorf("serve address %q: use a numeric IP (0.0.0.0 for every interface) or localhost and a numeric port (0–65535)", authority)
-	}
-	return net.JoinHostPort(ip.String(), strconv.FormatUint(port, 10)), nil
+	return net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
 
 // CheckOrigin admits an exact browser origin: a scheme, a host, an optional port and nothing else.
@@ -80,17 +73,18 @@ type public struct {
 	token   []byte
 	origins map[string]bool
 	tls     bool
-	guard   *http.CrossOriginProtection // for the login forms, which run before next's own guard
+	guard   *http.CrossOriginProtection // the guard of next; the login forms run before next, so they check it too
 }
 
-// Public wraps the API handler for a public listener. The in-process client never goes through it, and
-// NetworkAuthority, the local guard, is not mounted with it: the token defends against the rebinding page the
-// Host check exists for.
-func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
+// Public is the handler of a public listener: the API on s, behind the token, CORS and the login pages. The allowed
+// origins are given once: one guard trusts them, for the writes of the API and for the login forms. The in-process
+// client never goes through it, and NetworkAuthority, the local guard, is not mounted with it: the token defends
+// against the rebinding page the Host check exists for.
+func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 	if err := CheckToken(o.Token); err != nil {
 		return nil, err
 	}
-	p := &public{next: next, token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection()}
+	p := &public{token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection()}
 	for _, origin := range o.Origins {
 		if err := CheckOrigin(origin); err != nil {
 			return nil, err
@@ -100,13 +94,13 @@ func Public(next http.Handler, o PublicOptions) (http.Handler, error) {
 		}
 		p.origins[origin] = true
 	}
+	p.next = newOn(s, p.guard)
 	return p, nil
 }
 
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Absolute-form targets replace Host during parsing; no proxy deployment relies on them.
-	if r.URL == nil || r.URL.IsAbs() || r.URL.Host != "" {
-		refuse(w, r, http.StatusForbidden, "HTTP authority refused", "")
+	if absoluteForm(r) {
+		writeError(w, r, authorityRefusal())
 		return
 	}
 	origin := r.Header.Get("Origin")
@@ -119,12 +113,12 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodOptions {
 		if !allowed {
-			refuse(w, r, http.StatusForbidden, "origin refused", "")
+			writeError(w, r, &core.Error{Status: http.StatusForbidden, Msg: "origin refused"})
 			return
 		}
 		h := w.Header()
 		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+SourceHeader)
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+siren.SourceHeader)
 		h.Set("Access-Control-Max-Age", "600")
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -143,8 +137,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("WWW-Authenticate", `Bearer realm="lifelog"`)
-		e, status := errorEntity(&core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: "token_required"})
-		writeEntity(w, r, status, e)
+		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: "token_required"})
 		return
 	}
 	p.next.ServeHTTP(w, r)
@@ -169,13 +162,13 @@ func (p *public) matches(credential string) bool {
 // header instead. The page is the only one served without a credential, and it shows nothing of the database.
 func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		e := &Entity{Class: []string{"login"}, Title: "Log in",
+		e := &siren.Entity{Class: []string{"login"}, Title: "Log in",
 			Properties: map[string]any{"failed": r.URL.Query().Get("failed") == "1", "logged_in": p.authorized(r)}}
-		renderHTML(w, r, http.StatusOK, e, nil)
+		answer(w, r, http.StatusOK, e, frame{pageOnly: true})
 		return
 	}
 	if err := p.guard.Check(r); err != nil {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
+		writeError(w, r, crossOriginRefusal())
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -189,7 +182,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 
 func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 	if err := p.guard.Check(r); err != nil {
-		refuse(w, r, http.StatusForbidden, "cross-origin browser write refused", "cross_origin")
+		writeError(w, r, crossOriginRefusal())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: -1})

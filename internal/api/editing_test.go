@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,42 +8,15 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-)
 
-// TestTitlesAreTheNamesAfterABracket: /titles answers the names of live pages that start with a prefix, in key
-// order, with the page each name is of; its limits are refused, not clamped.
-func TestTitlesAreTheNamesAfterABracket(t *testing.T) {
-	c, _ := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
-	for _, title := range []string{"Sam Example", "SAMUEL", "Garden project"} {
-		must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": title}))
-	}
-	got := must(c.Get(t.Context(), "/titles?prefix=sa"))
-	var names []string
-	for _, m := range props(got)["titles"].([]any) {
-		names = append(names, m.(map[string]any)["title"].(string))
-	}
-	if strings.Join(names, ",") != "Sam Example,SAMUEL" || len(got.Entities) != 2 || !strings.HasPrefix(got.Entities[0].Href, "/pages/") {
-		t.Errorf("titles: %v %v", names, got.Entities)
-	}
-	if fmt.Sprint(props(got)["limit"]) != "10" || props(got)["prefix"] != "sa" {
-		t.Errorf("titles' prefix and limit: %v", props(got))
-	}
-	if n := len(props(must(c.Get(t.Context(), "/titles?prefix=s&limit=1")))["titles"].([]any)); n != 1 {
-		t.Errorf("limit 1 answered %d", n)
-	}
-	for _, bad := range []string{"/titles", "/titles?prefix=", "/titles?prefix=%20", "/titles?prefix=s&limit=0", "/titles?prefix=s&limit=21", "/titles?prefix=s&limit=x"} {
-		if _, err := c.Get(t.Context(), bad); !clientStatus(err, 422) {
-			t.Errorf("%s: %v", bad, err)
-		}
-	}
-}
+	"lifelog/internal/api/apitest"
+)
 
 // TestRenderIsTheSavedPage: the preview of a body is a page whose prose is the HTML its page shows once saved, it
 // writes nothing, and it is a POST like any other: the origin guard and the request limit apply. A form that
 // writes a body offers it as Preview, in a new tab, so the form keeps its words (plan 108).
 func TestRenderIsTheSavedPage(t *testing.T) {
-	c, h, s := freshStore(t)
+	c, h, s := apitest.Fresh(t, "cli")
 	body := "# Notes\n\nRan with [[Sam]] #running, <b>raw</b> and ![[IMG_0001.jpg]].\n\n- one\n- two"
 	post := func(form url.Values, header map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("POST", "/render", strings.NewReader(form.Encode()))
@@ -71,8 +43,8 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 	if after := rows(); after != before {
 		t.Fatalf("render wrote: %s, then %s", before, after)
 	}
-	page := must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Notes", "body": body}))
-	saved := browse(t, h, hrefOf(page, "self"))
+	page := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Notes", "body": body}))
+	saved := browse(t, h, apitest.Href(page, "self"))
 	if !strings.Contains(saved, `<div class="prose">`+preview+`</div>`) {
 		t.Errorf("the preview is not the saved page:\npreview %s\npage %.2000s", preview, saved)
 	}
@@ -91,9 +63,9 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 	if get.Code != http.StatusMethodNotAllowed {
 		t.Errorf("GET /render: %d", get.Code)
 	}
-	for _, a := range must(c.Get(t.Context(), "/actions")).Actions {
-		if strings.HasPrefix(a.Href, "/render") || strings.HasPrefix(a.Href, "/titles") {
-			t.Errorf("the catalog names %s: the preview is presentation, and the titles a resource", a.Href)
+	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
+		if strings.HasPrefix(a.Href, "/render") {
+			t.Errorf("the catalog names %s: the preview is presentation", a.Href)
 		}
 	}
 	big := httptest.NewRequest("POST", "/render", io.MultiReader(strings.NewReader("body="), strings.NewReader(strings.Repeat("a", 20<<20))))
@@ -108,22 +80,33 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 // TestTheEditorIsTallAsItsBodyAndFirst: a page's save-body textarea grows with its body, 12 to 40 lines, and the
 // page draws its editor before its body.
 func TestTheEditorIsTallAsItsBodyAndFirst(t *testing.T) {
-	c, h := fresh(t)
-	root := must(c.Get(t.Context(), "/"))
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for _, tc := range []struct {
 		lines, rows int
 	}{{1, 12}, {20, 21}, {38, 39}, {39, 40}, {200, 40}} {
 		body := strings.Repeat("line\n", tc.lines-1) + "line"
-		p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Lines " + strings.Repeat("x", tc.lines), "body": body}))
-		for _, f := range find(p, "save-body").Fields {
+		p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Lines " + strings.Repeat("x", tc.lines), "body": body}))
+		for _, f := range apitest.Action(t, p, "save-body").Fields {
 			if f.Name == "body" && f.Rows != tc.rows {
 				t.Errorf("%d lines: rows %d, want %d", tc.lines, f.Rows, tc.rows)
 			}
 		}
 	}
-	p := must(c.Do(t.Context(), find(root, "create-page"), map[string]string{"title": "Long", "body": "words"}))
-	body := browse(t, h, hrefOf(p, "self"))
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Long", "body": "words"}))
+	body := browse(t, h, apitest.Href(p, "self"))
 	if e, b := strings.Index(body, "<summary>Edit</summary>"), strings.Index(body, `<div class="prose">`); e < 0 || b < 0 || e > b {
 		t.Errorf("the editor is not before the body: %d, %d", e, b)
+	}
+}
+
+// TestTheBrowserMarksTheBodyOfASaveRequired: save-body refuses an empty body (the catalog marks the field required),
+// so the browser marks its text area required and does not send an empty body.
+func TestTheBrowserMarksTheBodyOfASaveRequired(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Notes", "body": "words"}))
+	area := regexp.MustCompile(`<textarea name="body"[^>]*>`).FindString(browse(t, h, apitest.Href(p, "self")))
+	if area != `<textarea name="body" rows="12" required>` {
+		t.Errorf("the text area of save-body: %q, want it required", area)
 	}
 }

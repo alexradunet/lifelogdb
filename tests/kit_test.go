@@ -5,18 +5,16 @@ package tests
 // (entity first, ids by RETURNING, a named entity is one id with a page).
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +22,7 @@ import (
 
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/internal/photo/phototest"
 	"lifelog/internal/text"
 
 	_ "modernc.org/sqlite"
@@ -142,7 +141,7 @@ func (d *Docs) Pages() []string {
 			re := []string{"README.md"}
 			for _, k := range order {
 				listed[k] = true
-				if contains(names, k+".md") {
+				if slices.Contains(names, k+".md") {
 					re = append(re, k+".md")
 				}
 			}
@@ -152,7 +151,7 @@ func (d *Docs) Pages() []string {
 				}
 			}
 			names = re
-		} else if contains(names, "README.md") {
+		} else if slices.Contains(names, "README.md") {
 			rest := []string{"README.md"}
 			for _, n := range names {
 				if n != "README.md" {
@@ -638,16 +637,8 @@ func (c *C) measure(metric any, day string, value any, cols ...M) string {
 	return c.tryx("INSERT INTO measurements("+strings.Join(cs, ",")+",created_at) VALUES ("+marks+","+NOW+")", vals...)
 }
 
-// habit inserts a habit period (D24): 'OK' or 'ERR <message>'.
-
-// jpegBytes is a real JPEG (8×8, grey): a preview the DDL and the writer both accept.
-var jpegBytes = func() []byte {
-	var b bytes.Buffer
-	if err := jpeg.Encode(&b, image.NewGray(image.Rect(0, 0, 8, 8)), nil); err != nil {
-		panic(err)
-	}
-	return b.Bytes()
-}()
+// jpegBytes is a real JPEG (8×8): a preview the DDL and the writer both accept.
+var jpegBytes = phototest.JPEG(8, 8)
 
 // metric is a metric (D27): the entity, its page titled title, and its metrics row with the unit, one id.
 func (c *C) metric(title, unit string) int64 {
@@ -798,15 +789,6 @@ func (c *C) runBlock(sql string, p P, after func(string)) ([][][]any, error) {
 	return out, nil
 }
 
-func contains(xs []string, x string) bool {
-	for _, y := range xs {
-		if y == x {
-			return true
-		}
-	}
-	return false
-}
-
 // ---- the save contract
 
 // The steps of cookbook/save-a-body, each one statement of its block.
@@ -952,17 +934,7 @@ func (c *C) capture(entry, day string) int64 {
 
 // linksOf is the titles a page links to by wikilink, sorted.
 func (c *C) linksOf(pid int64) []string {
-	return sorted(c.col("SELECT n.title FROM links l JOIN entities e ON e.id=l.to_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE l.from_id=? AND l.kind='wikilink'", pid))
-}
-
-func sorted(xs []string) []string {
-	out := append([]string{}, xs...)
-	sort.Strings(out)
-	return out
-}
-
-func eq(a, b []string) bool {
-	return strings.Join(a, "\x00") == strings.Join(b, "\x00") && len(a) == len(b)
+	return slices.Sorted(slices.Values(c.col("SELECT n.title FROM links l JOIN entities e ON e.id=l.to_id JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE l.from_id=? AND l.kind='wikilink'", pid)))
 }
 
 // relPath is a link target on the page base, relative to docs/ ('..' leaves the tree).

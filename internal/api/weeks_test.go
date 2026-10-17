@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/apitest"
 	"lifelog/internal/client"
 )
 
@@ -19,14 +20,14 @@ const weekToday = "2026-10-12"
 // read on 1 October (week 40), 6 and 9 October.
 func weekScenario(t *testing.T) (*client.Client, http.Handler) {
 	t.Helper()
-	c, h := freshOn(t, weekToday)
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
 	for day, text := range map[string]string{"2026-10-05": "Monday: the long meeting.", "2026-10-07": "Wednesday: a walk by the river.", "2026-10-11": "Sunday: rest."} {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	for day, value := range map[string]string{"2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
-		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
 	return c, h
 }
@@ -44,7 +45,7 @@ func objects(p map[string]any, key string) []map[string]any {
 // readings are checked against the scenario by hand.
 func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 	c, h := weekScenario(t)
-	w := must(c.Get(t.Context(), "/weeks/2026-W41"))
+	w := apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W41"))
 	p := props(w)
 	if w.Class[0] != "week" || w.Title != "Week 41 of 2026" || p["week"] != "2026-W41" || p["from"] != "2026-10-05" || p["through"] != "2026-10-11" || p["today"] != weekToday {
 		t.Errorf("the week: %v %q %v", w.Class, w.Title, p)
@@ -75,16 +76,16 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		t.Errorf("metrics %v: weight, 2 readings, mean (71.6+71.2)/2 = 71.4, the week before 71.9", metrics)
 	}
 	for rel, want := range map[string]string{"self": "/weeks/2026-W41", "prev": "/weeks/2026-W40", "next": "/weeks/2026-W42", "month": "/months/2026-10", "year": "/years/2026"} {
-		if got := hrefOf(w, rel); got != want {
+		if got := apitest.Href(w, rel); got != want {
 			t.Errorf("link %s = %q, want %q", rel, got, want)
 		}
 	}
-	if len(w.Actions) != 1 || find(w, "open-day").Name != "open-day" {
+	if len(w.Actions) != 1 || !hasAction(w, "open-day") {
 		t.Errorf("actions: %s", names(w))
 	}
 
 	// The week before has one reading and no week before it: no previous mean.
-	p40 := props(must(c.Get(t.Context(), "/weeks/2026-W40")))
+	p40 := props(apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W40")))
 	m40 := objects(p40, "metrics")
 	if len(m40) != 1 || said(m40[0]["readings"]) != "1" || said(m40[0]["mean"]) != "71.9" {
 		t.Fatalf("week 40 metrics %v", m40)
@@ -93,23 +94,23 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 		t.Error("week 40 has a previous mean, and week 39 has no reading")
 	}
 	// A week with nothing in it is still a week.
-	p42 := props(must(c.Get(t.Context(), "/weeks/2026-W42")))
+	p42 := props(apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W42")))
 	if len(objects(p42, "metrics")) != 0 || len(objects(p42, "days")) != 7 {
 		t.Errorf("week 42: %v", p42)
 	}
 	// 2026 and 2020 have 53 weeks. Week 1 of 2026 starts in 2025, and its Thursday is in January.
 	for week, want := range map[string]string{"2026-W53": "2026-12-28", "2020-W53": "2020-12-28", "2027-W01": "2027-01-04", "2026-W01": "2025-12-29"} {
-		if got := props(must(c.Get(t.Context(), "/weeks/"+week)))["from"]; got != want {
+		if got := props(apitest.Must(t)(c.Get(t.Context(), "/weeks/"+week)))["from"]; got != want {
 			t.Errorf("%s starts on %v, want %s", week, got, want)
 		}
 	}
-	w1 := must(c.Get(t.Context(), "/weeks/2026-W01"))
-	if hrefOf(w1, "month") != "/months/2026-01" || hrefOf(w1, "year") != "/years/2026" || hrefOf(w1, "prev") != "/weeks/2025-W52" {
-		t.Errorf("week 1 of 2026 links: %s %s %s", hrefOf(w1, "month"), hrefOf(w1, "year"), hrefOf(w1, "prev"))
+	w1 := apitest.Must(t)(c.Get(t.Context(), "/weeks/2026-W01"))
+	if apitest.Href(w1, "month") != "/months/2026-01" || apitest.Href(w1, "year") != "/years/2026" || apitest.Href(w1, "prev") != "/weeks/2025-W52" {
+		t.Errorf("week 1 of 2026 links: %s %s %s", apitest.Href(w1, "month"), apitest.Href(w1, "year"), apitest.Href(w1, "prev"))
 	}
 
 	for _, bad := range []string{"2026-W60", "2026-10", "2026-W00", "2026-W54", "2025-W53", "2026-W1", "x", "2026-w41", "2026-W41x"} {
-		if _, err := c.Get(t.Context(), "/weeks/"+bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/weeks/"+bad); apitest.Status(err) != 422 {
 			t.Errorf("/weeks/%s: %v", bad, err)
 		}
 	}
@@ -152,16 +153,16 @@ func TestTheWeekLooksBackOverSevenDays(t *testing.T) {
 // TestTheYearHoldsTwelveMonths: the day pages and the current readings of one year, month by month. A reading of the
 // year before is not counted.
 func TestTheYearHoldsTwelveMonths(t *testing.T) {
-	c, h := freshOn(t, weekToday)
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
 	for _, day := range []string{"2026-10-05", "2026-10-07", "2026-10-11"} {
-		must(c.Do(t.Context(), find(must(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "A page."}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "A page."}))
 	}
-	root := must(c.Get(t.Context(), "/"))
-	must(c.Do(t.Context(), find(root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	for day, value := range map[string]string{"2025-12-31": "70", "2026-10-01": "71.9", "2026-10-06": "71.6", "2026-10-09": "71.2"} {
-		must(c.Do(t.Context(), find(root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
 	}
-	y := must(c.Get(t.Context(), "/years/2026"))
+	y := apitest.Must(t)(c.Get(t.Context(), "/years/2026"))
 	p := props(y)
 	if y.Class[0] != "year" || y.Title != "2026" || p["year"] != "2026" || p["today"] != weekToday || said(p["written"]) != "3" || said(p["readings"]) != "3" {
 		t.Errorf("the year: %v %q %v %v %v %v", y.Class, y.Title, p["year"], p["today"], p["written"], p["readings"])
@@ -177,18 +178,18 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 		t.Errorf("5 October: %v", d)
 	}
 	for rel, want := range map[string]string{"self": "/years/2026", "prev": "/years/2025", "next": "/years/2027"} {
-		if got := hrefOf(y, rel); got != want {
+		if got := apitest.Href(y, rel); got != want {
 			t.Errorf("link %s = %q, want %q", rel, got, want)
 		}
 	}
-	if len(y.Actions) != 1 || find(y, "open-day").Name != "open-day" {
+	if len(y.Actions) != 1 || !hasAction(y, "open-day") {
 		t.Errorf("actions: %s", names(y))
 	}
-	if len(objects(props(must(c.Get(t.Context(), "/years/2028"))), "months")[1]["days"].([]any)) != 29 {
+	if len(objects(props(apitest.Must(t)(c.Get(t.Context(), "/years/2028"))), "months")[1]["days"].([]any)) != 29 {
 		t.Error("February 2028 has not 29 days")
 	}
 	for _, bad := range []string{"20", "abcd", "0000", "20260", "2026-10"} {
-		if _, err := c.Get(t.Context(), "/years/"+bad); !clientStatus(err, 422) {
+		if _, err := c.Get(t.Context(), "/years/"+bad); apitest.Status(err) != 422 {
 			t.Errorf("/years/%s: %v", bad, err)
 		}
 	}
@@ -219,12 +220,214 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 
 // TestHomeLinksTheWeekAndTheYear: Home links this week and this year.
 func TestHomeLinksTheWeekAndTheYear(t *testing.T) {
-	c, _ := freshOn(t, weekToday)
-	home := must(c.Get(t.Context(), "/"))
-	if hrefOf(home, "week") != "/weeks/current" || hrefOf(home, "year") != "/years/current" {
-		t.Errorf("Home links: week %q, year %q", hrefOf(home, "week"), hrefOf(home, "year"))
+	c, _, _ := apitest.FreshOn(t, "cli", weekToday)
+	home := apitest.Must(t)(c.Get(t.Context(), "/"))
+	if apitest.Href(home, "week") != "/weeks/current" || apitest.Href(home, "year") != "/years/current" {
+		t.Errorf("Home links: week %q, year %q", apitest.Href(home, "week"), apitest.Href(home, "year"))
 	}
 }
 
 // said is a property as the client decodes it, written out: a number is a json.Number.
 func said(v any) string { return fmt.Sprint(v) }
+
+// TestTheFirstWeekOfTheDaysHasNoLowerBound: week 1 of 0000 runs from Monday 3 to Sunday 9 January 0000. The week
+// before it starts in the year -1, before the first day that a date can name, so the week reads its series with no
+// lower bound: the reading of 0000-01-01 is the week before. Week 2 of 0000 has a lower bound again: the reading of
+// 0000-01-01 is not in it or in the week before it.
+func TestTheFirstWeekOfTheDaysHasNoLowerBound(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for day, value := range map[string]string{"0000-01-01": "70", "0000-01-03": "71", "0000-01-09": "73", "0000-01-10": "74"} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": day, "value": value}))
+	}
+	for _, tc := range []struct{ week, from, through, readings, mean, previous string }{
+		{"0000-W01", "0000-01-03", "0000-01-09", "2", "72", "70"},
+		{"0000-W02", "0000-01-10", "0000-01-16", "1", "74", "72"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		p := props(w)
+		if p["from"] != tc.from || p["through"] != tc.through || len(objects(p, "days")) != 7 {
+			t.Errorf("%s: from %v, through %v, %d days", tc.week, p["from"], p["through"], len(objects(p, "days")))
+		}
+		m := objects(p, "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}
+
+// TestTheEdgesOfTheCalendarLinkOnlyToPages: the days run from 0000-01-01 to 9999-12-31 (lifelog_meta.days), and a
+// year has a page from 0001 to 9999. The first and the last day, week, month and year answer, and each of their
+// links leads to a page that answers: a link to a period that has no page is absent, in the links of the entity and
+// in its HTML. A week of the year 0000 has no year link. 0000-01-01 is a Saturday, so it and 0000-01-02 are in a week
+// of the year -1, which has no page: their HTML has no week link. Where the entity has no prev or next link, the HTML
+// has no step with that rel, and no page has an empty href.
+func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	calendarHref := regexp.MustCompile(`href="(/(?:days|weeks|months|years)/[^"]+)"`)
+	checked := map[string]bool{} // the HTML links already fetched: the sidebar repeats the days of this month
+	answers := func(path, accept string) int {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", accept)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for _, tc := range []struct{ page, rels string }{
+		{"/days/0000-01-01", "next,month"},
+		{"/days/0000-01-02", "prev,next,month"},
+		{"/days/9999-12-31", "prev,month"},
+		{"/weeks/0000-W01", "next,month"},
+		{"/weeks/0000-W02", "prev,next,month"},
+		{"/weeks/9999-W52", "prev,month,year"},
+		{"/months/0000-01", "next"},
+		{"/months/9999-12", "prev"},
+		{"/years/0001", "next"},
+		{"/years/9999", "prev"},
+	} {
+		e, err := c.Get(t.Context(), tc.page)
+		if err != nil {
+			t.Errorf("%s: %v", tc.page, err)
+			continue
+		}
+		var rels []string
+		for _, rel := range []string{"prev", "next", "up", "month", "year"} {
+			href := apitest.Href(e, rel)
+			if href == "" {
+				continue
+			}
+			rels = append(rels, rel)
+			if code := answers(href, "application/vnd.siren+json"); code != http.StatusOK {
+				t.Errorf("%s: the %s link %s answers %d, want 200", tc.page, rel, href, code)
+			}
+		}
+		if got := strings.Join(rels, ","); got != tc.rels {
+			t.Errorf("%s links %s, want %s", tc.page, got, tc.rels)
+		}
+		page := browse(t, h, tc.page)
+		for _, m := range calendarHref.FindAllStringSubmatch(page, -1) {
+			if checked[m[1]] {
+				continue
+			}
+			checked[m[1]] = true
+			if code := answers(m[1], "text/html"); code != http.StatusOK && code != http.StatusSeeOther {
+				t.Errorf("%s: its HTML links %s, which answers %d", tc.page, m[1], code)
+			}
+		}
+		for _, rel := range []string{"prev", "next"} {
+			if apitest.Href(e, rel) == "" && strings.Contains(page, `rel="`+rel+`"`) {
+				t.Errorf("%s has no %s link, and its HTML draws a step with rel=%q", tc.page, rel, rel)
+			}
+		}
+		if strings.Contains(page, `href=""`) {
+			t.Errorf("%s: its HTML has an empty href", tc.page)
+		}
+	}
+}
+
+// TestTheLastWeekOfTheDaysEndsOnTheLastDay: week 52 of 9999 runs from Monday 27 to Friday 31 December 9999, the last
+// day that a date can name. The week reads its five days, with a reading in it and with none.
+func TestTheLastWeekOfTheDaysEndsOnTheLastDay(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
+	for _, reading := range []string{"", "9999-12-31"} {
+		if reading != "" {
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": reading, "value": "70"}))
+		}
+		w, err := c.Get(t.Context(), "/weeks/9999-W52")
+		if err != nil {
+			t.Errorf("/weeks/9999-W52 (a reading on %q): %v", reading, err)
+			continue
+		}
+		p := props(w)
+		days := objects(p, "days")
+		if p["from"] != "9999-12-27" || p["through"] != "9999-12-31" || len(days) != 5 || days[4]["day"] != "9999-12-31" {
+			t.Errorf("9999-W52: from %v, through %v, %d days", p["from"], p["through"], len(days))
+		}
+		if m := objects(p, "metrics"); (reading == "") != (len(m) == 0) || reading != "" && said(m[0]["readings"]) != "1" {
+			t.Errorf("9999-W52 metrics %v, with a reading on %q", m, reading)
+		}
+		browse(t, h, "/weeks/9999-W52")
+	}
+}
+
+// TestTheMeanOfAWeekDoesNotOverflow: a reading can be as large as a float64 holds (measurements_value_finite), so the
+// sum of a week's readings can overflow where their mean does not. The mean of week 40 is that of three readings of
+// the largest float64, of week 41 that of two readings of 1e308, and of week 42 that of two readings of -1e308. Each
+// week answers 200, in JSON and in HTML, with its mean and the mean of the week before.
+func TestTheMeanOfAWeekDoesNotOverflow(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "distance", "unit": "m"}))
+	for _, r := range []struct{ day, value string }{
+		{"2026-09-28", "1.7976931348623157e308"}, {"2026-09-29", "1.7976931348623157e308"}, {"2026-09-30", "1.7976931348623157e308"},
+		{"2026-10-05", "1e308"}, {"2026-10-06", "1e308"},
+		{"2026-10-12", "-1e308"}, {"2026-10-12", "-1e308"},
+	} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "distance", "day": r.day, "value": r.value}))
+	}
+	for _, tc := range []struct{ week, readings, mean, previous string }{
+		{"2026-W40", "3", "1.7976931348623157e+308", "<nil>"},
+		{"2026-W41", "2", "1e+308", "1.7976931348623157e+308"},
+		{"2026-W42", "2", "-1e+308", "1e+308"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		m := objects(props(w), "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}
+
+// TestTheMeanOfAWeekDividesTheSumOnce: the mean of a week is the sum of its readings divided by their count, and then
+// rounded to two places. A division of each reading before the sum adds a rounding error for each reading, and a
+// mean on the boundary of two places then goes to the wrong side. Week 41 has 24 readings with the sum 81 and the
+// mean 3.375 exactly: 3.38. Week 40 has three readings of 2.675, a float64 a little less than 2.675: 2.67. Week 42
+// has one reading of -1.7105991318142733e171: its mean is that value times 100, rounded, divided by 100, which is
+// -1.710599131814273e171 (the last digit changes).
+func TestTheMeanOfAWeekDividesTheSumOnce(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "distance", "unit": "m"}))
+	for _, r := range []struct {
+		day, value string
+		times      int
+	}{
+		{"2026-09-28", "2.675", 3},
+		{"2026-10-05", "3", 4}, {"2026-10-06", "1", 4}, {"2026-10-07", "5", 4}, {"2026-10-08", "8", 3},
+		{"2026-10-09", "1", 3}, {"2026-10-10", "3", 3}, {"2026-10-11", "3", 3},
+		{"2026-10-12", "-1.7105991318142733e171", 1},
+	} {
+		for range r.times {
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "distance", "day": r.day, "value": r.value}))
+		}
+	}
+	for _, tc := range []struct{ week, readings, mean, previous string }{
+		{"2026-W40", "3", "2.67", "<nil>"},
+		{"2026-W41", "24", "3.38", "2.67"},
+		{"2026-W42", "1", "-1.710599131814273e+171", "3.38"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		m := objects(props(w), "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}

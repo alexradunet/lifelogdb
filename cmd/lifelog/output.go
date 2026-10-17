@@ -5,22 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 
-	"lifelog/internal/api"
-	"lifelog/internal/client"
+	"lifelog/internal/api/siren"
 )
 
-func listActions(ctx context.Context, o opts, c *client.Client) error {
-	actions, err := c.Catalog(ctx)
+func listActions(ctx context.Context, e env) error {
+	actions, err := e.c.Catalog(ctx)
 	if err != nil {
 		return err
 	}
-	if !o.human {
-		return printJSON(os.Stdout, actions)
+	if !e.o.human {
+		return siren.WriteJSON(e.stdout, actions, "  ")
 	}
+	out := &errWriter{w: e.stdout}
 	for _, a := range actions {
 		var fs []string
 		for _, f := range a.Fields {
@@ -30,41 +29,57 @@ func listActions(ctx context.Context, o opts, c *client.Client) error {
 			}
 			fs = append(fs, s)
 		}
-		fmt.Printf("%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))
+		fmt.Fprintf(out, "%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))
 	}
-	return nil
+	return out.err
 }
 
 // show prints an entity (an error entity too: an agent reads the message and the links) and returns the error.
-func show(o opts) func(*api.Entity, error) error {
-	return func(e *api.Entity, err error) error {
-		if e == nil {
+func show(e env) func(*siren.Entity, error) error {
+	return func(ent *siren.Entity, err error) error {
+		if ent == nil {
 			return err
 		}
-		if o.human {
-			human(os.Stdout, e)
-		} else if perr := printJSON(os.Stdout, e); perr != nil {
+		var perr error
+		if e.o.human {
+			perr = human(e.stdout, ent)
+		} else {
+			perr = siren.WriteJSON(e.stdout, ent, "  ")
+		}
+		if perr != nil {
 			return perr
 		}
 		return err
 	}
 }
 
-// printJSON writes a value as indented JSON, as the API answers it: no HTML escaping, so a body reads as it was written.
-func printJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+// errWriter writes to w until a write fails. It keeps the error of that write, and after it a write does nothing.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (o *errWriter) Write(p []byte) (int, error) {
+	if o.err != nil {
+		return 0, o.err
+	}
+	n, err := o.w.Write(p)
+	o.err = err
+	return n, err
 }
 
 // human writes an entity as a readable summary: its title and class, the result of a write, its properties, then
-// the embedded links, the links and the actions.
-func human(w io.Writer, e *api.Entity) {
-	fmt.Fprintf(w, "# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
+// the embedded links, the links and the actions. It returns the error of the first write that fails, or of a value
+// that JSON cannot write.
+func human(w io.Writer, e *siren.Entity) error {
+	out := &errWriter{w: w}
+	fmt.Fprintf(out, "# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
 	if e.Result != nil {
-		b, _ := json.Marshal(e.Result)
-		fmt.Fprintf(w, "result: %s\n", b)
+		b, err := json.Marshal(e.Result)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "result: %s\n", b)
 	}
 	if p, ok := e.Properties.(map[string]any); ok {
 		keys := make([]string, 0, len(p))
@@ -76,25 +91,29 @@ func human(w io.Writer, e *api.Entity) {
 			switch v := p[k].(type) {
 			case string:
 				if strings.Contains(v, "\n") {
-					fmt.Fprintf(w, "%s:\n%s\n", k, indent(v))
+					fmt.Fprintf(out, "%s:\n%s\n", k, indent(v))
 				} else if v != "" {
-					fmt.Fprintf(w, "%s: %s\n", k, v)
+					fmt.Fprintf(out, "%s: %s\n", k, v)
 				}
 			default:
-				b, _ := json.Marshal(v)
-				fmt.Fprintf(w, "%s: %s\n", k, b)
+				b, err := json.Marshal(v)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "%s: %s\n", k, b)
 			}
 		}
 	}
 	for _, l := range e.Entities {
-		fmt.Fprintf(w, "  → %-12s %-28s %s\n", strings.Join(l.Rel, " "), l.Title, l.Href)
+		fmt.Fprintf(out, "  → %-12s %-28s %s\n", strings.Join(l.Rel, " "), l.Title, l.Href)
 	}
 	for _, l := range e.Links {
-		fmt.Fprintf(w, "  ↗ %-12s %s\n", strings.Join(l.Rel, " "), l.Href)
+		fmt.Fprintf(out, "  ↗ %-12s %s\n", strings.Join(l.Rel, " "), l.Href)
 	}
 	for _, a := range e.Actions {
-		fmt.Fprintf(w, "  ! %-14s %s %s\n", a.Name, a.Method, a.Href)
+		fmt.Fprintf(out, "  ! %-14s %s %s\n", a.Name, a.Method, a.Href)
 	}
+	return out.err
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }

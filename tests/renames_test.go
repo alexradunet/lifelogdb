@@ -27,7 +27,7 @@ func renames(s *S) {
 			return 0, &core.Error{Status: 409, Msg: "reserved identity/name"}
 		}
 		old := c.rows(sts[1], p)
-		if len(old) != 1 || old[0][2] == int64(1) || old[0][3] != nil || core.IsDay(title) {
+		if len(old) != 1 || old[0][2] == int64(1) || old[0][3] != nil || text.IsDay(title) {
 			return rollback()
 		}
 		taken := c.rows(sts[2], p)
