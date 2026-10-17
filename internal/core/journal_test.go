@@ -241,6 +241,15 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		{"![[A.jpg]] ![[B.jpg|the lake]]\nWords", "Words"},
 		{"![[A.jpg]]", ""},
 		{"Café ünïcode", "Café ünïcode"},
+		// the marks of the inline CommonMark are not words
+		{"Finished *Piranesi* today", "Finished Piranesi today"},
+		{"**Good** day, _calm_", "Good day, calm"},
+		{"## A `quiet` [walk](https://x.example/a) in the park", "A quiet walk in the park"},
+		{"Ran with [[Sam Smith|Sam]]", "Ran with Sam"},
+		{"A &amp; B and a \\*star\\*", "A & B and a *star*"},
+		// a line with no words is passed over
+		{"---\nWords", "Words"},
+		{"![a lake](lake.png)\nWords", "Words"},
 		{long, long[:160] + "…"},
 	} {
 		if got := firstLine(c.body); got != c.want {

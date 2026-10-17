@@ -128,15 +128,17 @@ func TestMarkShowsTheMatchedWords(t *testing.T) {
 }
 
 // TestASnippetIsPlainText says a search snippet shows the words of a body without its CommonMark: the markers of a
-// heading, a quote, a list item and a task box at the start of a line, the brackets of a wikilink and of an embed are
-// cut, and the lines are joined with a space; a #tag keeps its sign, and a mark keeps its place.
+// heading, a quote, a list item and a task box at the start of a line, the brackets of a wikilink and of an embed, and
+// the marks of emphasis and code are cut, a link shows its label, and the lines are joined with a space; a #tag keeps
+// its sign, and a mark keeps its place.
 func TestASnippetIsPlainText(t *testing.T) {
 	for src, want := range map[string]string{
 		"Raised beds.\n\n- [x] Order cedar boards\n- [ ] Fill with ⟦soil⟧": "Raised beds. Order cedar boards Fill with <mark>soil</mark>",
 		"Coffee with [[Ana]]; the [[⟦Garden⟧ project]].":                   "Coffee with Ana; the <mark>Garden</mark> project.",
 		"## A ⟦heading⟧\n> a quote\n* one\n+ two":                          "A <mark>heading</mark> a quote one two",
 		"#running at the lake\n![[sunset.png]]":                            "#running at the lake sunset.png",
-		"a [link](x) and [x] in a line":                                    "a [link](x) and [x] in a line",
+		"a [link](x) and [x] in a line":                                    "a link and [x] in a line",
+		"Read *⟦Piranesi⟧*, **well** `done`, _calm_ and file_name.txt":     "Read <mark>Piranesi</mark>, well done, calm and file_name.txt",
 	} {
 		if got := string(mark(src)); got != want {
 			t.Errorf("mark(%q) = %q, want %q", src, got, want)

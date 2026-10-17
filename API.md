@@ -102,7 +102,7 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 | `recent[]` | list | the 5 newest live day pages up to today, the newest first |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
-| `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker and the brackets of a wikilink cut, an embed left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
+| `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker, the marks of emphasis, code and links, and the brackets of a wikilink cut (a link shows its label), an embed or an image left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
 | `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
 | `on_this_day[].day` | day | the day |

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
 	"strings"
 
 	"lifelog/internal/text"
@@ -199,23 +198,19 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	return out, setPictures(ctx, s.DB.R, out, func(e *DayEntry) (string, *int64) { return e.body, &e.Picture })
 }
 
-// embedMark is an ![[embed]] in a line, its label with it.
-var embedMark = regexp.MustCompile(`!\[\[[^\[\]\n\r]*\]\]`)
-
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
-// firstLine is the first line of a body that has text, as plain text: a heading's or a list item's marker cut, an
-// ![[embed]] left out (a picture is not words, and a cover goes first in the body), the brackets of a [[wikilink]]
-// cut, and cut with "…" after 160 characters. It is for a list of days, not a rendering.
+// firstLine is the first line of a body that has text, as plain text (text.Plain): a heading's or a list item's marker
+// cut, the marks of emphasis, code and links cut, an ![[embed]] or an image left out (a picture is not words, and a
+// cover goes first in the body), the brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. A line
+// with no words is passed over. It is for a list of days, not a rendering.
 func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
-		line = strings.TrimSpace(embedMark.ReplaceAllString(line, ""))
-		line = strings.TrimSpace(text.BlockMark.ReplaceAllString(line, ""))
+		line = text.Plain(text.BlockMark.ReplaceAllString(strings.TrimSpace(line), ""))
 		if line == "" {
 			continue
 		}
-		line = strings.NewReplacer("[[", "", "]]", "").Replace(line)
 		if r := []rune(line); len(r) > firstLineRunes {
 			line = strings.TrimSpace(string(r[:firstLineRunes])) + "…"
 		}

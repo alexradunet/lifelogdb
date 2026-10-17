@@ -225,8 +225,9 @@ func mark(snippet string) template.HTML {
 }
 
 // plainSnippet is the words of a snippet without its CommonMark, on one line: the marker of a heading, a quote, a
-// list item or a task box at the start of a line is cut, and the brackets of a wikilink or an embed. It is for a
-// list of hits, not a rendering; the JSON keeps the text as it is.
+// list item or a task box at the start of a line is cut, the brackets of a wikilink or an embed, and the inline marks
+// (text.CutInlineMarks; a snippet is a fragment, so goldmark does not read it). It is for a list of hits, not a
+// rendering; the JSON keeps the text as it is.
 func plainSnippet(s string) string {
 	var words []string
 	for line := range strings.SplitSeq(s, "\n") {
@@ -235,7 +236,7 @@ func plainSnippet(s string) string {
 			words = append(words, line)
 		}
 	}
-	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(strings.Join(words, " "))
+	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(text.CutInlineMarks(strings.Join(words, " ")))
 }
 
 var markRE = regexp.MustCompile(text.SnippetOpen + `([^` + text.SnippetOpen + text.SnippetClose + `]+)` + text.SnippetClose)
