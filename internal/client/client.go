@@ -35,17 +35,28 @@ func InProcess(h http.Handler, source string) *Client {
 }
 
 // Remote calls a running server, e.g. http://127.0.0.1:7777, with token as the owner's bearer credential when the
-// server is --public ("" for none). Connecting and the TLS handshake are bounded by dialTimeout; the response is not,
-// since an upload may take minutes, and the command's context carries the interrupt.
+// server is --public ("" for none). Connecting and the TLS handshake are bounded by dialTimeout, and the wait for the
+// answer's headers by headerTimeout. That timer starts after the request is sent, so an upload may take minutes. The
+// answer's body is bounded in size (maxResponse). It is not bounded in time: the caller's context ends a body that
+// stalls, and the command's context carries the interrupt.
 func Remote(base, source, token string) *Client {
-	return &Client{hc: &http.Client{Transport: remoteTransport()}, base: strings.TrimRight(base, "/"), source: source, token: token}
+	return &Client{hc: &http.Client{Transport: remoteTransport(headerTimeout)}, base: strings.TrimRight(base, "/"), source: source, token: token}
 }
 
 const dialTimeout = 10 * time.Second
 
-func remoteTransport() *http.Transport {
+// headerTimeout is the longest wait for the headers of an answer once the request is sent. The server ends a request
+// at its own limit of 2 minutes (internal/api, defaultLimits), and the slowest action is a snapshot: the client waits
+// a little longer than that, so a slow answer is the server's 504 and not a timeout of this side.
+const headerTimeout = 3 * time.Minute
+
+// maxResponse is the largest answer body the client reads. An answer is one Siren entity, and a list is paged, so it
+// is small; the limit stops a wrong or hostile server from filling memory.
+const maxResponse = 16 << 20
+
+func remoteTransport(headerWait time.Duration) *http.Transport {
 	return &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
-		TLSHandshakeTimeout: dialTimeout, ExpectContinueTimeout: time.Second, ForceAttemptHTTP2: true}
+		TLSHandshakeTimeout: dialTimeout, ResponseHeaderTimeout: headerWait, ExpectContinueTimeout: time.Second, ForceAttemptHTTP2: true}
 }
 
 type handlerTransport struct{ h http.Handler }
@@ -243,9 +254,12 @@ func (c *Client) send(req *http.Request) (*siren.Entity, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxResponse+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > maxResponse { // an error, never a cut body: half an entity could decode as another answer
+		return nil, fmt.Errorf("HTTP %d, the answer is larger than %d bytes", res.StatusCode, maxResponse)
 	}
 	var e siren.Entity
 	decoder := json.NewDecoder(bytes.NewReader(body))

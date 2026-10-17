@@ -5,11 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
+	"runtime/debug"
 	"strings"
+	"time"
 
 	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
@@ -40,7 +44,60 @@ func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 	}))
-	return guard.Handler(limitBody(h.mux))
+	return guard.Handler(limitBody(withDeadlines(defaultLimits, h.mux)))
+}
+
+// The time limits of a request. A server-wide ReadTimeout is wrong here: it would cut an upload, which has no size
+// limit as a whole (limitBody). So the limits are per request, and a multipart form (the upload of a file) has its own.
+type limits struct {
+	request time.Duration // the context of any other request: the whole of its work. Snapshot and integrity-check are the longest.
+	upload  time.Duration // the context of an upload: long, because a large original on a slow link is slow, but not endless
+	stall   time.Duration // the longest an upload may send no byte
+}
+
+var defaultLimits = limits{request: 2 * time.Minute, upload: time.Hour, stall: 2 * time.Minute}
+
+// withDeadlines gives each request a context deadline: l.request, or l.upload for a multipart form. The deadline reaches
+// a query of the store and ends it with context.DeadlineExceeded, which errorEntity answers as 504. A wait for the
+// file's lock ends by busy_timeout (5 s) and not by this deadline: the answer is then busy (503).
+// An upload also gets a read deadline that moves on with each read of its body (stallBody), so a sender that stops
+// is cut after l.stall, and a sender that goes on is not.
+func withDeadlines(l limits, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := l.request
+		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" { // as limitBody
+			limit = l.upload
+			if r.Body != nil {
+				rc := http.NewResponseController(w)
+				if err := rc.SetReadDeadline(time.Now().Add(l.stall)); err == nil {
+					r.Body = stallBody{r.Body, rc, l.stall}
+				} else if !errors.Is(err, http.ErrNotSupported) { // a recorder in a test is not a connection
+					logFault(r, "the upload has no read deadline", err)
+				}
+			}
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), limit)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// stallBody is the body of an upload. Each read moves the read deadline of the connection on by stall. At the end of
+// the body the deadline is cleared: after that the server watches the connection for a client that went away, and a
+// deadline that ran out then would cancel the request while the answer is still being made.
+type stallBody struct {
+	io.ReadCloser
+	rc    *http.ResponseController
+	stall time.Duration
+}
+
+func (b stallBody) Read(p []byte) (int, error) {
+	b.rc.SetReadDeadline(time.Now().Add(b.stall)) // supported: withDeadlines set it once already
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		b.rc.SetReadDeadline(time.Time{})
+	}
+	return n, err
 }
 
 // newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
@@ -156,7 +213,7 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 
 func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		e, err := f(r)
+		e, err := guarded(f, r)
 		status := http.StatusOK
 		var rd redirect
 		switch {
@@ -190,6 +247,22 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 		}
 		answer(w, r, status, e, frame{shell: h.s})
 	}
+}
+
+// guarded runs the handler f of a route and turns a panic of it into an error. serve writes nothing before f returns,
+// so the answer of that error, the 500 entity, can still be sent whole, and errorEntity logs the cause with the route
+// (logFault). Without this, net/http would drop the connection and the owner would see no line for the route.
+// http.ErrAbortHandler is the standard way to end a response on purpose: it goes on up.
+func guarded(f func(*http.Request) (*siren.Entity, error), r *http.Request) (e *siren.Entity, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if p == http.ErrAbortHandler {
+				panic(p)
+			}
+			e, err = nil, fmt.Errorf("panic: %v\n%s", p, debug.Stack())
+		}
+	}()
+	return f(r)
 }
 
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
@@ -319,11 +392,17 @@ func codeOf(status int) string {
 		return "too_large"
 	case http.StatusUnprocessableEntity:
 		return "invalid"
+	case http.StatusServiceUnavailable:
+		return core.CodeBusy
 	case http.StatusGatewayTimeout:
 		return "timeout"
 	}
 	return "internal"
 }
+
+// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (core.CodeBusy), which the writer
+// has waited on for busy_timeout already, so a short wait before the next try is enough.
+const retryAfter = "1"
 
 // writeError answers with the error entity of err, as JSON or as a page with no shell. The guards, the pictures and
 // /render use it. A route that serve wraps answers its error in serve: there a browser gets the page in the shell, or
@@ -359,6 +438,9 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity,
 		status, b = sirenAnswer(r, status, e)
 	}
 	w.Header().Set("Content-Type", typ)
+	if status == http.StatusServiceUnavailable {
+		w.Header().Set("Retry-After", retryAfter)
+	}
 	w.WriteHeader(status)
 	if _, err := w.Write(b); err != nil {
 		logFault(r, "the answer was not sent", err)
