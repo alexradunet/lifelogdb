@@ -118,7 +118,7 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		h := w.Header()
 		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+SourceHeader)
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, "+siren.SourceHeader)
 		h.Set("Access-Control-Max-Age", "600")
 		w.WriteHeader(http.StatusNoContent)
 		return

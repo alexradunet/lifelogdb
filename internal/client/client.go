@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/siren"
 )
 
@@ -234,7 +233,7 @@ func (c *Client) Catalog(ctx context.Context) ([]siren.Action, error) {
 func (c *Client) send(req *http.Request) (*siren.Entity, error) {
 	req.Header.Set("Accept", "application/vnd.siren+json")
 	if c.source != "" {
-		req.Header.Set(api.SourceHeader, c.source)
+		req.Header.Set(siren.SourceHeader, c.source)
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)

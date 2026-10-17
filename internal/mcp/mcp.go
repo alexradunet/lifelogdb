@@ -12,7 +12,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
@@ -76,7 +75,7 @@ func result(e *siren.Entity, err error) (*mcp.CallToolResult, error) {
 		return failure(err), nil
 	}
 	var b bytes.Buffer
-	if err := api.WriteJSON(&b, e, ""); err != nil {
+	if err := siren.WriteJSON(&b, e, ""); err != nil {
 		return failure(err), nil
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimSuffix(b.String(), "\n")}}, IsError: err != nil}, nil

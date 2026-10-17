@@ -1,15 +1,22 @@
 // Package siren is the hypermedia of the API: the Siren types that every answer is made of (an entity, its links, its
-// actions and their fields), and the addresses of the resources that the API serves and that its view links. The API
-// (internal/api), its view (internal/api/view) and the clients (internal/client, internal/mcp, cmd/lifelog) import it.
-// It imports only the standard library, so a client of the types gets none of the server with them.
+// actions and their fields), the header that names the writer of a request, the JSON of an answer, and the addresses
+// of the resources that the API serves and that its view links. The API (internal/api), its view (internal/api/view)
+// and the clients (internal/client, internal/mcp, cmd/lifelog) import it. It imports only the standard library, so a
+// client of the types gets none of the server with them.
 package siren
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strconv"
 	"time"
 )
+
+// SourceHeader names the writer of a request's rows (lifelog_meta.source). Without it a browser form writes as
+// "ui" and any other client as "api".
+const SourceHeader = "Lifelog-Source"
 
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
 type Entity struct {
@@ -81,6 +88,16 @@ func (a *Action) Field(name string) *Field {
 		}
 	}
 	return nil
+}
+
+// WriteJSON writes v to w as the API's JSON: with no HTML escapes, so a body reads as it was written (< > & stay as
+// they are); indented by indent ("" for none); with a newline at the end. The API, the CLI and the MCP server write
+// their JSON with it.
+func WriteJSON(w io.Writer, v any, indent string) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", indent)
+	return enc.Encode(v)
 }
 
 // PageHref is the address of a page.

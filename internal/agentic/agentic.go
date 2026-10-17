@@ -85,8 +85,8 @@ func Files(p Paths) (map[string][]byte, error) {
 	}
 	server := func(agent string) []string { return []string{"mcp", "--agent", agent, "--db", p.DB} }
 	var err2 error
-	// jsonFile encodes as api.WriteJSON does, with an indent of two spaces. It keeps its own encoder: this package
-	// imports no package of lifelog, and an import of api would add the store and SQLite to it.
+	// jsonFile encodes as siren.WriteJSON does, with an indent of two spaces. It keeps its own encoder: this package
+	// imports no package of lifelog.
 	jsonFile := func(v any) []byte {
 		var b bytes.Buffer
 		enc := json.NewEncoder(&b)

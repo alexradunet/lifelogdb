@@ -1,11 +1,11 @@
-package api_test
+package siren_test
 
 import (
 	"bytes"
 	"math"
 	"testing"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 // TestWriteJSONKeepsWhatABodySays: the one JSON writer of the API, the CLI and the MCP server. < > & stay as they
@@ -17,14 +17,14 @@ func TestWriteJSONKeepsWhatABodySays(t *testing.T) {
 		{"", "{\"body\":\"a < b > c & d\",\"n\":1.5}\n"},               // the MCP server, which then removes the newline
 	} {
 		var b bytes.Buffer
-		if err := api.WriteJSON(&b, v, tc.indent); err != nil {
+		if err := siren.WriteJSON(&b, v, tc.indent); err != nil {
 			t.Fatal(err)
 		}
 		if b.String() != tc.want {
 			t.Errorf("indent %q: %q, want %q", tc.indent, b.String(), tc.want)
 		}
 	}
-	if err := api.WriteJSON(&bytes.Buffer{}, math.NaN(), ""); err == nil {
+	if err := siren.WriteJSON(&bytes.Buffer{}, math.NaN(), ""); err == nil {
 		t.Error("a NaN was written")
 	}
 }

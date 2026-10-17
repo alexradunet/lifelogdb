@@ -97,7 +97,7 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		ran, src, given = "", "", ""
 		req := httptest.NewRequest(tc.method, tc.path, nil)
 		if tc.source != "" {
-			req.Header.Set(SourceHeader, tc.source)
+			req.Header.Set(siren.SourceHeader, tc.source)
 		}
 		rec := httptest.NewRecorder()
 		m.ServeHTTP(rec, req)

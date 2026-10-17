@@ -15,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
@@ -105,7 +104,7 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 		if a.Method == "POST" {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
-		req.Header.Set(api.SourceHeader, "agent:x")
+		req.Header.Set(siren.SourceHeader, "agent:x")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		ct := rec.Header().Get("Content-Type")

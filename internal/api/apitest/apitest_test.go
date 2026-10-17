@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
@@ -87,7 +86,7 @@ func TestHrefAndStatus(t *testing.T) {
 func TestRemoteReachesTheHandlerOverASocket(t *testing.T) {
 	var sources, peers []string
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sources, peers = append(sources, r.Header.Get(api.SourceHeader)), append(peers, r.RemoteAddr)
+		sources, peers = append(sources, r.Header.Get(siren.SourceHeader)), append(peers, r.RemoteAddr)
 		w.Header().Set("Content-Type", "application/vnd.siren+json")
 		fmt.Fprint(w, `{"title":"kit"}`)
 	})

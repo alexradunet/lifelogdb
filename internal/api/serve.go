@@ -3,10 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -16,10 +14,6 @@ import (
 	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 )
-
-// SourceHeader names the writer of a request's rows (lifelog_meta.source). Without it a browser form writes as
-// "ui" and any other client as "api".
-const SourceHeader = "Lifelog-Source"
 
 // server is the API on one store. The store's clock is the server's one clock: today is core.Store.Today, the words
 // for a time and the name of a snapshot are in the zone of core.Store.Local, and the life of a feedback receipt is
@@ -415,20 +409,10 @@ func sirenAnswer(r *http.Request, status int, e *siren.Entity) (int, []byte) {
 // maxRequestBody bytes.
 func sirenJSON(e *siren.Entity) ([]byte, error) {
 	var b bytes.Buffer
-	if err := WriteJSON(&b, e, "  "); err != nil {
+	if err := siren.WriteJSON(&b, e, "  "); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
-}
-
-// WriteJSON writes v to w as the API's JSON: with no HTML escapes, so a body reads as it was written (< > & stay as
-// they are); indented by indent ("" for none); with a newline at the end. The API, the CLI and the MCP server write
-// their JSON with it.
-func WriteJSON(w io.Writer, v any, indent string) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", indent)
-	return enc.Encode(v)
 }
 
 func wantsHTML(r *http.Request) bool {
@@ -437,7 +421,7 @@ func wantsHTML(r *http.Request) bool {
 }
 
 func source(r *http.Request) (string, error) {
-	s := r.Header.Get(SourceHeader)
+	s := r.Header.Get(siren.SourceHeader)
 	switch {
 	case s != "":
 	case wantsHTML(r):

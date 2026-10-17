@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/siren"
 )
 
@@ -18,7 +17,7 @@ func listActions(ctx context.Context, e env) error {
 		return err
 	}
 	if !e.o.human {
-		return api.WriteJSON(e.stdout, actions, "  ")
+		return siren.WriteJSON(e.stdout, actions, "  ")
 	}
 	out := &errWriter{w: e.stdout}
 	for _, a := range actions {
@@ -45,7 +44,7 @@ func show(e env) func(*siren.Entity, error) error {
 		if e.o.human {
 			perr = human(e.stdout, ent)
 		} else {
-			perr = api.WriteJSON(e.stdout, ent, "  ")
+			perr = siren.WriteJSON(e.stdout, ent, "  ")
 		}
 		if perr != nil {
 			return perr

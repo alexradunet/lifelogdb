@@ -171,7 +171,7 @@ func TestPublicAllowedOrigins(t *testing.T) {
 	// Preflight from the allowed origin.
 	rec := request(h, "OPTIONS", "/pages", "", map[string]string{"Origin": app, "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "authorization,content-type"})
 	if rec.Code != 204 || rec.Header().Get("Access-Control-Allow-Origin") != app || !strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), "Authorization") ||
-		!strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), api.SourceHeader) || !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "POST") || rec.Header().Get("Vary") != "Origin" {
+		!strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), siren.SourceHeader) || !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "POST") || rec.Header().Get("Vary") != "Origin" {
 		t.Fatalf("preflight: %d %v", rec.Code, rec.Header())
 	}
 	// Preflight from another origin: refused, no CORS headers.

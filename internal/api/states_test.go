@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestAnErrorIsAnAlertInWords: the browser draws an error entity as an alert whose first words and tone its code
@@ -37,7 +37,7 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 	req := httptest.NewRequest("POST", "/snapshots", strings.NewReader(""))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "text/html")
-	req.Header.Set(api.SourceHeader, "agent:synthetic")
+	req.Header.Set(siren.SourceHeader, "agent:synthetic")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `<div class="alert danger" role="alert"><p><strong>Refused.</strong> `) {
