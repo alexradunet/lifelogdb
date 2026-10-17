@@ -240,7 +240,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 		if _, sent := c.sent[fd.Name]; f.Refused && sent && fd.Type != "file" {
 			fd.Value = c.sent.Get(fd.Name)
 		}
-		if v, ok := fixed[fd.Name]; ok {
+		if v, ok := fixed[fd.Name]; ok { // after the sent value: a fixed field keeps its value (the habit's empty unit)
 			fd.Value, fd.Type = v, "hidden"
 		}
 		if required[fd.Name] {

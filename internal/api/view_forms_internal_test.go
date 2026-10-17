@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -256,8 +257,9 @@ func TestAnEmptyAutofocusKeepsTheFocusOut(t *testing.T) {
 
 // TestARefusalFillsTheFormThatWasSent: of the forms of a refused action, the form that was sent is refused: it holds
 // what it sent and the alert describes it. A form with an id is that form only when the refusal sent its id (form); a
-// form with no id, or a refusal that sent no id, is that form too. A sent file is never drawn back, and no form of a
-// page that shows a refusal takes the focus.
+// form with no id, or a refusal that sent no id, is that form too. A field that the form fixes keeps its fixed value,
+// not the value that was sent: a refusal that sent no id fills the habit's form too, and its unit stays empty. A sent
+// file is never drawn back, and no form of a page that shows a refusal takes the focus.
 func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 	refusal := func(sent url.Values) *shownAction {
 		return &shownAction{Action: action("register-metric", nil, nil), refused: true, sent: sent, noFocus: true}
@@ -285,6 +287,14 @@ func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 		if f.Refused != tc.want || (filled["name"] == "Mood" && filled["unit"] == "1-10") != tc.want || f.Focus != "" {
 			t.Errorf("%s: refused %v, fields %v, focus %q; want refused and filled %v, no focus", tc.what, f.Refused, filled, f.Focus, tc.want)
 		}
+	}
+	habit, err := formOf(refusal(url.Values{"name": {"Mood"}, "unit": {"1-10"}}), "id", "new-habit", "unit", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := slices.IndexFunc(habit.Hidden, func(fd Field) bool { return fd.Name == "unit" })
+	if !habit.Refused || unit < 0 || habit.Hidden[unit].Value != "" {
+		t.Errorf("a refusal that sent no id and the unit 1-10: the habit's form is refused %v, its hidden fields %v; want refused, and the unit hidden and empty", habit.Refused, habit.Hidden)
 	}
 	file := &shownAction{Action: action("add-file", nil, nil), refused: true, sent: url.Values{"title": {"Scan"}, "original": {"scan.jpg"}}}
 	f, err := formOf(file)
