@@ -197,7 +197,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
-		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Day, m.Value)))
+		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), m.Day+" "+num(m.Value)))
 	}
 	return e, nil
 }

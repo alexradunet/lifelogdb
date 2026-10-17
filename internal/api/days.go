@@ -4,7 +4,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -185,7 +184,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
 	for _, m := range d.Readings {
-		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), fmt.Sprintf("%s %g", m.Metric, m.Value)))
+		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), m.Metric+" "+num(m.Value)))
 	}
 	return e, nil
 }

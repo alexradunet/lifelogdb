@@ -659,3 +659,29 @@ func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
 		t.Error("the list after + Add lacks the reading")
 	}
 }
+
+// TestAReadingLinkWritesItsNumberAsNumDoes: the title of a reading's link, in a day and in a series, writes the value
+// as every other place writes it: 1000000, never 1e+06, and 0.00001, never 1e-05.
+func TestAReadingLinkWritesItsNumberAsNumDoes(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", "2026-10-13")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "steps"}))
+	for _, v := range []string{"1000000", "0.00001"} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "steps", "day": "2026-10-12", "value": v}))
+	}
+	for path, want := range map[string][]string{
+		"/days/2026-10-12": {"steps 0.00001", "steps 1000000"},
+		"/metrics/steps":   {"2026-10-12 0.00001", "2026-10-12 1000000"},
+	} {
+		var got []string
+		for _, l := range apitest.Must(t)(c.Get(t.Context(), path)).Entities {
+			if slices.Contains(l.Rel, "reading") {
+				got = append(got, l.Title)
+			}
+		}
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: the reading links are %q, want %q", path, got, want)
+		}
+	}
+}
