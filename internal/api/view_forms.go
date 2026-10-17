@@ -61,10 +61,11 @@ func (v *view) shown(a Action) *shownAction {
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
 // "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the
-// page the browser returns to after the write (no field of the action: the server reads it, see backOf),
-// "placeholder" ("field=words") and "key" ("field=letter") give a field its prompt and its access key, "required"
-// lists fields that the form requires though the action does not, "pattern" ("field=regexp") is what the browser
-// accepts in a field (a score's range), and any other name fixes a field to a value (hidden).
+// page the browser returns to after the write (no field of the action: the server reads it, see backOf), "label"
+// ("field=words") gives a field a title in this form only (the score form calls its unit Range), "placeholder"
+// ("field=words") and "key" ("field=letter") give a field its prompt and its access key, "required" lists fields
+// that the form requires though the action does not, "pattern" ("field=regexp") is what the browser accepts in a
+// field (a score's range), and any other name fixes a field to a value (hidden).
 type formView struct {
 	*Action
 	Button, Class string
@@ -176,6 +177,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 		f.Button = a.Name
 	}
 	fixed, hide, outside, more, required := map[string]string{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	labels := map[string]string{}
 	focused := false // the options name the field of the focus, or none
 	for i := 0; i < len(opts); i += 2 {
 		k, v := opts[i], opts[i+1]
@@ -206,6 +208,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 			f.Focus, focused = v, true
 		case k == "back":
 			f.Back = v
+		case k == "label": // "field=words"
+			if name, words, ok := strings.Cut(v, "="); ok {
+				labels[name] = words
+			}
 		case k == "placeholder": // "field=words"
 			if name, words, ok := strings.Cut(v, "="); ok {
 				if f.prompts == nil {
@@ -245,6 +251,9 @@ func formOf(x any, opts ...string) (*formView, error) {
 		}
 		if required[fd.Name] {
 			fd.Required = true
+		}
+		if l, ok := labels[fd.Name]; ok {
+			fd.Title = l
 		}
 		switch {
 		case outside[fd.Name]:

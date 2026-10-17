@@ -248,6 +248,20 @@ func TestOrSendsTheFormToASecondAction(t *testing.T) {
 	}
 }
 
+// TestALabelGivesAFieldATitleOfItsForm: the option label ("field=words") gives a field a title in this form only, as
+// the score form of New metric calls its unit Range. The action keeps the catalog's title, so another form of it, and
+// the JSON, still say Unit.
+func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
+	a := action("register-metric", nil, nil)
+	if got := markup(drawForm(t, a, "label", "unit=Range")); !strings.Contains(got, "<label><span>Range</span>\n"+`<input type="text" name="unit" value="">`) ||
+		strings.Contains(got, "Unit") {
+		t.Errorf("the label option does not give the unit the title Range:\n%s", got)
+	}
+	if got := markup(drawForm(t, a)); !strings.Contains(got, "<label><span>Unit</span>") || a.field("unit").Title != "Unit" {
+		t.Errorf("a form with no label option, or the action, lost the catalog's title Unit:\n%s", got)
+	}
+}
+
 // TestAnEmptyAutofocusKeepsTheFocusOut: a form the page's link asks for starts in its first field, unless the view
 // names the field, or none ("autofocus" ""): the New metric fold draws one action in three forms, and only the first
 // takes the focus.

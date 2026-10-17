@@ -125,7 +125,7 @@
      each form sends its id, so the page knows which one was sent (formOf). It takes the action; nothing is drawn
      without it. */}}
 {{define "new-metric"}}{{with .}}{{$number := form . "id" "new-number" "class" "kind-number" "button" "Create" "back" "/metrics" "required" "unit" "placeholder" "name=Weight, Savings" "placeholder" "unit=kg, EUR, bpm" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
-{{- $score := form . "id" "new-score" "class" "kind-score" "button" "Create" "back" "/metrics" "autofocus" "" "required" "unit" "pattern" "unit=[0-9]+-[0-9]+" "placeholder" "name=Mood, Sleep quality" "placeholder" "unit=1-5" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
+{{- $score := form . "id" "new-score" "class" "kind-score" "button" "Create" "back" "/metrics" "autofocus" "" "required" "unit" "label" "unit=Range" "pattern" "unit=[0-9]+-[0-9]+" "placeholder" "name=Mood, Sleep quality" "placeholder" "unit=1-5" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
 {{- $habit := form . "id" "new-habit" "class" "kind-habit" "button" "Create" "back" "/metrics" "autofocus" "" "unit" "" "placeholder" "name=Walk, No sugar" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
 {{- $kind := "number"}}{{if not $number.Refused}}{{if $score.Refused}}{{$kind = "score"}}{{else if $habit.Refused}}{{$kind = "habit"}}{{end}}{{end}}
 <details class="action new-metric" id="new-metric"{{if or $number.Refused $score.Refused $habit.Refused $number.Asked}} open{{end}}><summary class="button">{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary>
