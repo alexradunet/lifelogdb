@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -70,7 +71,7 @@ func call(c *client.Client, t tool) mcp.ToolHandler {
 	}
 }
 
-func result(e *api.Entity, err error) (*mcp.CallToolResult, error) {
+func result(e *siren.Entity, err error) (*mcp.CallToolResult, error) {
 	if e == nil && err != nil {
 		return failure(err), nil
 	}

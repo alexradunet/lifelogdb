@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
@@ -400,7 +401,7 @@ func doAction(ctx context.Context, e env, name string, vals map[string]string) e
 	return show(e)(do(ctx, e.c, name, vals))
 }
 
-func do(ctx context.Context, c *client.Client, name string, vals map[string]string) (*api.Entity, error) {
+func do(ctx context.Context, c *client.Client, name string, vals map[string]string) (*siren.Entity, error) {
 	a, err := actionNamed(ctx, c, name)
 	if err != nil {
 		return nil, err
@@ -409,17 +410,17 @@ func do(ctx context.Context, c *client.Client, name string, vals map[string]stri
 }
 
 // actionNamed is the catalog's action of that name.
-func actionNamed(ctx context.Context, c *client.Client, name string) (api.Action, error) {
+func actionNamed(ctx context.Context, c *client.Client, name string) (siren.Action, error) {
 	actions, err := c.Catalog(ctx)
 	if err != nil {
-		return api.Action{}, err
+		return siren.Action{}, err
 	}
 	for _, a := range actions {
 		if a.Name == name {
 			return a, nil
 		}
 	}
-	return api.Action{}, fmt.Errorf("no action %q (lifelog actions)", name)
+	return siren.Action{}, fmt.Errorf("no action %q (lifelog actions)", name)
 }
 
 // dayOrToday is the day a shortcut sends: --day, else "today", which the API reads as the server's local day.

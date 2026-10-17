@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -82,7 +83,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"sinceLast":  sinceLastWeek,
 	"nameWords":  nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
-		if t, ok := MonthOf(month); ok {
+		if t, ok := siren.MonthOf(month); ok {
 			return t.Format("January")
 		}
 		return month
@@ -139,7 +140,7 @@ var viewOf = map[string]string{
 // docs/plans/091-the-browser-for-daily-use.md) and, for an error answering a form, the text that form sent (so a
 // refused save loses nothing) and the page it came from.
 type view struct {
-	*Entity
+	*siren.Entity
 	Props     any
 	Path      string
 	Here      string
@@ -194,7 +195,7 @@ type Facts struct {
 // pageView is the view of a page: the entity, the facts of the page and the refusal of a form that the page shows,
 // nil for none. It reads nothing, so the same arguments give the same view. Properties that JSON cannot carry (a
 // NaN, an infinity) are an error, so a page is never drawn with its properties left out.
-func pageView(e *Entity, f Facts, rf *Refusal) (*view, error) {
+func pageView(e *siren.Entity, f Facts, rf *Refusal) (*view, error) {
 	shape, err := jsonShape(e.Properties)
 	if err != nil {
 		return nil, err
@@ -215,7 +216,7 @@ func pageView(e *Entity, f Facts, rf *Refusal) (*view, error) {
 // Draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
 // call of the view that the API makes: f are the facts of the page, and rf is the refused form that the page shows,
 // nil for none.
-func Draw(e *Entity, f Facts, rf *Refusal) ([]byte, error) {
+func Draw(e *siren.Entity, f Facts, rf *Refusal) ([]byte, error) {
 	v, err := pageView(e, f, rf)
 	if err != nil {
 		return nil, err
@@ -224,7 +225,7 @@ func Draw(e *Entity, f Facts, rf *Refusal) ([]byte, error) {
 }
 
 // TemplateOf names the template that draws an entity: the first of its classes that has one, else "generic".
-func TemplateOf(e *Entity) string {
+func TemplateOf(e *siren.Entity) string {
 	for _, c := range e.Class {
 		if n, ok := viewOf[c]; ok {
 			return n
@@ -259,8 +260,8 @@ func (v *view) Link(rel string) string {
 }
 
 // LinksOf are the entity's links with that rel, in order.
-func (v *view) LinksOf(rel string) []Link {
-	var out []Link
+func (v *view) LinksOf(rel string) []siren.Link {
+	var out []siren.Link
 	for _, l := range v.Links {
 		if slices.Contains(l.Rel, rel) {
 			out = append(out, l)
@@ -270,8 +271,8 @@ func (v *view) LinksOf(rel string) []Link {
 }
 
 // Embedded are the entity's embedded links with that rel.
-func (v *view) Embedded(rel string) []Link {
-	var out []Link
+func (v *view) Embedded(rel string) []siren.Link {
+	var out []siren.Link
 	for _, l := range v.Entities {
 		for _, r := range l.Rel {
 			if r == rel {
@@ -286,7 +287,7 @@ func (v *view) Embedded(rel string) []Link {
 // filedHere is what a category page lists under Filed here: the sub-categories first, then the rest, each in the
 // order of the backlinks (by title).
 type filedHere struct {
-	Subs, Items []Link
+	Subs, Items []siren.Link
 }
 
 // Filed is the Filed here of a page: its part-of backlinks, the categories first; nil when nothing is filed in it.

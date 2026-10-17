@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lifelog/internal/api/siren"
 )
 
 // TestADayIsADate: a day in words against today, with the year only when it is not this year.
@@ -141,7 +143,7 @@ func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &Entity{Class: []string{"day"}, Title: "2026-10-16", Properties: map[string]any{"day": "2026-10-16", "today": "2026-10-15", "view": []any{}}}
+	e := &siren.Entity{Class: []string{"day"}, Title: "2026-10-16", Properties: map[string]any{"day": "2026-10-16", "today": "2026-10-15", "view": []any{}}}
 	v, err := pageView(e, Facts{URL: u, Shell: shell}, nil)
 	if err != nil {
 		t.Fatal(err)

@@ -12,8 +12,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -114,7 +114,7 @@ func mcpTestClient(t *testing.T) *client.Client {
 	return c
 }
 
-func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *api.Entity {
+func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *siren.Entity {
 	t.Helper()
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
@@ -130,7 +130,7 @@ func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, 
 	if !ok {
 		t.Fatalf("%s returned %T content", name, res.Content[0])
 	}
-	var e api.Entity
+	var e siren.Entity
 	if err := json.Unmarshal([]byte(text.Text), &e); err != nil {
 		t.Fatalf("%s returned non-entity JSON %q: %v", name, text.Text, err)
 	}
@@ -210,11 +210,11 @@ func TestMCPNumericArguments(t *testing.T) {
 	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.siren+json")
 		if r.URL.Path == "/actions" {
-			json.NewEncoder(w).Encode(api.Entity{Actions: actions})
+			json.NewEncoder(w).Encode(siren.Entity{Actions: actions})
 			return
 		}
 		paths = append(paths, r.URL.Path)
-		json.NewEncoder(w).Encode(api.Entity{})
+		json.NewEncoder(w).Encode(siren.Entity{})
 	}), "agent:test")
 	session, ctx := numericSession(t, c)
 	// A number is sent as its JSON text: the API's own parser is the one rule for an id, on this surface as on the
@@ -334,7 +334,7 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 			}
 			decoder := json.NewDecoder(strings.NewReader(text))
 			decoder.UseNumber()
-			var entity api.Entity
+			var entity siren.Entity
 			if err := decoder.Decode(&entity); err != nil {
 				t.Fatal(err)
 			}

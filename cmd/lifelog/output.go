@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 func listActions(ctx context.Context, e env) error {
@@ -35,8 +36,8 @@ func listActions(ctx context.Context, e env) error {
 }
 
 // show prints an entity (an error entity too: an agent reads the message and the links) and returns the error.
-func show(e env) func(*api.Entity, error) error {
-	return func(ent *api.Entity, err error) error {
+func show(e env) func(*siren.Entity, error) error {
+	return func(ent *siren.Entity, err error) error {
 		if ent == nil {
 			return err
 		}
@@ -71,7 +72,7 @@ func (o *errWriter) Write(p []byte) (int, error) {
 // human writes an entity as a readable summary: its title and class, the result of a write, its properties, then
 // the embedded links, the links and the actions. It returns the error of the first write that fails, or of a value
 // that JSON cannot write.
-func human(w io.Writer, e *api.Entity) error {
+func human(w io.Writer, e *siren.Entity) error {
 	out := &errWriter{w: w}
 	fmt.Fprintf(out, "# %s  (%s)\n", e.Title, strings.Join(e.Class, " "))
 	if e.Result != nil {

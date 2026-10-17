@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -148,7 +149,7 @@ func TestErrorEntity(t *testing.T) {
 // program gets 500 and the error entity with the general message, not 200 and a cut body. The server's log has the
 // cause one time, with the pattern of the route and not the path.
 func TestAnAnswerThatJSONCannotCarryIsAFault(t *testing.T) {
-	for name, e := range map[string]*Entity{
+	for name, e := range map[string]*siren.Entity{
 		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
 		"a result that is not JSON":    {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": 1}, Result: map[string]any{"value": math.Inf(1)}},
 	} {
@@ -189,7 +190,7 @@ func TestAnAnswerThatJSONCannotCarryIsAFault(t *testing.T) {
 // TestAnswerDrawsByTheFrame: answer gives a program JSON and a browser a page; a page-only frame gives a program the
 // page too. A page with no shell has no sidebar. The GET of a refused form gets the entity and the status, no bytes.
 func TestAnswerDrawsByTheFrame(t *testing.T) {
-	e := &Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": "words"}}
+	e := &siren.Entity{Class: []string{"preview"}, Title: "Preview", Properties: map[string]any{"body": "words"}}
 	for _, c := range []struct {
 		name, accept string
 		fr           frame
@@ -227,7 +228,7 @@ func TestAnswerDrawsByTheFrame(t *testing.T) {
 // JSON, or its template fails on them), the browser gets a 500 that says no word of the internal cause. The server's
 // log has the cause one time, with the pattern of the route and not the path.
 func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
-	for name, e := range map[string]*Entity{
+	for name, e := range map[string]*siren.Entity{
 		"properties that are not JSON": {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": math.NaN()}},
 		"a result that is not JSON":    {Class: []string{"thing"}, Title: "Thing", Properties: map[string]any{"value": 1}, Result: map[string]any{"value": math.Inf(1)}},
 		"a template that fails":        {Class: []string{"error"}, Title: "Error", Properties: "not an object"},

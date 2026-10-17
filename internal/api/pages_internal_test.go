@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -95,7 +96,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 
 // actionWords is an action as one line: its name, its href, then each field that has options (name=a|b) or a value
 // other than a body (name:value), in the order of the catalog.
-func actionWords(a Action) string {
+func actionWords(a siren.Action) string {
 	words := []string{a.Name, a.Href}
 	for _, f := range a.Fields {
 		if len(f.Options) > 0 {

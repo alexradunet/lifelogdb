@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
@@ -20,14 +21,14 @@ const InUseDays = 60
 
 // recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
 // registry; the record action itself takes any registered metric.
-func (h *server) recordAction(ctx context.Context, metric, day string) (Action, error) {
+func (h *server) recordAction(ctx context.Context, metric, day string) (siren.Action, error) {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
 		a.Field("metric").Value = metric
 	}
 	names, err := h.s.InUse(ctx, day, InUseDays)
 	if err != nil {
-		return Action{}, err
+		return siren.Action{}, err
 	}
 	if metric != "" && !slices.Contains(names, metric) {
 		names = append(names, metric)
@@ -47,7 +48,7 @@ type metricRow struct {
 	Recent []core.Recent `json:"recent"`
 }
 
-func (h *server) metrics(r *http.Request) (*Entity, error) {
+func (h *server) metrics(r *http.Request) (*siren.Entity, error) {
 	ctx := r.Context()
 	ms, err := h.s.Metrics(ctx)
 	if err != nil {
@@ -72,13 +73,13 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 		titles = append(titles, c.Title)
 	}
 	today := h.s.Today()
-	e := &Entity{Class: []string{"metrics"}, Title: "Metrics",
+	e := &siren.Entity{Class: []string{"metrics"}, Title: "Metrics",
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
-		Links:      []Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
+		Links:      []siren.Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
+		Actions: []siren.Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
 			withOptions(action("file-pages", nil, nil), "category", titles), withOptions(action("register-metric", nil, nil), "category", titles)}}
 	for _, m := range ms {
-		e.Entities = append(e.Entities, link("item", MetricHref(m.Name), m.Name))
+		e.Entities = append(e.Entities, link("item", siren.MetricHref(m.Name), m.Name))
 	}
 	return e, nil
 }
@@ -129,14 +130,14 @@ func groupMetrics(ms []core.Metric, cs []core.Category) []metricGroup {
 }
 
 // series is cookbook/metric-series.md; ?to= defaults to today, and with no ?from= every reading through it is read.
-func (h *server) series(r *http.Request) (*Entity, error) {
+func (h *server) series(r *http.Request) (*siren.Entity, error) {
 	return h.seriesEntity(r.Context(), r.PathValue("name"), r.URL.Query())
 }
 
 // seriesEntity is the resource /metrics/{name} serves, the one page of a metric (docs/plans/100-one-page-a-metric.md):
 // its readings, the writes of a reading and of a habit, and, as the metric is a page (D27), the page's text, edges
 // and actions. q is its query (from, to, all_history), nil for the defaults.
-func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*Entity, error) {
+func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*siren.Entity, error) {
 	today := h.s.Today()
 	to := q.Get("to")
 	if to == "" {
@@ -173,20 +174,20 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		} else {
 			v.Set("from", from)
 		}
-		return MetricHref(name) + "?" + v.Encode()
+		return siren.MetricHref(name) + "?" + v.Encode()
 	}
 	self, allHref := seriesHref(allHistory), seriesHref(true)
 	if len(q) == 0 { // asked with no query, the series names itself so: a browser that registers a metric lands on it
-		self = MetricHref(name)
+		self = siren.MetricHref(name)
 	}
 	record, err := h.recordAction(ctx, name, today)
 	if err != nil {
 		return nil, err
 	}
 	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "all_history": allHistory, "categories": []string(nil)}
-	e := &Entity{Class: []string{"series"}, Title: name, Properties: props,
-		Links:   []Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []Action{record}}
+	e := &siren.Entity{Class: []string{"series"}, Title: name, Properties: props,
+		Links:   []siren.Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
+		Actions: []siren.Action{record}}
 	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
 		page, err := h.pageEntity(ctx, m.ID)
 		if err != nil {
@@ -194,11 +195,11 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		}
 		p := page.Properties.(*core.Page)
 		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
-		e.Links = append(e.Links, link("page", PageHref(m.ID), "Page"))
+		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
-		e.Entities = append(e.Entities, link("reading", MeasurementHref(m.ID), m.Day+" "+Num(m.Value)))
+		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Day+" "+Num(m.Value)))
 	}
 	return e, nil
 }
@@ -222,7 +223,7 @@ func (h *server) metricOf(ctx context.Context, name string) (*core.Metric, error
 	return nil, nil
 }
 
-func (h *server) measurement(r *http.Request) (*Entity, error) {
+func (h *server) measurement(r *http.Request) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -230,33 +231,33 @@ func (h *server) measurement(r *http.Request) (*Entity, error) {
 	return h.measurementEntity(r.Context(), id)
 }
 
-func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, error) {
+func (h *server) measurementEntity(ctx context.Context, id int64) (*siren.Entity, error) {
 	m, err := h.s.Measurement(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	e := &Entity{Class: []string{"measurement"}, Title: fmt.Sprintf("%s on %s", m.Metric, m.Day), Properties: m,
-		Links: []Link{link("self", MeasurementHref(id), "This reading"), link("day", DayHref(m.Day), m.Day),
-			link("series", MetricHref(m.Metric), m.Metric), link("index", "/", "Home")}}
+	e := &siren.Entity{Class: []string{"measurement"}, Title: fmt.Sprintf("%s on %s", m.Metric, m.Day), Properties: m,
+		Links: []siren.Link{link("self", siren.MeasurementHref(id), "This reading"), link("day", siren.DayHref(m.Day), m.Day),
+			link("series", siren.MetricHref(m.Metric), m.Metric), link("index", "/", "Home")}}
 	if m.Supersedes != 0 {
-		e.Links = append(e.Links, link("supersedes", MeasurementHref(m.Supersedes), "Corrects"))
+		e.Links = append(e.Links, link("supersedes", siren.MeasurementHref(m.Supersedes), "Corrects"))
 	}
 	if m.SupersededBy != 0 {
-		e.Links = append(e.Links, link("superseded-by", MeasurementHref(m.SupersededBy), "Corrected by"))
+		e.Links = append(e.Links, link("superseded-by", siren.MeasurementHref(m.SupersededBy), "Corrected by"))
 	} else {
 		ids := idParam(id)
-		e.Actions = []Action{action("correct", ids, nil)}
+		e.Actions = []siren.Action{action("correct", ids, nil)}
 		if !m.Retraction {
 			e.Actions = append(e.Actions, action("retract", ids, nil))
 		}
 	}
 	if m.CapturedWith != 0 {
-		e.Links = append(e.Links, link("captured-with", PageHref(m.CapturedWith), "Captured with"))
+		e.Links = append(e.Links, link("captured-with", siren.PageHref(m.CapturedWith), "Captured with"))
 	}
 	return e, nil
 }
 
-func (h *server) record(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) record(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -271,14 +272,14 @@ func (h *server) record(r *http.Request, act spec, src string) (*Entity, error) 
 		return nil, err
 	}
 	if id == 0 { // a re-send: the first one stands (docs/contract/imports.md)
-		return &Entity{Class: []string{"result"}, Title: "Already recorded",
+		return &siren.Entity{Class: []string{"result"}, Title: "Already recorded",
 			Properties: map[string]any{"message": "a reading with this import_key was recorded before; nothing changed"},
-			Links:      []Link{link("day", DayHref(v.Get("day")), v.Get("day")), link("index", "/", "Home")}}, nil
+			Links:      []siren.Link{link("day", siren.DayHref(v.Get("day")), v.Get("day")), link("index", "/", "Home")}}, nil
 	}
 	return h.measurementEntity(r.Context(), id)
 }
 
-func (h *server) correct(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) correct(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err
@@ -290,7 +291,7 @@ func (h *server) correct(r *http.Request, act spec, src string) (*Entity, error)
 	return h.correctTo(r.Context(), src, id, value)
 }
 
-func (h *server) retract(r *http.Request, _ spec, src string) (*Entity, error) {
+func (h *server) retract(r *http.Request, _ spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -299,7 +300,7 @@ func (h *server) retract(r *http.Request, _ spec, src string) (*Entity, error) {
 }
 
 // correctTo corrects or retracts a reading.
-func (h *server) correctTo(ctx context.Context, src string, id int64, value *float64) (*Entity, error) {
+func (h *server) correctTo(ctx context.Context, src string, id int64, value *float64) (*siren.Entity, error) {
 	fix, err := h.s.Correct(ctx, src, id, value)
 	if err != nil {
 		return nil, err
@@ -307,7 +308,7 @@ func (h *server) correctTo(ctx context.Context, src string, id int64, value *flo
 	return h.measurementEntity(ctx, fix)
 }
 
-func (h *server) registerMetric(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) registerMetric(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err

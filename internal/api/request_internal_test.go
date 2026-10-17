@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/siren"
 )
 
 // TestPaged: paged trims a read of limit+1 rows to the page, puts limit and offset in the properties, and adds the
@@ -38,7 +40,7 @@ func TestPaged(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := q.Encode()
-		e := &Entity{Properties: map[string]any{"kind": "x"}, Links: []Link{link("self", "/x", "This")}}
+		e := &siren.Entity{Properties: map[string]any{"kind": "x"}, Links: []siren.Link{link("self", "/x", "This")}}
 		rows := paged(e, tc.rows, tc.path, q, tc.limit, tc.offset)
 		got := fmt.Sprint(rows, " ", e.Properties)
 		for _, l := range e.Links {
@@ -52,7 +54,7 @@ func TestPaged(t *testing.T) {
 		}
 	}
 	// An entity with no properties gets them.
-	e := &Entity{}
+	e := &siren.Entity{}
 	paged(e, []string{"a"}, "/days", url.Values{}, 60, 0)
 	if fmt.Sprint(e.Properties) != "map[limit:60 offset:0]" || len(e.Links) != 0 {
 		t.Errorf("an entity with no properties: %v %v", e.Properties, e.Links)

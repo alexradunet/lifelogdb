@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestSearchListsTitlesFirst: the search answers the pages whose title starts with the words before the pages whose
@@ -40,7 +40,7 @@ func TestSearchListsTitlesFirst(t *testing.T) {
 		m := x.(map[string]any)
 		got = append(got, fmt.Sprintf("%v=%v %v %v", m["name"], m["title"], m["entity_type"], m["page_id"]))
 	}
-	id := func(p *api.Entity) any { return props(p)["id"] }
+	id := func(p *siren.Entity) any { return props(p)["id"] }
 	want := []string{
 		fmt.Sprintf("Garden=Garden page %v", id(garden)),
 		fmt.Sprintf("Garden log=Garden log page %v", id(log)),

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -43,7 +44,7 @@ func idsOf(values []string) ([]int64, error) {
 // tombstoneMany is tombstone-pages: every id named is tombstoned in one write, or none is. The answer is the class
 // tombstoned: the ids, their count, and an item link to each. A browser form returns to its list (back), with the
 // count as its feedback.
-func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -55,11 +56,11 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*Entity, 
 	if err := h.s.TombstonePages(r.Context(), src, ids); err != nil {
 		return nil, err
 	}
-	e := &Entity{Class: []string{"tombstoned"}, Title: "Deleted",
+	e := &siren.Entity{Class: []string{"tombstoned"}, Title: "Deleted",
 		Properties: map[string]any{"ids": ids, "count": len(ids)},
-		Links:      []Link{link("self", "/", "Home"), link("index", "/", "Home")}}
+		Links:      []siren.Link{link("self", "/", "Home"), link("index", "/", "Home")}}
 	for _, id := range ids {
-		e.Entities = append(e.Entities, link("item", PageHref(id), strconv.FormatInt(id, 10)))
+		e.Entities = append(e.Entities, link("item", siren.PageHref(id), strconv.FormatInt(id, 10)))
 	}
 	noun := "page"
 	if len(ids) != 1 {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestMediaListsPicturesVideosAndRecordings: the media list of Browse is the files of the three kinds, newest day
@@ -60,7 +60,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 		t.Errorf("the links: %+v", e.Links)
 	}
 	// The list's add-file takes a file of any kind, as the catalog's does.
-	accept := func(a api.Action) string {
+	accept := func(a siren.Action) string {
 		for _, f := range a.Fields {
 			if f.Name == "original" {
 				return f.Accept

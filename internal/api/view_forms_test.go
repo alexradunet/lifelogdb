@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // formRE finds a POST form of a page: its action and what it holds. This application's own markup is regular enough
@@ -76,7 +76,7 @@ func withoutReceipt(t *testing.T, location string) string {
 }
 
 // fieldOf is the value of an action's field, "" when it has none.
-func fieldOf(a api.Action, name string) string {
+func fieldOf(a siren.Action, name string) string {
 	for _, f := range a.Fields {
 		if f.Name == name && f.Value != nil {
 			return fmt.Sprint(f.Value)

@@ -7,10 +7,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/siren"
 )
 
 // drawForm draws the action with the template form, as a page draws it, with the options of formOf.
-func drawForm(t *testing.T, a Action, opts ...string) (string, *formView) {
+func drawForm(t *testing.T, a siren.Action, opts ...string) (string, *formView) {
 	t.Helper()
 	f, err := formOf(a, opts...)
 	if err != nil {
@@ -28,8 +30,8 @@ func drawForm(t *testing.T, a Action, opts ...string) (string, *formView) {
 
 // filePages is the action file-pages, with the value of its field move; categories are the options of its field
 // category.
-func filePages(move any, categories ...string) Action {
-	return Action{Name: "file-pages", Title: "Put in a category", Method: "POST", Href: "/pages/file", Fields: []Field{
+func filePages(move any, categories ...string) siren.Action {
+	return siren.Action{Name: "file-pages", Title: "Put in a category", Method: "POST", Href: "/pages/file", Fields: []siren.Field{
 		{Name: "ids", Type: "text", Title: "Page ids, separated by spaces or commas", Required: true},
 		{Name: "category", Type: "text", Title: "Category (title)", Required: true, Options: categories, Pages: true},
 		{Name: "move", Type: "number", Title: "Move (remove the other categories)", Value: move, Options: []string{"0", "1"}},
@@ -37,8 +39,8 @@ func filePages(move any, categories ...string) Action {
 }
 
 // registerMetric is the action register-metric; categories are the options of its field category.
-func registerMetric(categories ...string) Action {
-	return Action{Name: "register-metric", Owner: true, Title: "New metric", Method: "POST", Href: "/metrics", Fields: []Field{
+func registerMetric(categories ...string) siren.Action {
+	return siren.Action{Name: "register-metric", Owner: true, Title: "New metric", Method: "POST", Href: "/metrics", Fields: []siren.Field{
 		{Name: "name", Type: "text", Title: "Name", Required: true},
 		{Name: "unit", Type: "text", Title: "Unit"},
 		{Name: "note", Type: "text", Title: "Note"},
@@ -47,15 +49,15 @@ func registerMetric(categories ...string) Action {
 }
 
 // tombstonePages is the action tombstone-pages.
-func tombstonePages() Action {
-	return Action{Name: "tombstone-pages", Danger: true, Title: "Delete pages", Method: "POST", Href: "/pages/tombstone", Fields: []Field{
+func tombstonePages() siren.Action {
+	return siren.Action{Name: "tombstone-pages", Danger: true, Title: "Delete pages", Method: "POST", Href: "/pages/tombstone", Fields: []siren.Field{
 		{Name: "ids", Type: "text", Title: "Page ids, separated by spaces or commas", Required: true},
 	}}
 }
 
 // record is the action record, with the values of its fields day and tz.
-func record(day, tz any) Action {
-	return Action{Name: "record", Title: "Add a reading", Method: "POST", Href: "/measurements", Fields: []Field{
+func record(day, tz any) siren.Action {
+	return siren.Action{Name: "record", Title: "Add a reading", Method: "POST", Href: "/measurements", Fields: []siren.Field{
 		{Name: "metric", Type: "text", Title: "Metric", Required: true},
 		{Name: "day", Type: "date", Title: "Day", Value: day, Required: true},
 		{Name: "value", Type: "number", Title: "Value", Required: true},
@@ -66,8 +68,8 @@ func record(day, tz any) Action {
 }
 
 // addFile is the action add-file, with the fields that the tests read: its title and its two files.
-func addFile() Action {
-	return Action{Name: "add-file", Title: "New file", Method: "POST", Href: "/files", Fields: []Field{
+func addFile() siren.Action {
+	return siren.Action{Name: "add-file", Title: "New file", Method: "POST", Href: "/files", Fields: []siren.Field{
 		{Name: "title", Type: "text", Title: "Title", Required: true},
 		{Name: "original", Type: "file", Title: "The file (read, never stored)"},
 		{Name: "preview", Type: "file", Title: "Picture, when the original is not a JPEG, PNG or GIF"},
@@ -75,7 +77,7 @@ func addFile() Action {
 }
 
 func TestBrowserFieldPresence(t *testing.T) {
-	a := Action{Name: "fields", Method: "POST", Href: "/fields", Fields: []Field{
+	a := siren.Action{Name: "fields", Method: "POST", Href: "/fields", Fields: []siren.Field{
 		{Name: "hidden", Type: "hidden", Value: 0},
 		{Name: "optional", Type: "number"},
 		{Name: "default", Type: "number", Value: 5},
@@ -95,16 +97,16 @@ func TestBrowserFieldPresence(t *testing.T) {
 func TestPreviewKeysOnATextArea(t *testing.T) {
 	for _, c := range []struct {
 		name   string
-		fields []Field
+		fields []siren.Field
 		opts   []string
 		want   bool
 	}{
-		{"a text area named note", []Field{{Name: "note", Type: "textarea"}}, nil, true},
-		{"a folded text area", []Field{{Name: "title", Type: "text", Required: true}, {Name: "note", Type: "textarea"}}, []string{"more", "note"}, true},
-		{"an input named body", []Field{{Name: "body", Type: "text"}}, nil, false},
+		{"a text area named note", []siren.Field{{Name: "note", Type: "textarea"}}, nil, true},
+		{"a folded text area", []siren.Field{{Name: "title", Type: "text", Required: true}, {Name: "note", Type: "textarea"}}, []string{"more", "note"}, true},
+		{"an input named body", []siren.Field{{Name: "body", Type: "text"}}, nil, false},
 		{"no field", nil, nil, false},
 	} {
-		f, err := formOf(Action{Name: "x", Method: "POST", Href: "/x", Fields: c.fields}, c.opts...)
+		f, err := formOf(siren.Action{Name: "x", Method: "POST", Href: "/x", Fields: c.fields}, c.opts...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -132,14 +134,14 @@ func TestSegmentedIsForAFewShortOptions(t *testing.T) {
 		{[]string{"open", "done", "skipped"}, false},
 		{nil, false},
 	} {
-		if got := segmented(Field{Name: "f", Type: "text", Options: tc.options}); got != tc.want {
+		if got := segmented(siren.Field{Name: "f", Type: "text", Options: tc.options}); got != tc.want {
 			t.Errorf("segmented(%q) = %v, want %v", tc.options, got, tc.want)
 		}
 	}
-	if segmented(Field{Name: "f", Type: "text", Pages: true, Options: []string{"Art", "Gym"}}) {
+	if segmented(siren.Field{Name: "f", Type: "text", Pages: true, Options: []string{"Art", "Gym"}}) {
 		t.Error("a field of two short page titles is segmented: it takes a new title too")
 	}
-	if !segmented(Field{Name: "f", Type: "number", Required: true, Options: []string{"0", "1"}}) {
+	if !segmented(siren.Field{Name: "f", Type: "number", Required: true, Options: []string{"0", "1"}}) {
 		t.Error("a required flag is not segmented: a checkbox cannot send 0")
 	}
 }
@@ -181,7 +183,7 @@ func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 			`<input type="text" name="category" value="" required list="pick-category"><datalist id="pick-category"><option value="Art"><option value="Gym"></datalist></label>`},
 		{"with no options", markup(drawForm(t, filePages(nil))),
 			`<input type="text" name="category" value="" required></label>`},
-		{"not a page's title", markup(drawForm(t, Action{Name: "promote", Title: "Promote", Method: "POST", Href: "/pages/7/promote", Fields: []Field{
+		{"not a page's title", markup(drawForm(t, siren.Action{Name: "promote", Title: "Promote", Method: "POST", Href: "/pages/7/promote", Fields: []siren.Field{
 			{Name: "to", Type: "text", Title: "Into", Required: true, Options: []string{"person", "place"}}}})),
 			`<select name="to"><option>person</option><option>place</option></select>`},
 		{"the titles 0 and 1", markup(drawForm(t, flagLike)),
@@ -316,7 +318,7 @@ func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unit := slices.IndexFunc(habit.Hidden, func(fd Field) bool { return fd.Name == "unit" })
+	unit := slices.IndexFunc(habit.Hidden, func(fd siren.Field) bool { return fd.Name == "unit" })
 	if !habit.Refused || unit < 0 || habit.Hidden[unit].Value != "" {
 		t.Errorf("a refusal that sent no id and the unit 1-10: the habit's form is refused %v, its hidden fields %v; want refused, and the unit hidden and empty", habit.Refused, habit.Hidden)
 	}
@@ -336,12 +338,12 @@ func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
 // as tall as its field says: both from the action (Danger, Rows), so no template knows an action or a field by name.
 // The catalog marks them (TestDangerIsACatalogAction, in package api).
 func TestDangerAndRowsReachTheForm(t *testing.T) {
-	tombstone := Action{Name: "tombstone", Danger: true, Title: "Delete", Method: "POST", Href: "/pages/7/tombstone"}
-	revive := Action{Name: "revive", Title: "Restore", Method: "POST", Href: "/pages/7/revive"}
-	save := Action{Name: "save-body", Title: "Save", Method: "POST", Href: "/pages/7/body", Fields: []Field{
+	tombstone := siren.Action{Name: "tombstone", Danger: true, Title: "Delete", Method: "POST", Href: "/pages/7/tombstone"}
+	revive := siren.Action{Name: "revive", Title: "Restore", Method: "POST", Href: "/pages/7/revive"}
+	save := siren.Action{Name: "save-body", Title: "Save", Method: "POST", Href: "/pages/7/body", Fields: []siren.Field{
 		{Name: "body", Type: "textarea", Title: "Body", Value: "words", Required: true, Rows: 18},
 		{Name: "version", Type: "hidden", Title: "Version", Value: "3", Required: true}}}
-	capture := Action{Name: "capture", Title: "Add to the day", Method: "POST", Href: "/days/2026-01-01/capture", Fields: []Field{
+	capture := siren.Action{Name: "capture", Title: "Add to the day", Method: "POST", Href: "/days/2026-01-01/capture", Fields: []siren.Field{
 		{Name: "text", Type: "textarea", Title: "Entry (CommonMark)", Rows: 4},
 		{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}}
 	if got, _ := drawForm(t, tombstone); !strings.Contains(got, `<button class="danger">`) {

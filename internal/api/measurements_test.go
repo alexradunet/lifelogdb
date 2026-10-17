@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -306,7 +306,7 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 	}
 	metricPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(metric, "page")))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, metricPage, "rename"), map[string]string{"title": "Stride count"}))
-	assertRows := func(t *testing.T, e *api.Entity, want []string) {
+	assertRows := func(t *testing.T, e *siren.Entity, want []string) {
 		t.Helper()
 		rows := e.Properties.(map[string]any)["readings"].([]any)
 		got := []string{}

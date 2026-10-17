@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestTheMonthIsACalendar: each day of a month, whether it has a live day page, its first line and its mood; the
@@ -124,7 +124,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
-	do := func(e *api.Entity, action string, v map[string]string) *api.Entity {
+	do := func(e *siren.Entity, action string, v map[string]string) *siren.Entity {
 		t.Helper()
 		return apitest.Must(t)(c.Do(ctx, apitest.Action(t, e, action), v))
 	}

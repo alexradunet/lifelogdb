@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -165,7 +166,7 @@ func pageOf(r *http.Request, def int) (limit, offset int, err error) {
 
 // paged trims a read of limit+1 rows to the page, records limit and offset in the properties and adds the next
 // and prev links; path and q are the list's own address.
-func paged[T any](e *Entity, rows []T, path string, q url.Values, limit, offset int) []T {
+func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, offset int) []T {
 	more := len(rows) > limit
 	if more {
 		rows = rows[:limit]

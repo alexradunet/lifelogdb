@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
@@ -46,24 +47,15 @@ const (
 // layoutMonth is the layout of a month in words.
 const layoutMonth = "January 2006"
 
-// MonthOf parses a month, YYYY-MM; ok is false for anything else.
-func MonthOf(s string) (time.Time, bool) {
-	t, err := time.Parse("2006-01", s)
-	return t, err == nil && t.Format("2006-01") == s
-}
-
-// MonthHref is the address of the month of t.
-func MonthHref(t time.Time) string { return "/months/" + t.Format("2006-01") }
-
 // currentMonth answers with this month's address, as /days/today does with today's.
-func (h *server) currentMonth(*http.Request) (*Entity, error) {
+func (h *server) currentMonth(*http.Request) (*siren.Entity, error) {
 	t, _ := text.ParseDay(h.s.Today())
-	return nil, redirect{MonthHref(t)}
+	return nil, redirect{siren.MonthHref(t)}
 }
 
-func (h *server) month(r *http.Request) (*Entity, error) {
+func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	ctx := r.Context()
-	first, ok := MonthOf(r.PathValue("month"))
+	first, ok := siren.MonthOf(r.PathValue("month"))
 	if !ok {
 		return nil, core.Invalid("a month is YYYY-MM")
 	}
@@ -75,25 +67,25 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	}
 	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
-	e := &Entity{Class: []string{"month"}, Title: name, Links: []Link{link("self", MonthHref(first), name)},
-		Actions: []Action{action("open-day", nil, nil)}}
+	e := &siren.Entity{Class: []string{"month"}, Title: name, Links: []siren.Link{link("self", siren.MonthHref(first), name)},
+		Actions: []siren.Action{action("open-day", nil, nil)}}
 	// A link leads only to a page that answers: a month has a page when its first day is a day.
 	if text.IsDay(prev.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("prev", MonthHref(prev), prev.Format(layoutMonth)))
+		e.Links = append(e.Links, link("prev", siren.MonthHref(prev), prev.Format(layoutMonth)))
 	}
 	if text.IsDay(next.Format(time.DateOnly)) {
-		e.Links = append(e.Links, link("next", MonthHref(next), next.Format(layoutMonth)))
+		e.Links = append(e.Links, link("next", siren.MonthHref(next), next.Format(layoutMonth)))
 	}
 	e.Links = append(e.Links, link("days", "/days", "Days"), link("index", "/", "Home"))
 	for _, d := range cal.days {
-		e.Entities = append(e.Entities, link("day", DayHref(d.Day), d.Day))
+		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
 	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": cal.days}
 	return e, nil
 }
 
 // openDay answers with the address of the day the form names, or of today when it names none or the word "today".
-func (h *server) openDay(r *http.Request, act spec, _ string) (*Entity, error) {
+func (h *server) openDay(r *http.Request, act spec, _ string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -105,7 +97,7 @@ func (h *server) openDay(r *http.Request, act spec, _ string) (*Entity, error) {
 	if !text.IsDay(day) {
 		return nil, core.Invalid("day must be a day, YYYY-MM-DD")
 	}
-	return nil, redirect{DayHref(day)}
+	return nil, redirect{siren.DayHref(day)}
 }
 
 // calendar is what a window of days holds: its days as a calendar shows them.
@@ -143,10 +135,10 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 	items, more := map[string][]calendarItem{}, map[string]int{}
 	add := func(day string, it calendarItem) { items[day] = append(items[day], it) }
 	for _, a := range anniversaries {
-		add(a.Day, calendarItem{Kind: a.Kind, Title: a.Title, Href: PageHref(a.ID), Years: a.Years})
+		add(a.Day, calendarItem{Kind: a.Kind, Title: a.Title, Href: siren.PageHref(a.ID), Years: a.Years})
 	}
 	for _, d := range dated {
-		add(d.Day, calendarItem{Kind: d.Kind, Title: d.Title, Href: PageHref(d.ID)})
+		add(d.Day, calendarItem{Kind: d.Kind, Title: d.Title, Href: siren.PageHref(d.ID)})
 		if d.Pages > dayPages {
 			more[d.Day] = d.Pages - dayPages
 		}

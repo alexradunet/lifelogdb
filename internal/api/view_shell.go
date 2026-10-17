@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
@@ -40,7 +41,7 @@ func shellOf(ctx context.Context, s *core.Store) *Shell {
 	if err != nil { // the page is drawn without the month
 		return sv
 	}
-	sv.Month, sv.MonthHref, sv.Written = first.Format(layoutMonth), MonthHref(first), len(entries)
+	sv.Month, sv.MonthHref, sv.Written = first.Format(layoutMonth), siren.MonthHref(first), len(entries)
 	for _, d := range writtenDays(entries, first, last) {
 		sv.Days = append(sv.Days, map[string]any{"day": d.Day, "page": d.Page})
 	}
@@ -92,7 +93,7 @@ func (v *view) NewKinds() []struct{ Title, Href, Icon string } { return newKinds
 // the page's path, else the one with the longest path the page is under. Today's day is Today, not Calendar.
 func (v *view) Nav() []navItem {
 	path := v.Path
-	if today := v.Today(); today != "" && path == DayHref(today) {
+	if today := v.Today(); today != "" && path == siren.DayHref(today) {
 		path = "/days/today"
 	}
 	out := make([]navItem, len(navItems))

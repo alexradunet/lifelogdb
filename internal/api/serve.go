@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -120,7 +121,7 @@ func (r redirect) Error() string { return "see " + r.to }
 // actionFunc runs one action of the catalog. act is the action's row of the catalog, which mount gives: the handler
 // reads its fields with it (fieldsOf), so a handler does not write its own name. src is the writer of the request
 // (lifelog_meta.source); a read that is not the owner's alone gets "".
-type actionFunc func(r *http.Request, act spec, src string) (*Entity, error)
+type actionFunc func(r *http.Request, act spec, src string) (*siren.Entity, error)
 
 // mount gives each action of cat a route to its handler, with the method and the path of the action, and gives the
 // handler the action's row. An action that writes reads its writer. An Owner action reads its writer and refuses a
@@ -142,7 +143,7 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 	}
 	for _, s := range cat {
 		f := handlers[s.Name]
-		m.HandleFunc(s.Method+" "+s.Path, h.serve(func(r *http.Request) (*Entity, error) {
+		m.HandleFunc(s.Method+" "+s.Path, h.serve(func(r *http.Request) (*siren.Entity, error) {
 			var src string
 			if s.Method != "GET" || s.Owner {
 				var err error
@@ -158,7 +159,7 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 	}
 }
 
-func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc {
+func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		e, err := f(r)
 		status := http.StatusOK
@@ -199,9 +200,9 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 // Refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
 // the error and the form as the owner filled it (pageView).
 type Refusal struct {
-	Entity *Entity    // the error entity
-	Href   string     // the refused action's address
-	Sent   url.Values // what the form sent
+	Entity *siren.Entity // the error entity
+	Href   string        // the refused action's address
+	Sent   url.Values    // what the form sent
 }
 
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
@@ -210,7 +211,7 @@ type Refusal struct {
 // status. When the GET answers with no entity, or with an error (a 404, a redirect, a picture), nothing is sent from
 // it and the plain error view answers, as for a POST with no back path. The GET gets no body: only the refusal
 // carries what the form sent.
-func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Entity, status int) bool {
+func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *siren.Entity, status int) bool {
 	back := backOf(r)
 	if r.Method != "POST" || !wantsHTML(r) || back == "" {
 		return false
@@ -242,7 +243,7 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 // of the routes) leaves entity nil, and its bytes are dropped.
 type caught struct {
 	header http.Header
-	entity *Entity
+	entity *siren.Entity
 	status int
 }
 
@@ -276,9 +277,9 @@ func backOf(r *http.Request) string {
 // driver failed. Its text can name a file or show the driver, so the client gets the message "internal error", and
 // the server's log gets the cause (logFault). A cancelled request is not logged: its client went away, or the server
 // stopped it, and no fault caused it. A timeout keeps its text.
-func errorEntity(r *http.Request, err error) (*Entity, int) {
+func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
 	status, code, msg := http.StatusInternalServerError, "", err.Error()
-	e := &Entity{Class: []string{"error"}, Title: "Error", Links: []Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
+	e := &siren.Entity{Class: []string{"error"}, Title: "Error", Links: []siren.Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
 	var ce *core.Error
 	var ex *core.ExistsError
 	switch {
@@ -286,7 +287,7 @@ func errorEntity(r *http.Request, err error) (*Entity, int) {
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
 		status, code = http.StatusConflict, "exists"
-		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: PageHref(ex.ID), Title: ex.Title})
+		e.Links = append(e.Links, siren.Link{Rel: []string{"existing"}, Href: siren.PageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
 	default:
@@ -358,7 +359,7 @@ type frame struct {
 // refusedOnItsPage runs gets the entity itself (caught). The answer is held whole before its first byte, so a fault
 // found while it is made can still answer 500. A failed write is logged: the client went away, and nothing else can
 // be done.
-func answer(w http.ResponseWriter, r *http.Request, status int, e *Entity, fr frame) {
+func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity, fr frame) {
 	if c, ok := w.(*caught); ok {
 		c.entity, c.status = e, status
 		return
@@ -379,7 +380,7 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *Entity, fr fr
 
 // pageAnswer is the status and the HTML of the page of e. When the page cannot be drawn, a defect of this program,
 // the owner reads the cause in the log and a client never does: the page is DrawFailed, with 500.
-func pageAnswer(r *http.Request, status int, e *Entity, fr frame) (int, []byte) {
+func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []byte) {
 	f := Facts{URL: r.URL}
 	if fr.shell != nil {
 		f.Shell = shellOf(r.Context(), fr.shell)
@@ -403,7 +404,7 @@ func pageAnswer(r *http.Request, status int, e *Entity, fr frame) (int, []byte) 
 
 // sirenAnswer is the status and the Siren JSON of e. A value that JSON cannot carry (a NaN, an infinity) is a fault
 // of this program: the answer is then the error entity of the fault, with 500.
-func sirenAnswer(r *http.Request, status int, e *Entity) (int, []byte) {
+func sirenAnswer(r *http.Request, status int, e *siren.Entity) (int, []byte) {
 	b, err := sirenJSON(e)
 	if err == nil {
 		return status, b
@@ -419,7 +420,7 @@ func sirenAnswer(r *http.Request, status int, e *Entity) (int, []byte) {
 // sirenJSON is the Siren JSON of e, indented, with no HTML escapes. The answer is held whole before its first byte,
 // as a page is. An entity is small: a list is paged, and this writer takes a body in a request of at most
 // maxRequestBody bytes.
-func sirenJSON(e *Entity) ([]byte, error) {
+func sirenJSON(e *siren.Entity) ([]byte, error) {
 	var b bytes.Buffer
 	if err := WriteJSON(&b, e, "  "); err != nil {
 		return nil, err
@@ -460,8 +461,8 @@ func isOwner(source string) bool {
 	return !strings.HasPrefix(source, "agent:") && !strings.HasPrefix(source, "import:")
 }
 
-func (h *server) actions(*http.Request) (*Entity, error) {
-	e := &Entity{Class: []string{"actions"}, Title: "Actions", Links: []Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
+func (h *server) actions(*http.Request) (*siren.Entity, error) {
+	e := &siren.Entity{Class: []string{"actions"}, Title: "Actions", Links: []siren.Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
 	for _, s := range catalog {
 		e.Actions = append(e.Actions, templated(s))
 	}

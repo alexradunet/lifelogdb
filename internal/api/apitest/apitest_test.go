@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -40,7 +41,7 @@ func fatalOf(t *testing.T, f func(testing.TB)) string {
 // TestMustAndActionFailTheTestAndDoNotPanic: Must gives the entity of a call with no error and fails the test with
 // the error of a call; Action gives the named action and fails the test when e has none.
 func TestMustAndActionFailTheTestAndDoNotPanic(t *testing.T) {
-	e := &api.Entity{Title: "kit", Actions: []api.Action{{Name: "capture"}, {Name: "find"}}}
+	e := &siren.Entity{Title: "kit", Actions: []siren.Action{{Name: "capture"}, {Name: "find"}}}
 	if got := fatalOf(t, func(tb testing.TB) {
 		if Must(tb)(e, nil) != e {
 			t.Error("Must did not give the entity of a call with no error")
@@ -60,7 +61,7 @@ func TestMustAndActionFailTheTestAndDoNotPanic(t *testing.T) {
 }
 
 func TestHrefAndStatus(t *testing.T) {
-	e := &api.Entity{Links: []api.Link{{Rel: []string{"self"}, Href: "/pages/1"}, {Rel: []string{"prev", "first"}, Href: "/pages/0"}}}
+	e := &siren.Entity{Links: []siren.Link{{Rel: []string{"self"}, Href: "/pages/1"}, {Rel: []string{"prev", "first"}, Href: "/pages/0"}}}
 	for rel, want := range map[string]string{"self": "/pages/1", "first": "/pages/0", "next": ""} {
 		if got := Href(e, rel); got != want {
 			t.Errorf("Href(%s) = %q, want %q", rel, got, want)
@@ -71,8 +72,8 @@ func TestHrefAndStatus(t *testing.T) {
 		want int
 	}{
 		{nil, 0},
-		{&client.Error{Status: http.StatusConflict, Entity: &api.Entity{}}, http.StatusConflict},
-		{fmt.Errorf("save: %w", &client.Error{Status: http.StatusNotFound, Entity: &api.Entity{}}), http.StatusNotFound},
+		{&client.Error{Status: http.StatusConflict, Entity: &siren.Entity{}}, http.StatusConflict},
+		{fmt.Errorf("save: %w", &client.Error{Status: http.StatusNotFound, Entity: &siren.Entity{}}), http.StatusNotFound},
 		{errors.New("connection refused"), -1},
 	} {
 		if got := Status(tc.err); got != tc.want {

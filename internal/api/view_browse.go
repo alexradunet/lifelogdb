@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"lifelog/internal/api/siren"
 )
 
 // The folds of Browse (docs/plans/118-fold-and-find.md): the category tree folds each branch, a list in title order
@@ -136,7 +138,7 @@ func (v *view) BrowseList() browseList {
 			}
 			f := tree[Num(r["id"])]
 			if f == nil { // a category the tree does not draw: nothing live is filed in it
-				f = map[string]any{"id": r["id"], "title": r["title"], "count": "0", "href": BrowseHref(map[string][]string{"in": {r["title"].(string)}})}
+				f = map[string]any{"id": r["id"], "title": r["title"], "count": "0", "href": siren.BrowseHref(map[string][]string{"in": {r["title"].(string)}})}
 			}
 			l.Folders = append(l.Folders, f)
 		}

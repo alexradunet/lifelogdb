@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 // TestAgenticInitAndTheDatabaseBesideTheProgram runs the command lines in-process, with the program in a folder of its
@@ -197,7 +197,7 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	if err := runArgs(t.Context(), e, []string{"actions", "--db", live}); err != nil {
 		t.Fatal(err)
 	}
-	var actions []api.Action
+	var actions []siren.Action
 	if err := json.Unmarshal(stdout.Bytes(), &actions); err != nil {
 		t.Fatal(err)
 	}

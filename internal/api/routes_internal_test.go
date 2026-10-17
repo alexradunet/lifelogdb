@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/siren"
 )
 
 // panicOf runs f and returns what it panics with, "" when it does not panic.
@@ -22,7 +24,7 @@ func panicOf(f func()) (msg string) {
 // TestMountPanicsWhenTheCatalogAndTheHandlersDisagree: an action with no handler, or a handler with no action, stops
 // the server at start. When they agree, each action gets a route with its method and its path.
 func TestMountPanicsWhenTheCatalogAndTheHandlersDisagree(t *testing.T) {
-	run := func(*http.Request, spec, string) (*Entity, error) { return &Entity{}, nil }
+	run := func(*http.Request, spec, string) (*siren.Entity, error) { return &siren.Entity{}, nil }
 	cat := []spec{{Name: "read", Method: "GET", Path: "/read"}, {Name: "write", Method: "POST", Path: "/things/{id}/write"}}
 	for _, tc := range []struct {
 		name     string
@@ -66,9 +68,9 @@ func TestMountReadsTheWriterAndRefusesAnAgentAnOwnerAction(t *testing.T) {
 		{Name: "keep", Method: "POST", Path: "/keep", Owner: true},
 	}
 	for _, s := range cat {
-		handlers[s.Name] = func(_ *http.Request, act spec, writer string) (*Entity, error) {
+		handlers[s.Name] = func(_ *http.Request, act spec, writer string) (*siren.Entity, error) {
 			ran, src, given = s.Name, writer, act.Method+" "+act.Path
-			return &Entity{Title: s.Name}, nil
+			return &siren.Entity{Title: s.Name}, nil
 		}
 	}
 	m := http.NewServeMux()

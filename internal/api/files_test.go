@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/photo"
 	"lifelog/internal/photo/phototest"
 )
@@ -32,7 +32,7 @@ func jpegFile(t *testing.T, name string, w, h int) (string, string) {
 	return p, hex.EncodeToString(sum[:])
 }
 
-func props(e *api.Entity) map[string]any { p, _ := e.Properties.(map[string]any); return p }
+func props(e *siren.Entity) map[string]any { p, _ := e.Properties.(map[string]any); return p }
 
 // TestAPictureThatCannotBeSentIsLogged: when the client of a picture went away, the write of its bytes fails. The
 // server's log has it one time, under the route of the picture; nothing else can be done.

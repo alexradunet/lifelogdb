@@ -4,18 +4,18 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		actions []api.Action
+		actions []siren.Action
 		want    string
 	}{
-		{"catalog collision", []api.Action{{Name: "same-name"}, {Name: "same_name"}}, `"same_name"`},
-		{"built-in get", []api.Action{{Name: "get"}}, `"get"`},
-		{"built-in get day", []api.Action{{Name: "get-day"}}, `"get_day"`},
+		{"catalog collision", []siren.Action{{Name: "same-name"}, {Name: "same_name"}}, `"same_name"`},
+		{"built-in get", []siren.Action{{Name: "get"}}, `"get"`},
+		{"built-in get day", []siren.Action{{Name: "get-day"}}, `"get_day"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tools(tc.actions)
@@ -24,7 +24,7 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 			}
 		})
 	}
-	list, err := tools([]api.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}, {Name: "open-day", Method: "GET"}})
+	list, err := tools([]siren.Action{{Name: "get", Owner: true}, {Name: "find"}, {Name: "import-find"}, {Name: "open-day", Method: "GET"}})
 	if err != nil {
 		t.Fatalf("owner-only duplicate and distinct public tools were rejected: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 // TestGetDayIsOpenDay: get_day is the action open-day under the name of a read, so there is no get_day when open-day
 // is not a tool: it is absent, or it is the owner's.
 func TestGetDayIsOpenDay(t *testing.T) {
-	for _, actions := range [][]api.Action{{{Name: "find"}}, {{Name: "find"}, {Name: "open-day", Owner: true}}} {
+	for _, actions := range [][]siren.Action{{{Name: "find"}}, {{Name: "find"}, {Name: "open-day", Owner: true}}} {
 		list, err := tools(actions)
 		if err != nil {
 			t.Fatal(err)
@@ -57,7 +57,7 @@ func TestGetDayIsOpenDay(t *testing.T) {
 
 func TestToolsRefuseAnInvalidNumericOption(t *testing.T) {
 	for _, option := range []string{"oops", "null", "\"1\""} {
-		if _, err := inputSchema([]api.Field{{Name: "done", Type: "number", Options: []string{option}}}); err == nil {
+		if _, err := inputSchema([]siren.Field{{Name: "done", Type: "number", Options: []string{option}}}); err == nil {
 			t.Fatalf("accepted %q", option)
 		}
 	}
@@ -91,7 +91,7 @@ func TestArgumentsFlattenToFormValues(t *testing.T) {
 // TestToolsCarryNoFileField is the one allowed difference of the MCP surface: a file (a recording, a picture) is
 // sent by the CLI or a browser; the tool keeps the action's other fields.
 func TestToolsCarryNoFileField(t *testing.T) {
-	list, err := tools([]api.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []api.Field{
+	list, err := tools([]siren.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
 		{Name: "audio", Type: "file", Accept: "audio/*"}}}})
 	if err != nil {

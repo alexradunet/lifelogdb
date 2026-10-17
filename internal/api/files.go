@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/photo"
 	"lifelog/internal/preview"
@@ -28,7 +29,7 @@ const (
 )
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
-func (h *server) addFile(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	in, dry, sent, err := parseFileForm(r, act)
 	if err != nil {
 		return nil, err
@@ -41,9 +42,9 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*Entity, error)
 		if err != nil {
 			return nil, err
 		}
-		return &Entity{Class: []string{"result", "dry-run"}, Title: "Dry run: nothing written",
+		return &siren.Entity{Class: []string{"result", "dry-run"}, Title: "Dry run: nothing written",
 			Properties: map[string]any{"title": in.Title, "sha256": in.SHA256, "mime": in.MIME, "picture": in.Preview != nil},
-			Result:     k, Links: []Link{link("index", "/", "Home")}}, nil
+			Result:     k, Links: []siren.Link{link("index", "/", "Home")}}, nil
 	}
 	k, err := h.s.AddFile(r.Context(), src, in)
 	if err != nil {
@@ -267,7 +268,7 @@ func picture(get func(*http.Request) ([]byte, error), cache string) http.Handler
 
 // setPicture makes a photo a page's picture (core.SetPicture): a new photo sent as original, or a kept file named by
 // title. It answers with the page.
-func (h *server) setPicture(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) setPicture(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -293,7 +294,7 @@ func (h *server) setPicture(r *http.Request, act spec, src string) (*Entity, err
 	return h.setPictureOf(r, src, id, v.Get("title"))
 }
 
-func (h *server) setPictureOf(r *http.Request, src string, id int64, title string) (*Entity, error) {
+func (h *server) setPictureOf(r *http.Request, src string, id int64, title string) (*siren.Entity, error) {
 	if title == "" {
 		return nil, core.Invalid("title: a kept picture's title, or send a new photo as original")
 	}

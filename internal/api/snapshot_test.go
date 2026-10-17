@@ -12,6 +12,7 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -131,7 +132,7 @@ func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 		req := httptest.NewRequestWithContext(ctx, "POST", "/snapshots", nil)
 		rec := httptest.NewRecorder()
 		api.New(&core.Store{DB: d, SnapshotDir: dir}).ServeHTTP(rec, req)
-		var e api.Entity
+		var e siren.Entity
 		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
 			t.Fatalf("the answer is not an entity: %v: %s", err, rec.Body.String())
 		}

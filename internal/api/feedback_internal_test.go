@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -84,8 +85,8 @@ func TestBrowserMutationFeedbackIndependentTabs(t *testing.T) {
 
 func TestBrowserMutationFeedbackEscaping(t *testing.T) {
 	h := &server{feedback: feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}}
-	endpoint := h.serve(func(r *http.Request) (*Entity, error) {
-		e := &Entity{Class: []string{"page"}, Title: "Synthetic", Properties: map[string]any{"body": "", "entity_type": "page"}, Links: []Link{link("self", "/pages/1", "Synthetic")}}
+	endpoint := h.serve(func(r *http.Request) (*siren.Entity, error) {
+		e := &siren.Entity{Class: []string{"page"}, Title: "Synthetic", Properties: map[string]any{"body": "", "entity_type": "page"}, Links: []siren.Link{link("self", "/pages/1", "Synthetic")}}
 		if r.Method == "POST" {
 			e.Result = map[string]any{"skipped": []string{"<script>alert(1)</script>"}}
 		}

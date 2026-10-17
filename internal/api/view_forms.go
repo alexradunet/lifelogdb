@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"lifelog/internal/api/siren"
 )
 
 // Action is the entity's action of that name as this page draws it, nil when it is not offered.
@@ -22,7 +24,7 @@ func (v *view) Action(name string) *shownAction {
 // shownAction is an action as a page draws it: a copy of the entity's action, so the entity stays as it is and the
 // JSON with it, and the marks of the browser, which the wire does not carry.
 type shownAction struct {
-	Action
+	siren.Action
 	refused bool       // the action a refusal came from: formOf fills, opens and describes the form that was sent
 	sent    url.Values // what the refused form sent
 	noFocus bool       // the page shows a refusal: no field takes the focus from the alert
@@ -34,7 +36,7 @@ type shownAction struct {
 //
 // With no refusal, the page's link can ask for one form (?new=<name>, docs/plans/114-one-way-to-do-a-thing.md): it
 // is open, and each field that the query names, but a path field or a file, holds the query's value.
-func (v *view) shown(a Action) *shownAction {
+func (v *view) shown(a siren.Action) *shownAction {
 	c := &shownAction{Action: a}
 	if v.Refused == nil {
 		if a.Name == "" || v.Asked("new") != a.Name {
@@ -67,18 +69,18 @@ func (v *view) shown(a Action) *shownAction {
 // that the form requires though the action does not, "pattern" ("field=regexp") is what the browser accepts in a
 // field (a score's range), and any other name fixes a field to a value (hidden).
 type formView struct {
-	*Action
+	*siren.Action
 	Button, Class string
 	ID            string // the form's id, which the controls outside it name (form="pick")
 	Focus         string
 	Back          string
-	Refused       bool      // the form a refusal came from: open, filled, described by the alert, with no focus
-	Asked         bool      // the form the page's link asked for (?new=<name>): open
-	Primary       bool      // the button is the primary one: a form with fields to fill
-	Also          *formView // a second action that the form sends to, by a button of its own (Or)
-	Shown         []Field   // the fields most writes need
-	More          []Field   // optional fields, folded; still in the form, so a browser sends them with no script
-	Hidden        []Field
+	Refused       bool          // the form a refusal came from: open, filled, described by the alert, with no focus
+	Asked         bool          // the form the page's link asked for (?new=<name>): open
+	Primary       bool          // the button is the primary one: a form with fields to fill
+	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
+	Shown         []siren.Field // the fields most writes need
+	More          []siren.Field // optional fields, folded; still in the form, so a browser sends them with no script
+	Hidden        []siren.Field
 	prompts       map[string]string // field name to placeholder words
 	keys          map[string]string // field name to its access key
 	patterns      map[string]string // field name to the pattern of its value
@@ -119,7 +121,7 @@ func (f *formView) Multipart() bool {
 
 // fieldView is a field as the "field" template draws it: the field, and whether the browser starts in it.
 type fieldView struct {
-	Field
+	siren.Field
 	Focus       bool
 	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
 	Key         string // the field's access key, which the browser's own modifier reaches
@@ -163,7 +165,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 			return nil, nil
 		}
 		c = *x
-	case Action:
+	case siren.Action:
 		c.Action = x
 	default:
 		return nil, nil
@@ -280,7 +282,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 // 2 to 5 options, none empty and each of 3 characters or fewer (a mood 1 to 5). A field of page titles is never one:
 // its options are the titles it offers, and it takes a new title too (a datalist). A flag is never one either: it is
 // a checkbox. Any other field with options is a select.
-func segmented(f Field) bool {
+func segmented(f siren.Field) bool {
 	if f.Pages || checkbox(f) || len(f.Options) < 2 || len(f.Options) > 5 {
 		return false
 	}
@@ -296,6 +298,6 @@ func segmented(f Field) bool {
 // a field that the action does not require. A checked box sends 1, and a box that is not checked sends nothing,
 // which the server reads as 0 (flag). A required flag stays a row of radio buttons, as a checkbox cannot send 0. A
 // field of page titles is never one: its options are titles (two categories titled 0 and 1), which a datalist offers.
-func checkbox(f Field) bool {
+func checkbox(f siren.Field) bool {
 	return !f.Pages && !f.Required && slices.Equal(f.Options, []string{"0", "1"})
 }

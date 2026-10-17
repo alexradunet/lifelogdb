@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lifelog/internal/api/siren"
 )
 
 // The folds of Browse (docs/plans/118-fold-and-find.md, rules 1 to 3), on props written by hand in the shape a
@@ -12,11 +14,11 @@ import (
 
 // browseViewOf is a view of GET /browse with these props, and the tree's links in the order of its categories.
 func browseViewOf(props map[string]any) *view {
-	e := &Entity{Class: []string{"browse"}}
+	e := &siren.Entity{Class: []string{"browse"}}
 	cats, _ := props["categories"].([]any)
 	for _, x := range cats {
 		c := x.(map[string]any)
-		e.Entities = append(e.Entities, Link{Rel: []string{"category"}, Href: "/browse?in=" + c["title"].(string)})
+		e.Entities = append(e.Entities, siren.Link{Rel: []string{"category"}, Href: "/browse?in=" + c["title"].(string)})
 	}
 	return &view{Entity: e, Props: props}
 }

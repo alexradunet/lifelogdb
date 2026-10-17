@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -164,7 +164,7 @@ func TestANewPageIsFiledWhereItIsMade(t *testing.T) {
 }
 
 // titled says whether a link of the list has the title.
-func titled(links []api.Link, title string) bool {
+func titled(links []siren.Link, title string) bool {
 	for _, l := range links {
 		if l.Title == title {
 			return true
@@ -205,7 +205,7 @@ func TestACategoryPageOpensInBrowse(t *testing.T) {
 // A new person, place or file is filed where it is made (docs/plans/117-one-browse-view.md, rule 6).
 
 // partOfLinks are the titles the entity links part-of, in order.
-func partOfLinks(e *api.Entity) []string {
+func partOfLinks(e *siren.Entity) []string {
 	var out []string
 	for _, l := range e.Entities {
 		if len(l.Rel) == 1 && l.Rel[0] == "part-of" {

@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
-func (h *server) find(r *http.Request, act spec, _ string) (*Entity, error) {
+func (h *server) find(r *http.Request, act spec, _ string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -26,10 +27,10 @@ func (h *server) find(r *http.Request, act spec, _ string) (*Entity, error) {
 	if id == 0 {
 		return nil, core.NotFound("no page titled %s", title)
 	}
-	return nil, redirect{PageHref(id)}
+	return nil, redirect{siren.PageHref(id)}
 }
 
-func (h *server) page(r *http.Request) (*Entity, error) {
+func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -41,7 +42,7 @@ func (h *server) page(r *http.Request) (*Entity, error) {
 	// In a browser, the page of a live metric is its metric's one page, which carries the page's text, edges and
 	// actions (docs/plans/100-one-page-a-metric.md); a receipt of feedback goes with it. JSON keeps the page.
 	if p := e.Properties.(*core.Page); wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
-		to := MetricHref(p.Title)
+		to := siren.MetricHref(p.Title)
 		if t := r.URL.Query().Get("feedback"); t != "" && h.feedback.move(t, r.URL.Path, to) {
 			to += "?" + url.Values{"feedback": {t}}.Encode()
 		}
@@ -50,22 +51,22 @@ func (h *server) page(r *http.Request) (*Entity, error) {
 	return e, nil
 }
 
-func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
+func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error) {
 	p, err := h.s.PageByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	e := &Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
-		Links: []Link{link("self", PageHref(id), p.Title), link("index", "/", "Home")}}
+	e := &siren.Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
+		Links: []siren.Link{link("self", siren.PageHref(id), p.Title), link("index", "/", "Home")}}
 	if p.IsDayPage {
 		e.Class = append(e.Class, "day-page")
-		e.Links = append(e.Links, link("day", DayHref(p.Day), "Day view"))
+		e.Links = append(e.Links, link("day", siren.DayHref(p.Day), "Day view"))
 	}
 	if p.File != nil && p.File.Preview {
-		e.Links = append(e.Links, link("preview", PageHref(id)+"/preview", "Picture"))
+		e.Links = append(e.Links, link("preview", siren.PageHref(id)+"/preview", "Picture"))
 	}
 	for _, l := range p.Out {
-		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: PageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
+		e.Entities = append(e.Entities, siren.Link{Rel: []string{l.Kind}, Href: siren.PageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
 	// The categories, read once: the options of file-pages, and which of the pages filed here are categories
 	// themselves (docs/plans/115-categories-to-browse.md).
@@ -83,7 +84,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		if l.Kind == "part-of" && isCategory(l.ID) {
 			class = append(class, "category")
 		}
-		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: PageHref(l.ID), Title: l.Title, Class: class})
+		e.Entities = append(e.Entities, siren.Link{Rel: []string{"backlink", l.Kind}, Href: siren.PageHref(l.ID), Title: l.Title, Class: class})
 	}
 	var kinds []string
 	if p.DeletedAt != "" {
@@ -98,12 +99,12 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 // pageActions are the actions a page offers, by its type, its state and its links. kinds are the link kinds it may
 // start (linkKinds), and cats are the categories that file-pages offers. A tombstoned page offers revive alone. A
 // page that something is part-of is a category page: a new page is made and filed there in one write.
-func pageActions(p *core.Page, kinds []string, cats []core.Category) []Action {
+func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Action {
 	ids := idParam(p.ID)
 	if p.DeletedAt != "" {
-		return []Action{action("revive", ids, nil)}
+		return []siren.Action{action("revive", ids, nil)}
 	}
-	var out []Action
+	var out []siren.Action
 	if slices.ContainsFunc(p.In, func(l core.Edge) bool { return l.Kind == "part-of" }) {
 		out = append(out, action("create-page", nil, map[string]any{"category": p.Title}))
 	}
@@ -151,11 +152,11 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
-func (h *server) search(r *http.Request, _ spec, _ string) (*Entity, error) {
+func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
 	q := r.URL.Query().Get("q")
-	e := &Entity{Class: []string{"search"}, Title: "Search",
-		Links:   []Link{link("self", "/search?q="+url.QueryEscape(q), "Search"), link("index", "/", "Home")},
-		Actions: []Action{action("search", nil, map[string]any{"q": q})}}
+	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
+		Links:   []siren.Link{link("self", "/search?q="+url.QueryEscape(q), "Search"), link("index", "/", "Home")},
+		Actions: []siren.Action{action("search", nil, map[string]any{"q": q})}}
 	if strings.TrimSpace(q) == "" { // a q of only blanks has no words: it answers as the empty search does
 		return e, nil
 	}
@@ -177,12 +178,12 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*Entity, error) {
 	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
 	e.Properties.(map[string]any)["hits"] = hits
 	for _, x := range hits {
-		e.Entities = append(e.Entities, link("item", PageHref(x.ID), x.Title))
+		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}
 	return e, nil
 }
 
-func (h *server) createPage(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) createPage(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func (h *server) createPage(r *http.Request, act spec, src string) (*Entity, err
 	return withResult(h.pageEntity(r.Context(), id))(sync)
 }
 
-func (h *server) saveBody(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) saveBody(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err
@@ -206,7 +207,7 @@ func (h *server) saveBody(r *http.Request, act spec, src string) (*Entity, error
 	return withResult(h.pageEntity(r.Context(), id))(sync)
 }
 
-func (h *server) createPerson(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) createPerson(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -218,7 +219,7 @@ func (h *server) createPerson(r *http.Request, act spec, src string) (*Entity, e
 	return h.pageEntity(r.Context(), id)
 }
 
-func (h *server) createPlace(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) createPlace(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
 		return nil, err
@@ -230,7 +231,7 @@ func (h *server) createPlace(r *http.Request, act spec, src string) (*Entity, er
 	return h.pageEntity(r.Context(), id)
 }
 
-func (h *server) promote(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) promote(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err
@@ -241,7 +242,7 @@ func (h *server) promote(r *http.Request, act spec, src string) (*Entity, error)
 	return h.pageEntity(r.Context(), id)
 }
 
-func (h *server) tombstone(r *http.Request, _ spec, src string) (*Entity, error) {
+func (h *server) tombstone(r *http.Request, _ spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -252,7 +253,7 @@ func (h *server) tombstone(r *http.Request, _ spec, src string) (*Entity, error)
 	return h.pageEntity(r.Context(), id)
 }
 
-func (h *server) revive(r *http.Request, _ spec, src string) (*Entity, error) {
+func (h *server) revive(r *http.Request, _ spec, src string) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
 		return nil, err
@@ -274,7 +275,7 @@ func (h *server) linkEnds(r *http.Request, act spec) (from, to int64, v url.Valu
 	return
 }
 
-func (h *server) linkPages(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) linkPages(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	from, to, v, err := h.linkEnds(r, act)
 	if err != nil {
 		return nil, err
@@ -285,7 +286,7 @@ func (h *server) linkPages(r *http.Request, act spec, src string) (*Entity, erro
 	return h.pageEntity(r.Context(), from)
 }
 
-func (h *server) unlinkPages(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) unlinkPages(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	from, to, v, err := h.linkEnds(r, act)
 	if err != nil {
 		return nil, err
@@ -296,7 +297,7 @@ func (h *server) unlinkPages(r *http.Request, act spec, src string) (*Entity, er
 	return h.pageEntity(r.Context(), from)
 }
 
-func (h *server) rename(r *http.Request, act spec, src string) (*Entity, error) {
+func (h *server) rename(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err

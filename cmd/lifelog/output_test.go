@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 // TestHumanWritesAReadableSummary: --human writes the title and the classes, the result of a write, the properties in
@@ -17,22 +17,22 @@ import (
 func TestHumanWritesAReadableSummary(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		e    *api.Entity
+		e    *siren.Entity
 		want string
 	}{
-		{"a title only", &api.Entity{Title: "Ana"}, "# Ana  ()\n"},
-		{"properties that are not an object", &api.Entity{Title: "Ana", Class: []string{"page"}, Properties: []int{1}},
+		{"a title only", &siren.Entity{Title: "Ana"}, "# Ana  ()\n"},
+		{"properties that are not an object", &siren.Entity{Title: "Ana", Class: []string{"page"}, Properties: []int{1}},
 			"# Ana  (page)\n"},
-		{"every part", &api.Entity{
+		{"every part", &siren.Entity{
 			Class:  []string{"page", "file"},
 			Title:  "Lakeside",
 			Result: map[string]any{"linked": []string{"Sam"}},
 			Properties: map[string]any{
 				"title": "Lakeside", "body": "Walked with [[Sam]].\nCold water.", "kind": "", "id": 12, "tags": []string{"walk"},
 			},
-			Entities: []api.Link{{Rel: []string{"backlink"}, Title: "2031-05-14", Href: "/pages/3"}},
-			Links:    []api.Link{{Rel: []string{"self"}, Href: "/pages/12"}, {Rel: []string{"collection", "up"}, Href: "/pages"}},
-			Actions:  []api.Action{{Name: "save-body", Method: "POST", Href: "/pages/12/body"}},
+			Entities: []siren.Link{{Rel: []string{"backlink"}, Title: "2031-05-14", Href: "/pages/3"}},
+			Links:    []siren.Link{{Rel: []string{"self"}, Href: "/pages/12"}, {Rel: []string{"collection", "up"}, Href: "/pages"}},
+			Actions:  []siren.Action{{Name: "save-body", Method: "POST", Href: "/pages/12/body"}},
 		}, `# Lakeside  (page file)
 result: {"linked":["Sam"]}
 body:
@@ -91,7 +91,7 @@ func TestACommandReportsAFailedWriteOfItsOutput(t *testing.T) {
 // TestHumanReportsAValueThatJSONCannotWrite: --human writes a result and a property that is not a text as JSON; a value
 // that JSON cannot write is an error, not an empty line.
 func TestHumanReportsAValueThatJSONCannotWrite(t *testing.T) {
-	for _, e := range []*api.Entity{
+	for _, e := range []*siren.Entity{
 		{Title: "a result", Result: math.NaN()},
 		{Title: "a property", Properties: map[string]any{"value": math.Inf(1)}},
 	} {

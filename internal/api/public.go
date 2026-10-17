@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -161,7 +162,7 @@ func (p *public) matches(credential string) bool {
 // header instead. The page is the only one served without a credential, and it shows nothing of the database.
 func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		e := &Entity{Class: []string{"login"}, Title: "Log in",
+		e := &siren.Entity{Class: []string{"login"}, Title: "Log in",
 			Properties: map[string]any{"failed": r.URL.Query().Get("failed") == "1", "logged_in": p.authorized(r)}}
 		answer(w, r, http.StatusOK, e, frame{pageOnly: true})
 		return

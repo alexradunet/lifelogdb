@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 )
@@ -83,10 +83,10 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 
 // browseRows says the rows of a Browse answer, one "title:field=value;…" each, the fields in the order named (a field
 // the row lacks is "-"); and it checks the item links: one a row, in the same order, the class the row's type.
-func browseRows(t *testing.T, e *api.Entity, fields ...string) string {
+func browseRows(t *testing.T, e *siren.Entity, fields ...string) string {
 	t.Helper()
 	rows, _ := props(e)["rows"].([]any)
-	items := []api.Link{}
+	items := []siren.Link{}
 	for _, l := range e.Entities {
 		if l.Rel[0] == "item" {
 			items = append(items, l)
@@ -280,7 +280,7 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		}
 	}
 	// The chips keep where the list looks; All is a chip inside a category only.
-	chips := func(e *api.Entity) string {
+	chips := func(e *siren.Entity) string {
 		var out []string
 		for _, l := range e.Links {
 			if l.Rel[0] == "kind" {
@@ -313,7 +313,7 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		t.Errorf("branches by path: %s", got)
 	}
 	if e := apitest.Must(t)(c.Get(ctx, "/browse")); apitest.Href(e, "everything") != "/browse" || apitest.Href(e, "unfiled") != "/browse?unfiled=1" ||
-		!slices.ContainsFunc(e.Entities, func(l api.Link) bool { return l.Href == "/browse?in=Family" }) {
+		!slices.ContainsFunc(e.Entities, func(l siren.Link) bool { return l.Href == "/browse?in=Family" }) {
 		t.Errorf("tree with no kind named: %s %s %v", apitest.Href(e, "everything"), apitest.Href(e, "unfiled"), e.Entities)
 	}
 }
@@ -481,7 +481,7 @@ func TestTheCatalogsBrowseGivesTheRowsToAnAgent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		i := slices.IndexFunc(actions, func(a api.Action) bool { return a.Name == "browse" })
+		i := slices.IndexFunc(actions, func(a siren.Action) bool { return a.Name == "browse" })
 		if i < 0 || actions[i].Owner || actions[i].Danger || actions[i].Method != "GET" || actions[i].Href != "/browse" {
 			t.Fatalf("%s: the catalog's browse: %+v", source, actions)
 		}

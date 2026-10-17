@@ -18,8 +18,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/mcp"
@@ -67,7 +67,7 @@ const parityToday = "2031-05-20"
 
 // surfaceCall runs the catalog's action with the field values on one surface. It returns the entity of the answer
 // (the error entity of a refusal too) and the error of a refusal.
-type surfaceCall func(action string, args map[string]string) (*api.Entity, error)
+type surfaceCall func(action string, args map[string]string) (*siren.Entity, error)
 
 // errNoTool is the answer of the MCP surface to an action that is not one of its tools.
 var errNoTool = errors.New("the MCP server has no tool of this action")
@@ -83,7 +83,7 @@ func openRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
 // catalogCall runs an action of GET /actions with the client.
 func catalogCall(t *testing.T, c *client.Client) surfaceCall {
 	catalog := apitest.Must(t)(c.Get(t.Context(), "/actions"))
-	return func(action string, args map[string]string) (*api.Entity, error) {
+	return func(action string, args map[string]string) (*siren.Entity, error) {
 		t.Helper()
 		return c.Do(t.Context(), apitest.Action(t, catalog, action), args)
 	}
@@ -99,7 +99,7 @@ func openCLI(t *testing.T, _ http.Handler, path, source string) surfaceCall {
 		t.Fatal(err)
 	}
 	e.clock = func() time.Time { return today.Add(12 * time.Hour) }
-	return func(action string, args map[string]string) (*api.Entity, error) {
+	return func(action string, args map[string]string) (*siren.Entity, error) {
 		t.Helper()
 		argv := []string{"--db", path}
 		if source != "cli" {
@@ -192,7 +192,7 @@ func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 			numbers[tool.Name][name] = p.Type == "number"
 		}
 	}
-	return func(action string, args map[string]string) (*api.Entity, error) {
+	return func(action string, args map[string]string) (*siren.Entity, error) {
 		t.Helper()
 		name := strings.ReplaceAll(action, "-", "_")
 		if action == "open-day" {
@@ -232,11 +232,11 @@ func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 }
 
 // decodeEntity reads the JSON of an entity with its numbers exact, as the client reads them.
-func decodeEntity(t *testing.T, b []byte) *api.Entity {
+func decodeEntity(t *testing.T, b []byte) *siren.Entity {
 	t.Helper()
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.UseNumber()
-	var e api.Entity
+	var e siren.Entity
 	if err := d.Decode(&e); err != nil {
 		t.Fatalf("not an entity: %v: %s", err, b)
 	}
@@ -259,7 +259,7 @@ type parityRow struct {
 }
 
 // ok is the entity of a call that must succeed.
-func (x *parityRun) ok(action string, args map[string]string) *api.Entity {
+func (x *parityRun) ok(action string, args map[string]string) *siren.Entity {
 	x.t.Helper()
 	e, err := x.call(action, args)
 	if err != nil {
@@ -288,7 +288,7 @@ func (x *parityRun) refused(action string, args map[string]string, status int, c
 }
 
 // page reads the page with the title through the HTTP API.
-func (x *parityRun) page(title string) (*api.Entity, error) {
+func (x *parityRun) page(title string) (*siren.Entity, error) {
 	return x.read.Get(x.t.Context(), "/pages?title="+url.QueryEscape(title))
 }
 
@@ -326,7 +326,7 @@ func (x *parityRun) browse(query string) string {
 }
 
 // rowField is a field of each row of a browse entity, in order.
-func rowField(t *testing.T, e *api.Entity, name string) string {
+func rowField(t *testing.T, e *siren.Entity, name string) string {
 	t.Helper()
 	var out []string
 	rows, _ := props(t, e)["rows"].([]any)
@@ -344,7 +344,7 @@ func (x *parityRun) sql(query string, args ...any) {
 	}
 }
 
-func props(t *testing.T, e *api.Entity) map[string]any {
+func props(t *testing.T, e *siren.Entity) map[string]any {
 	t.Helper()
 	p, ok := e.Properties.(map[string]any)
 	if !ok {
@@ -354,7 +354,7 @@ func props(t *testing.T, e *api.Entity) map[string]any {
 }
 
 // fieldValue is the value that the action carries for the field, nil for none.
-func fieldValue(a api.Action, name string) any {
+func fieldValue(a siren.Action, name string) any {
 	for _, f := range a.Fields {
 		if f.Name == name {
 			return f.Value

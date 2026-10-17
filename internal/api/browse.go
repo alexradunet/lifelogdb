@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 )
 
@@ -135,14 +136,6 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 	return v
 }
 
-// BrowseHref is the address of Browse with a query.
-func BrowseHref(v url.Values) string {
-	if len(v) == 0 {
-		return "/browse"
-	}
-	return "/browse?" + v.Encode()
-}
-
 // oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
 // Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
 // routes of the same paths do not change.
@@ -170,12 +163,12 @@ func toBrowse(path string, q url.Values) string {
 	if path == "/media" && q.Get("kind") != "" {
 		v.Set("media", q.Get("kind"))
 	}
-	return BrowseHref(v)
+	return siren.BrowseHref(v)
 }
 
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
 // category tree. Inside a category the list's New form files the new page there.
-func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
+func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
 	b, err := browseQueryOf(r.URL.Query())
 	if err != nil {
 		return nil, err
@@ -203,31 +196,31 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 		return nil, err
 	}
 
-	self := BrowseHref(b.values(""))
-	e := &Entity{Class: []string{"browse"}, Title: "Browse",
-		Links: []Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
+	self := siren.BrowseHref(b.values(""))
+	e := &siren.Entity{Class: []string{"browse"}, Title: "Browse",
+		Links: []siren.Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
 	chips := core.BrowseKinds()
 	if in != nil { // inside a category All is the default, and its chip comes first
 		chips = append([]string{"all"}, chips...)
 	}
 	for _, k := range chips {
-		e.Links = append(e.Links, Link{Rel: []string{"kind"}, Href: BrowseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
+		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: siren.BrowseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
 	}
 	treeKind := url.Values{} // a branch keeps the kind the URL names; All needs a category
 	if b.named && b.kind != "all" {
 		treeKind.Set("kind", b.kind)
 	}
-	e.Links = append(e.Links, link("everything", BrowseHref(treeKind), "Everything"))
+	e.Links = append(e.Links, link("everything", siren.BrowseHref(treeKind), "Everything"))
 	unfiled := url.Values{"unfiled": {"1"}}
 	if k := treeKind.Get("kind"); k != "" {
 		unfiled.Set("kind", k)
 	}
-	e.Links = append(e.Links, link("unfiled", BrowseHref(unfiled), "Not filed"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"))
+	e.Links = append(e.Links, link("unfiled", siren.BrowseHref(unfiled), "Not filed"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"))
 	if b.kind == "media" {
 		for _, m := range []struct{ rel, kind, title string }{{"pictures", "image", "Pictures"}, {"videos", "video", "Videos"}, {"recordings", "audio", "Recordings"}} {
 			v := b.values("", "media")
 			v.Set("media", m.kind)
-			e.Links = append(e.Links, link(m.rel, BrowseHref(v), m.title))
+			e.Links = append(e.Links, link(m.rel, siren.BrowseHref(v), m.title))
 		}
 	}
 
@@ -236,18 +229,18 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 		return nil, err
 	}
 	for _, row := range rows {
-		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: PageHref(row.ID), Title: row.Title, Class: []string{row.Type}})
+		e.Entities = append(e.Entities, siren.Link{Rel: []string{"item"}, Href: siren.PageHref(row.ID), Title: row.Title, Class: []string{row.Type}})
 	}
 	treeIn := func(title string) string {
 		v := url.Values{"in": {title}}
 		if k := treeKind.Get("kind"); k != "" {
 			v.Set("kind", k)
 		}
-		return BrowseHref(v)
+		return siren.BrowseHref(v)
 	}
 	var titles []string
 	for _, c := range cs {
-		e.Entities = append(e.Entities, Link{Rel: []string{"category"}, Href: treeIn(c.Title), Title: c.Title, Class: []string{"category"}})
+		e.Entities = append(e.Entities, siren.Link{Rel: []string{"category"}, Href: treeIn(c.Title), Title: c.Title, Class: []string{"category"}})
 		titles = append(titles, c.Title)
 	}
 	e.Actions = browseActions(b, in, titles)
@@ -306,7 +299,7 @@ func (h *server) categoryNamed(ctx context.Context, title string, cs []core.Cate
 }
 
 // browseRows reads one page of the rows of the list and links its next and previous pages, the filters kept.
-func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc core.Scope, limit, offset int) ([]browseRow, error) {
+func (h *server) browseRows(ctx context.Context, e *siren.Entity, b browseQuery, sc core.Scope, limit, offset int) ([]browseRow, error) {
 	q := b.values("")
 	rows := []browseRow{}
 	switch {
@@ -334,7 +327,7 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 		for _, p := range paged(e, found, "/browse", q, limit, offset) {
 			row := browseRow{ID: p.ID, Title: p.Title, Type: b.kind, Kind: b.kind, Mentions: &p.Mentions, LastDay: p.LastDay}
 			if p.Picture != 0 {
-				row.Picture = PageHref(p.Picture) + "/preview"
+				row.Picture = siren.PageHref(p.Picture) + "/preview"
 			}
 			rows = append(rows, row)
 		}
@@ -353,7 +346,7 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 			row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: b.kind, Mentions: &f.Mentions, MIME: f.MIME,
 				FileKind: fileKind(f.MIME), Day: f.Day}
 			if f.Picture {
-				row.Picture = PageHref(f.ID) + "/preview"
+				row.Picture = siren.PageHref(f.ID) + "/preview"
 			}
 			rows = append(rows, row)
 		}
@@ -387,12 +380,12 @@ func fileKind(mime string) string {
 // browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
 // rule 6), and the pick bar's. Every list but All offers file-pages; pages (the ghosts too), media and documents
 // also offer tombstone-pages. People, places and metrics are deleted from their own page.
-func browseActions(b browseQuery, in *browseIn, categories []string) []Action {
+func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
 	var values map[string]any
 	if in != nil {
 		values = map[string]any{"category": in.Title}
 	}
-	var out []Action
+	var out []siren.Action
 	switch {
 	case b.ghosts:
 	case b.kind == "page":

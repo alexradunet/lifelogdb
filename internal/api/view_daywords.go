@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -40,7 +41,7 @@ func weekPage(day string) string {
 	if !text.IsDay(monday.Format(time.DateOnly)) {
 		return ""
 	}
-	return WeekHref(monday)
+	return siren.WeekHref(monday)
 }
 
 // sinceLastWeek says in words how a week's mean differs from the week before's: previous is nil when that week had
@@ -186,8 +187,8 @@ func weeks(list any) [][]any {
 // yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
 func yearPage(month string) string {
 	year, err := strconv.Atoi(month[:min(4, len(month))])
-	if err != nil || !IsYear(year) {
+	if err != nil || !siren.IsYear(year) {
 		return ""
 	}
-	return YearHref(year)
+	return siren.YearHref(year)
 }

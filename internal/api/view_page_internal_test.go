@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"lifelog/internal/api/siren"
 )
 
 // TestNumWritesNumbersInFull keeps an id a path can carry: the JSON client reads every number as a float64.
@@ -27,16 +29,16 @@ func TestNumWritesNumbersInFull(t *testing.T) {
 // every action takes no focus, and the page's ?new= opens no form. With no refusal, ?new= opens its form, filled from
 // the query. The entity does not change.
 func TestPageViewTakesTheRefusalAsAnArgument(t *testing.T) {
-	e := &Entity{Class: []string{"page"}, Title: "Diet", Properties: map[string]any{"id": 4}, Actions: []Action{
-		{Name: "save-body", Method: "POST", Href: "/pages/4/body", Fields: []Field{{Name: "body", Type: "textarea", Value: "v1"}, {Name: "version", Type: "hidden", Value: "3"}}},
-		{Name: "rename", Method: "POST", Href: "/pages/4/rename", Fields: []Field{{Name: "title", Type: "text"}}},
+	e := &siren.Entity{Class: []string{"page"}, Title: "Diet", Properties: map[string]any{"id": 4}, Actions: []siren.Action{
+		{Name: "save-body", Method: "POST", Href: "/pages/4/body", Fields: []siren.Field{{Name: "body", Type: "textarea", Value: "v1"}, {Name: "version", Type: "hidden", Value: "3"}}},
+		{Name: "rename", Method: "POST", Href: "/pages/4/rename", Fields: []siren.Field{{Name: "title", Type: "text"}}},
 	}}
 	u, err := url.Parse("/pages/4?feedback=abc&new=rename&title=Food")
 	if err != nil {
 		t.Fatal(err)
 	}
 	sv := &Shell{Today: "2026-10-16"}
-	refused := &Entity{Class: []string{"error"}, Properties: map[string]any{"status": 409, "code": "stale_version", "message": "the page changed"}}
+	refused := &siren.Entity{Class: []string{"error"}, Properties: map[string]any{"status": 409, "code": "stale_version", "message": "the page changed"}}
 	sent := url.Values{"body": {"my draft"}, "version": {"3"}, "other": {"x"}}
 
 	v, err := pageView(e, Facts{URL: u, Shell: sv}, &Refusal{Entity: refused, Href: "/pages/4/body", Sent: sent})

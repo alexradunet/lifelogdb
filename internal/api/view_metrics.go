@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -174,7 +175,7 @@ func (v *view) MetricSections() []metricSection {
 		name, _ := m["name"].(string)
 		unit, _ := m["unit"].(string)
 		note, _ := m["note"].(string)
-		k := metricCard{ID: id, Name: name, Href: MetricHref(name), Unit: unitWords(unit), Note: note}
+		k := metricCard{ID: id, Name: name, Href: siren.MetricHref(name), Unit: unitWords(unit), Note: note}
 		recent, _ := m["recent"].([]any)
 		if n := len(recent); n > 0 {
 			last, _ := recent[n-1].(map[string]any)

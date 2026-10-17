@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestSetPictureFromThePersonPage: a person's page offers set-picture, and a place's page and the lists do not. A
@@ -25,7 +25,7 @@ func TestSetPictureFromThePersonPage(t *testing.T) {
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "Met at school."}))
 	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
-	for _, e := range []*api.Entity{lake, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), apitest.Must(t)(c.Get(ctx, "/browse?kind=place"))} {
+	for _, e := range []*siren.Entity{lake, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), apitest.Must(t)(c.Get(ctx, "/browse?kind=place"))} {
 		if hasAction(e, "set-picture") {
 			t.Errorf("%s offers set-picture", e.Title)
 		}
@@ -68,7 +68,7 @@ func TestSetPictureFromThePersonPage(t *testing.T) {
 	}
 }
 
-func pictureAction(t *testing.T, e *api.Entity, href string) api.Action {
+func pictureAction(t *testing.T, e *siren.Entity, href string) siren.Action {
 	t.Helper()
 	for _, a := range e.Actions {
 		if a.Name == "set-picture" && a.Href == href {
@@ -76,7 +76,7 @@ func pictureAction(t *testing.T, e *api.Entity, href string) api.Action {
 		}
 	}
 	t.Fatalf("no set-picture to %s among %+v", href, e.Actions)
-	return api.Action{}
+	return siren.Action{}
 }
 
 // postPhoto sends a photo as a browser's form does.

@@ -17,6 +17,7 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 )
@@ -31,7 +32,7 @@ func scalar(t *testing.T, s *core.Store, query string) string {
 	return v
 }
 
-func names(e *api.Entity) string {
+func names(e *siren.Entity) string {
 	var out []string
 	for _, a := range e.Actions {
 		out = append(out, a.Name)
@@ -39,7 +40,7 @@ func names(e *api.Entity) string {
 	return strings.Join(out, ",")
 }
 
-func hasAction(e *api.Entity, name string) bool {
+func hasAction(e *siren.Entity, name string) bool {
 	for _, a := range e.Actions {
 		if a.Name == name {
 			return true
@@ -54,7 +55,7 @@ func TestCatalogNamesAreUnique(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seen, normalized := map[string]api.Action{}, map[string]api.Action{}
+	seen, normalized := map[string]siren.Action{}, map[string]siren.Action{}
 	for _, a := range actions {
 		if prev, ok := seen[a.Name]; ok {
 			t.Errorf("catalog action name %q is used by both %s and %s", a.Name, prev.Href, a.Href)
@@ -218,11 +219,11 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 					}
 					return values
 				}
-				sends := map[string]func() (*api.Entity, error){
-					"a form": func() (*api.Entity, error) { return c.Do(t.Context(), a, values()) },
+				sends := map[string]func() (*siren.Entity, error){
+					"a form": func() (*siren.Entity, error) { return c.Do(t.Context(), a, values()) },
 				}
 				if file != "" {
-					sends["multipart"] = func() (*api.Entity, error) {
+					sends["multipart"] = func() (*siren.Entity, error) {
 						return c.DoFiles(t.Context(), a, values(), map[string]string{file: original})
 					}
 				}
@@ -336,7 +337,7 @@ func TestCorrectionDomainActions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actions := &api.Entity{Actions: catalog}
+	actions := &siren.Entity{Actions: catalog}
 	record := apitest.Action(t, actions, "record")
 	correct := apitest.Action(t, actions, "correct")
 	retract := apitest.Action(t, actions, "retract")
@@ -374,7 +375,7 @@ func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
-		var e api.Entity
+		var e siren.Entity
 		if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil {
 			t.Fatalf("correct with %q: the answer is not an entity: %v: %s", body, err, rec.Body.String())
 		}
@@ -391,7 +392,7 @@ func TestACorrectWithNoValueIsRefusedAndChangesNothing(t *testing.T) {
 	}
 }
 
-func measurementID(e *api.Entity) string {
+func measurementID(e *siren.Entity) string {
 	return strings.TrimPrefix(apitest.Href(e, "self"), "/measurements/")
 }
 
@@ -509,7 +510,7 @@ func TestBrowserOriginProtection(t *testing.T) {
 
 }
 
-func hasOption(a api.Action, field, opt string) bool {
+func hasOption(a siren.Action, field, opt string) bool {
 	for _, f := range a.Fields {
 		if f.Name == field {
 			for _, o := range f.Options {
@@ -636,7 +637,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 			if apitest.Href(stored, "page") != apitest.Href(equivalent, "page") {
 				t.Errorf("page identity differs: %q vs %q", apitest.Href(stored, "page"), apitest.Href(equivalent, "page"))
 			}
-			for _, e := range []*api.Entity{stored, equivalent} {
+			for _, e := range []*siren.Entity{stored, equivalent} {
 				if apitest.Href(e, "self") == "" {
 					t.Error("missing self link")
 				} else if names(apitest.Must(t)(c.Get(t.Context(), apitest.Href(e, "self")))) != names(e) {

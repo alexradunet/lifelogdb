@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 )
 
 type Client struct {
@@ -67,7 +68,7 @@ func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // Error is a non-2xx answer; Entity is the API's error entity.
 type Error struct {
 	Status int
-	Entity *api.Entity
+	Entity *siren.Entity
 }
 
 func (e *Error) Error() string {
@@ -78,7 +79,7 @@ func (e *Error) Error() string {
 }
 
 // Get fetches a resource by its href (a path such as /days/2026-09-29).
-func (c *Client) Get(ctx context.Context, href string) (*api.Entity, error) {
+func (c *Client) Get(ctx context.Context, href string) (*siren.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func (c *Client) Get(ctx context.Context, href string) (*api.Entity, error) {
 }
 
 // fill is an action's href with its path fields filled, and its other field values (file fields are DoFiles').
-func fill(a api.Action, values map[string]string) (string, url.Values, error) {
+func fill(a siren.Action, values map[string]string) (string, url.Values, error) {
 	href := a.Href
 	form := url.Values{}
 	for _, f := range a.Fields {
@@ -122,7 +123,7 @@ func fill(a api.Action, values map[string]string) (string, url.Values, error) {
 
 // DoFiles submits an action as multipart/form-data: values as fields, and files (field name → path on disk)
 // streamed from disk, never held whole in memory.
-func (c *Client) DoFiles(ctx context.Context, a api.Action, values, files map[string]string) (*api.Entity, error) {
+func (c *Client) DoFiles(ctx context.Context, a siren.Action, values, files map[string]string) (*siren.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -186,7 +187,7 @@ func (c *Client) DoFiles(ctx context.Context, a api.Action, values, files map[st
 }
 
 // Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
-func (c *Client) Do(ctx context.Context, a api.Action, values map[string]string) (*api.Entity, error) {
+func (c *Client) Do(ctx context.Context, a siren.Action, values map[string]string) (*siren.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -209,7 +210,7 @@ func (c *Client) Do(ctx context.Context, a api.Action, values map[string]string)
 	return c.send(req)
 }
 
-func hasField(a api.Action, name string) bool {
+func hasField(a siren.Action, name string) bool {
 	for _, f := range a.Fields {
 		if f.Name == name {
 			return true
@@ -219,7 +220,7 @@ func hasField(a api.Action, name string) bool {
 }
 
 // Catalog is GET /actions: every action, with templated hrefs.
-func (c *Client) Catalog(ctx context.Context) ([]api.Action, error) {
+func (c *Client) Catalog(ctx context.Context) ([]siren.Action, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -230,7 +231,7 @@ func (c *Client) Catalog(ctx context.Context) ([]api.Action, error) {
 	return e.Actions, nil
 }
 
-func (c *Client) send(req *http.Request) (*api.Entity, error) {
+func (c *Client) send(req *http.Request) (*siren.Entity, error) {
 	req.Header.Set("Accept", "application/vnd.siren+json")
 	if c.source != "" {
 		req.Header.Set(api.SourceHeader, c.source)
@@ -247,7 +248,7 @@ func (c *Client) send(req *http.Request) (*api.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	var e api.Entity
+	var e siren.Entity
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	err = decoder.Decode(&e)

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -220,7 +221,7 @@ func TestPublicRemoteClientParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var capture api.Action
+	var capture siren.Action
 	for _, a := range catalog {
 		if a.Name == "capture" {
 			capture = a

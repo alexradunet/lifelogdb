@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -19,7 +19,7 @@ type tool struct {
 	name        string
 	description string
 	schema      map[string]any
-	action      *api.Action // nil for get
+	action      *siren.Action // nil for get
 }
 
 // instructions are what a model reads first about life.db and its tools, on the MCP server.
@@ -33,7 +33,7 @@ const instructions = "life.db is a personal life log: a journal of day pages (on
 // owner's actions are never an MCP tool (AGENTS.md). A tool name that two actions share is refused. get_day wraps the
 // action open-day (AGENTS.md: a shortcut of a surface wraps an action), so there is no get_day when open-day is not a
 // tool.
-func tools(actions []api.Action) ([]tool, error) {
+func tools(actions []siren.Action) ([]tool, error) {
 	seen := map[string]string{"get": "built-in tool get", "get_day": "built-in tool get_day"}
 	var list, day []tool // day: get_day, when open-day is a tool
 	for i := range actions {
@@ -67,7 +67,7 @@ func tools(actions []api.Action) ([]tool, error) {
 func toolName(action string) string { return strings.ReplaceAll(action, "-", "_") }
 
 // run calls a tool through the client with its arguments, as arguments gives them.
-func run(ctx context.Context, c *client.Client, t tool, args map[string]string) (*api.Entity, error) {
+func run(ctx context.Context, c *client.Client, t tool, args map[string]string) (*siren.Entity, error) {
 	if t.action != nil {
 		return c.Do(ctx, *t.action, args)
 	}
@@ -81,7 +81,7 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 }
 
 // inputSchema is a JSON Schema for an action's fields: numbers as numbers, everything else a string.
-func inputSchema(fields []api.Field) (map[string]any, error) {
+func inputSchema(fields []siren.Field) (map[string]any, error) {
 	props := map[string]any{}
 	req := []string{}
 	for _, f := range fields {

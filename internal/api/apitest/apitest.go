@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"lifelog/internal/api"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
@@ -52,8 +53,8 @@ func Remote(t testing.TB, h http.Handler, source string) *client.Client {
 // Must returns a function that gives the entity of a call of the client, or fails the test with the error of the
 // call: apitest.Must(t)(c.Get(ctx, "/")). Go gives the two values of a call only to a function with exactly these two
 // parameters, so the test comes first, in its own call.
-func Must(t testing.TB) func(*api.Entity, error) *api.Entity {
-	return func(e *api.Entity, err error) *api.Entity {
+func Must(t testing.TB) func(*siren.Entity, error) *siren.Entity {
+	return func(e *siren.Entity, err error) *siren.Entity {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
@@ -63,7 +64,7 @@ func Must(t testing.TB) func(*api.Entity, error) *api.Entity {
 }
 
 // Action returns the action of e with the name, or fails the test.
-func Action(t testing.TB, e *api.Entity, name string) api.Action {
+func Action(t testing.TB, e *siren.Entity, name string) siren.Action {
 	t.Helper()
 	for _, a := range e.Actions {
 		if a.Name == name {
@@ -71,11 +72,11 @@ func Action(t testing.TB, e *api.Entity, name string) api.Action {
 		}
 	}
 	t.Fatalf("no action %s in %v", name, e.Actions)
-	return api.Action{}
+	return siren.Action{}
 }
 
 // Href returns the href of the link of e with the rel, or "" when e has no such link.
-func Href(e *api.Entity, rel string) string {
+func Href(e *siren.Entity, rel string) string {
 	for _, l := range e.Links {
 		if slices.Contains(l.Rel, rel) {
 			return l.Href

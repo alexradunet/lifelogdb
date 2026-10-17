@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"testing"
 
-	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 )
@@ -58,20 +58,20 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 		}
 	}
 	// actionOf is the action with the name of the entity at href: the catalog for /actions.
-	actionOf := func(c *client.Client, href, name string) (api.Action, error) {
+	actionOf := func(c *client.Client, href, name string) (siren.Action, error) {
 		e, err := c.Get(ctx, href)
 		if err != nil {
-			return api.Action{}, err
+			return siren.Action{}, err
 		}
 		for _, a := range e.Actions {
 			if a.Name == name {
 				return a, nil
 			}
 		}
-		return api.Action{}, fmt.Errorf("no action %s at %s", name, href)
+		return siren.Action{}, fmt.Errorf("no action %s at %s", name, href)
 	}
-	do := func(href, name string, values map[string]string) func(*client.Client) (*api.Entity, error) {
-		return func(c *client.Client) (*api.Entity, error) {
+	do := func(href, name string, values map[string]string) func(*client.Client) (*siren.Entity, error) {
+		return func(c *client.Client) (*siren.Entity, error) {
 			a, err := actionOf(c, href, name)
 			if err != nil {
 				return nil, err
@@ -79,17 +79,17 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 			return c.Do(ctx, a, values)
 		}
 	}
-	get := func(href string) func(*client.Client) (*api.Entity, error) {
-		return func(c *client.Client) (*api.Entity, error) { return c.Get(ctx, href) }
+	get := func(href string) func(*client.Client) (*siren.Entity, error) {
+		return func(c *client.Client) (*siren.Entity, error) { return c.Get(ctx, href) }
 	}
-	record := func(value string) func(*client.Client) (*api.Entity, error) {
+	record := func(value string) func(*client.Client) (*siren.Entity, error) {
 		return do("/actions", "record", map[string]string{"metric": "Weight", "day": "2031-05-14", "value": value})
 	}
 
 	for _, step := range []struct {
 		name   string
 		before func(*core.Store) error // on each file, before the request
-		send   func(*client.Client) (*api.Entity, error)
+		send   func(*client.Client) (*siren.Entity, error)
 		status int               // the HTTP status of a refusal, 0 for none
 		want   map[string]string // properties of the answer, each as its JSON
 	}{
@@ -97,7 +97,7 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 			want: map[string]string{"title": `"Conformance"`, "body": `"A [[Link]]."`, "version": `"1"`}},
 		{name: "a write", send: do("/pages?title=Conformance", "save-body", map[string]string{"body": "Saved [[Other]]."}),
 			want: map[string]string{"body": `"Saved [[Other]]."`, "version": `"2"`}},
-		{name: "a file sent as multipart", send: func(c *client.Client) (*api.Entity, error) {
+		{name: "a file sent as multipart", send: func(c *client.Client) (*siren.Entity, error) {
 			a, err := actionOf(c, "/actions", "add-file")
 			if err != nil {
 				return nil, err
@@ -176,7 +176,7 @@ func TestOnlyTheRemoteClientUsesASocket(t *testing.T) {
 var instant = regexp.MustCompile(`"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z"`)
 
 // masked is the JSON of e with each instant replaced by the same mark.
-func masked(t *testing.T, e *api.Entity) string {
+func masked(t *testing.T, e *siren.Entity) string {
 	t.Helper()
 	b, err := json.Marshal(e)
 	if err != nil {
