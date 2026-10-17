@@ -80,14 +80,15 @@
 {{define "moodwords"}}{{with .}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{if eq (len .) 1}}{{with moodWord (index . 0)}} · {{.}}{{end}}{{end}}{{end}}{{end}}
 
 {{/* dayentry is a day page in a list: its date (with the year when it is not this year's), its first line and its
-     mood. It takes v (the view) and e (the entry: day, first_line, mood). */}}
-{{define "dayentry"}}{{$v := .v}}{{with .e}}<a class="entry" href="/days/{{.day}}"><span class="date">{{$v.Date .day}}</span><span class="first">{{.first_line}}</span><span class="meta">{{template "moodwords" .mood}}</span></a>{{end}}{{end}}
+     mood. It takes v (the view) and e (the entry: day, first_line, mood, picture); with cover set, an entry that has a
+     picture draws it first, as a row of a list does. */}}
+{{define "dayentry"}}{{$v := .v}}{{$cover := .cover}}{{with .e}}<a class="entry{{if and $cover .picture}} covered{{end}}" href="/days/{{.day}}"><span class="date">{{$v.Date .day}}</span>{{if $cover}}{{template "cover-picture" .}}{{end}}<span class="first">{{.first_line}}</span><span class="meta">{{template "moodwords" .mood}}</span></a>{{end}}{{end}}
 
 {{/* onthisday is the margin's group of the day pages of earlier years on this date, when there are any. It takes v
      (the view) and days. */}}
 {{define "onthisday"}}{{$v := .v}}{{with .days}}<section class="group" aria-label="On this day">
 <div class="panel-head"><h2>On this day</h2></div>
-<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $v "e" .)}}</li>{{end}}</ul>
+<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $v "e" . "cover" true)}}</li>{{end}}</ul>
 </section>{{end}}{{end}}
 
 

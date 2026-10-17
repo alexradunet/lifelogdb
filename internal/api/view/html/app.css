@@ -542,10 +542,10 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & .face-picture{display:grid; place-items:center; inline-size:32px; block-size:32px; border-radius:50%; object-fit:cover;
     background:var(--surface-deep); border:1px solid var(--edge); color:var(--text-muted)}}
 /* Any other row with a cover has it first, as a small square of the same size. */
-.entry.named.covered{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
+.entry.covered{grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
   & .cover-picture{display:block; inline-size:32px; block-size:32px; object-fit:cover; background:var(--surface-deep); border:1px solid var(--edge)}}
 /* In a narrow column the name keeps the line, and the mentions go under it. */
-@container column (max-width:487px){.entry.named:is(.face,.covered){grid-template-columns:32px minmax(0,1fr); row-gap:0;
+@container column (max-width:487px){.entry:is(.named.face,.covered){grid-template-columns:32px minmax(0,1fr); row-gap:0;
   & :is(.face-picture,.cover-picture){grid-row:span 2} & .meta{grid-column:2}}}
 
 /* The media list (docs/plans/110-the-media-list.md): the kinds as links under the head, the current one in the

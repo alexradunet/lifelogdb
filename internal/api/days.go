@@ -16,16 +16,18 @@ import (
 // recentDays is how many of the newest day pages the root shows.
 const recentDays = 5
 
-// recentDay is a day page as the root lists it: the day, the first line of its body, and its mood.
+// recentDay is a day page as the root lists it: the day, the first line of its body, its mood and the address of the
+// picture of its cover. Picture hides the id of the embedded entry, which has no JSON name.
 type recentDay struct {
 	core.DayEntry
-	Mood []float64 `json:"mood,omitempty"`
+	Mood    []float64 `json:"mood,omitempty"`
+	Picture string    `json:"picture,omitempty"`
 }
 
 // onThisDayMax is how many earlier years a day lists.
 const onThisDayMax = 10
 
-// withMoods adds to each day entry the day's moods.
+// withMoods adds to each day entry the day's moods, and the address of its picture.
 func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]recentDay, error) {
 	out := []recentDay{}
 	if len(entries) == 0 {
@@ -40,7 +42,7 @@ func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]rece
 		return nil, err
 	}
 	for _, d := range entries {
-		out = append(out, recentDay{DayEntry: d, Mood: moods[d.Day]})
+		out = append(out, recentDay{DayEntry: d, Mood: moods[d.Day], Picture: pictureHref(d.Picture)})
 	}
 	return out, nil
 }

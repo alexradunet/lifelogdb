@@ -226,7 +226,8 @@ func TestTheDayIsALeafAndItsMargin(t *testing.T) {
 }
 
 // TestTheDayAndHomeCarryOnThisDay: the day pages of earlier years on the month and day, the newest first, in the
-// property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt.
+// property and in the margin; none, an empty list and no group. The capture box carries its quiet prompt. A day page
+// with a cover names its picture, and the margin draws it first in the entry; a day page without one has none.
 func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -240,20 +241,29 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	for day, text := range map[string]string{older: "Two years ago.", old: "Four years ago.", dayOf(-1): "Yesterday."} {
 		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
+	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
+	file := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"),
+		map[string]string{"title": "Lake.jpg", "day": older}, map[string]string{"original": jpg}))
+	preview := apitest.Href(file, "preview")
 	for _, route := range []string{"/", "/days/" + fixedToday} {
 		var got []string
 		for _, x := range props(apitest.Must(t)(c.Get(t.Context(), route)))["on_this_day"].([]any) {
 			m := x.(map[string]any)
-			got = append(got, fmt.Sprintf("%v %v", m["day"], m["first_line"]))
+			got = append(got, fmt.Sprintf("%v %v picture=%v", m["day"], m["first_line"], str(m["picture"])))
 		}
-		if want := []string{older + " Two years ago.", old + " Four years ago."}; strings.Join(got, "|") != strings.Join(want, "|") {
+		if want := []string{older + " Two years ago. picture=" + preview, old + " Four years ago. picture="}; strings.Join(got, "|") != strings.Join(want, "|") {
 			t.Errorf("%s on_this_day = %q, want %q", route, got, want)
 		}
 		body := browse(t, h, route)
-		for _, w := range []string{`aria-label="On this day"`, `<a class="entry" href="/days/` + older + `">`, `placeholder="What happened? Who was there?"`} {
+		covered := `<a class="entry covered" href="/days/` + older + `"><span class="date">`
+		for _, w := range []string{`aria-label="On this day"`, covered, `<img class="cover-picture" src="` + preview + `" alt="" loading="lazy"><span class="first">Two years ago.</span>`,
+			`<a class="entry" href="/days/` + old + `">`, `placeholder="What happened? Who was there?"`} {
 			if !strings.Contains(body, w) {
 				t.Errorf("%s lacks %s", route, w)
 			}
+		}
+		if n := strings.Count(body, `class="cover-picture"`); n != 1 {
+			t.Errorf("%s draws %d cover pictures in all, want 1 (the day without a cover draws none)", route, n)
 		}
 	}
 }

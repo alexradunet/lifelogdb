@@ -104,11 +104,13 @@ The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create
 | `recent[].page_id` | integer | the day page's id |
 | `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker, the marks of emphasis, code and links, and the brackets of a wikilink cut (a link shows its label), an embed or an image left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
+| `recent[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
 | `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
 | `on_this_day[].day` | day | the day |
 | `on_this_day[].page_id` | integer | the day page's id |
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
+| `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
 
 ### actions
 
@@ -250,6 +252,7 @@ answers with this entity and a `result` of the sync shape; its field `mood` has 
 | `on_this_day[].page_id` | integer | the day page's id |
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
+| `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
 | `today` | day | this machine's local day |
 | `cover` | object | the day page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
 | `cover.id` | integer | |

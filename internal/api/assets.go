@@ -66,7 +66,7 @@ func styleEntity() *siren.Entity {
 			"journal": "### A walk in Lisbon\n\nI walked with [[Sam]] along the river. It was warm. #walk The weight was `71.0` kg.\n\n" +
 				"- Coffee at the corner\n- The old tram\n- Dinner at eight\n",
 			"on_this_day": []any{
-				map[string]any{"day": "2025-10-12", "first_line": "A walk with Sam", "mood": []any{4.0}},
+				map[string]any{"day": "2025-10-12", "first_line": "A walk with Sam", "mood": []any{4.0}, "picture": "/assets/icon.svg"},
 				map[string]any{"day": "2024-10-12", "first_line": "The first rain of the autumn", "mood": []any{3.0}},
 			},
 			"readings": []any{
