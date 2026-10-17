@@ -162,3 +162,17 @@ func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
 		}
 	}
 }
+
+// TestAMoodHasAWord: the view's word for each mood from 1 to 5, as a number or as the text of an option; any other
+// value has no word. The words are a view list, not a rule of the data.
+func TestAMoodHasAWord(t *testing.T) {
+	for in, want := range map[any]string{
+		float64(1): "awful", float64(2): "bad", float64(3): "okay", float64(4): "good", float64(5): "great",
+		"1": "awful", "5": "great", 3: "okay",
+		float64(0): "", float64(6): "", float64(2.5): "", "": "", "good": "", nil: "",
+	} {
+		if got := moodWord(in); got != want {
+			t.Errorf("moodWord(%v) = %q, want %q", in, got, want)
+		}
+	}
+}

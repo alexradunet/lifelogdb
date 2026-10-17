@@ -345,7 +345,7 @@ func TestDangerAndRowsReachTheForm(t *testing.T) {
 		{Name: "version", Type: "hidden", Title: "Version", Value: "3", Required: true}}}
 	capture := siren.Action{Name: "capture", Title: "Add to the day", Method: "POST", Href: "/days/2026-01-01/capture", Fields: []siren.Field{
 		{Name: "text", Type: "textarea", Title: "Entry (CommonMark)", Rows: 4},
-		{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}}
+		{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}}}
 	if got, _ := drawForm(t, tombstone); !strings.Contains(got, `<button class="danger">`) {
 		t.Errorf("a tombstone draws no danger button: %s", got)
 	}

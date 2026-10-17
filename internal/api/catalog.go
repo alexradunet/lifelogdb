@@ -68,7 +68,7 @@ var catalog = []spec{
 		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
 		Method:      "POST", Path: "/days/{day}/capture",
 		Fields: []siren.Field{path("day", "date", "Local day"), area("text", "Entry (CommonMark)", 4),
-			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}},
+			{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}},
 	},
 	{Name: "create-page", Title: "New page",
 		Description: "Create a page with a unique title (a valid file name) and a CommonMark body. category files it in that category page (D26) in the same write, making the category when it is new.",

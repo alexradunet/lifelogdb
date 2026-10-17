@@ -78,8 +78,8 @@ func TestTheMonthIsACalendar(t *testing.T) {
 
 	body := browse(t, h, "/months/2031-05")
 	for _, w := range []string{`<table class="calendar">`,
-		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3</span></a></td>`,
-		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">May day: a walk by the lake.</span><span class="meta">mood 4</span></a></td>`,
+		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3 · okay</span></a></td>`,
+		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">May day: a walk by the lake.</span><span class="meta">mood 4 · good</span></a></td>`,
 		`<td><a href="/days/2031-05-20"><span class="n">20</span></a></td>`,
 		`aria-label="Previous month, April 2031"`, `aria-label="Next month, June 2031"`, `action="/days/go"`} {
 		if !strings.Contains(body, w) {
@@ -198,7 +198,7 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 	for _, s := range []string{
 		// a cell: three items, each with a square, and the mood; a phone's squares
 		`<span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span><span class="item">Scan.pdf</span></span>`,
-		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4</span>`,
+		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4 · good</span>`,
 		`<span class="more">and 18 more</span>`,
 		// Day by day: a day a heading, each item a tag, a link to the thing and a note
 		`<h3><a href="/days/2031-05-14">`,

@@ -121,14 +121,21 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 
 	body := browse(t, h, "/days/"+fixedToday)
 	form := captureForm(t, body, "/days/"+fixedToday+"/capture")
-	for _, want := range []string{`<fieldset class="segmented"><legend>Mood 1-5</legend>`, `<input type="radio" name="mood" value="1">`,
-		`<input type="radio" name="mood" value="5">`, `<input type="hidden" name="back" value="/days/` + fixedToday + `">`} {
+	for _, want := range []string{`<fieldset class="segmented"><legend>Mood</legend>`,
+		`<label title="awful"><input type="radio" name="mood" value="1"><span aria-label="1, awful">1</span></label>`,
+		`<label title="okay"><input type="radio" name="mood" value="3"><span aria-label="3, okay">3</span></label>`,
+		`<label title="great"><input type="radio" name="mood" value="5"><span aria-label="5, great">5</span></label>`, `<input type="hidden" name="back" value="/days/` + fixedToday + `">`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the day's Capture lacks %s:\n%s", want, form)
 		}
 	}
 	if strings.Contains(form, `<select name="mood"`) || strings.Contains(form, " required") {
 		t.Errorf("the mood is a list, or is required:\n%s", form)
+	}
+	past := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+dayOf(-1))), "capture")
+	apitest.Must(t)(c.Do(t.Context(), past, map[string]string{"mood": "2"}))
+	if one := browse(t, h, "/days/"+dayOf(-1)); !strings.Contains(one, `<span class="mood" title="Mood">mood 2 · bad</span>`) {
+		t.Errorf("a day with one mood does not say its word:\n%s", one)
 	}
 	rec := submit(h, "/days/"+fixedToday+"/capture", url.Values{"text": {"From the browser."}, "mood": {"3"}, "back": {"/days/" + fixedToday}}, "")
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/days/"+fixedToday) {

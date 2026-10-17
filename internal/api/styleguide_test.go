@@ -37,10 +37,10 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	body := page[strings.LastIndex(page, "</style>"):] // the markup after the two sheets
 	for _, c := range []struct{ what, want string }{
 		{"leaf", `<a class="leaf" href="/months/2026-10" aria-label="Oct 2026, the calendar of the month"><span class="leaf-month">Oct 2026</span><span class="leaf-day">12</span></a>`},
-		{"mood", `<p class="specimen-title">Monday <span class="mood" title="Mood">mood 4</span></p>`},
+		{"mood", `<p class="specimen-title">Monday <span class="mood" title="Mood">mood 4 · good</span></p>`},
 		{"step", `<a class="button step" accesskey="[" href="/styleguide" rel="prev" aria-label="Previous day, Sun 11 Oct"><span aria-hidden="true">‹</span><span class="step-day">Sun 11 Oct</span></a>`},
 		{"form of capture", `<textarea name="text" rows="4" placeholder="What happened? Who was there?"></textarea>`},
-		{"form, a segmented field", `<fieldset class="segmented"><legend>Mood 1-5</legend>`},
+		{"form, a segmented field", `<fieldset class="segmented"><legend>Mood</legend><label title="awful"><input type="radio" name="mood" value="1"><span aria-label="1, awful">1</span></label>`},
 		{"form, a select", `<select name="kind"><option></option><option>page</option>`},
 		{"form, a flag", `<label><input type="checkbox" name="unfiled" value="1"><span>Only what is in no category</span></label>`},
 		{"form, folded fields", `<details class="more-fields"><summary>3 more fields</summary>`},
@@ -49,7 +49,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 		{"form, a field of page titles", `<input type="text" name="category" value="" list="create-person-category"><datalist id="create-person-category"><option value="Bloodwork"><option value="Sport"></datalist>`},
 		{"body-editor", "<details><summary>Edit the day page</summary>\n<small class=\"desc\">CommonMark."},
 		{"body-editor, its form", `<textarea name="body" rows="18" required>A walk in Lisbon</textarea>`},
-		{"onthisday", `<a class="entry" href="/days/2025-10-12"><span class="date">Sun 12 Oct 2025</span><span class="first">A walk with Sam</span><span class="meta">mood 4</span></a>`},
+		{"onthisday", `<a class="entry" href="/days/2025-10-12"><span class="date">Sun 12 Oct 2025</span><span class="first">A walk with Sam</span><span class="meta">mood 4 · good</span></a>`},
 		{"a tile of a day", `<div class="readings"><div class="reading-tile"><a class="name" href="/styleguide">weight</a>`},
 		{"reading-link of a tile", `<a class="reading" href="/measurements/1">71 <span class="unit">kg</span></a>`},
 		{"the trend of a tile", `aria-label="weight from 71.4 kg Tue 6 Oct to 71 kg 4 days ago · Mon 12 Oct"`},

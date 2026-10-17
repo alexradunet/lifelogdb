@@ -75,8 +75,9 @@
 {{/* weekdays is the header row of a calendar, Monday first: one letter a day when short, else three */}}
 {{define "weekdays"}}<thead><tr>{{if .}}<th scope="col" abbr="Monday">M</th><th scope="col" abbr="Tuesday">T</th><th scope="col" abbr="Wednesday">W</th><th scope="col" abbr="Thursday">T</th><th scope="col" abbr="Friday">F</th><th scope="col" abbr="Saturday">S</th><th scope="col" abbr="Sunday">S</th>{{else}}<th scope="col" abbr="Monday">Mon</th><th scope="col" abbr="Tuesday">Tue</th><th scope="col" abbr="Wednesday">Wed</th><th scope="col" abbr="Thursday">Thu</th><th scope="col" abbr="Friday">Fri</th><th scope="col" abbr="Saturday">Sat</th><th scope="col" abbr="Sunday">Sun</th>{{end}}</tr></thead>{{end}}
 
-{{/* moodwords are a day's moods in words, "mood 3, 4": each current reading, in the order it was recorded */}}
-{{define "moodwords"}}{{with .}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{end}}{{end}}
+{{/* moodwords are a day's moods in words, "mood 3, 4": each current reading, in the order it was recorded. One mood
+     also says its word, "mood 4 · good". */}}
+{{define "moodwords"}}{{with .}}mood {{range $i, $m := .}}{{if $i}}, {{end}}{{num $m}}{{end}}{{if eq (len .) 1}}{{with moodWord (index . 0)}} · {{.}}{{end}}{{end}}{{end}}{{end}}
 
 {{/* dayentry is a day page in a list: its date (with the year when it is not this year's), its first line and its
      mood. It takes v (the view) and e (the entry: day, first_line, mood). */}}
@@ -169,14 +170,14 @@
 {{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{.Button}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
-     options as a row of radio buttons, other options as a select, a textarea, or an input of the field's type. A
-     field of page titles with options is an input with a datalist of them (List), so the reader picks a title or
+     options as a row of radio buttons (the options of the field mood also carry their words), other options as a
+     select, a textarea, or an input of the field's type. A field of page titles with options is an input with a datalist of them (List), so the reader picks a title or
      types a new one. A select of an optional field starts empty, so the form sends no value that the reader did not
      pick. A required radio, textarea or input is marked required, so the browser does not send it empty, and an
      input with a pattern (formOf) only when its value matches. A form with a text area offers Preview
      (formView.Preview, drawn by form), which sends the form to /render in a new tab, so the words stay in the form. */}}
 {{define "field"}}{{if checkbox .Field}}<label><input type="checkbox" name="{{.Name}}" value="1"{{if eq (num .Value) "1"}} checked{{end}}{{if .Focus}} autofocus{{end}}><span>{{or .Title .Name}}</span></label>
-{{else if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}<label><input type="radio" name="{{$n}}" value="{{.}}"{{if eq . $v}} checked{{end}}{{if $req}} required{{end}}><span>{{.}}</span></label>{{end}}</fieldset>
+{{else if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}{{$o := .}}{{$w := ""}}{{if eq $n "mood"}}{{$w = moodWord $o}}{{end}}<label{{with $w}} title="{{.}}"{{end}}><input type="radio" name="{{$n}}" value="{{$o}}"{{if eq $o $v}} checked{{end}}{{if $req}} required{{end}}><span{{with $w}} aria-label="{{$o}}, {{.}}"{{end}}>{{$o}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if .Required}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>

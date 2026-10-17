@@ -115,6 +115,24 @@ func (c clock) timeHTML(s string) template.HTML {
 // nameWords is a property's name in words: "created_at" is "created at".
 func nameWords(name string) string { return strings.ReplaceAll(name, "_", " ") }
 
+// moodWord is the word for a mood from 1 to 5, or "" for any other value. The value is a number or the text of an
+// option. The words are a list for the view, not a rule of the data: the mood is a number from 1 to 5 (D6).
+func moodWord(v any) string {
+	switch Num(v) {
+	case "1":
+		return "awful"
+	case "2":
+		return "bad"
+	case "3":
+		return "okay"
+	case "4":
+		return "good"
+	case "5":
+		return "great"
+	}
+	return ""
+}
+
 // Count says a number and its noun, in the form for that number: "0 readings", "1 reading", "3 more pages". The
 // number is a JSON number (a float64) or a length (an int), written in full (Num); any other value is 0. A site that
 // has its own words for 0 ("no recordings") says them before it calls Count.
