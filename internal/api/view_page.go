@@ -212,6 +212,17 @@ func pageView(e *Entity, f facts, rf *refusal) (*view, error) {
 	return v, nil
 }
 
+// draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
+// call of the view that the API makes: f are the facts of the page, and rf is the refused form that the page shows,
+// nil for none.
+func draw(e *Entity, f facts, rf *refusal) ([]byte, error) {
+	v, err := pageView(e, f, rf)
+	if err != nil {
+		return nil, err
+	}
+	return htmlOf(v)
+}
+
 // templateOf names the template that draws an entity: the first of its classes that has one, else "generic".
 func templateOf(e *Entity) string {
 	for _, c := range e.Class {

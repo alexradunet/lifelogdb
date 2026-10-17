@@ -37,12 +37,14 @@ type calendarItem struct {
 // them all. An import can write thousands of pages on one day.
 const dayPages = 20
 
-// The layouts of a day and a month in words.
+// The layouts of a day in words.
 const (
 	layoutDate     = "Mon 2 Jan"
 	layoutDateYear = "Mon 2 Jan 2006"
-	layoutMonth    = "January 2006"
 )
+
+// layoutMonth is the layout of a month in words.
+const layoutMonth = "January 2006"
 
 // monthOf parses a month, YYYY-MM; ok is false for anything else.
 func monthOf(s string) (time.Time, bool) {

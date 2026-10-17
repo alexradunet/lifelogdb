@@ -393,11 +393,7 @@ func pageAnswer(r *http.Request, status int, e *Entity, fr frame) (int, []byte) 
 			f.back = ref.RequestURI()
 		}
 	}
-	v, err := pageView(e, f, fr.refused)
-	var b []byte
-	if err == nil {
-		b, err = htmlOf(v)
-	}
+	b, err := draw(e, f, fr.refused)
 	if err != nil {
 		logFault(r, "the view "+templateOf(e)+" cannot be drawn", err)
 		return http.StatusInternalServerError, []byte(drawFailed)
