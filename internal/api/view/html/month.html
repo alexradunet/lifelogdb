@@ -1,7 +1,7 @@
 {{/* The calendar (docs/plans/092-the-app-shell.md): the weeks of a month, Monday first. A day with a page is tinted,
      with its first line; today is framed; each day opens its day view. Every other thing that names a day is an item
      of it (docs/plans/101-the-calendar-holds-every-dated-thing.md): a cell shows three, with a square each, then
-     "and N more", the mood and the readings; a phone's cell shows only the squares. Under the
+     "and N more", then the mood; a phone's cell shows only the squares. Under the
      calendar, Day by day links each item to its own page. */}}
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
@@ -19,7 +19,7 @@
 <tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written{{if .picture}} pictured{{end}}"{{end}}{{if eq .day $.Today}} aria-current="date"{{end}}><a href="/days/{{.day}}">{{with .picture}}<img class="cell-cover" src="{{.}}" alt="" loading="lazy">{{end}}<span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}
 {{- with .items}}<span class="items">{{range upTo . 3}}{{$w := calItem .}}<span class="item">{{.title}}{{with $w.Word}} <small>{{.}}</small>{{end}}</span>{{end}}</span><span class="marks" aria-hidden="true">{{range upTo . 4}}<i></i>{{end}}</span>{{end}}
 {{- with beyond .items 3 .more_pages}}<span class="more">and {{.}} more</span>{{end}}
-{{- if or .mood .readings}}<span class="meta">{{with .mood}}{{template "moodwords" .}}{{end}}{{if and .mood .readings}} · {{end}}{{with .readings}}{{count . "reading" "readings"}}{{end}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
+{{- with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
 {{end}}</tbody></table></div>
 
 {{$agenda := .AgendaDays}}

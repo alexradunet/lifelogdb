@@ -196,9 +196,9 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 
 	body := browse(t, h, "/months/2031-05")
 	for _, s := range []string{
-		// a cell: three items, each with a square, the mood and the readings; a phone's squares
+		// a cell: three items, each with a square, and the mood; a phone's squares
 		`<span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span><span class="item">Scan.pdf</span></span>`,
-		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4 · 1 reading</span>`,
+		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4</span>`,
 		`<span class="more">and 18 more</span>`,
 		// Day by day: a day a heading, each item a tag, a link to the thing and a note
 		`<h3><a href="/days/2031-05-14">`,
@@ -210,6 +210,10 @@ func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
 		if !strings.Contains(body, s) {
 			t.Errorf("the calendar lacks %s", s)
 		}
+	}
+	// A cell says the mood, not how many readings the day has: 14 May has one reading besides the mood.
+	if strings.Contains(body, "1 reading") {
+		t.Error("a cell of the calendar counts readings")
 	}
 
 	// A month with nothing says so: a fresh file's.

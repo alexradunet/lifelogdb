@@ -318,13 +318,18 @@ func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading,
 }
 
 // ReadingsByDay counts the current readings of each day from from through through, both included: the readings
-// that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all. A day without
-// one is absent.
+// that Series gives, for all metrics. A corrected reading counts once, and a retracted one not at all. The readings
+// of a tombstoned metric do not count, as they do not in Moods. A day without one is absent.
 func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[string]int, error) {
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
-	return groupCounts(s.DB.R.QueryContext(ctx, `SELECT day, count(*) FROM measurement_values WHERE day BETWEEN ? AND ? GROUP BY day`, from, through))
+	return groupCounts(s.DB.R.QueryContext(ctx, `
+		SELECT me.day, count(*)
+		  FROM measurement_values me
+		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
+		 WHERE me.day BETWEEN ? AND ?
+		 GROUP BY me.day`, from, through))
 }
 
 // Measurement reads one row of the append-only table, current or not, and what corrected it.

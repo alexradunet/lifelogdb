@@ -531,8 +531,8 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 
 // TestReadingsByDayCountsTheCurrentReadingsOfAWindow: the readings of all metrics together (the mood of a capture, a
 // weight, steps). A correction replaces its reading, so its day counts it once, and a retracted reading does not
-// count. The bounds are both included, and a day with no reading is absent. A sum of the counts is the count of the
-// window that the year page shows.
+// count. A tombstoned metric has no reading in the count, as it has none in Moods. The bounds are both included, and a
+// day with no reading is absent. A sum of the counts is the count of the window that the year page shows.
 func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	s := fresh(t)
 	mood := 4.0
@@ -565,6 +565,20 @@ func TestReadingsByDayCountsTheCurrentReadingsOfAWindow(t *testing.T) {
 	record("steps", "2031-05-16", 900)
 	record("weight", "2031-05-31", 72)
 	record("weight", "2031-06-01", 77)
+	// A metric that is tombstoned: its readings stay in the file but not in the count (14 May would count 4, and
+	// 20 May would appear).
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "scrap", Unit: "n"}); err != nil {
+		t.Fatal(err)
+	}
+	record("scrap", "2031-05-14", 1)
+	record("scrap", "2031-05-20", 2)
+	var scrap int64
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT entity_id FROM entity_names WHERE name_key = 'scrap'`).Scan(&scrap); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", scrap); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, tc := range []struct {
 		from, through string
