@@ -72,7 +72,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
   to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
   list. A value that is not a plain path is ignored, and a JSON client never follows it
-  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
+  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). A form with an id sends it in `form` (not a field of any
+  action either), so a page that draws one action in several forms (New metric) shows a refusal in the form that
+  was sent and in no other.
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a flag,
   the options 0 and 1, one checkbox that sends 1 or nothing; a field of 2 to 5 short options a `fieldset` of radio
   buttons; a `pages` field with `options` a text input with a `datalist` of those titles, so the reader can also type

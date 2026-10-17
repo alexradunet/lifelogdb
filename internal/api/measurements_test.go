@@ -494,15 +494,20 @@ func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
 		t.Errorf("Weight's readings %v, want 80.5 on %s", weight, fixedToday)
 	}
 
-	// A refused form opens the fold again: each form holds what was sent (the habit keeps no unit), and the alert
-	// describes each. The kind is a word of the page, which no form sends: the fold opens on a number.
+	// A refused form opens the fold again on its own kind. Each form sends its id (form), so the page knows which one
+	// was sent: only that form holds what it sent, and only it is described by the alert.
 	submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-5"}}), "")
 	rec = submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-10"}, "category": {"Mind"}}), "")
 	body := rec.Body.String()
-	if rec.Code != http.StatusConflict || !strings.Contains(body, `id="new-metric" open>`) || strings.Count(body, `<input type="text" name="unit" value="1-10"`) != 2 ||
-		strings.Count(body, `<input type="text" name="category" value="Mind"`) != 3 || strings.Count(body, `action="/metrics" aria-describedby="refused"`) != 3 ||
-		!strings.Contains(body, `<form id="new-habit" method="POST" action="/metrics" aria-describedby="refused" class="kind-habit">`+"\n"+`<input type="hidden" name="unit" value="">`) {
-		t.Errorf("a refused New metric: %d %.600s", rec.Code, body)
+	score := regexp.MustCompile(`(?s)<form id="new-score".*?</form>`).FindString(body)
+	if rec.Code != http.StatusConflict || !strings.Contains(body, `id="new-metric" open>`) ||
+		!strings.Contains(body, `<input type="radio" name="new-kind" value="number"><span>A number</span></label><label><input type="radio" name="new-kind" value="score" checked>`) ||
+		!strings.Contains(score, `<form id="new-score" method="POST" action="/metrics" aria-describedby="refused" class="kind-score">`) ||
+		!strings.Contains(score, `name="name" value="Mood"`) || !strings.Contains(score, `name="unit" value="1-10"`) || !strings.Contains(score, `name="category" value="Mind"`) ||
+		strings.Count(body, "aria-describedby") != 1 || strings.Count(body, `name="name" value="Mood"`) != 1 || strings.Count(body, `name="unit" value="1-10"`) != 1 ||
+		strings.Count(body, `name="category" value="Mind"`) != 1 ||
+		!strings.Contains(body, `<form id="new-habit" method="POST" action="/metrics" class="kind-habit">`+"\n"+`<input type="hidden" name="unit" value="">`) {
+		t.Errorf("a refused New metric: %d %.600s\nthe score form: %s", rec.Code, body, score)
 	}
 }
 

@@ -67,9 +67,9 @@ func TestAPageThatCannotBeDrawnNamesNoCause(t *testing.T) {
 }
 
 // TestPageViewTakesTheRefusalAsAnArgument: the view of a page is a function of its entity, its facts and the refusal
-// that it shows, and of nothing else. The refused action holds what its form sent and is marked; every action takes
-// no focus, and the page's ?new= opens no form. With no refusal, ?new= opens its form, filled from the query. The
-// entity does not change.
+// that it shows, and of nothing else. The refused action is marked with what its form sent, and its form holds it;
+// every action takes no focus, and the page's ?new= opens no form. With no refusal, ?new= opens its form, filled from
+// the query. The entity does not change.
 func TestPageViewTakesTheRefusalAsAnArgument(t *testing.T) {
 	e := &Entity{Class: []string{"page"}, Title: "Diet", Properties: map[string]any{"id": 4}, Actions: []Action{
 		{Name: "save-body", Method: "POST", Href: "/pages/4/body", Fields: []Field{{Name: "body", Type: "textarea", Value: "v1"}, {Name: "version", Type: "hidden", Value: "3"}}},
@@ -94,8 +94,11 @@ func TestPageViewTakesTheRefusalAsAnArgument(t *testing.T) {
 		v.Refused.Words != "Not saved. The page changed since you opened it." || v.Refused.Danger || v.Sent.Get("other") != "x" {
 		t.Errorf("refused %+v, sent %v: want the alert of the refusal and what the form sent", v.Refused, v.Sent)
 	}
-	if save := v.Action("save-body"); !save.refused || !save.noFocus || save.asked || save.Fields[0].Value != "my draft" || len(save.Fields) != 2 {
+	if save := v.Action("save-body"); !save.refused || !save.noFocus || save.asked || save.sent.Get("body") != "my draft" || len(save.Fields) != 2 {
 		t.Errorf("the refused action: %+v", save)
+	}
+	if f, err := formOf(v.Action("save-body")); err != nil || !f.Refused || len(f.Shown) != 1 || f.Shown[0].Value != "my draft" || len(f.Hidden) != 1 || f.Hidden[0].Value != "3" {
+		t.Errorf("the form of the refused action: %+v, %v", f, err)
 	}
 	if rename := v.Action("rename"); rename.refused || !rename.noFocus || rename.asked || rename.Fields[0].Value != nil {
 		t.Errorf("an action that was not refused: %+v", rename)

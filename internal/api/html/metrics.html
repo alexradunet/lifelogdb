@@ -120,15 +120,19 @@
 {{/* new-metric is the New metric fold of /metrics (docs/plans/113-new-metric-on-metrics.md): "What do you record?"
      switches three forms of register-metric with CSS, with no script. A number requires its unit, a score its range
      as lo-hi (a pattern), so the browser does not send them empty, and done or not done sends no unit. Each form has
-     an id, so each has a datalist of its own. ?new=register-metric
-     opens the fold, and a query parameter that names a field fills it in (?category=). A refused form opens the fold
-     again, each form filled with what it sent. It takes the action; nothing is drawn without it. */}}
+     an id, so each has a datalist of its own. ?new=register-metric opens the fold, and a query parameter that names
+     a field fills it in (?category=). A refused form opens the fold again on its own kind, filled with what it sent:
+     each form sends its id, so the page knows which one was sent (formOf). It takes the action; nothing is drawn
+     without it. */}}
 {{define "new-metric"}}{{with .}}{{$number := form . "id" "new-number" "class" "kind-number" "button" "Create" "back" "/metrics" "required" "unit" "placeholder" "name=Weight, Savings" "placeholder" "unit=kg, EUR, bpm" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
-<details class="action new-metric" id="new-metric"{{if or $number.Refused $number.Asked}} open{{end}}><summary class="button">{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary>
+{{- $score := form . "id" "new-score" "class" "kind-score" "button" "Create" "back" "/metrics" "autofocus" "" "required" "unit" "pattern" "unit=[0-9]+-[0-9]+" "placeholder" "name=Mood, Sleep quality" "placeholder" "unit=1-5" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
+{{- $habit := form . "id" "new-habit" "class" "kind-habit" "button" "Create" "back" "/metrics" "autofocus" "" "unit" "" "placeholder" "name=Walk, No sugar" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial"}}
+{{- $kind := "number"}}{{if not $number.Refused}}{{if $score.Refused}}{{$kind = "score"}}{{else if $habit.Refused}}{{$kind = "habit"}}{{end}}{{end}}
+<details class="action new-metric" id="new-metric"{{if or $number.Refused $score.Refused $habit.Refused $number.Asked}} open{{end}}><summary class="button">{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary>
 <div class="action-form"><fieldset class="segmented"><legend>What do you record?</legend>
-<label><input type="radio" name="new-kind" value="number" checked><span>A number</span></label><label><input type="radio" name="new-kind" value="score"><span>A score</span></label><label><input type="radio" name="new-kind" value="habit"><span>Done or not done</span></label></fieldset>
+<label><input type="radio" name="new-kind" value="number"{{if eq $kind "number"}} checked{{end}}><span>A number</span></label><label><input type="radio" name="new-kind" value="score"{{if eq $kind "score"}} checked{{end}}><span>A score</span></label><label><input type="radio" name="new-kind" value="habit"{{if eq $kind "habit"}} checked{{end}}><span>Done or not done</span></label></fieldset>
 <p class="desc">A unit never changes: a number has a unit (kg), a score has a range (1-5), and done or not done (1 or 0 a day) has no unit.</p>
 {{template "form" $number}}
-{{template "form" (form . "id" "new-score" "class" "kind-score" "button" "Create" "back" "/metrics" "autofocus" "" "required" "unit" "pattern" "unit=[0-9]+-[0-9]+" "placeholder" "name=Mood, Sleep quality" "placeholder" "unit=1-5" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial")}}
-{{template "form" (form . "id" "new-habit" "class" "kind-habit" "button" "Create" "back" "/metrics" "autofocus" "" "unit" "" "placeholder" "name=Walk, No sugar" "placeholder" "note=What it measures, and how" "placeholder" "category=Bloodwork, Sport, Financial")}}
+{{template "form" $score}}
+{{template "form" $habit}}
 </div></details>{{end}}{{end}}

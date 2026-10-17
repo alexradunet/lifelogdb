@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -249,6 +250,50 @@ func TestAnEmptyAutofocusKeepsTheFocusOut(t *testing.T) {
 		}
 		if f.Focus != tc.want {
 			t.Errorf("options %q: the focus is in %q, want %q", tc.opts, f.Focus, tc.want)
+		}
+	}
+}
+
+// TestARefusalFillsTheFormThatWasSent: of the forms of a refused action, the form that was sent is refused: it holds
+// what it sent and the alert describes it. A form with an id is that form only when the refusal sent its id (form); a
+// form with no id, or a refusal that sent no id, is that form too. A sent file is never drawn back, and no form of a
+// page that shows a refusal takes the focus.
+func TestARefusalFillsTheFormThatWasSent(t *testing.T) {
+	refusal := func(sent url.Values) *shownAction {
+		return &shownAction{Action: action("register-metric", nil, nil), refused: true, sent: sent, noFocus: true}
+	}
+	byScore := refusal(url.Values{"form": {"new-score"}, "name": {"Mood"}, "unit": {"1-10"}})
+	for _, tc := range []struct {
+		what string
+		c    *shownAction
+		opts []string
+		want bool
+	}{
+		{"the form that was sent", byScore, []string{"id", "new-score"}, true},
+		{"another form of the action", byScore, []string{"id", "new-number"}, false},
+		{"a form with no id", byScore, nil, true},
+		{"a refusal that sent no id", refusal(url.Values{"name": {"Mood"}, "unit": {"1-10"}}), []string{"id", "new-number"}, true},
+	} {
+		f, err := formOf(tc.c, tc.opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		filled := map[string]any{}
+		for _, fd := range f.Shown {
+			filled[fd.Name] = fd.Value
+		}
+		if f.Refused != tc.want || (filled["name"] == "Mood" && filled["unit"] == "1-10") != tc.want || f.Focus != "" {
+			t.Errorf("%s: refused %v, fields %v, focus %q; want refused and filled %v, no focus", tc.what, f.Refused, filled, f.Focus, tc.want)
+		}
+	}
+	file := &shownAction{Action: action("add-file", nil, nil), refused: true, sent: url.Values{"title": {"Scan"}, "original": {"scan.jpg"}}}
+	f, err := formOf(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fd := range f.Shown {
+		if (fd.Name == "title" && fd.Value != "Scan") || (fd.Name == "original" && fd.Value != nil) {
+			t.Errorf("a refused add-file draws %s with %v: want the title it sent, and no file", fd.Name, fd.Value)
 		}
 	}
 }
