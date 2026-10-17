@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -173,6 +174,8 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if err := r.ParseForm(); err != nil || !p.matches(r.PostForm.Get("token")) {
+		// One line for the owner, who reads the log: a guess shows there. Never the token that was sent, or the body.
+		log.Printf("lifelog: %s %s: the token does not match", r.Method, r.URL.Path)
 		http.Redirect(w, r, "/login?failed=1", http.StatusSeeOther)
 		return
 	}

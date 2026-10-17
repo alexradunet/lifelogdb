@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strings"
 
 	"lifelog/internal/api/siren"
@@ -156,7 +157,7 @@ func (h *server) mount(m *http.ServeMux, cat []spec, handlers map[string]actionF
 
 func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		e, err := f(r)
+		e, err := guarded(f, r)
 		status := http.StatusOK
 		var rd redirect
 		switch {
@@ -190,6 +191,22 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 		}
 		answer(w, r, status, e, frame{shell: h.s})
 	}
+}
+
+// guarded runs the handler f of a route and turns a panic of it into an error. serve writes nothing before f returns,
+// so the answer of that error, the 500 entity, can still be sent whole, and errorEntity logs the cause with the route
+// (logFault). Without this, net/http would drop the connection and the owner would see no line for the route.
+// http.ErrAbortHandler is the standard way to end a response on purpose: it goes on up.
+func guarded(f func(*http.Request) (*siren.Entity, error), r *http.Request) (e *siren.Entity, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			if p == http.ErrAbortHandler {
+				panic(p)
+			}
+			e, err = nil, fmt.Errorf("panic: %v\n%s", p, debug.Stack())
+		}
+	}()
+	return f(r)
 }
 
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
