@@ -77,3 +77,7 @@ The two comments inside `CREATE TABLE entities` and `CREATE TABLE people` stay, 
 change. The file stores the text of each `CREATE` statement with its comments in `sqlite_schema`. A change of a
 comment is a change of that stored text, and the owner's file then needs its tables rebuilt or its stored schema
 edited. A change of a row needs only an `UPDATE`. Plan 123 applies the three rows to the owner's file.
+
+2026-10-17: the owner decided to fix the two comments too ("Fix the old comments also").
+[Plan 124](../plans/124-true-comments-in-the-file.md) changes them in [schema.sql](../schema/schema.sql) and in the
+owner's file.
