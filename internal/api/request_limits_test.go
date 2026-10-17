@@ -52,9 +52,21 @@ func limitsHandler(t *testing.T) (http.Handler, func()) {
 	}
 }
 
+// keptBody is the body of the page in the answer w.
+func keptBody(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	var page struct {
+		Properties struct{ Body string } `json:"properties"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+		t.Fatalf("the answer: %v", err)
+	}
+	return page.Properties.Body
+}
+
 // TestRequestBufferLimits: a JSON or URL-encoded request has at most 20 MiB. The limit is of the request, not of a
-// field, so blanks between two tokens bring a request to the limit, and the page that it saves is small: a body of
-// 20 MiB would cost seconds in the save, not in the limit.
+// field. One byte under and one byte over the limit, blanks between two tokens fill the request. At the limit, the
+// body of the page fills it, and the page keeps the whole body. The framing is the same 26 bytes.
 func TestRequestBufferLimits(t *testing.T) {
 	h, unchanged := limitsHandler(t)
 	head, tail := `{"title":"Long",`, `"body":""}`
@@ -63,6 +75,9 @@ func TestRequestBufferLimits(t *testing.T) {
 		boundaryHandler, boundaryUnchanged := limitsHandler(t)
 		n := int64(20<<20) - framing + delta
 		body := io.MultiReader(strings.NewReader(head), blanks(n), strings.NewReader(tail))
+		if delta == 0 {
+			body = io.MultiReader(strings.NewReader(`{"title":"Long","body":"`), generated(n), strings.NewReader(`"}`))
+		}
 		r := httptest.NewRequest("POST", "/pages", body)
 		r.Header.Set("Content-Type", "application/json")
 		r.TransferEncoding = []string{"chunked"}
@@ -77,6 +92,11 @@ func TestRequestBufferLimits(t *testing.T) {
 		}
 		if w.Code != want {
 			t.Fatalf("size %d: %d want %d: %.200s", n+framing, w.Code, want, w.Body.String())
+		}
+		if delta == 0 {
+			if got := keptBody(t, w); got != strings.Repeat("x", int(n)) {
+				t.Fatalf("the body at the limit: %d bytes, want %d bytes of x", len(got), n)
+			}
 		}
 	}
 	defer unchanged()
@@ -105,7 +125,9 @@ func TestRequestBufferLimits(t *testing.T) {
 }
 
 func TestMultipartAggregateLimits(t *testing.T) {
-	for _, kind := range []string{"aggregate", "unique", "text-at", "text-over", "parts", "original", "preview", "large-original"} {
+	// fields is the length of the text of the three fields that come first: title, sha256 and mime.
+	fields := int64(len("Synthetic") + 64 + len("application/octet-stream"))
+	for _, kind := range []string{"aggregate", "unique", "body-at", "text-at", "text-over", "parts", "original", "preview", "large-original"} {
 		t.Run(kind, func(t *testing.T) {
 			h, unchanged := limitsHandler(t)
 			pr, pw := io.Pipe()
@@ -119,15 +141,23 @@ func TestMultipartAggregateLimits(t *testing.T) {
 				}
 				mw.WriteField("mime", "application/octet-stream")
 				switch kind {
+				case "body-at":
+					// The body fills the text of the request to the limit, and the page keeps the whole body.
+					p, e := mw.CreateFormField("body")
+					if e != nil {
+						return
+					}
+					if _, e = io.Copy(p, generated(16<<20-fields)); e != nil {
+						return
+					}
 				case "text-at", "text-over":
 					// An unknown field fills the text of the request to the limit, less a short body. The body comes
-					// last: it is kept only when the text of all the fields is at most 16 MiB. A long body would cost
-					// seconds in the save, not in the limit.
+					// last: it is kept only when the text of all the fields is at most 16 MiB.
 					p, e := mw.CreateFormField("unknown")
 					if e != nil {
 						return
 					}
-					n := int64(16<<20) - int64(len("Synthetic")+64+len("application/octet-stream")+len("the text"))
+					n := 16<<20 - fields - int64(len("the text"))
 					if kind == "text-over" {
 						n++
 					}
@@ -182,7 +212,7 @@ func TestMultipartAggregateLimits(t *testing.T) {
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
 			want := 413
-			if kind == "large-original" || kind == "text-at" {
+			if kind == "large-original" || kind == "body-at" || kind == "text-at" {
 				want = 200
 			} // an original larger than the preview and JSON budgets still succeeds
 			if want == 413 {
@@ -191,12 +221,14 @@ func TestMultipartAggregateLimits(t *testing.T) {
 			if w.Code != want {
 				t.Fatalf("%d want %d: %.200s", w.Code, want, w.Body.String())
 			}
-			if kind == "text-at" {
-				var page struct {
-					Properties struct{ Body string } `json:"properties"`
+			switch kind {
+			case "body-at":
+				if got := keptBody(t, w); got != strings.Repeat("x", int(16<<20-fields)) {
+					t.Fatalf("the body that fills the text: %d bytes, want %d bytes of x", len(got), 16<<20-fields)
 				}
-				if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil || page.Properties.Body != "the text" {
-					t.Fatalf("the body at the limit: %q, %v; want it kept", page.Properties.Body, err)
+			case "text-at":
+				if got := keptBody(t, w); got != "the text" {
+					t.Fatalf("the body at the limit: %q; want it kept", got)
 				}
 			}
 		})
