@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -101,40 +102,47 @@ func asciiUpper(s string) string {
 func Candidates(body string) []string {
 	var out []string
 	for _, run := range textRuns(body, true) {
-		type hit struct {
-			pos   int
-			title string
-		}
-		var found []hit
-		blanked := []rune(run)
-		for _, m := range wiki.FindAllStringSubmatchIndex(run, -1) {
-			title, _, _ := strings.Cut(run[m[2]:m[3]], "|")
-			found = append(found, hit{m[0], strings.Trim(title, " ")})
-		}
-		// blank the wikilinks (by rune position) so their text is not re-read for tags
-		runeStarts := runeIndex(run)
-		for _, m := range wiki.FindAllStringIndex(run, -1) {
-			for i := runeStarts[m[0]]; i < runeStarts[m[1]]; i++ {
-				blanked[i] = ' '
+		links := wiki.FindAllStringSubmatchIndex(run, -1)
+		// One walk over the run blanks the wikilinks, so that their text is not read again for tags. It also finds
+		// the position of each wikilink in characters, which is the unit of a tag's position.
+		blanked := make([]rune, 0, utf8.RuneCountInString(run))
+		linkAt := make([]int, len(links))
+		k := 0
+		for b, r := range run {
+			for k < len(links) && b >= links[k][1] {
+				k++
 			}
+			if k < len(links) && b >= links[k][0] {
+				if b == links[k][0] {
+					linkAt[k] = len(blanked)
+				}
+				r = ' '
+			}
+			blanked = append(blanked, r)
 		}
+		// The wikilinks and the tags are each in order of position: a merge puts them in one order.
+		k = 0
 		for _, t := range scanTags(blanked) {
 			if !namesPage(t.tag) {
 				continue
 			}
-			found = append(found, hit{runeToByte(run, t.pos), t.tag})
-		}
-		// stable sort by position (insertion sort; runs are short)
-		for i := 1; i < len(found); i++ {
-			for j := i; j > 0 && found[j].pos < found[j-1].pos; j-- {
-				found[j], found[j-1] = found[j-1], found[j]
+			for ; k < len(links) && linkAt[k] < t.pos; k++ {
+				out = append(out, linkTitle(run, links[k]))
 			}
+			out = append(out, t.tag)
 		}
-		for _, h := range found {
-			out = append(out, h.title)
+		for ; k < len(links); k++ {
+			out = append(out, linkTitle(run, links[k]))
 		}
 	}
 	return out
+}
+
+// linkTitle is the title of the wikilink at m, a match of wiki in run: the text before a |, without the spaces at
+// its ends.
+func linkTitle(run string, m []int) string {
+	title, _, _ := strings.Cut(run[m[2]:m[3]], "|")
+	return strings.Trim(title, " ")
 }
 
 // Targets returns the distinct valid targets as (key, first valid spelling) pairs in order, skipping ownKey,
@@ -251,28 +259,6 @@ func allDigits(s string) bool {
 		}
 	}
 	return true
-}
-
-func runeIndex(s string) map[int]int {
-	m := map[int]int{}
-	i := 0
-	for b := range s {
-		m[b] = i
-		i++
-	}
-	m[len(s)] = i
-	return m
-}
-
-func runeToByte(s string, pos int) int {
-	i := 0
-	for b := range s {
-		if i == pos {
-			return b
-		}
-		i++
-	}
-	return len(s)
 }
 
 // textRuns returns the CommonMark text of a body as runs of plain text, each NFC-normalised. A run is a maximal

@@ -1,8 +1,10 @@
 package text
 
 import (
+	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -175,6 +177,41 @@ func TestTagAtAgreesWithCandidates(t *testing.T) {
 		if want := Candidates(in); strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("%q: TagAt finds %q, Candidates %q", in, got, want)
 		}
+	}
+}
+
+// TestCandidatesAllocatesAFewBytesForEachByteOfALongRun: a save takes a body of up to 20 MiB, and a body with no
+// break is one run of text. Candidates holds the run as characters (4 bytes each), and the parse copies the text a
+// few times. No other value can grow with each character of the run: the bound is 16 bytes for each byte of the body.
+func TestCandidatesAllocatesAFewBytesForEachByteOfALongRun(t *testing.T) {
+	const half = 2 << 20
+	body := "#start " + strings.Repeat("x", half) + " #middle " + strings.Repeat("y", half) + " #end"
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	got := Candidates(body)
+	runtime.ReadMemStats(&after)
+	if want := []string{"start", "middle", "end"}; !slices.Equal(got, want) {
+		t.Fatalf("Candidates of the long run: %q, want %q", got, want)
+	}
+	if n, limit := after.TotalAlloc-before.TotalAlloc, uint64(16*len(body)); n > limit {
+		t.Errorf("Candidates of a run of %d bytes allocated %d bytes (%.1f for each byte), want at most %d", len(body), n, float64(n)/float64(len(body)), limit)
+	}
+}
+
+// TestCandidatesKeepsTheOrderOfManyWikilinksAndTagsInOneRun: the wikilinks and the tags of a run come out in the
+// order of the text. The titles have characters of two and three bytes, so a position in bytes and a position in
+// characters are not the same. A tag can touch a wikilink on each side. A tag of digits and a # just before a
+// wikilink name no page. A # in a wikilink is a part of its title.
+func TestCandidatesKeepsTheOrderOfManyWikilinksAndTagsInOneRun(t *testing.T) {
+	var body strings.Builder
+	var want []string
+	for i := range 100 {
+		fmt.Fprintf(&body, "[[Lé %d|日本]] #tü%d #%d [[Ök #%d]]#ä%d[[Ü%d]] #[[Ö%d]] ", i, i, i, i, i, i, i)
+		want = append(want, fmt.Sprint("Lé ", i), fmt.Sprint("tü", i), fmt.Sprint("Ök #", i), fmt.Sprint("ä", i),
+			fmt.Sprint("Ü", i), fmt.Sprint("Ö", i))
+	}
+	if got := Candidates(body.String()); !slices.Equal(got, want) {
+		t.Errorf("Candidates of one run of %d wikilinks and tags:\n got %q\nwant %q", len(want), got, want)
 	}
 }
 
