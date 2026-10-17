@@ -59,12 +59,16 @@ func (s *Store) dryRun(ctx context.Context, source string, fn func(*Tx) error) e
 }
 
 // savepoint runs fn inside a savepoint of the transaction. When fn fails and the savepoint rolls back what fn wrote,
-// the transaction goes on: skipped is the error of fn, a constraint or trigger of the DDL as the 422 that Do would
-// return. A wikilink target that cannot be made: the rest of the work is unaffected (syncWikilinks). fault is an error
-// of the savepoint itself, and the caller must fail the write with it: the SAVEPOINT failed, the RELEASE failed, or fn
-// failed and the savepoint then could not roll back or release (a *db.RollbackError with both errors, as db.Write
-// gives for a transaction). The state of the transaction is then not known. A RELEASE that fails can keep what fn
-// wrote, and when SAVEPOINT or RELEASE fails because the file is full, SQLite rolls back the whole transaction.
+// the transaction goes on: skipped is the error of fn, as refused gives it (a constraint or trigger of the DDL is the
+// 422 that Do would return; another error that SQLite rolled back to the savepoint, such as a function that does not
+// exist, stays as it is). A wikilink target that cannot be made: the rest of the work is unaffected (syncWikilinks).
+// savepoint is the one place where a Tx method catches an error of its SQL and goes on: ROLLBACK TO succeeds only
+// while the transaction and the savepoint are open, so a skip cannot hide a transaction that SQLite ended. fault is
+// an error of the savepoint itself, and the caller must fail the write with it: the SAVEPOINT failed, the RELEASE
+// failed, or fn failed and the savepoint then could not roll back or release (a *db.RollbackError with both errors,
+// as db.Write gives for a transaction). The state of the transaction is then not known. A RELEASE that fails can keep
+// what fn wrote, and when SAVEPOINT or RELEASE fails because the file is full, SQLite can roll back the whole
+// transaction.
 func (t *Tx) savepoint(fn func() error) (skipped, fault error) {
 	if _, err := t.tx.ExecContext(t.ctx, `SAVEPOINT step`); err != nil {
 		return nil, err
