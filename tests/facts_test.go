@@ -119,6 +119,54 @@ func facts(s *S) {
 	c.measure(w, "2026-06-05", 70.4)
 	s.K("two independent readings on one day are both returned", c.n("select count(*) from measurement_values where day='2026-06-05'") == 2)
 
+	// ---- a scale's unit is a true range (metrics_range_order, D6): lo-hi with lo less than hi
+	c = s.fresh()
+	register := func(unit string) string { // the result of the insert; a refused insert writes no metrics row
+		id := c.identity("metric", "ui", fmt.Sprintf("Scale %d", c.s.next()), nil, "")
+		before := c.n("SELECT count(*) FROM metrics")
+		r := c.tryx("INSERT INTO metrics(id,unit) VALUES (?,?)", id, unit)
+		if err(r) && c.n("SELECT count(*) FROM metrics") != before {
+			return "WROTE " + r
+		}
+		return r
+	}
+	const outOfOrder = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
+	refusedAll := func(units ...string) (bool, []string) {
+		ok, got := true, []string{}
+		for _, u := range units {
+			r := register(u)
+			ok = ok && strings.HasPrefix(r, "ERR") && strings.Contains(r, outOfOrder)
+			got = append(got, u+": "+r)
+		}
+		return ok, got
+	}
+	acceptedAll := func(units ...string) (bool, []string) {
+		ok, got := true, []string{}
+		for _, u := range units {
+			r := register(u)
+			ok = ok && r == "OK"
+			got = append(got, u+": "+r)
+		}
+		return ok, got
+	}
+	ok, got := refusedAll("5-1", "3-3", "10-2")
+	s.K("a scale's unit with its bounds out of order (5-1, 3-3) is refused, and nothing is written", ok, got)
+	ok, got = acceptedAll("1-5", "0-10", "0-1")
+	s.K("a scale's unit with its bounds in order (1-5, 0-10) is accepted", ok, got)
+	ok, got = acceptedAll("kg", "", "x-y", "1-2-3", "1--5", "-5", "5-")
+	s.K("a unit of another shape (kg, '', x-y, 1-2-3) is not a range, and is accepted as before", ok, got)
+	// a unit is at most 32 bytes: one bound has at most 15 digits, and the bounds compare as numbers at any length
+	inOrder := []string{"100000000000000-999999999999999", "999999999999998-999999999999999", "999999999999999-1000000000000000",
+		"999999999999999-9007199254740993", "1-" + strings.Repeat("0", 29) + "2", "1-" + strings.Repeat("9", 30)}
+	ok, got = acceptedAll(inOrder...)
+	s.K("a long bound of 15, 16 or 30 digits in order is accepted", ok, got)
+	ok, got = refusedAll("999999999999999-100000000000000", "999999999999999-999999999999998", "1000000000000000-999999999999999",
+		"9007199254740993-999999999999999", "2-"+strings.Repeat("0", 29)+"1", strings.Repeat("9", 30)+"-1", "000000000000003-3")
+	s.K("a long bound of 15, 16 or 30 digits out of order is refused", ok, got)
+	scale := c.metric("Grade", "1-5")
+	s.K("a scale's unit never changes to bounds out of order: metrics_unit_fixed refuses the UPDATE, so no UPDATE trigger is needed",
+		strings.Contains(c.tryx("UPDATE metrics SET unit='5-1' WHERE id=?", scale), "metrics.unit is fixed") && c.str("SELECT unit FROM metrics WHERE id=?", scale) == "1-5")
+
 	// ---- the correction story of cookbook/correct-a-measurement, executed
 	c = s.fresh()
 	w = c.metric("weight", "kg")
