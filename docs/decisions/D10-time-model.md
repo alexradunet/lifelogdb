@@ -15,7 +15,9 @@
   stale mutable edits ([D7](D07-measurements.md), [D12](D12-no-revision-tables.md)). The
   CHECK uses `IS`, because a CHECK passes when it evaluates to NULL and `date()` returns NULL for malformed
   input: `date(x) = x` silently accepts `2026-9-3` (executed). A recorded local day is written in the zone of the
-  device that captured it — a phone's, never the clock or zone of a hub on a server ([D3](D03-integer-ids.md)) — and never
+  device that captured it — a phone's — when the client names the date. When the client sends the word `today`, or no
+  day where `today` is the default, the writer gives the local day of its own clock and zone: the hub's
+  ([D3](D03-integer-ids.md)). A client that needs the day of its device sends the date. A day is never
   derived from the instant at query time: "the day I graduated" is a local-date fact, not an instant
   [R7](../research/references.md#r7)[R8](../research/references.md#r8)[R9](../research/references.md#r9). A timed reading's zone is a column because only capture time can supply it: a
   UTC instant alone cannot say whether `22:30Z` was 14:30, 22:30 or 07:30 the next morning. A write time needs
