@@ -9,8 +9,8 @@
 - **Priority:** P1 for batch 1, P2 for batch 2, P3 for batch 3 and the docs. **Effort:** L in all.
   **Risk:** LOW for batches 1 and 3 (small diffs, behavior-preserving refactors); MEDIUM for batch 2 (new checks and
   two new owner-only actions).
-- **Status:** IN PROGRESS. Batches 1 and 2 and the docs actions (1–11, 18, 19) are done; batch 3 (12–17) is open.
-  The owner approved the plan on 2026-10-17 ("retry", then the approval of the plan file).
+- **Status:** DONE. Every action (1–19) is done; the open points are in the record. The owner approved the plan
+  on 2026-10-17 ("retry", then the approval of the plan file).
 - **Resolves:** the owner's request of 2026-10-17: "do a review of the entire codebase based on the new rules we
   applied. Let's find all the gaps and opportunities".
 
@@ -200,6 +200,16 @@ change follows the process; none is proposed here without an issue first.
     fix copies under a temporary name first and changes D25, so it waits for the owner.
   - Not done here: shipping. The work ran in a cloud container with no service. The owner builds to the install
     path, restarts `lifelog.service` and reads the new start line, which names the version and `user_version`.
+- 2026-10-17: batch 3 (actions 12–17) is done, as behavior-preserving refactors, one per commit. The choices:
+  - Action 15: the error codes are constants in `siren`, not `core`, because the view may import `siren` and
+    never `core` (`TestTheViewImportsNoStore`). The writer prefixes `agent:` and `import:` live there too.
+  - Action 14: the "New" action of each kind and the browse hrefs are in `siren`, for the same reason.
+  - Action 13: `parseFileForm` still writes `r.PostForm` in one commented line. The redirect, `backOf` and the
+    refused form read it; a handler has no other way to give it to `serve` without a change of its signature.
+  - Action 17: `trends.go` keeps its own bound (one lower bound, not a pair of neighbours); `db.DB` keeps `W` and
+    `R` exported; templates still pass form options as pairs, as a template cannot build a struct.
+  - Action 12: the JSON keys of a list's properties now come in the order of the struct, not sorted. The names, the
+    values and the presence are the same.
 
 Skills: a-philosophy-of-software-design, code-complete, refactoring, release-it,
 designing-data-intensive-applications. Conflict: Code Complete says "validate input at trust boundaries"; AGENTS.md
