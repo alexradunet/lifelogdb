@@ -184,7 +184,7 @@ func (v *view) Mentions(mentions, lastDay any) string {
 	if n < 1 {
 		return "not mentioned yet"
 	}
-	words := "mentioned on " + count(n, "page", "pages")
+	words := "mentioned on " + Count(n, "page", "pages")
 	if day, _ := lastDay.(string); day != "" {
 		words += ", last " + v.clock().day(day)
 	}
@@ -213,5 +213,5 @@ func (v *view) MediaCount(n any, one, many string) string {
 	if c, _ := n.(float64); c == 0 {
 		return "no " + many
 	}
-	return count(n, one, many)
+	return Count(n, one, many)
 }

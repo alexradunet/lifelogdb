@@ -147,8 +147,8 @@ func TestALongListIsInLetterGroups(t *testing.T) {
 	}
 }
 
-// TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls count says 0 in its own words, and every other number
-// with count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
+// TestTheSitesOfCountSayZeroTheirOwnWay: a site that calls Count says 0 in its own words, and every other number
+// with Count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
 // TestAYearsSummary.
 func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
 	v := &view{Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}}

@@ -111,11 +111,11 @@ func calItem(item any) calWords {
 		if years == 0 {
 			return calWords{Tag: "born", Word: "born"}
 		}
-		return calWords{Tag: "birthday", Word: "birthday", Note: count(years, "year", "years")}
+		return calWords{Tag: "birthday", Word: "birthday", Note: Count(years, "year", "years")}
 	case "death":
 		w := calWords{Tag: "died", Word: "died"}
 		if years > 0 {
-			w.Note = count(years, "year", "years") + " ago"
+			w.Note = Count(years, "year", "years") + " ago"
 		}
 		return w
 	case "place":

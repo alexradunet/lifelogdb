@@ -75,7 +75,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"dict":       dict,
 	"monthBand":  monthBand,
 	"num":        Num,
-	"count":      count,
+	"count":      Count,
 	"pathesc":    url.PathEscape,
 	"icon":       icon,
 	"shortDay":   shortDay,

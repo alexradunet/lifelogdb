@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 )
 
@@ -62,10 +63,6 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*siren.En
 	for _, id := range ids {
 		e.Entities = append(e.Entities, link("item", siren.PageHref(id), strconv.FormatInt(id, 10)))
 	}
-	noun := "page"
-	if len(ids) != 1 {
-		noun = "pages"
-	}
-	e.Result = "Deleted " + strconv.Itoa(len(ids)) + " " + noun + "."
+	e.Result = "Deleted " + view.Count(len(ids), "page", "pages") + "."
 	return e, nil
 }

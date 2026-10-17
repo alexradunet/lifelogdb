@@ -115,10 +115,10 @@ func (c clock) timeHTML(s string) template.HTML {
 // nameWords is a property's name in words: "created_at" is "created at".
 func nameWords(name string) string { return strings.ReplaceAll(name, "_", " ") }
 
-// count says a number and its noun, in the form for that number: "0 readings", "1 reading", "3 more pages". The
+// Count says a number and its noun, in the form for that number: "0 readings", "1 reading", "3 more pages". The
 // number is a JSON number (a float64) or a length (an int), written in full (Num); any other value is 0. A site that
-// has its own words for 0 ("no recordings") says them before it calls count.
-func count(n any, one, many string) string {
+// has its own words for 0 ("no recordings") says them before it calls Count.
+func Count(n any, one, many string) string {
 	f, _ := n.(float64)
 	if i, ok := n.(int); ok {
 		f = float64(i)

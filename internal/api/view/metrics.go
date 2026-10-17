@@ -91,7 +91,7 @@ func yearSummary(rows []map[string]any, unit string) string {
 		}
 		n++
 	}
-	s := count(len(rows), "reading", "readings")
+	s := Count(len(rows), "reading", "readings")
 	if n == 0 {
 		return s
 	}

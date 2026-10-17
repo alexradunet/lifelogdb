@@ -93,7 +93,7 @@ func TestAValueIsDrawnByItsType(t *testing.T) {
 	}
 }
 
-// TestCountSaysTheNumberAndTheFormOfItsNoun: count writes the number in full and the noun in the form for that
+// TestCountSaysTheNumberAndTheFormOfItsNoun: Count writes the number in full and the noun in the form for that
 // number, for a JSON number and for a length, with the words of each site that calls it.
 func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
 	for _, c := range []struct {
@@ -116,12 +116,15 @@ func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
 		{1.0, "year", "years", "1 year"},
 		{36.0, "year", "years", "36 years"},
 		{1.0, "page", "pages", "1 page"},
+		{0, "page", "pages", "0 pages"}, // the words of tombstone-pages
+		{1, "page", "pages", "1 page"},
+		{2, "page", "pages", "2 pages"},
 		{1.0, "picture", "pictures", "1 picture"},
 		{nil, "reading", "readings", "0 readings"},
 		{"1", "reading", "readings", "0 readings"},
 	} {
-		if got := count(c.n, c.one, c.many); got != c.want {
-			t.Errorf("count(%#v, %q, %q) = %q, want %q", c.n, c.one, c.many, got, c.want)
+		if got := Count(c.n, c.one, c.many); got != c.want {
+			t.Errorf("Count(%#v, %q, %q) = %q, want %q", c.n, c.one, c.many, got, c.want)
 		}
 	}
 }
