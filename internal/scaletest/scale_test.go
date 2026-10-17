@@ -36,7 +36,7 @@ func TestSmallWorkloadKnownAnswersAndReproducibility(t *testing.T) {
 	if first.Manifest.LogicalSHA256 == third.Manifest.LogicalSHA256 {
 		t.Fatal("seed did not affect generated values")
 	}
-	if len(first.Operations) != 9 {
+	if len(first.Operations) != 10 {
 		t.Fatalf("workflow measurements: %+v", first.Operations)
 	}
 }

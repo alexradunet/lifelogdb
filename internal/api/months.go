@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"lifelog/internal/api/siren"
@@ -69,12 +70,45 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{prev, siren.MonthHref(prev), prev.Format(layoutMonth)},
 		neighbour{next, siren.MonthHref(next), next.Format(layoutMonth)})...)
-	e.Links = append(e.Links, link("days", "/days", "Days"), link("index", "/", "Home"))
+	e.Links = append(e.Links, zoomLinks(anchorIn(today, first, last), streamAfter(last))...)
+	e.Links = append(e.Links, link("index", "/", "Home"))
 	for _, d := range cal.days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
 	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": cal.days}
 	return e, nil
+}
+
+// zoomLinks are the levels of the Calendar's zoom (docs/plans/130-the-explore-pass.md, part 3): the stream (days, at
+// the address the caller gives), and the week, the month and the year of the anchor. A level whose page the anchor's
+// year cannot have is left out.
+func zoomLinks(anchor time.Time, days string) []siren.Link {
+	out := []siren.Link{link("days", days, "Days")}
+	if _, ok := weekOf(siren.WeekKey(anchor)); ok {
+		out = append(out, link("week", siren.WeekHref(anchor), "Week"))
+	}
+	out = append(out, link("month", siren.MonthHref(anchor), anchor.Format(layoutMonth)))
+	if siren.IsYear(anchor.Year()) {
+		out = append(out, link("year", siren.YearHref(anchor.Year()), strconv.Itoa(anchor.Year())))
+	}
+	return out
+}
+
+// anchorIn is the day a period's zoom is anchored on: today when it is inside the period, else its first day.
+func anchorIn(today string, first, last time.Time) time.Time {
+	if t, ok := text.ParseDay(today); ok && !t.Before(first) && !t.After(last) {
+		return t
+	}
+	return first
+}
+
+// streamAfter is the page of the stream that a period opens on: the days before the day after its last day, or the
+// top of the stream when that day is not one (after 9999-12-31).
+func streamAfter(last time.Time) string {
+	if next := last.AddDate(0, 0, 1).Format(time.DateOnly); text.IsDay(next) {
+		return streamHref(next, streamLimit, 0)
+	}
+	return "/days"
 }
 
 // openDay answers with the address of the day the form names, or of today when it names none or the word "today".

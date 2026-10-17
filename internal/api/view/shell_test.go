@@ -10,12 +10,12 @@ import (
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 	for path, want := range map[string]string{
 		"/":                "/",
-		"/days":            "/months/current",
-		"/days/2026-01-01": "/months/current",
+		"/days":            "/days",
+		"/days/2026-01-01": "/days",
 		"/days/today":      "/days/today",
-		"/months/2026-10":  "/months/current",
-		"/weeks/2026-W41":  "/months/current",
-		"/years/2026":      "/months/current",
+		"/months/2026-10":  "/days",
+		"/weeks/2026-W41":  "/days",
+		"/years/2026":      "/days",
 		"/integrity":       "/integrity",
 		"/browse":          "/browse",
 		"/metrics":         "/metrics",
@@ -54,7 +54,7 @@ func TestMoreIsMarkedOnAPageOfTheOwner(t *testing.T) {
 	for _, c := range []struct {
 		shell *Shell
 		want  string
-	}{{shell, "/days/today"}, {nil, "/months/current"}, {&Shell{Today: "2026-10-15"}, "/months/current"}} {
+	}{{shell, "/days/today"}, {nil, "/days"}, {&Shell{Today: "2026-10-15"}, "/days"}} {
 		var got string
 		for _, it := range (&view{Path: "/days/2026-10-16", Shell: c.shell}).Nav() {
 			if it.Current {

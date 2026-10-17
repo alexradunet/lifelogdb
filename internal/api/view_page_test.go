@@ -88,7 +88,8 @@ func TestEveryViewRenders(t *testing.T) {
 	}{
 		{"/actions", http.StatusOK, nil},
 		{"/actions?new=snapshot", http.StatusOK, []string{`<details class="action" open><summary class="button">Take a snapshot`}}, // the rail's Snapshot link
-		{"/days", http.StatusOK, nil},
+		{"/days", http.StatusOK, []string{`<article class="day-card" aria-label="`, `<article class="day-card slim" aria-label="2026-09-28">`,
+			`<p class="quiet-gap">· `, `<a href="/days" aria-current="page">Days</a>`, `</svg>Ana</a>`, `<nav class="stream-side panel" aria-label="Years and months">`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
@@ -107,9 +108,9 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/search?q=ran", http.StatusOK, nil},
 		{"/integrity", http.StatusOK, nil},
 		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
-		{"/weeks/2026-W40", http.StatusOK, nil},
-		{"/years/2026", http.StatusOK, nil},
-		{"/months/2026-09", http.StatusOK, nil},
+		{"/weeks/2026-W40", http.StatusOK, []string{`<a href="/weeks/2026-W40" aria-current="page">Week</a>`}},
+		{"/years/2026", http.StatusOK, []string{`<a href="/years/2026" aria-current="page">Year</a>`}},
+		{"/months/2026-09", http.StatusOK, []string{`<a href="/months/2026-09" aria-current="page">Month</a>`, `<a href="/days?before=2026-10-01">Days</a>`}},
 		{apitest.Href(draft, "self"), http.StatusOK, nil},
 		{opens(t, h, "Essay"), http.StatusOK, nil},
 		{"/pages/999999", http.StatusNotFound, nil},

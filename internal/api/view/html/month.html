@@ -6,7 +6,7 @@
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
-<p class="sub"><a href="/days/{{$m.today}}">Today</a><a href="/months/current">This month</a><a href="/weeks/current">This week</a>{{with yearPage $m.month}}<a href="{{.}}">The year</a>{{end}}<a href="/days">Every day, as a list</a></p></div>
+{{template "zoom" (dict "v" . "current" "month")}}</div>
 <div class="tools">
 {{- with .Link "prev"}}
 {{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous month, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}

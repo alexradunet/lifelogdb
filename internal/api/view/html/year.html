@@ -3,7 +3,7 @@
 {{define "year"}}{{template "head" .}}
 {{$y := .Props}}
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
-<p class="sub">{{if ne .Title (yearOf .Today)}}<a href="/years/current">This year</a>{{end}}<a href="/days/today">Today</a></p></div>
+{{template "zoom" (dict "v" . "current" "year")}}</div>
 <div class="tools">
 {{- with .Link "prev"}}
 {{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous year, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}

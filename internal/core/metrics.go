@@ -324,12 +324,17 @@ func (s *Store) ReadingsByDay(ctx context.Context, from, through string) (map[st
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
+	return s.readingsBy(ctx, `me.day BETWEEN ? AND ?`, from, through)
+}
+
+// readingsBy is ReadingsByDay for the days that a condition on me.day selects.
+func (s *Store) readingsBy(ctx context.Context, cond string, args ...any) (map[string]int, error) {
 	return groupCounts(s.DB.R.QueryContext(ctx, `
 		SELECT me.day, count(*)
 		  FROM measurement_values me
 		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
-		 WHERE me.day BETWEEN ? AND ?
-		 GROUP BY me.day`, from, through))
+		 WHERE `+cond+`
+		 GROUP BY me.day`, args...))
 }
 
 // Measurement reads one row of the append-only table, current or not, and what corrected it.

@@ -63,6 +63,13 @@ func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay i
 	if pagesPerDay < 1 {
 		return nil, Invalid("the dated rows need a limit of pages of 1 or more")
 	}
+	return s.dated(ctx, `BETWEEN :from AND :through`, pagesPerDay, sql.Named("from", from), sql.Named("through", through))
+}
+
+// dated is DatedIn for the days that days selects: the rest of a condition on a day column, after the column
+// ("BETWEEN :from AND :through", "IN (SELECT value FROM json_each(:days))"), with its named arguments. The month and
+// the stream share it.
+func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ...any) ([]Dated, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT day, kind, id, title, n FROM (
 		  SELECT p.day AS day, CASE p.entity_type WHEN 'file' THEN 'file' ELSE 'page' END AS kind, p.id AS id,
@@ -70,17 +77,16 @@ func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay i
 		         row_number() OVER (PARTITION BY p.day ORDER BY p.preferred_name_key, p.id) AS r,
 		         count(*) OVER (PARTITION BY p.day) AS n
 		    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-		   WHERE p.day BETWEEN :from AND :through AND NOT p.is_journal AND p.deleted_at IS NULL
+		   WHERE p.day `+days+` AND NOT p.is_journal AND p.deleted_at IS NULL
 		  UNION ALL
 		  SELECT d.day, 'place', pl.id, pl_name.title, 1, pl.preferred_name_key, 0, 0
 		    FROM entities d
 		    JOIN links l ON l.from_id = d.id AND l.kind = 'at'
 		    JOIN entities pl ON pl.id = l.to_id AND pl.deleted_at IS NULL
 		    JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key
-		   WHERE d.is_journal AND d.day BETWEEN :from AND :through AND d.deleted_at IS NULL
+		   WHERE d.is_journal AND d.day `+days+` AND d.deleted_at IS NULL
 		) WHERE r <= :cap
-		ORDER BY day, rank, sortkey, id`,
-		sql.Named("from", from), sql.Named("through", through), sql.Named("cap", pagesPerDay))
+		ORDER BY day, rank, sortkey, id`, append(args, sql.Named("cap", pagesPerDay))...)
 	return list(rows, err, func(d *Dated) []any { return []any{&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages} })
 }
 
@@ -100,10 +106,23 @@ func (s *Store) Anniversaries(ctx context.Context, from, through string) ([]Anni
 	if err := checkCalendarWindow(from, through); err != nil {
 		return nil, err
 	}
-	// the days of the window by their month and day ("05-14"), with 29 February on 28 February of a common year
-	on := map[string][]string{}
+	var days []string
 	for _, t := range calendarDays(from, through) {
-		day := t.Format(time.DateOnly)
+		days = append(days, t.Format(time.DateOnly))
+	}
+	return s.anniversariesOn(ctx, days)
+}
+
+// anniversariesOn is Anniversaries on a set of days, which need not be one window: the stream's days can span
+// decades. Each day is an exact day (YYYY-MM-DD).
+func (s *Store) anniversariesOn(ctx context.Context, days []string) ([]Anniversary, error) {
+	// the days by their month and day ("05-14"), with 29 February on 28 February of a common year
+	on := map[string][]string{}
+	for _, day := range days {
+		t, ok := text.ParseDay(day)
+		if !ok {
+			continue
+		}
 		on[day[5:]] = append(on[day[5:]], day)
 		if day[5:] == "02-28" && t.AddDate(0, 0, 1).Day() == 1 {
 			on["02-29"] = append(on["02-29"], day)

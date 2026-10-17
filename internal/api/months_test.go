@@ -261,3 +261,31 @@ func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
 	}
 	browse(t, h, "/months/0000-01")
 }
+
+// TestTheZoomLinksEveryLevel: a week, a month and a year link Days, Week, Month and Year: the period of today when
+// today is in it, else of its first day (a week's Thursday), and the stream before the day after the period. The page
+// marks its own level.
+func TestTheZoomLinksEveryLevel(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14, a Wednesday of week 20
+	for _, tc := range []struct {
+		page, days, week, month, year string
+	}{
+		{"/months/2031-05", "/days?before=2031-06-01", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
+		{"/months/2031-04", "/days?before=2031-05-01", "/weeks/2031-W14", "/months/2031-04", "/years/2031"},
+		{"/weeks/2031-W20", "/days?before=2031-05-19", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
+		{"/weeks/2031-W01", "/days?before=2031-01-06", "/weeks/2031-W01", "/months/2031-01", "/years/2031"}, // Monday is 2030-12-30
+		{"/years/2031", "/days?before=2032-01-01", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
+		{"/years/2030", "/days?before=2031-01-01", "/weeks/2030-W01", "/months/2030-01", "/years/2030"},
+		{"/months/9999-12", "/days", "/weeks/9999-W48", "/months/9999-12", "/years/9999"},
+	} {
+		e := apitest.Must(t)(c.Get(t.Context(), tc.page))
+		got := strings.Join([]string{apitest.Href(e, "days"), apitest.Href(e, "week"), apitest.Href(e, "month"), apitest.Href(e, "year")}, " ")
+		if want := strings.Join([]string{tc.days, tc.week, tc.month, tc.year}, " "); got != want {
+			t.Errorf("%s zooms to %s, want %s", tc.page, got, want)
+		}
+	}
+	body := browse(t, h, "/months/2031-04")
+	if n := strings.Count(body, `aria-current="page">`); !strings.Contains(body, `<a href="/months/2031-04" aria-current="page">Month</a>`) || strings.Contains(body, "Every day, as a list") || n != 2 {
+		t.Errorf("the month's zoom marks %d links (want its Month and the sidebar's Calendar): %.300s", n, body[strings.Index(body, `aria-label="Zoom"`):])
+	}
+}

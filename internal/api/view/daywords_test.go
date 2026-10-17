@@ -146,3 +146,23 @@ func TestAgendaDaysAreTheDaysWithAnItem(t *testing.T) {
 		}
 	}
 }
+
+// TestYearsAgo: whole years from a day to today, in words; 29 February is a year older on 1 March of a common year.
+func TestYearsAgo(t *testing.T) {
+	for _, tc := range []struct{ day, today, want string }{
+		{"2025-10-17", "2026-10-17", "1 year ago"},
+		{"2016-10-17", "2026-10-17", "10 years ago"},
+		{"2025-10-18", "2026-10-17", "this year"},
+		{"2026-10-17", "2026-10-17", "this year"},
+		{"2027-10-17", "2026-10-17", "this year"},
+		{"2024-02-29", "2028-02-29", "4 years ago"},
+		{"2024-02-29", "2025-02-28", "this year"},
+		{"2024-02-29", "2025-03-01", "1 year ago"},
+		{"2023-03-01", "2024-02-29", "this year"},
+		{"x", "2026-10-17", ""},
+	} {
+		if got := yearsAgo(tc.day, tc.today); got != tc.want {
+			t.Errorf("yearsAgo(%q, %q) = %q, want %q", tc.day, tc.today, got, tc.want)
+		}
+	}
+}

@@ -35,7 +35,7 @@ func walk(t *testing.T, c *client.Client, first string) (titles []string, sizes 
 }
 
 func TestListsPage(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
+	c, h, _ := apitest.FreshOn(t, "cli", "2031-03-08") // the stream holds no day after today
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	catalog := apitest.Must(t)(c.Get(t.Context(), "/actions"))
 	for i := 1; i <= 7; i++ {
@@ -71,7 +71,7 @@ func TestListsPage(t *testing.T) {
 	for _, tc := range []struct {
 		list  string
 		limit int
-	}{{"/days", 60}, {"/browse", 200}, {"/browse?kind=person", 200}, {"/browse?kind=media", 200}, {"/browse?ghosts=1", 200}, {"/search?q=needleword", 50}} {
+	}{{"/days", 30}, {"/browse", 200}, {"/browse?kind=person", 200}, {"/browse?kind=media", 200}, {"/browse?ghosts=1", 200}, {"/search?q=needleword", 50}} {
 		e := apitest.Must(t)(c.Get(t.Context(), tc.list))
 		p, _ := e.Properties.(map[string]any)
 		if fmt.Sprint(p["limit"]) != fmt.Sprint(tc.limit) || fmt.Sprint(p["offset"]) != "0" || apitest.Href(e, "next") != "" || apitest.Href(e, "prev") != "" {
