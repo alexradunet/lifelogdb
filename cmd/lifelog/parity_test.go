@@ -369,7 +369,7 @@ func parityRows() []parityRow {
 	rows := []parityRow{
 		{"find", rowFind},
 		{"open-day", rowOpenDay},
-		{"open-day with no day", rowOpenToday},
+		{"open-day of today", rowOpenToday},
 		{"browse", rowBrowse},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
@@ -407,15 +407,15 @@ func rowOpenDay(x *parityRun) {
 	x.absent("2031-05-14")
 }
 
-// open-day with no day, or with an empty one, is the day view of today. The word "today" is not a day: it is refused.
-// It is a read, so it makes no day page.
+// open-day with no day, with an empty one or with the word "today" is the day view of today, as GET /days/today is. A
+// value that is not a day is refused. It is a read, so it makes no day page.
 func rowOpenToday(x *parityRun) {
-	for _, args := range []map[string]string{{}, {"day": ""}} {
+	for _, args := range []map[string]string{{}, {"day": ""}, {"day": "today"}} {
 		if e := x.ok("open-day", args); e.Title != parityToday || apitest.Href(e, "self") != "/days/"+parityToday {
 			x.t.Errorf("open-day %v: %q %q, want the day %s", args, e.Title, apitest.Href(e, "self"), parityToday)
 		}
 	}
-	x.refused("open-day", map[string]string{"day": "today"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("open-day", map[string]string{"day": "x"}, http.StatusUnprocessableEntity, "invalid")
 	x.absent(parityToday)
 }
 

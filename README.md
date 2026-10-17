@@ -89,10 +89,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   page, its first line, its mood and its readings, and every other thing that names the day: a
   birthday or a death each year, a place, a page or a file; under the calendar, Day by
   day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
-  and the catalog action `open-day` goes to a day by its date, or to today with no date. The handler reads
-  today from one clock, which a test fixes. The day and the root carry `on_this_day`, the day pages of the same date
-  in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its readings
-  against the week before) and `/years/{YYYY}` the year (twelve months);
+  and the catalog action `open-day` goes to a day by its date, or to today with no date or the word
+  `today`. The handler reads today from one clock, which a test fixes. The day and the root carry `on_this_day`, the
+  day pages of the same date in earlier years, which the margin shows. `/weeks/{YYYY-Www}` is the week (its days, its
+  readings against the week before) and `/years/{YYYY}` the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture: the preview of
   the first live file with a preview that the person's page embeds (`![[Ana.jpg]]`), else the icon of a person. The

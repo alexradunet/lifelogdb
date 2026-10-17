@@ -92,8 +92,8 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	}
 }
 
-// TestOpenDayGoesToTheDay: open-day goes to the day it names, and to today when it names no day. The word "today" is
-// not a day: an empty day is today.
+// TestOpenDayGoesToTheDay: open-day goes to the day it names, and to today when it names no day or names the word
+// "today", as GET /days/today does. An empty day is today.
 func TestOpenDayGoesToTheDay(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	for _, tc := range []struct {
@@ -101,7 +101,7 @@ func TestOpenDayGoesToTheDay(t *testing.T) {
 	}{
 		{"?day=2031-04-30", "2031-04-30"}, {"?day=1999-12-31", "1999-12-31"},
 		{"", fixedToday}, {"?day=", fixedToday},
-		{"?day=2031-02-30", ""}, {"?day=x", ""}, {"?day=today", ""},
+		{"?day=today", fixedToday}, {"?day=2031-02-30", ""}, {"?day=x", ""},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", "/days/go"+tc.query, nil))

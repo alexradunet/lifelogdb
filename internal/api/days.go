@@ -92,6 +92,16 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 
 func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.s.Today())} }
 
+// dayNamed is the day that a path or a field names. The word "today" is today: the local day of the store's clock, the
+// day that GET /days/today redirects to. capture and open-day read their day through it, so the word has one meaning
+// in the API. Any other value comes back as it is, and the handler checks it.
+func (h *server) dayNamed(day string) string {
+	if day == "today" {
+		return h.s.Today()
+	}
+	return day
+}
+
 func (h *server) days(r *http.Request) (*Entity, error) {
 	limit, offset, err := pageOf(r, 60)
 	if err != nil {
@@ -189,10 +199,7 @@ func (h *server) capture(r *http.Request, act spec, src string) (*Entity, error)
 	if err != nil {
 		return nil, err
 	}
-	day := r.PathValue("day")
-	if day == "today" { // the share target of the manifest cannot know the day
-		day = h.s.Today()
-	}
+	day := h.dayNamed(r.PathValue("day")) // the share target of the manifest cannot know the day: it sends the word
 	_, sync, err := h.s.Capture(r.Context(), src, day, v.Get("text"), mood)
 	if err != nil {
 		return nil, err

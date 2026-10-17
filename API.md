@@ -219,8 +219,8 @@ With no `q`, the answer has the action `search` and no properties: a browser dra
 ### day
 
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
-names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links: `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev`
-and 9999-12-31 no `next`), `month` (its calendar),
+names, or to today when `day` is absent, empty or the word `today`, and a value that is not a day is 422). Links:
+`prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`

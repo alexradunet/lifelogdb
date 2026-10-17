@@ -164,7 +164,7 @@ var catalog = []spec{
 			opt("limit", "number", "Rows on a page (1-500, default 200)"), opt("offset", "number", "Rows skipped")}, false, false},
 	{"find", "Find page", "Open the page with this title (any case or normalisation).",
 		"GET", "/pages", []Field{pageField("title", "Title", true)}, false, false},
-	{"open-day", "Go to a day", "Open the day view of a local day (YYYY-MM-DD), or of today when day is empty: its journal, the pages of that day, the places it was at and its readings.",
+	{"open-day", "Go to a day", "Open the day view of a local day (YYYY-MM-DD), or of today when day is empty or today: its journal, the pages of that day, the places it was at and its readings.",
 		"GET", "/days/go", []Field{opt("day", "date", "Day (default today)")}, false, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true, false},
