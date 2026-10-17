@@ -383,6 +383,8 @@ func parityRows() []parityRow {
 		parityRow{"stale save-body", rowStaleSave},
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
+		parityRow{"rebuild-search", rowRebuildSearch},
+		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 	)
@@ -748,6 +750,82 @@ func rowRegisterMetric(x *parityRun) {
 		x.refused("register-metric", args, http.StatusForbidden, "forbidden")
 	}
 	x.absent("Weight")
+}
+
+// rebuild-search is the owner's repair of the full-text index: a surface of an owner repairs a drifted index and
+// answers the number of documents; a surface of an agent is refused with 403 forbidden and leaves the index as it
+// was; the MCP server has no such tool.
+func rowRebuildSearch(x *parityRun) {
+	x.sql(`INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')`)
+	indexOK := func() bool {
+		x.t.Helper()
+		r, err := x.store.Integrity(x.t.Context())
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		return r.FullTextIndexOK
+	}
+	switch {
+	case x.mcp:
+		if _, err := x.call("rebuild-search", nil); !errors.Is(err, errNoTool) {
+			x.t.Errorf("rebuild-search on MCP: %v, want no tool", err)
+		}
+	case x.owner:
+		if p := props(x.t, x.ok("rebuild-search", nil)); p["documents"] == nil {
+			x.t.Errorf("rebuild-search: %v, want a document count", p)
+		}
+		if !indexOK() {
+			x.t.Error("rebuild-search did not repair the index")
+		}
+		return
+	default:
+		x.refused("rebuild-search", nil, http.StatusForbidden, "forbidden")
+	}
+	if indexOK() {
+		x.t.Error("a surface that may not rebuild the index repaired it")
+	}
+}
+
+// resync-links is the owner's repair of the links of the bodies: a surface of an owner rewrites the links of a page whose
+// link row is missing and lists the page; a surface of an agent is refused with 403 forbidden and leaves the link
+// missing; the MCP server has no such tool.
+func rowResyncLinks(x *parityRun) {
+	to, _, err := x.store.CreatePage(x.t.Context(), "cli", "Bridge", "", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	from, _, err := x.store.CreatePage(x.t.Context(), "cli", "Anchor", "see [[Bridge]]", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	x.sql(`DELETE FROM links WHERE from_id = ? AND to_id = ?`, from, to)
+	drifted := func() int {
+		x.t.Helper()
+		r, err := x.store.Integrity(x.t.Context())
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		return len(r.LinkDrift)
+	}
+	switch {
+	case x.mcp:
+		if _, err := x.call("resync-links", nil); !errors.Is(err, errNoTool) {
+			x.t.Errorf("resync-links on MCP: %v, want no tool", err)
+		}
+	case x.owner:
+		if p := props(x.t, x.ok("resync-links", nil)); fmt.Sprint(p["pages"]) != fmt.Sprint([]any{json.Number(id(from))}) {
+			x.t.Errorf("resync-links lists %v; want the page %d", p["pages"], from)
+		}
+		if n := drifted(); n != 0 {
+			x.t.Errorf("resync-links left %d pages with other links than their bodies", n)
+		}
+		return
+	default:
+		x.refused("resync-links", nil, http.StatusForbidden, "forbidden")
+	}
+	if n := drifted(); n != 1 {
+		x.t.Errorf("a surface that may not resync links changed them: %d pages drift, want 1", n)
+	}
 }
 
 // A place is never promoted: promote of a place to a person is refused by the schema (entities_promote_from_page) as a

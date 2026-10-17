@@ -234,9 +234,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
   `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
   action: it writes files beside the program.
-- **Owner-only actions.** `register-metric`, `snapshot` and `integrity-check` are refused to an `agent:*` or
-  `import:*` writer and are never MCP tools. The full-text check of `integrity-check` holds the write lock while it
-  runs, so an agent must not start it. An agent that imports with the owner asks for them in the conversation.
+- **Owner-only actions.** `register-metric`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links` are
+  refused to an `agent:*` or `import:*` writer and are never MCP tools. The full-text check of `integrity-check` holds the write
+  lock while it runs, so an agent must not start it. `rebuild-search` (`POST /search/rebuild`) is the repair of the
+  full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
+  rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save
+  ([integrity checks](docs/contract/integrity-checks.md)). An agent that imports with the owner asks for them in the conversation.
 - **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
   The owner's decision (2026-10-15): `ask`, the Conversations pages, the chat sidebar and the voice note are
   removed, with the model and transcriber endpoints they needed. The owner talks to `life.db` through a coding

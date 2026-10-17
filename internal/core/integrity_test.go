@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/db"
 )
@@ -18,6 +20,12 @@ import (
 type integrityConnector struct {
 	check, fault           string
 	closed, queries, execs int
+	deadlines              []time.Time // the deadline of the context of each query and exec; zero when it has none
+}
+
+func (c *integrityConnector) noteDeadline(ctx context.Context) {
+	d, _ := ctx.Deadline()
+	c.deadlines = append(c.deadlines, d)
 }
 
 func (c *integrityConnector) Connect(context.Context) (driver.Conn, error) {
@@ -34,7 +42,15 @@ type integrityConn struct{ c *integrityConnector }
 func (*integrityConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("unexpected prepare")
 }
-func (*integrityConn) Begin() (driver.Tx, error) { return nil, errors.New("unexpected transaction") }
+func (*integrityConn) Begin() (driver.Tx, error) { return integrityTx{}, nil }
+func (*integrityConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return integrityTx{}, nil
+}
+
+type integrityTx struct{}
+
+func (integrityTx) Commit() error   { return nil }
+func (integrityTx) Rollback() error { return nil }
 func (c *integrityConn) Close() error {
 	if c.c.fault == "conn-close" {
 		return errIntegrityFault
@@ -44,7 +60,8 @@ func (c *integrityConn) Close() error {
 
 var errIntegrityFault = errors.New("synthetic integrity execution failure")
 
-func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (c *integrityConn) QueryContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	c.c.noteDeadline(ctx)
 	c.c.queries++
 	check := "orphan entities"
 	if strings.Contains(query, "PRAGMA integrity_check") {
@@ -55,10 +72,20 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 		check = "measurement correction chains"
 	} else if strings.Contains(query, "SELECT n.id FROM entity_names") {
 		check = "journal name ownership"
-	} else if strings.Contains(query, "SELECT l.id FROM links") {
+	} else if strings.Contains(query, "JOIN link_kinds") {
 		check = "typed link endpoints"
+	} else if strings.Contains(query, "SELECT l.id FROM links") {
+		check = "link day-page rules"
+	} else if strings.Contains(query, "JOIN metrics x") {
+		check = "scale ranges"
 	} else if strings.Contains(query, "SELECT m.id FROM measurements") {
 		check = "measurement corrections"
+	} else if strings.Contains(query, "FROM entity_names ORDER BY id") {
+		check = "name keys"
+	} else if strings.Contains(query, "preferred_name_key FROM entities WHERE deleted_at IS NULL") {
+		check = "link drift"
+	} else if strings.Contains(query, "FROM sqlite_schema") {
+		check = "schema drift"
 	}
 	fault := ""
 	if check == c.c.check {
@@ -69,7 +96,8 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 	}
 	return &integrityRows{c: c.c, check: check, fault: fault}, nil
 }
-func (c *integrityConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+func (c *integrityConn) ExecContext(ctx context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
+	c.c.noteDeadline(ctx)
 	c.c.execs++
 	if c.c.fault == "fts" {
 		return nil, errIntegrityFault
@@ -86,6 +114,15 @@ type integrityRows struct {
 func (r *integrityRows) Columns() []string {
 	if r.check == "foreign_key_check" {
 		return []string{"table", "rowid", "parent", "fkid"}
+	}
+	if r.check == "name keys" {
+		return []string{"id", "title", "name_key"}
+	}
+	if r.check == "schema drift" {
+		return []string{"type", "name", "tbl_name", "sql"}
+	}
+	if r.check == "link drift" {
+		return []string{"id", "body", "preferred_name_key"}
 	}
 	return []string{"value"}
 }
@@ -112,6 +149,12 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 	}
 	if r.check == "foreign_key_check" {
 		copy(dest, []driver.Value{"measurements", int64(7), "metrics", int64(0)})
+	} else if r.check == "name keys" {
+		copy(dest, []driver.Value{int64(42), "Title", "not the key of Title"})
+	} else if r.check == "schema drift" {
+		copy(dest, []driver.Value{"table", "stray", "stray", "CREATE TABLE stray(a)"})
+	} else if r.check == "link drift" {
+		copy(dest, []driver.Value{int64(42), "[[Linked]]", "own"}) // its target has no page: the links differ
 	} else if r.check == "integrity_check" {
 		dest[0] = "ok"
 	} else {
@@ -128,6 +171,12 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 			dest[0] = nil
 		} else if r.check == "foreign_key_check" {
 			dest[1] = "not an integer"
+		} else if r.check == "name keys" {
+			dest[0] = "not an integer"
+		} else if r.check == "schema drift" {
+			dest[0] = nil
+		} else if r.check == "link drift" {
+			dest[0] = "not an integer"
 		} else {
 			dest[0] = "not an integer"
 		}
@@ -142,8 +191,13 @@ func faultIntegrityStore(t *testing.T, c *integrityConnector) *Store {
 	t.Cleanup(func() { d.Close() })
 	return &Store{DB: &db.DB{R: d, W: d}}
 }
+
+// integrityCheckNames are the reads of Integrity in the order it runs them.
+var integrityCheckNames = []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections",
+	"measurement correction chains", "journal name ownership", "link day-page rules", "scale ranges", "name keys", "link drift", "schema drift"}
+
 func TestIntegrityReadFailures(t *testing.T) {
-	for i, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections", "measurement correction chains", "journal name ownership"} {
+	for i, check := range integrityCheckNames {
 		for _, fault := range []string{"query", "late", "scan", "close", "scan-close"} {
 			t.Run(check+"/"+fault, func(t *testing.T) {
 				c := &integrityConnector{check: check, fault: fault}
@@ -176,22 +230,51 @@ func TestIntegrityResultSemantics(t *testing.T) {
 			if r.OK != (fault == "") || r.FullTextIndexOK != (fault == "") || (r.FullTextError != "") != (fault == "fts") || len(r.IntegrityCheck) != 1 || r.IntegrityCheck[0] != "ok" || r.ForeignKeys != 0 || len(r.OrphanEntities) != 0 {
 				t.Errorf("unexpected result: %+v", r)
 			}
-			if c.closed != 7 || c.execs != 1 {
+			if c.closed != len(integrityCheckNames) || c.execs != 1 {
 				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
 			}
 		})
 	}
 }
 
+// Every read and the full-text step, which holds the writer connection, run under the deadline of Integrity.
+func TestIntegrityRunsUnderItsDeadline(t *testing.T) {
+	c := &integrityConnector{}
+	start := time.Now()
+	if _, err := faultIntegrityStore(t, c).Integrity(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	end := time.Now()
+	if len(c.deadlines) != len(integrityCheckNames)+1 { // the reads and the full-text exec
+		t.Fatalf("%d statements noted; want %d", len(c.deadlines), len(integrityCheckNames)+1)
+	}
+	for i, d := range c.deadlines {
+		if d.IsZero() || d.After(end.Add(IntegrityDeadline)) || !d.After(start.Add(IntegrityDeadline-time.Minute)) {
+			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, IntegrityDeadline, start, end)
+		}
+	}
+}
+
+// A run that its context ends gives an error and no result, not a result of the checks that ran.
+func TestIntegrityEndsWithTheErrorOfItsContext(t *testing.T) {
+	s := fresh(t)
+	done, cancel := context.WithCancel(context.Background())
+	cancel()
+	r, err := s.Integrity(done)
+	if r != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("result=%+v error=%v; want no result and context.Canceled", r, err)
+	}
+}
+
 func TestIntegrityDiagnostics(t *testing.T) {
-	for _, check := range []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections", "measurement correction chains", "journal name ownership"} {
+	for _, check := range integrityCheckNames {
 		t.Run(check, func(t *testing.T) {
 			c := &integrityConnector{check: check, fault: "diagnostic"}
 			r, err := faultIntegrityStore(t, c).Integrity(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.OK || !r.FullTextIndexOK {
+			if r.OK == (check != "schema drift") || !r.FullTextIndexOK { // a drift is outside ok
 				t.Errorf("diagnostic semantics: %+v", r)
 			}
 			switch check {
@@ -223,9 +306,33 @@ func TestIntegrityDiagnostics(t *testing.T) {
 				if len(r.OrphanEntities) != 1 || r.OrphanEntities[0] != 42 {
 					t.Errorf("orphan diagnostic lost: %+v", r)
 				}
+			case "link day-page rules":
+				if len(r.InvalidLinkDayRules) != 1 || r.InvalidLinkDayRules[0] != 42 {
+					t.Errorf("link day-page diagnostic lost: %+v", r)
+				}
+			case "scale ranges":
+				if len(r.InvalidScaleValues) != 1 || r.InvalidScaleValues[0] != 42 {
+					t.Errorf("scale diagnostic lost: %+v", r)
+				}
+			case "schema drift":
+				if !slices.Contains(r.SchemaDrift, "extra table stray") {
+					t.Errorf("schema diagnostic lost: %+v", r)
+				}
+			case "link drift":
+				if len(r.LinkDrift) != 1 || r.LinkDrift[0] != 42 {
+					t.Errorf("link drift diagnostic lost: %+v", r)
+				}
+			case "name keys":
+				if len(r.NameKeyMismatches) != 1 || r.NameKeyMismatches[0] != 42 {
+					t.Errorf("name key diagnostic lost: %+v", r)
+				}
 			}
-			if c.closed != 7 || c.execs != 1 {
-				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
+			want := len(integrityCheckNames)
+			if check == "link drift" {
+				want++ // the lookup of the target, which has no page: the links differ before the stored links are read
+			}
+			if c.closed != want || c.execs != 1 {
+				t.Errorf("closed=%d execs=%d; want %d/1", c.closed, c.execs, want)
 			}
 		})
 	}

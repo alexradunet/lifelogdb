@@ -22,6 +22,6 @@
     (`[[C#]]`); `|alias` is kept because `|` can never be in a title.
   - *Redirect-text suppression*: rejected — names resolve directly through ownership, and a `#REDIRECT` line is ordinary prose, not a second save mode.
 - **Costs accepted.** The database does not check that `links` matches the bodies. That drift is
-  detectable and repairable: a rebuild from the bodies gives the same links as 400 incremental random
-  edits (executed). A skipped target is remembered only in the body's own text.
+  detectable and repairable ([the link check and its repair](../contract/integrity-checks.md)): a rebuild from the
+  bodies gives the same links as 400 incremental random edits (executed). A skipped target is remembered only in the body's own text.
 - **Sources.** [R58](../research/references.md#r58)[R59](../research/references.md#r59).
