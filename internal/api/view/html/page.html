@@ -47,7 +47,7 @@
 {{if $groups}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Link "choose-cover") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Link "choose-cover") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{with .Link "choose-cover"}}<a class="button" href="{{.}}">{{if $p.cover}}Change cover photo{{else}}Set cover photo{{end}}</a>{{end}}
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}

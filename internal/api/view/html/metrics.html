@@ -68,11 +68,11 @@
 <section class="group" aria-label="Links"><h2>Links</h2>
 {{with $s.links}}{{template "typed-links" (dict "v" $ "links" .)}}
 {{else}}<p class="empty">Filed in no category, and linked to no page.</p>{{end}}
-<div class="actions">{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
+<div class="actions quiet">{{template "boxed" (form (.Action "link") "button" "Add a typed link" "back" $.Here)}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link" "back" $.Here)}}</div>
 </section>
 
-<section class="group" aria-label="More"><h2>More</h2><div class="actions">
+<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "tombstone"))}}</div>
 </section>

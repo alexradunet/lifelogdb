@@ -181,9 +181,14 @@ button.primary,.button.primary{background:var(--primary); color:var(--on-accent)
   &:hover{background:var(--primary-hover); color:var(--on-accent); filter:none}}
 button.danger{color:var(--danger); border-color:var(--danger-line); background:var(--surface);
   &:hover{background:var(--danger-soft); border-color:var(--danger); filter:none}}
-button.quiet{background:none; border-color:transparent; box-shadow:none; color:var(--text-link); font-weight:400;
-  &:hover{border-color:var(--rule); filter:none}
-  &:active{transform:none}}
+/* A quiet row (.actions.quiet, plan 129 part 5: the More of a page and of a metric) draws its buttons as button.quiet is
+   drawn. They are not nested under one :is(), so each keeps its own specificity. An open fold keeps a border, and a
+   Delete keeps the danger colour on its words. */
+button.quiet,.actions.quiet :is(summary.button,a.button){background:none; border-color:transparent; box-shadow:none; color:var(--text-link); font-weight:400}
+button.quiet:hover,.actions.quiet :is(summary.button,a.button):hover{border-color:var(--rule); filter:none}
+button.quiet:active,.actions.quiet :is(summary.button,a.button):active{transform:none}
+.actions.quiet>details.action[open]>summary.button{border-color:var(--rule)}
+.actions.quiet>details.action:has(button.danger)>summary.button{color:var(--danger)}
 button.small,.button.small,form.tiny button{block-size:var(--control-small); padding:0 var(--space-3); font-size:13px}
 .button.step{font:400 13px/1 var(--mono); padding:0 var(--space-3); gap:var(--space-2);
   &>[aria-hidden]{font:400 20px/1 var(--sans)}}

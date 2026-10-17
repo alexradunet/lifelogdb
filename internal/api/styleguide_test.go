@@ -45,6 +45,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 		{"form, a flag", `<label><input type="checkbox" name="unfiled" value="1"><span>Only what is in no category</span></label>`},
 		{"form, folded fields", `<details class="more-fields"><summary>3 more fields</summary>`},
 		{"boxed", `<details class="action"><summary class="button">New person</summary>`},
+		{"a quiet row", `<div class="actions quiet"><a class="button" href="/styleguide">Set cover photo</a><details class="action"><summary class="button">Find a page</summary>`},
 		{"form, a field of page titles", `<input type="text" name="category" value="" list="create-person-category"><datalist id="create-person-category"><option value="Bloodwork"><option value="Sport"></datalist>`},
 		{"body-editor", "<details><summary>Edit the day page</summary>\n<small class=\"desc\">CommonMark."},
 		{"body-editor, its form", `<textarea name="body" rows="18" required>A walk in Lisbon</textarea>`},
