@@ -37,6 +37,7 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, 
 	if !sent {
 		return nil, core.Invalid("send the original, or its sha256 and mime")
 	}
+	in.Day = h.dayNamed(in.Day)
 	if dry {
 		k, err := h.s.TryAddFile(r.Context(), src, in)
 		if err != nil {

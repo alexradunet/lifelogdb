@@ -97,8 +97,9 @@ func (h *server) today(*http.Request) (*siren.Entity, error) {
 }
 
 // dayNamed is the day that a path or a field names. The word "today" is today: the local day of the store's clock, the
-// day that GET /days/today redirects to. capture and open-day read their day through it, so the word has one meaning
-// in the API. Any other value comes back as it is, and the handler checks it.
+// day that GET /days/today redirects to. Every field of the catalog whose type is date is read through it, so the word
+// has one meaning in the API (TestEveryDayFieldReadsTheWordToday). Any other value comes back as it is: the schema's
+// CHECK refuses a write of a value that is not a day, and open-day checks its own.
 func (h *server) dayNamed(day string) string {
 	if day == "today" {
 		return h.s.Today()

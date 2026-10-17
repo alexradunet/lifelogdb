@@ -52,7 +52,7 @@ func tools(actions []siren.Action) ([]tool, error) {
 		}
 		list = append(list, tool{name: name, description: a.Description, schema: schema, action: a})
 		if a.Name == "open-day" {
-			day = []tool{{name: "get_day", description: "The day view of one local day (YYYY-MM-DD; default today): its journal page, places and readings.",
+			day = []tool{{name: "get_day", description: "The day view of one local day: its journal page, places and readings.",
 				schema: schema, action: a}}
 		}
 	}

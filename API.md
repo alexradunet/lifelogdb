@@ -44,7 +44,9 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 fields and sends the rest as the form. An action is offered on a resource only where it is legal there, so a client
 that follows `actions` needs no rules of its own. A `required` field that is missing or empty is refused (422
 `invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`,
-or a `q` of blanks only, it answers with no hits ([search](#search)).
+or a `q` of blanks only, it answers with no hits ([search](#search)). A field of the type `date` takes a local day,
+`YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
+value that is not a day is refused (422 `invalid`).
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
@@ -220,12 +222,12 @@ action `search` and no properties: a browser draws it as the page to search from
 ### day
 
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
-names, or to today when `day` is absent, empty or the word `today`, and a value that is not a day is 422). Links:
+names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`. Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `open-day`, `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
-answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. `POST /days/today/capture` captures on the local day.
+answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5.
 
 | property | type | meaning |
 |---|---|---|

@@ -263,7 +263,8 @@ func (h *server) record(r *http.Request, act spec, src string) (*siren.Entity, e
 	if err != nil {
 		return nil, err
 	}
-	id, err := h.s.Record(r.Context(), src, core.Reading{Metric: v.Get("metric"), Day: v.Get("day"), Value: *value,
+	day := h.dayNamed(v.Get("day"))
+	id, err := h.s.Record(r.Context(), src, core.Reading{Metric: v.Get("metric"), Day: day, Value: *value,
 		TakenAt: v.Get("taken_at"), TZ: v.Get("tz"), ImportKey: v.Get("import_key")})
 	if err != nil {
 		return nil, err
@@ -271,7 +272,7 @@ func (h *server) record(r *http.Request, act spec, src string) (*siren.Entity, e
 	if id == 0 { // a re-send: the first one stands (docs/contract/imports.md)
 		return &siren.Entity{Class: []string{"result"}, Title: "Already recorded",
 			Properties: map[string]any{"message": "a reading with this import_key was recorded before; nothing changed"},
-			Links:      []siren.Link{link("day", siren.DayHref(v.Get("day")), v.Get("day")), link("index", "/", "Home")}}, nil
+			Links:      []siren.Link{link("day", siren.DayHref(day), day), link("index", "/", "Home")}}, nil
 	}
 	return h.measurementEntity(r.Context(), id)
 }

@@ -370,6 +370,7 @@ func parityRows() []parityRow {
 		{"find", rowFind},
 		{"open-day", rowOpenDay},
 		{"open-day of today", rowOpenToday},
+		{"the word today in a day field", rowTodayInADayField},
 		{"browse", rowBrowse},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
@@ -417,6 +418,49 @@ func rowOpenToday(x *parityRun) {
 	}
 	x.refused("open-day", map[string]string{"day": "x"}, http.StatusUnprocessableEntity, "invalid")
 	x.absent(parityToday)
+}
+
+// The word "today" in a day field is the local day of the server's clock: a reading that record writes and a file
+// that add-file keeps with the day today have the day parityToday, in the answer and in the file. A value that is
+// neither a day nor the word is the 422 of the schema's CHECK (measurements_day, entities_day), and it writes nothing.
+func rowTodayInADayField(x *parityRun) {
+	ctx := x.t.Context()
+	if _, err := x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
+		x.t.Fatal(err)
+	}
+	m := x.ok("record", map[string]string{"metric": "Weight", "day": "today", "value": "71"})
+	if p := props(x.t, m); m.Class[0] != "measurement" || p["day"] != parityToday || p["value"] != json.Number("71") {
+		x.t.Errorf("record with the day today: %v %v %v, want 71 on %s", m.Class, p["day"], p["value"], parityToday)
+	}
+	f := x.ok("add-file", map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ab", 32), "mime": "application/pdf", "day": "today"})
+	if p := props(x.t, f); f.Class[0] != "file" || p["day"] != parityToday {
+		x.t.Errorf("add-file with the day today: %v %v, want the day %s", f.Class, p["day"], parityToday)
+	}
+	for _, tc := range []struct {
+		action, check string
+		args          map[string]string
+	}{
+		{"record", "measurements_day", map[string]string{"metric": "Weight", "day": "Today", "value": "72"}},
+		{"add-file", "entities_day", map[string]string{"title": "Notes.pdf", "sha256": strings.Repeat("cd", 32), "mime": "application/pdf", "day": "yesterday"}},
+	} {
+		if msg := x.refused(tc.action, tc.args, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, tc.check) {
+			x.t.Errorf("%s %v: %q, want the CHECK %s", tc.action, tc.args, msg, tc.check)
+		}
+	}
+	x.absent("Notes.pdf")
+	day := props(x.t, apitest.Must(x.t)(x.read.Get(ctx, "/days/"+parityToday)))
+	var readings []string
+	rows, _ := day["readings"].([]any)
+	for _, r := range rows {
+		r, _ := r.(map[string]any)
+		readings = append(readings, fmt.Sprint(r["metric"], " ", r["value"]))
+	}
+	if strings.Join(readings, ",") != "Weight 71" {
+		x.t.Errorf("the readings of %s: %v, want Weight 71 alone", parityToday, readings)
+	}
+	if e, err := x.page("Scan.pdf"); err != nil || props(x.t, e)["day"] != parityToday {
+		x.t.Errorf("the page Scan.pdf: %v %v, want the day %s", e, err, parityToday)
+	}
 }
 
 // browse lists the things of one kind, in a category or in none, a page of rows at a time; a combination with no
