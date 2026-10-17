@@ -35,6 +35,9 @@ lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original 
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
 ```
 
+To run `lifelog serve` as a system service with a nightly snapshot, see [deploy/](deploy/README.md): the unit files
+and the snapshot script, as a reference to compare with the installed copies before you replace them.
+
 An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a coding agent
 with the owner, in a conversation: the agent reads a source with its own tools and writes through the catalog's MCP
 tools, and the owner says yes or no to each person, place and link ([plan 089](docs/plans/089-no-import-process.md)).

@@ -1,6 +1,9 @@
 package dbtest
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -77,12 +80,16 @@ type recorder struct {
 func (r *recorder) Cleanup(f func())  { r.cleanups = append(r.cleanups, f) }
 func (r *recorder) Error(args ...any) { r.errors = append(r.errors, fmt.Sprint(args...)) }
 
-// TestAFailedCloseFailsTheTestOfNew: the cleanup of New fails the test when its Close fails. The test closes the file
-// first, so the Close of the cleanup fails.
+// TestAFailedCloseFailsTheTestOfNew: the cleanup of New fails the test when its Close fails. A failed PRAGMA optimize is
+// not such a failure (Close logs it), so the test gives the writer a connection whose own close fails.
 func TestAFailedCloseFailsTheTestOfNew(t *testing.T) {
 	r := &recorder{TB: t}
 	d := New(r)
-	if err := d.Close(); err != nil {
+	if err := d.W.Close(); err != nil {
+		t.Fatal(err)
+	}
+	d.W = sql.OpenDB(closeFails{})
+	if err := d.W.PingContext(t.Context()); err != nil { // opens the connection whose close fails
 		t.Fatal(err)
 	}
 	for _, f := range slices.Backward(r.cleanups) {
@@ -91,4 +98,19 @@ func TestAFailedCloseFailsTheTestOfNew(t *testing.T) {
 	if len(r.errors) == 0 {
 		t.Error("the Close of the cleanup failed, and the test did not fail")
 	}
+}
+
+// closeFails is a connector of connections that accept a statement and fail their close.
+type closeFails struct{}
+
+func (closeFails) Connect(context.Context) (driver.Conn, error) { return closeFailsConn{}, nil }
+func (closeFails) Driver() driver.Driver                        { return nil }
+
+type closeFailsConn struct{}
+
+func (closeFailsConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("not used") }
+func (closeFailsConn) Close() error                        { return errors.New("the connection cannot close") }
+func (closeFailsConn) Begin() (driver.Tx, error)           { return nil, errors.New("not used") }
+func (closeFailsConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	return driver.ResultNoRows, nil
 }

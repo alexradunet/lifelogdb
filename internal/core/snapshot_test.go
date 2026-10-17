@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -441,5 +442,85 @@ func TestSnapshotNeverFollowsDestinationFileSymlinks(t *testing.T) {
 				t.Errorf("snapshot changed the existing symlink: %q, %v", got, err)
 			}
 		})
+	}
+}
+
+// TestASnapshotThatFailsItsCheckLandsUnderTheFailedName: the live file is damaged on purpose, so the copy fails its
+// restore check. The copy is kept for the owner to read, but under life-DATE.failed.db (or the time form), so that no
+// restore routine picks it and no script counts it as good (D25). A later failed snapshot never overwrites an earlier one.
+func TestASnapshotThatFailsItsCheckLandsUnderTheFailedName(t *testing.T) {
+	s := fresh(t)
+	dir := t.TempDir()
+	s.SnapshotDir = dir
+	id, _, err := s.CreatePage(ctx, "cli", "Owner", "prose", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2031, 5, 14, 9, 30, 0, 0, time.UTC)
+	names := func() []string {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, e := range entries {
+			got = append(got, e.Name())
+		}
+		return got
+	}
+	// A clean snapshot first: the day name is taken, so the failed one below uses the time form.
+	if _, res, err := s.TakeSnapshot(ctx, now); err != nil || !res.OK {
+		t.Fatalf("clean snapshot: %+v %v", res, err)
+	}
+	// Deliberate external damage only: same pooled connection, FK disabled for this write.
+	if _, err := s.DB.W.Exec(`PRAGMA foreign_keys=OFF; UPDATE entities SET preferred_name_key='mood' WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.W.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		t.Fatal(err)
+	}
+	path, res, err := s.TakeSnapshot(ctx, now)
+	if err != nil || res == nil || res.OK {
+		t.Fatalf("damaged snapshot: %+v %v; want a failed check and no error", res, err)
+	}
+	if filepath.Base(path) != "life-2031-05-14T093000.failed.db" {
+		t.Errorf("returned path %s, want life-2031-05-14T093000.failed.db", path)
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Errorf("the returned path is not the file: %v", err)
+	}
+	if got, want := names(), []string{"life-2031-05-14.db", "life-2031-05-14T093000.failed.db"}; !slices.Equal(got, want) {
+		t.Fatalf("snapshot folder = %v, want %v", got, want)
+	}
+	// The good copy goes away. The day name is free again and fails again: it takes the failed name of the day.
+	if err := os.Remove(filepath.Join(dir, "life-2031-05-14.db")); err != nil {
+		t.Fatal(err)
+	}
+	first := mustRead(t, path)
+	again, res, err := s.TakeSnapshot(ctx, now)
+	if err != nil || res == nil || res.OK {
+		t.Fatalf("second damaged snapshot: %+v %v", res, err)
+	}
+	if filepath.Base(again) != "life-2031-05-14.failed.db" {
+		t.Errorf("second failed snapshot = %s, want life-2031-05-14.failed.db", again)
+	}
+	// A third failure the same day finds both failed names taken: it must not overwrite either.
+	third, res, err := s.TakeSnapshot(ctx, now)
+	if err != nil || res == nil || res.OK {
+		t.Fatalf("third damaged snapshot: %+v %v", res, err)
+	}
+	if third == again || third == path || !strings.HasSuffix(third, ".failed.db") {
+		t.Errorf("third failed snapshot = %s, want a new name that ends in .failed.db", third)
+	}
+	if !bytes.Equal(first, mustRead(t, path)) {
+		t.Error("a later failed snapshot overwrote an earlier one")
+	}
+	if got := names(); len(got) != 3 {
+		t.Errorf("snapshot folder = %v, want the three failed copies", got)
+	}
+	for _, name := range names() {
+		if !strings.HasSuffix(name, ".failed.db") {
+			t.Errorf("%s in the snapshot folder has no .failed.db name", name)
+		}
 	}
 }

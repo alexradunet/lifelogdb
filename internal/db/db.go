@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -301,17 +302,17 @@ func removeReservedDatabasePath(path string, reserved *os.File) error {
 }
 
 // Close runs PRAGMA optimize on the writer, except on a snapshot under its restore check, and then closes the
-// readers and the writer. It closes them also when the optimize fails, and returns every error. Close has no
-// caller's context: it runs at the end, often after a signal cancelled the operation's context, and the optimize
-// must run then too. busy_timeout limits its wait for the lock.
+// readers and the writer. It closes them also when the optimize fails. A failed optimize is logged and is not an
+// error of Close: it only keeps the planner statistics as they were, so no data is lost, and a command that is done
+// must not exit 1 for it. Close has no caller's context: it runs at the end, often after a signal cancelled the
+// operation's context, and the optimize must run then too. busy_timeout limits its wait for the lock.
 func (d *DB) Close() error {
-	var optimize error
 	if !d.keep {
 		if _, err := d.W.ExecContext(context.Background(), "PRAGMA optimize"); err != nil {
-			optimize = fmt.Errorf("PRAGMA optimize: %w", err)
+			log.Printf("lifelog: PRAGMA optimize skipped, no data is lost: %v", err)
 		}
 	}
-	return errors.Join(optimize, d.R.Close(), d.W.Close())
+	return errors.Join(d.R.Close(), d.W.Close())
 }
 
 // Write runs fn in one BEGIN IMMEDIATE transaction, committed when fn returns nil. When fn fails and the rollback
@@ -409,6 +410,34 @@ func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, err
 		return "", fmt.Errorf("check snapshot path %s: %w", to, err)
 	}
 	return to, Copy(ctx, from, to)
+}
+
+// MarkFailed renames a snapshot that did not pass its restore check from NAME.db to NAME.failed.db
+// (life-2026-10-02.failed.db, life-2026-10-02T143005.failed.db), and returns the new path. The old name is then free,
+// and no routine that restores or counts life-*.db snapshots by their good names can pick the file (D25). It never
+// overwrites a file: when the failed name is taken, it puts a number before ".failed.db" (NAME.2.failed.db).
+func MarkFailed(path string) (string, error) {
+	base, ok := strings.CutSuffix(path, ".db")
+	if !ok {
+		return path, fmt.Errorf("mark failed snapshot %s: the name does not end in .db", path)
+	}
+	for n := 1; ; n++ {
+		to := base + ".failed.db"
+		if n > 1 {
+			to = fmt.Sprintf("%s.%d.failed.db", base, n)
+		}
+		_, err := os.Lstat(to)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return path, fmt.Errorf("mark failed snapshot %s: %w", path, err)
+		}
+		if err := os.Rename(path, to); err != nil {
+			return path, fmt.Errorf("mark failed snapshot %s: %w", path, err)
+		}
+		return to, nil
+	}
 }
 
 // CheckSnapshotDir is the folder a snapshot may land in, resolved to its physical path: it must exist, and

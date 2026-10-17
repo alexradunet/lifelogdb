@@ -12,7 +12,10 @@
   connection, while the writer goes on writing; a file named by the local day ([D10](D10-time-model.md)), with the
   local time added when that day has one already; never written over an existing file; kept outside any git work
   tree. It is trusted once its **restore check** passes: the four [integrity checks](../contract/integrity-checks.md)
-  on the snapshot, left unchanged by them. A restore copies a checked snapshot back while nothing holds `life.db`
+  on the snapshot, left unchanged by them. A snapshot that fails the check is kept for the owner to read, but it is
+  renamed `life-YYYY-MM-DD.failed.db` (or `life-YYYY-MM-DDTHHMMSS.failed.db`; a number goes before `.failed.db` when
+  that name is taken). So a name without `.failed` is the name of a file that passed, and a routine that restores or
+  prunes by the good names never meets a failed one. A restore copies a checked snapshot back while nothing holds `life.db`
   open, without the old `-wal`, and puts the file back in WAL mode. The steps and the SQL are
   [take a snapshot](../cookbook/take-a-snapshot.md); the schema does not change.
 - **Alternatives.**

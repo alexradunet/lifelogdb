@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,18 +22,26 @@ import (
 	"lifelog/internal/db/dbtest"
 )
 
+// TestExecutableServeDrainsActiveRequest: an interrupt and a SIGTERM (the signal of systemctl stop and restart) both
+// stop new work, let an admitted request finish, and end the process with exit 0.
 func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("sending os.Interrupt to another process is unsupported on Windows")
+		t.Skip("Windows cannot send os.Interrupt or SIGTERM to another process")
 	}
 	root := t.TempDir()
 	binary := filepath.Join(root, "lifelog")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	// -cover: the coverage map counts the process (tests/README.md).
 	if out, err := exec.CommandContext(ctx, "go", "build", "-cover", "-mod=readonly", "-o", binary, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+		t.Run(sig.String(), func(t *testing.T) { drainsOn(ctx, t, binary, sig) })
+	}
+}
+
+func drainsOn(ctx context.Context, t *testing.T, binary string, sig os.Signal) {
 	live := dbtest.File(t)
 	cmd := exec.CommandContext(ctx, binary, "--db", live, "serve", "--addr", "127.0.0.1:0")
 	// The program writes its coverage to GOCOVERDIR: the coverage folder of this test binary when a coverage run gives
@@ -57,9 +66,14 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 			_ = cmd.Wait()
 		}
 	})
-	startup, err := bufio.NewReader(stderr).ReadString('\n')
+	stderrLines := bufio.NewReader(stderr)
+	startup, err := stderrLines.ReadString('\n')
 	if err != nil {
 		t.Fatalf("server startup: %q, %v", startup, err)
+	}
+	// The line says which program serves which file schema: the first thing to read at 2 a.m.
+	if want := "(version " + version + ", user_version 1)"; !strings.HasSuffix(strings.TrimSpace(startup), want) {
+		t.Errorf("server startup: %q, want it to end with %q", startup, want)
 	}
 	scheme, address := servedAt(t, startup)
 	if scheme != "http" {
@@ -88,7 +102,7 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	if response.StatusCode != http.StatusContinue {
 		t.Fatalf("handler did not begin reading the request: %s", response.Status)
 	}
-	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+	if err := cmd.Process.Signal(sig); err != nil {
 		t.Fatal(err)
 	}
 	// The listener closing is the observable shutdown barrier. Keep the admitted
@@ -118,6 +132,14 @@ func TestExecutableServeDrainsActiveRequest(t *testing.T) {
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK {
 		t.Fatalf("request completion: status=%s read=%v close=%v", response.Status, readErr, closeErr)
+	}
+	// The stop line follows the drain. The process closes its stderr at exit, so the read ends there.
+	rest, err := io.ReadAll(stderrLines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rest), "lifelog: stopped serving") {
+		t.Errorf("stderr after the drain: %q, want the stop line", rest)
 	}
 	err = cmd.Wait()
 	waited = true

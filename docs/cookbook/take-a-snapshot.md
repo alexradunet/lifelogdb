@@ -30,7 +30,7 @@ protects against a bad write, not against a lost disk; carrying it off the machi
 and close it **without** `PRAGMA optimize`. The FTS5 check is an `INSERT`, refused on a `mode=ro` connection
 (`attempt to write a readonly database`), so the check needs the writer's settings; the four checks write nothing and
 leave the snapshot as it was, byte for byte, where `PRAGMA optimize` can write to it. A snapshot that fails the check is
-not one to restore.
+not one to restore: it is renamed to `life-2026-10-02.failed.db` ([D25](../decisions/D25-snapshots.md)).
 
 **3. Restore**, when `life.db` is damaged or lost. With nothing holding `life.db` open — no writer, no reader — move
 `life.db`, `life.db-wal` and `life.db-shm` aside, copy the snapshot to `life.db`, put it back in WAL mode once, then
