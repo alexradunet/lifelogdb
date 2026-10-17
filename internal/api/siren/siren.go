@@ -1,8 +1,8 @@
 // Package siren is the hypermedia of the API: the Siren types that every answer is made of (an entity, its links, its
 // actions and their fields), the header that names the writer of a request, the JSON of an answer, and the addresses
-// of the resources that the API serves and that its view links. The API (internal/api), its view (internal/api/view)
-// and the clients (internal/client, internal/mcp, cmd/lifelog) import it. It imports only the standard library, so a
-// client of the types gets none of the server with them.
+// of the resources that the API serves and that its view links. The API (internal/api), its view (internal/api/view),
+// the clients (internal/client, internal/mcp, cmd/lifelog) and agentic-init (internal/agentic, for the JSON of an MCP
+// config) import it. It imports only the standard library, so a client of the types gets none of the server with them.
 package siren
 
 import (
