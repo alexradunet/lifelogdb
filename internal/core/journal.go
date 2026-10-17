@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"strings"
 
 	"lifelog/internal/text"
@@ -198,6 +199,10 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	return out, setPictures(ctx, s.DB.R, out, func(e *DayEntry) (string, *int64) { return e.body, &e.Picture })
 }
 
+// orderedMark is a number with a dot or a parenthesis at the start of a line. In a first line it is words ("1986.
+// Born"), so it is escaped before text.Plain reads the line, and CommonMark does not read it as an ordered list.
+var orderedMark = regexp.MustCompile(`^(\d{1,9})([.)])`)
+
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
@@ -207,7 +212,8 @@ const firstLineRunes = 160
 // with no words is passed over. It is for a list of days, not a rendering.
 func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
-		line = text.Plain(text.BlockMark.ReplaceAllString(strings.TrimSpace(line), ""))
+		line = text.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
+		line = text.Plain(orderedMark.ReplaceAllString(line, `$1\$2`))
 		if line == "" {
 			continue
 		}

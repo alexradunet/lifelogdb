@@ -250,6 +250,9 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		// a line with no words is passed over
 		{"---\nWords", "Words"},
 		{"![a lake](lake.png)\nWords", "Words"},
+		// a number with a dot or a parenthesis at the start is words, not the marker of an ordered list
+		{"1986. Born in Cluj", "1986. Born in Cluj"},
+		{"2) the second point", "2) the second point"},
 		{long, long[:160] + "…"},
 	} {
 		if got := firstLine(c.body); got != c.want {
