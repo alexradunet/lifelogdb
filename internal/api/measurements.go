@@ -11,13 +11,10 @@ import (
 	"strings"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
-
-// InUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
-// stays offered, a lab marker read twice a year is recorded from its own page (/metrics/{name}).
-const InUseDays = 60
 
 // recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
 // registry; the record action itself takes any registered metric.
@@ -26,7 +23,7 @@ func (h *server) recordAction(ctx context.Context, metric, day string) (siren.Ac
 	if metric != "" {
 		a.Field("metric").Value = metric
 	}
-	names, err := h.s.InUse(ctx, day, InUseDays)
+	names, err := h.s.InUse(ctx, day, view.InUseDays)
 	if err != nil {
 		return siren.Action{}, err
 	}
@@ -199,7 +196,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
-		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Day+" "+Num(m.Value)))
+		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Day+" "+view.Num(m.Value)))
 	}
 	return e, nil
 }

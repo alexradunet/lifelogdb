@@ -1,4 +1,4 @@
-package api
+package view
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 
 // The lines of the readings (docs/plans/093-words-phone-and-today.md): the line of a metric's last 14 days on the
 // tile of a day (trendLine), the line of a metric's recent readings on its card (sparkLine), and the chart of a
-// series on the page of its metric (chart). The tile and the card are in view_metrics.go. A line draws only the
+// series on the page of its metric (chart). The tile and the card are in metrics.go. A line draws only the
 // readings that have a day and a number: a retraction has no number.
 //
 // One drawer, plot, places the readings of each line: across by the line's own placement of a day, and up between
@@ -195,3 +195,6 @@ func chart(from, to string, readings any) template.HTML {
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())
 }
+
+// GlanceDays is how many days, the day itself the last, a reading's trend covers.
+const GlanceDays = 14

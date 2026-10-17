@@ -1,4 +1,8 @@
-package api
+// Package view draws an entity of the API as a page of HTML for a browser: a template per class of entity, and the
+// generic template for any other class. It reads nothing: a page is a function of its entity, the facts of its
+// request and the refused form that it shows (Draw). It imports no store (core or db), and a test holds this. The API
+// (internal/api) calls Draw, and serves the fonts, the manifest and the icon from Files.
+package view
 
 import (
 	"bytes"
@@ -438,4 +442,31 @@ func group(list any, key string) []bucket {
 		out[i].Items = append(out[i].Items, it)
 	}
 	return out
+}
+
+// styleParts are the parts of the style page that the methods of a real page's view give: the tiles of a day, the
+// sections of /metrics and the folds of a series. Each comes from its part of the synthetic properties of
+// styleEntity, on the clock of this view.
+type styleParts struct {
+	Tiles    []readingTile
+	Sections []metricSection
+	Series   metricReadings
+}
+
+// StyleParts are the parts of the style page that the methods of a real page's view give.
+func (v *view) StyleParts() styleParts {
+	props, _ := v.Props.(map[string]any)
+	part := func(key string) *view {
+		p, _ := props[key].(map[string]any)
+		return &view{Entity: v.Entity, Shell: v.Shell, Props: p}
+	}
+	return styleParts{Tiles: part("day").ReadingTiles(), Sections: part("metrics").MetricSections(), Series: part("series").MetricReadings()}
+}
+
+// Refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
+// the error and the form as the owner filled it (pageView).
+type Refusal struct {
+	Entity *siren.Entity // the error entity
+	Href   string        // the refused action's address
+	Sent   url.Values    // what the form sent
 }

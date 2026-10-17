@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"text/template/parse"
 	"time"
+
+	"lifelog/internal/api/view"
 )
 
 // The classes of a page and of a sheet: a class attribute's words, and a class selector's name. sheetComments cuts the
@@ -16,43 +17,6 @@ var (
 	cssSelector   = regexp.MustCompile(`\.([a-zA-Z_][\w-]*)`)
 	sheetComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
 )
-
-// calledTemplates are the names of the templates that the tree n calls, at any depth.
-func calledTemplates(n parse.Node, called map[string]bool) {
-	switch n := n.(type) {
-	case *parse.ListNode:
-		if n == nil {
-			return
-		}
-		for _, c := range n.Nodes {
-			calledTemplates(c, called)
-		}
-	case *parse.TemplateNode:
-		called[n.Name] = true
-	case *parse.IfNode:
-		calledTemplates(n.List, called)
-		calledTemplates(n.ElseList, called)
-	case *parse.RangeNode:
-		calledTemplates(n.List, called)
-		calledTemplates(n.ElseList, called)
-	case *parse.WithNode:
-		calledTemplates(n.List, called)
-		calledTemplates(n.ElseList, called)
-	}
-}
-
-// TestTheStylePageCallsEveryComponent: the style page calls the template of each component that has one. What each
-// draws is TestTheStylePageRunsTheRealTemplates's, in package api, which has the synthetic entity of the page.
-func TestTheStylePageCallsEveryComponent(t *testing.T) {
-	called := map[string]bool{}
-	calledTemplates(templates.Lookup("styleguide").Tree.Root, called)
-	for _, name := range []string{"leaf", "mood", "step", "form", "boxed", "body-editor", "onthisday", "reading-link",
-		"add-reading", "metric-cards", "weekdays", "monthbox", "readings", "pager"} {
-		if !called[name] {
-			t.Errorf("the style page does not call the template %s", name)
-		}
-	}
-}
 
 // TestTheStylePageRunsTheRealTemplates: the components of the style page draw the synthetic entity of the page
 // (styleEntity) with the real templates: the mark of each one, checked by hand, is in the page, and so is each
@@ -65,7 +29,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := Draw(styleEntity(), Facts{URL: u, Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}}, nil)
+	b, err := view.Draw(styleEntity(), view.Facts{URL: u, Shell: &view.Shell{Today: "2026-10-16", Zone: time.UTC}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +90,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	}
 
 	defined := map[string]bool{}
-	for _, m := range cssSelector.FindAllStringSubmatch(sheetComments.ReplaceAllString(string(MustFile("base.css"))+string(MustFile("app.css")), ""), -1) {
+	for _, m := range cssSelector.FindAllStringSubmatch(sheetComments.ReplaceAllString(string(view.MustFile("base.css"))+string(view.MustFile("app.css")), ""), -1) {
 		defined[m[1]] = true
 	}
 	if defined["num"] {

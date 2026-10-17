@@ -1,4 +1,4 @@
-package api
+package view
 
 import (
 	"html/template"
@@ -290,3 +290,7 @@ func unitWords(unit string) string {
 	}
 	return unit
 }
+
+// InUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
+// stays offered, a lab marker read twice a year is recorded from its own page (/metrics/{name}).
+const InUseDays = 60

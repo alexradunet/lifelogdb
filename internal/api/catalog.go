@@ -1,7 +1,8 @@
 // Package api serves life.db as hypermedia: Siren-style JSON for programs, plain HTML for a browser, one
 // representation behind both. A client needs no rules of its own: an action is offered only where it is legal,
 // with its fields (and their current values) filled in. The Siren types and the addresses of the resources are in
-// package siren, which the clients import too; this file holds the catalog of the actions.
+// package siren, which the clients import too; package view draws an entity as a page, and reads no store. This
+// file holds the catalog of the actions.
 package api
 
 import (

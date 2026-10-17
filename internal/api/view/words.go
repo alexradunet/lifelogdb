@@ -1,4 +1,4 @@
-package api
+package view
 
 import (
 	"fmt"
@@ -250,3 +250,9 @@ func (v *view) Value(x any) (template.HTML, error) {
 	v.clock().writeValue(&sb, shape)
 	return template.HTML(sb.String()), nil
 }
+
+// The layouts of a day in words.
+const (
+	layoutDate     = "Mon 2 Jan"
+	layoutDateYear = "Mon 2 Jan 2006"
+)

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 )
 
@@ -197,14 +198,6 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 	}
 }
 
-// Refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
-// the error and the form as the owner filled it (pageView).
-type Refusal struct {
-	Entity *siren.Entity // the error entity
-	Href   string        // the refused action's address
-	Sent   url.Values    // what the form sent
-}
-
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
 // did. The server runs its own GET of the back path through its routes, on the context and the headers of the POST,
 // and catches the entity that the route answers. answer then draws that entity with the refusal and the error's
@@ -234,7 +227,7 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *sir
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	get.Pattern = r.Pattern // a fault of the answer is logged under the route of the POST that the client sent (logFault)
-	answer(w, get, status, page.entity, frame{shell: h.s, refused: &Refusal{Entity: e, Href: r.URL.Path, Sent: r.PostForm}})
+	answer(w, get, status, page.entity, frame{shell: h.s, refused: &view.Refusal{Entity: e, Href: r.URL.Path, Sent: r.PostForm}})
 	return true
 }
 
@@ -349,9 +342,9 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 // frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
 // page with no sidebar: the answer of a guard, of a picture's error and of a refusal before the routes.
 type frame struct {
-	shell    *core.Store // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
-	refused  *Refusal    // the refused form that the page shows; nil: none
-	pageOnly bool        // a page for every client, a program too: the answer is presentation and has no JSON form
+	shell    *core.Store   // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
+	refused  *view.Refusal // the refused form that the page shows; nil: none
+	pageOnly bool          // a page for every client, a program too: the answer is presentation and has no JSON form
 }
 
 // answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
@@ -381,7 +374,7 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity,
 // pageAnswer is the status and the HTML of the page of e. When the page cannot be drawn, a defect of this program,
 // the owner reads the cause in the log and a client never does: the page is DrawFailed, with 500.
 func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []byte) {
-	f := Facts{URL: r.URL}
+	f := view.Facts{URL: r.URL}
 	if fr.shell != nil {
 		f.Shell = shellOf(r.Context(), fr.shell)
 	}
@@ -394,10 +387,10 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			f.Back = ref.RequestURI()
 		}
 	}
-	b, err := Draw(e, f, fr.refused)
+	b, err := view.Draw(e, f, fr.refused)
 	if err != nil {
-		logFault(r, "the view "+TemplateOf(e)+" cannot be drawn", err)
-		return http.StatusInternalServerError, []byte(DrawFailed)
+		logFault(r, "the view "+view.TemplateOf(e)+" cannot be drawn", err)
+		return http.StatusInternalServerError, []byte(view.DrawFailed)
 	}
 	return status, b
 }

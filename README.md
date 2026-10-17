@@ -65,7 +65,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `/browse` and `/search` take `limit` (1–500) and `offset` and link `next` and `prev`
   ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
-  person, place, metric, search, lists; `internal/api/html/`, embedded) or a generic one for any other. A
+  person, place, metric, search, lists; `internal/api/view/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it
@@ -359,7 +359,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 | `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files |
 | `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
 | `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
-| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types and the addresses of the resources, which the clients import too; `apitest` makes a fresh handler and its clients for a test |
+| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test |
 | `internal/client` | the hypermedia client, transport only: in-process or remote |
 | `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |

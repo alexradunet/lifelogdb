@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 )
 
 // fontTypes are the files the font route serves, by their extension: the faces and their licences.
@@ -26,7 +27,7 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := Files.ReadFile("html/fonts/" + name)
+	b, err := view.Files.ReadFile("html/fonts/" + name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -106,29 +107,10 @@ func styleEntity() *siren.Entity {
 			at("browse", nil)}}
 }
 
-// styleParts are the parts of the style page that the methods of a real page's view give: the tiles of a day, the
-// sections of /metrics and the folds of a series. Each comes from its part of the synthetic properties of
-// styleEntity, on the clock of this view.
-type styleParts struct {
-	Tiles    []readingTile
-	Sections []metricSection
-	Series   metricReadings
-}
-
-// StyleParts are the parts of the style page that the methods of a real page's view give.
-func (v *view) StyleParts() styleParts {
-	props, _ := v.Props.(map[string]any)
-	part := func(key string) *view {
-		p, _ := props[key].(map[string]any)
-		return &view{Entity: v.Entity, Shell: v.Shell, Props: p}
-	}
-	return styleParts{Tiles: part("day").ReadingTiles(), Sections: part("metrics").MetricSections(), Series: part("series").MetricReadings()}
-}
-
 // install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The
 // cache says how long a browser keeps it. The file is the same for every request, so it needs no read of the store.
 func install(name, typ, cache string) http.HandlerFunc {
-	b := MustFile(name)
+	b := view.MustFile(name)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", typ)
 		w.Header().Set("Cache-Control", cache)

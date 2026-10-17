@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
@@ -188,7 +189,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
 	for _, m := range d.Readings {
-		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Metric+" "+Num(m.Value)))
+		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Metric+" "+view.Num(m.Value)))
 	}
 	return e, nil
 }
