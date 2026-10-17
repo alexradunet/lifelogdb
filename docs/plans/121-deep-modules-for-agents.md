@@ -678,3 +678,147 @@ Left for later:
 | `usageError.Error` (`cmd/lifelog/main.go`), `redirect.Error` and `caught.WriteHeader` (`internal/api/serve.go`) are at 0 % in the coverage map | each one satisfies an interface (`error`, `http.ResponseWriter`) and no path calls it; for the closing record (done criterion 3) |
 | `agenticInit` is at 72.7 %: its error branches and its line "a kept file has another text" have no test of the CLI | `internal/agentic` tests the kept file (`TestASecondRunKeepsTheOwnersEdits`); the line is one `Fprintln` |
 | the table of `TestNavMarksThePageTheBrowserIsOn` has the path `/import/prepared`, of the import process that plan 089 removed | the row asks that no link is marked, which holds for any path; no step of this part asked |
+
+## Part 8 results (2026-10-17, `b8a5a8c`..`c6d3687`)
+
+The commits after `c7b5665`, in six steps with their review fixes, and this record. The owner said yes to every row of
+Part 8 (the owner's decisions, item 2). A range `A..B` is the commits after `A`, up to `B` and with it.
+
+| step | range | what |
+|---|---|---|
+| D1 | `c7b5665..1052172` | the Go checks that repeat a rule of the DDL go |
+| D2 | `1052172..f42b50e` | `/titles`, the `kind` of the answer of `tombstone-pages` and the import keys of an entity go |
+| D1, review fixes | `f42b50e..d91dfe3` | a day page renamed to its own date; a test, comments |
+| D3 | `d91dfe3..3d753bf` | `open-day` with no day opens today; `day` and `get_day` wrap it |
+| D4 | `3d753bf..634633d` | a field of page titles is an input with a datalist; three hand forms use `form` |
+| D3, review fixes | `634633d..74c32b4` | `open-day` reads the word `today`; three small fixes |
+| D5 | `74c32b4..dae824f` | numbers and words: the left-overs of Part 5 |
+| D4, review fixes | `dae824f..264c03d` | the id of a datalist, the unit and the range of New metric, a flag, a refused form; the Latest tile of a metric and the usage of `lifelog file` |
+| D5, review fixes | `264c03d..d0d0ba1` | the mean of a week, the line of the smallest readings, a blank search, the toast |
+| D4, second review fixes | `d0d0ba1..3b61d2c` | a fixed field, a field of page titles, `form` and `back`, a flag in README, Range |
+| D6 | `3b61d2c..c6d3687` | the view is a package of its own; the Siren types are a leaf package |
+
+The row of `save-body` is the owner's choice, not a change: an empty or a missing body is refused (422), as before
+Part 8. No commit of Part 8 changes it.
+
+- **The leaf** (`8486627`). `internal/api/siren`, 128 lines that import only the standard library: `Entity`, `Link`,
+  `Action` and `Field` with `LinkByRel` and `Field`, and the addresses of the resources that the API and the view both
+  write (`PageHref`, `DayHref`, `MeasurementHref`, `MetricHref`, `MonthHref`, `MonthOf`, `WeekHref`, `WeekKey`,
+  `YearHref`, `IsYear`, `BrowseHref`). It is under `internal/api`, not `internal/siren`: the types are the wire format
+  of this API, and its catalog is made of them. `client`, `mcp`, `cmd/lifelog` and `apitest` import the types from
+  `siren`, not from `api` by an alias: an alias is a second name for one type. `api/siren.go`, which then held the
+  catalog, is `api/catalog.go`.
+- **The view** (`452c2ea`). `internal/api/view`: the ten `view_*.go` files, `html/` and the internal tests of the view.
+  It imports `siren` and `text` of this module, and no store. `TestTheViewImportsNoStore` holds this with `go/build`,
+  and fails with an import of `core` (`c6d3687`). What `api` calls of the view: `view.Draw(e, view.Facts,
+  *view.Refusal)`, with `view.TemplateOf` and `view.DrawFailed` for a page that cannot be drawn; `view.Shell`, the
+  sidebar's read, which `shellOf` of `api` builds from the store; `view.Files` and `view.MustFile` for the routes of
+  the fonts, the manifest and the icon; `view.Num` for the title of a reading link; and `view.GlanceDays` and
+  `view.InUseDays`, the windows of the readings that the view shows.
+- **Before the moves.** The parse of a day and of an instant and the marks of plain text moved from `core` to
+  `internal/text/plain.go` (`7c00ef2`): the view reads them and imports no `core`. The API draws a page with one call
+  of the view (`26d9a50`). The tests that read the view and the catalog both were put on one side (`cb8d496`): the
+  tests of the forms draw actions written out in the shapes of the catalog's, and each fact of the catalog that they
+  named has a home in the tests of the catalog or of the pages. The names that cross a boundary were exported in one
+  commit of renames (`bb9b432`).
+- **The proof.** In each move commit (`7c00ef2`, `8486627`, `452c2ea`) each top-level declaration, with its doc comment,
+  the qualifiers cut and each run of blanks made one space, has the same hash before and after: 1550, 923 and 923
+  declarations, and 0 differ. The render dump (the pages of the fixture of `TestEveryViewRenders` and more: 112
+  answers, HTML and JSON, a refused form on its page, two toasts, the style page, the preview and the login page; the
+  instants masked) is the same, byte for byte, at `3b61d2c` and after each commit of D6 but `cb8d496`, which changes
+  tests only. `api` and `view` pass 260 top-level tests, as `api` did before (197 and 63).
+
+The answers that changed on the wire in Part 8, at `c7b5665` and at `c6d3687` (D6 changes none):
+
+| commit | request | before Part 8 | after Part 8 |
+|---|---|---|---|
+| `b8a5a8c` | rename of a day page to a title that no page has | 409 conflict "a day page's canonical date is not renamed" | 422 invalid "constraint failed: a journal day has only its canonical date name (1811)" |
+| `b8a5a8c` | rename of a day page to the title of another page | the same 409 | 409 exists "a page titled TITLE already exists", with the link `existing` |
+| `b8a5a8c` | rename of a day page to a title that is not valid | the same 409 | 422 invalid "title "TITLE" is not a valid title (docs/contract/titles-and-wikilinks.md)" |
+| `b8a5a8c` | rename of a page to a date that no page has | 409 conflict "a calendar date is reserved for its journal day" | 422 invalid, the sentence of 1811 above |
+| `b8a5a8c` | rename of a page to the date of a day page | the same 409 | 409 exists "a page titled DATE already exists", with the link `existing` |
+| `a2aa21a` | `register-metric` with the name of a day page | 409 conflict "DAY is taken by a page or a day page: a metric's title must be free or a plain page (D27)" | 422 invalid "constraint failed: CHECK constraint failed: entities_day_page_plain (275)"; with an `at` link, 422 invalid "constraint failed: type change would invalidate a retained link endpoint (1811)" |
+| `a2aa21a` | `register-metric` with the name of a person, a place or a file | 409 conflict "TITLE is taken by a TYPE or a day page: …" | 409 conflict "TITLE is taken by a TYPE: …" |
+| `a2aa21a` | `add-file` (its dry run, and `set-picture` with a new photo and a title) with the title of a day page with no text | 409 exists "a page titled DAY already exists" | the 422 of `entities_day_page_plain` (or of 1811, as above) |
+| `a2aa21a` | the same, when the day page and the file each have a text, and the texts differ | the same 409 exists | 409 conflict "DAY already has text of its own: give the file another title (two texts are never merged)" |
+| `1052172` | `link` of the kind `redirect` | 422 invalid "redirect is not a supported link kind" | 422 invalid "constraint failed: link kind is not registered in link_kinds (1811)" |
+| `1052172` | `link` of the kind `redirect` from an id that no page has | the same 422 | 404 not_found "no page ID" |
+| `1052172` | `unlink` of the kind `redirect` | the same 422 | 404 not_found "no redirect link from FROM to TO" |
+| `0946bc5` | `GET /titles` | 200, the titles that start with a prefix | 404, as an unknown route |
+| `452c40e` | the answer of `tombstone-pages` | the properties `kind` ("pages"), `ids` and `count` | `ids` and `count` |
+| `3d753bf`, `d25c02f` | `GET /days/go` with no day, an empty day or the word `today`; `do open-day`; the MCP tool `open_day` | 422 "missing field day"; the word `today`, 422 | 303 to `/days/TODAY`, the day view of today |
+| `3d753bf` | `lifelog day ""` | the 404 of `GET /days/` | the day view of today |
+| `3d753bf` | `get_day` and `lifelog day` with a value that is not a day | the 422 of `GET /days/VALUE`: 'day "VALUE" is not a day (YYYY-MM-DD)' | 422 "day must be a day, YYYY-MM-DD" |
+| `3d753bf`, `d25c02f` | the action `open-day` (in `GET /actions`, in the entities that offer it, in MCP) | "Open the day view of a local day (YYYY-MM-DD): its journal, …"; the field `day`, "Day", required | "… (YYYY-MM-DD), or of today when day is empty or today: its journal, …"; the field `day`, "Day (default today)", not required; `open_day` requires no argument, and `get_day` has its schema |
+| `634633d` | `GET /metrics` | `file-pages` and `register-metric` offer no options in `category` | the titles of the categories are the options of `category`, as on Browse and a page |
+| `634633d`, `9110fa2`, `9506a56`, `57971e1`, `61aecbd`, `3b61d2c` | the HTML of a field of page titles, of a flag and of three hand forms | as each commit's message gives it | a field of page titles with options is an input with a datalist, never a checkbox; a flag (0 and 1, not required) is one checkbox before its title; + Add of the categories, the pick bar and New metric are drawn by the template `form`; a form with an id sends `form`, and a refusal fills only the form that was sent; the number form requires its unit, and the score form requires its range (the pattern `[0-9]+-[0-9]+`) and calls it Range |
+| `c82251e`, `0843642` | `GET /weeks/WEEK` when the sum of the readings of the week overflows (two readings of 1e308) | 500 | 200, with the mean (1e+308). A week whose sum is finite has the mean that it had before Part 8 |
+| `c681380`, `bfb6c3d` | the lines of the readings 1e308 and -1e308 (the trend of a tile, the spark of a card, the chart) | points with NaN | each point in its place |
+| `2f60a83` | the title of a reading link in the JSON of `GET /days/DAY` and `GET /metrics/NAME` | `%g`: "walk 1e+06", "2026-10-12 1e-05" | as `num` writes it: "walk 1000000", "2026-10-12 0.00001" |
+| `e345d1b`, `e62207b` | the summary of a year and the Latest tile of a scale, on the page of a metric | "2 readings · 3 to 5 1-5"; "5 1-5" | "2 readings · 3 to 5 of 5"; "5 of 5" |
+| `285e05c`, `d0d0ba1` | the toast of `add-file` | "Filed under DAY."; "It was filed under DAY before." | "Its own day is DAY."; "Its page keeps the day DAY." |
+| `dae824f`, `72960d7` | `GET /search` with a `q` of only blanks | 422: the syntax error of FTS5 (ASCII blanks), or "a title prefix needs text and a limit" (a Unicode space) | 200, the empty search |
+| `264c03d` | the usage of `lifelog file` | "A photo is filed under its own day" | "Its own day is D, else a photo's EXIF date; a photo with neither has no day, another file the day it is kept" |
+
+In the file, not on the wire: since `f42b50e` the writer writes NULL in `entities.import_key`, where it could write a
+key (production code gave none since plan 089; only `internal/scaletest` gave one).
+
+Lines of Go, at `c7b5665` and at `c6d3687` (`wc -l` of the `.go` files of each folder; production is every file that
+is not a `_test.go`):
+
+| package | production | tests |
+|---|---|---|
+| `cmd/lifelog` | 836 → 838 | 2141 → 2194 |
+| `internal/api` | 6079 → 3676 | 11068 → 9363 |
+| `internal/api/apitest` | 98 → 99 | 117 → 118 |
+| `internal/api/siren` | 0 → 128 | 0 → 0 |
+| `internal/api/view` | 0 → 2439 | 0 → 2313 |
+| `internal/client` | 267 → 268 | 500 → 501 |
+| `internal/core` | 2868 → 2808 | 5988 → 6101 |
+| `internal/mcp` | 243 → 243 | 431 → 450 |
+| `internal/text` | 336 → 382 | 247 → 282 |
+| the other packages | 2355 → 2355 | 9485 → 9485 |
+| total | 13082 → 13236 | 29977 → 30807 |
+
+The templates and the sheets: 1888 → 1876 lines. D6 alone (`3b61d2c` → `c6d3687`): `api`, `siren` and `view` have
+6170 → 6243 production lines (the package comments, the doc comments of the exported addresses, the imports and
+`Draw`) and 11548 → 11676 lines of tests (the actions that the tests of the forms write out, and the test of the
+imports). `text` gains 46 lines of production and 35 of tests (`plain.go` and its test), and `core` loses 33 and 29.
+The plan estimated that about 2,100 lines move: 2439 lines of production and 2313 of tests moved to `view`.
+
+The checks at the end: `go test -count=1 -shuffle=on ./...` passes; `govulncheck ./...` (v1.9.0) finds no
+vulnerability; `staticcheck ./...` and `deadcode -test ./...` (with `GOOS=windows` too) report nothing.
+
+A commit is not amended. These messages say what is not true:
+
+| commit | the message says | the truth |
+|---|---|---|
+| `a2aa21a` | the kept 409s of `RegisterMetric` and `promote` are a rule that only the writer holds | the foreign keys of people, metrics and files hold them for a person, a metric and a file; only a place has no typed row (`966156e`) |
+| `dae824f` | a blank search does not reach `TitlesByPrefix`, so no answer of `/search` changes | true for ASCII blanks only: a `q` of a Unicode space reached it, and the message of its 422 changed (`72960d7`) |
+| `cb8d496` | `TestTheMetricsPageMakesAMetricACategoryAndAReading` holds the move of `file-pages` as one checkbox with its title | `TestTheMetricsPageDrawsCards` holds it |
+
+The rows of Part 5's "left for later" that Part 8 closed: the `%g` titles of the reading links (`2f60a83`), the
+summary of a year of a scale (`e345d1b`), the kinds of `browse` written by hand (`d37a011`) and the argument `s` of the
+template `readings` (`dfba158`).
+
+Questions for the owner, each true at `c6d3687`:
+
+| question | why it is a question |
+|---|---|
+| `record` and `add-file` refuse the day `today` (422, by a CHECK), and `capture` and `open-day` read it as today | one word, two answers; a change makes `record` and `add-file` read it too, or none |
+| a place is kept from being promoted to a person or registered as a metric only by the 409 of the writer: a place has no typed row, so no rule of the DDL refuses it | a rule that the DDL does not hold (issue 0068 asks for it in the DDL) |
+| the pattern of a score cannot say that lo is less than hi: "5-1" makes a number metric with the unit "5-1", and the server takes it | the unit of a metric never changes (`metrics_unit_fixed`) |
+| MCP has two tools for one action: `open_day` and `get_day` | `get_day` is the name of a read; one of the two can go |
+| an `import:*` or `agent:*` client that sends `create-page` again gets 409 exists: the API has no import key of an entity | a client that sends again must find the page itself |
+| `TestInitApplyFailurePreservesReplacement` (`internal/db`) fails when the temporary folder is on ext4 (seen again with `TMPDIR` on the disk of this machine; also before this plan) | likely a new file takes the inode of the removed one, and the identity check of `removeReservedDatabasePath` cannot see it: a small defect of `db.Init` |
+| the owner's agent folders keep the old texts of the agents until the owner runs `lifelog agentic-init --force` | the texts changed in Part 6 (`dd65bcf`, `a97b95f`, `9ca5bab`); Part 8 does not change them |
+
+Left for later:
+
+| finding | why it waits |
+|---|---|
+| `client` imports `api` only for `SourceHeader`, and `mcp` only for `WriteJSON`, so each builds `core`, `db` and SQLite | both names can move to `siren`; no row of Part 8 asks for it |
+| `view_forms_test.go`, `view_page_test.go` and `view_shell_test.go` of `internal/api` keep their names, though the `view_*.go` files are in `internal/api/view` | they are tests of package `api_test`: they draw the pages through the API and share their helpers (`browse`, `submit`, `fixedToday`) with the other tests of `api` |
+| the tests of the forms of `view` draw actions written out in the shapes of the catalog's (`cb8d496`): a change of a field of the catalog does not reach them | the view cannot import the catalog; the tests of the pages in `api` draw the real catalog |
+| `sheetComments` (`api/styleguide_test.go`) is the expression of `cssComments` (`view/sheets_test.go`) a second time | the test of the style page needs the catalog (`styleEntity`) and the sheets, and two test packages share no helper |
+| the title of a reading link in the JSON takes its number from `view.Num` | one way to write a number (`2f60a83`); a home for it in `siren` or `text` is a move that no row asks for |
