@@ -94,10 +94,11 @@ func (t *Tx) promote(id int64, typ, name string) error {
 	if err != nil {
 		return err
 	}
-	// This check is not a copy of a DDL rule. The foreign keys (id, entity_type) of people, metrics and files refuse
-	// a person, a metric or a file with a new type (D20). A place has no typed row, so no rule of the DDL refuses a
-	// place promoted: the writer keeps this 409 for that reason.
-	if have != "page" {
+	// The schema refuses a person, a place, a metric or a file promoted to another type (entities_promote_from_page).
+	// A promotion to the type that the entity has already changes no type, so no rule of the schema sees it: for a
+	// place the update below would only revive a tombstone, and for a person the people insert would fail on its key.
+	// The writer refuses it with this 409.
+	if have == typ {
 		return Conflict("page %d is a %s, not a plain page to promote", id, have)
 	}
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = ?, deleted_at = NULL WHERE id = ?`, typ, id); err != nil {
@@ -200,7 +201,8 @@ func (t *Tx) fileNew(id int64, category string) error {
 }
 
 // Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
-// tombstoned page is revived. A missing id is 404; a page of another type is a 409.
+// tombstoned page is revived. A missing id is 404; a page of another type is the schema's 422
+// (entities_promote_from_page), and a promotion to the type that the entity has already is a 409.
 func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name string) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name) })
 }

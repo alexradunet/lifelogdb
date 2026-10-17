@@ -59,7 +59,7 @@ func areaReq(name, title string, rows int) siren.Field {
 // server are built from it.
 var catalog = []spec{
 	{"capture", "Add to the day", "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. [[Title]] and #tag in the text link pages, creating them if new.",
-		"POST", "/days/{day}/capture", []siren.Field{path("day", "date", "Local day, YYYY-MM-DD"), area("text", "Entry (CommonMark)", 4),
+		"POST", "/days/{day}/capture", []siren.Field{path("day", "date", "Local day"), area("text", "Entry (CommonMark)", 4),
 			{Name: "mood", Type: "number", Title: "Mood 1-5", Options: []string{"1", "2", "3", "4", "5"}}}, false, false},
 	{"create-page", "New page", "Create a page with a unique title (a valid file name) and a CommonMark body. category files it in that category page (D26) in the same write, making the category when it is new.",
 		"POST", "/pages", []siren.Field{req("title", "text", "Title"), area("body", "Body", 12), pageField("category", "Category (title)", false)}, false, false},
@@ -118,7 +118,7 @@ var catalog = []spec{
 			opt("limit", "number", "Rows on a page (1-500, default 200)"), opt("offset", "number", "Rows skipped")}, false, false},
 	{"find", "Find page", "Open the page with this title (any case or normalisation).",
 		"GET", "/pages", []siren.Field{pageField("title", "Title", true)}, false, false},
-	{"open-day", "Go to a day", "Open the day view of a local day (YYYY-MM-DD), or of today when day is empty or today: its journal, the pages of that day, the places it was at and its readings.",
+	{"open-day", "Go to a day", "Open the day view of a local day: its journal, the pages of that day, the places it was at and its readings.",
 		"GET", "/days/go", []siren.Field{opt("day", "date", "Day (default today)")}, false, false},
 	{"snapshot", "Take a snapshot", "The owner's dated copy of life.db (docs/cookbook/take-a-snapshot.md) into the server's snapshot folder, never overwriting, then its restore check. The answer names the file and the check.",
 		"POST", "/snapshots", nil, true, false},

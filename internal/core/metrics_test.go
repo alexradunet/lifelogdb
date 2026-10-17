@@ -482,6 +482,13 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if _, err := s.CreatePlace(ctx, "cli", "Lake Example", ""); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf"}); err != nil {
+		t.Fatal(err)
+	}
+	const promoteOnly = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
 	for _, c := range []struct {
 		name string
 		m    NewMetric
@@ -492,9 +499,10 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 		{"a day as the category", NewMetric{Name: "Run", Unit: "km", Category: "2031-05-01"}, 422, ""},
 		// a day page is never a metric: the schema refuses the promotion
 		{"a day page's title", NewMetric{Name: "2031-05-02", Unit: "km"}, 422, "entities_day_page_plain"},
-		// a place is never a metric, and no rule of the schema refuses it (a place has no typed row): the writer
-		// refuses a page of another type (D27)
-		{"a place's title", NewMetric{Name: "Lake Example", Unit: "km"}, 409, "is taken by a place: a metric's title must be free or a plain page"},
+		// a person, a place or a file is never a metric: the schema refuses the promotion (entities_promote_from_page)
+		{"a place's title", NewMetric{Name: "Lake Example", Unit: "km"}, 422, promoteOnly},
+		{"a person's title", NewMetric{Name: "Ana Example", Unit: "km"}, 422, promoteOnly},
+		{"a file's title", NewMetric{Name: "Scan.pdf", Unit: "km"}, 422, promoteOnly},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)

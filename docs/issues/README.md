@@ -4,11 +4,14 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0080 are listed below; the next one is **0081**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0083 are listed below; the next one is **0084**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0083](0083-a-fault-of-a-savepoint-is-not-a-skipped-target.md) | The save recipe does not say that a fault of SAVEPOINT, ROLLBACK TO or RELEASE fails the save | resolved |
+| [0082](0082-the-meta-rows-name-removed-columns.md) | The lifelog_meta rows name the columns of the tasks that D23 removed | resolved |
+| [0081](0081-only-the-writer-keeps-a-place-a-place.md) | Only the writer keeps a place from becoming a person or a metric | resolved |
 | [0080](0080-a-filed-day-page-is-shown-nowhere.md) | A day page can be filed in a category, and Browse then shows it nowhere | resolved |
 | [0079](0079-tasks-cost-more-than-they-give.md) | Tasks and occurrences cost more than they give | resolved |
 | [0078](0078-habit-periods-cost-more-than-they-give.md) | Habit periods cost more than they give | resolved |

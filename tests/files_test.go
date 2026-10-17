@@ -121,7 +121,7 @@ func files(s *S) {
 		c.tab("select e.entity_type, f.entity_type from entities e join files f using(id) where id=?", g) == "file|file", r1, r2)
 	s.K("...and the embed that made it now lands on the file (the id did not change)", slices.Contains(c.linksOf(sd), "Unseen.png") &&
 		c.n("select count(*) from links where from_id=? and to_id=?", sd, g) == 1)
-	s.K("a file cannot be turned back into a plain page (the files row's FK)", err(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
+	s.K("a file cannot be turned back into a plain page (entities_promote_from_page)", strings.Contains(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g), "only a plain page is promoted"))
 	s.K("a day page cannot become a file (entities_day_page_plain)", strings.Contains(c.tryx("UPDATE entities SET entity_type='file' WHERE id=?", day), "entities_day_page_plain"))
 	empty := c.named("file", "Empty.pdf")
 	s.K("ghost_pages never lists a file page, however empty and alone", c.n("select count(*) from ghost_pages where id=?", empty) == 0)

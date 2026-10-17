@@ -826,7 +826,8 @@ func (s *S) saveSteps() (saveSteps, bool) {
 
 // docSave is the link sync of cookbook/save-a-body run literally (steps 1-4), inside the caller's transaction,
 // with the targets the writer's extraction finds. With validate false it skips the title predicate, so the
-// SAVEPOINT alone must keep a bad target from blocking the save.
+// SAVEPOINT alone must keep a bad target from blocking the save. An error of a target's steps 1-3 skips the target;
+// an error of SAVEPOINT, ROLLBACK TO or RELEASE stops the save, as the recipe says.
 func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bool) (linked []int64, skipped []string) {
 	var keys, titles []string
 	if validate {
@@ -866,8 +867,7 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 			} else {
 				tid = r[0][0].(int64)
 				if tid == pageID || linkedIDs[tid] {
-					_, e := c.query(st.rel)
-					return 0, e
+					return 0, nil
 				}
 				if r[0][2] != nil {
 					if _, err := c.query(st.rev, P{"found_id": tid}); err != nil {
@@ -875,10 +875,7 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 					}
 				}
 			}
-			if _, err := c.query(st.ln, P{"page_id": pageID, "target_id": tid, "source": "ui"}); err != nil {
-				return 0, err
-			}
-			_, err = c.query(st.rel)
+			_, err = c.query(st.ln, P{"page_id": pageID, "target_id": tid, "source": "ui"})
 			return tid, err
 		}()
 		if err != nil {
@@ -887,6 +884,7 @@ func (c *C) docSave(st saveSteps, pageID int64, body, ownKey string, validate bo
 			skipped = append(skipped, title)
 			continue
 		}
+		c.must(st.rel)
 		if tid != 0 {
 			linked = append(linked, tid)
 			linkedIDs[tid] = true

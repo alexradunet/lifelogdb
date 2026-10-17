@@ -22,7 +22,9 @@
   them, so "tamper-evident" would overstate it.
 - **Known asymmetry.** `links` rows are hard-deleted — no tombstone, no audit. Wikilink removal is
   *required* (the body is the truth, [D19](D19-wikilink-save-contract.md)). Authored links (`at`, `part-of`) go the same way,
-  weighed against a split policy and **rejected**: the *evidence* (the day pages that name
-  people together) survives, and relationship links are a summary over it. Relationship removal is therefore invisible. The split
+  weighed against a split policy and **rejected**: an authored link says what is true now (a place the owner was at
+  on a day, a category a page is filed in), as a body does. Its removal is an edit, and an edit keeps no history
+  ([D12](D12-no-revision-tables.md)): the removal is invisible, as the old text of a body is. A
+  [snapshot](D25-snapshots.md) keeps the links it contains. The split
   policy stays additive later (a `deleted_at` column + partial unique index + a flag in `link_kinds`),
   and `sqlite-history` triggers [R48](../research/references.md#r48) are the documented retrofit.

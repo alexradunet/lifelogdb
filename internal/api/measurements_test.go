@@ -11,10 +11,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
+	"lifelog/internal/core"
+	"lifelog/internal/db/dbtest"
 )
 
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): Record, every reading and the metric's own page.
@@ -713,6 +717,31 @@ func TestAReadingLinkWritesItsNumberAsNumDoes(t *testing.T) {
 		slices.Sort(got)
 		if !slices.Equal(got, want) {
 			t.Errorf("%s: the reading links are %q, want %q", path, got, want)
+		}
+	}
+}
+
+// TestAReadingSentAgainLinksTheDayOfTheStoredReading: a reading sent again with the same import_key answers "Already
+// recorded", and its day link is the day of the reading that stands, not the day of the request. The first send says
+// day=today on 2026-10-13. The next ones come on the next day: one says today again, and one names another day.
+func TestAReadingSentAgainLinksTheDayOfTheStoredReading(t *testing.T) {
+	now := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+	c := client.InProcess(api.New(&core.Store{DB: dbtest.New(t), Clock: func() time.Time { return now }, Zone: time.UTC}), "cli")
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
+	record := func(day string) *siren.Entity {
+		t.Helper()
+		return apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": day, "value": "71.2", "import_key": "scale/2026-10-13"}))
+	}
+	if first := record("today"); apitest.Href(first, "day") != "/days/2026-10-13" {
+		t.Fatalf("the first send links the day %q, want /days/2026-10-13", apitest.Href(first, "day"))
+	}
+	now = now.AddDate(0, 0, 1)
+	for _, day := range []string{"today", "2026-09-01"} {
+		again := record(day)
+		if again.Title != "Already recorded" || apitest.Href(again, "day") != "/days/2026-10-13" {
+			t.Errorf("sent again with day=%s: %q links the day %q, want Already recorded with /days/2026-10-13", day, again.Title, apitest.Href(again, "day"))
 		}
 	}
 }

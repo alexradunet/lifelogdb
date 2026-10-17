@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -198,6 +199,85 @@ func TestMCPNumericSchema(t *testing.T) {
 		t.Errorf("capture's mood is %q, want the numbers 1 to 5", moodEnum)
 	}
 	callTool(t, ctx, session, "record", map[string]any{"metric": "weight", "day": "2026-06-01", "value": 71.5})
+}
+
+// TestADateFieldTakesADayOrTheWordToday: a field of the type date takes a local day or the word today (API.md, "The
+// entity"). The MCP schema of the field says so once, from the type: a pattern that takes the two, in place of the
+// JSON Schema format date, which takes no word, and a description that adds the hint to the field's title. A title
+// that ends with its own brackets takes the hint inside them, so the description has one pair of brackets. The title
+// does not carry the hint, because it is also the label of the browser's date picker, in which a person cannot type
+// the word.
+func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
+	const pattern, hint = `^([0-9]{4}-[0-9]{2}-[0-9]{2}|today)$`, "YYYY-MM-DD or today)"
+	c := mcpTestClient(t)
+	session, ctx := numericSession(t, c)
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	props := map[string]map[string]map[string]any{} // tool, field: the field's schema
+	for _, tool := range tools.Tools {
+		b, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var schema struct {
+			Properties map[string]map[string]any `json:"properties"`
+		}
+		if err := json.Unmarshal(b, &schema); err != nil {
+			t.Fatal(err)
+		}
+		props[tool.Name] = schema.Properties
+	}
+	day := props["record"]["day"]
+	if day["pattern"] != pattern || day["description"] != "Day (YYYY-MM-DD or today)" || day["type"] != "string" {
+		t.Errorf("record's day: %v, want the pattern %s and the description Day (YYYY-MM-DD or today)", day, pattern)
+	}
+	for tool, want := range map[string]string{ // the titles with brackets of their own
+		"get_day":  "Day (default today; YYYY-MM-DD or today)",
+		"add_file": "Its day (default: a photo's EXIF date, else none; any other file: today; YYYY-MM-DD or today)",
+	} {
+		if got := props[tool]["day"]["description"]; got != want {
+			t.Errorf("%s's day: the description %q, want %q", tool, got, want)
+		}
+	}
+	re := regexp.MustCompile(pattern)
+	for value, want := range map[string]bool{"2026-10-17": true, "today": true, "Today": false, "yesterday": false, " today": false, "2026-10-17T00:00:00Z": false} {
+		if re.MatchString(value) != want {
+			t.Errorf("the pattern takes %q: %v, want %v", value, !want, want)
+		}
+	}
+	actions, err := c.Catalog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dates := 0
+	for _, a := range actions {
+		if a.Owner {
+			continue
+		}
+		for _, f := range a.Fields {
+			if f.Type != "date" {
+				continue
+			}
+			names := []string{toolName(a.Name)}
+			if a.Name == "open-day" {
+				names = append(names, "get_day") // get_day has the schema of open-day
+			}
+			for _, tool := range names {
+				dates++
+				p := props[tool][f.Name]
+				desc, _ := p["description"].(string)
+				if _, ok := p["format"]; ok || p["pattern"] != pattern || !strings.HasPrefix(desc, strings.TrimSuffix(f.Title, ")")) ||
+					!strings.HasSuffix(desc, hint) || strings.Count(desc, "(") != 1 || strings.Count(desc, ")") != 1 || strings.Count(desc, "YYYY-MM-DD") != 1 {
+					t.Errorf("%s.%s: %v, want the pattern, no format, and the title %q with the hint in one pair of brackets", tool, f.Name, p, f.Title)
+				}
+			}
+		}
+	}
+	if dates < 7 { // capture, create-person (2), add-file, record, open-day and get_day
+		t.Errorf("%d date fields in the tools, want 7 at least", dates)
+	}
 }
 
 func TestMCPNumericArguments(t *testing.T) {

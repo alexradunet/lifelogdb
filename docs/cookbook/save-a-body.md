@@ -3,8 +3,12 @@
 The app reads the body ([titles and wikilinks](../contract/titles-and-wikilinks.md)) and gets a list of distinct valid targets, each with `:title` (first
 spelling, NFC) and `:key` (`title_key(:title)`). Everything below is **one `BEGIN IMMEDIATE`
 transaction**: two writers that save the same new link cannot both see "none found" — the second
-waits, then finds the first one's page. Each target is its own `SAVEPOINT`, so a target that fails for
-any reason is rolled back alone (no link, no orphan `entities` row) and the save carries on ([D19](../decisions/D19-wikilink-save-contract.md)).
+waits, then finds the first one's page. Each target is its own `SAVEPOINT`. An error in steps 1–3 of a target rolls
+that target back alone (no link, no orphan `entities` row), and the save goes on. An error of `SAVEPOINT`, of
+`ROLLBACK TO` or of `RELEASE` fails the whole save: send `ROLLBACK` and report the error of that statement. The
+state of the transaction is then not known: SQLite can have rolled it back already (on a full file it does, executed),
+and the `ROLLBACK` then fails with "no transaction is active", which does no harm
+([D19](../decisions/D19-wikilink-save-contract.md) gives the reason).
 
 ```mermaid
 %% diagram: save-flow
@@ -24,6 +28,9 @@ flowchart TD
     link -->|"any error in 1 to 3"| back["ROLLBACK TO target, RELEASE<br/>no link and no orphan row"]
     release --> more
     back --> more
+    sp -->|"error of SAVEPOINT"| fault(["ROLLBACK<br/>the save fails"])
+    release -->|"error of RELEASE"| fault
+    back -->|"error of ROLLBACK TO or RELEASE"| fault
     more -->|"no"| prune["4. DELETE the wikilink rows<br/>the body no longer names"]
     prune --> commit(["COMMIT"])
 ```

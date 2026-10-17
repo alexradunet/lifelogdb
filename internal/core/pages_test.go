@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -102,8 +104,8 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 	}
 }
 
-// The lifecycle of an entity (docs/plans/098-the-codebase-made-cohesive.md): a
-// missing id is 404, the same state again is a no-op, and a promotion of what is not a plain page is a 409.
+// The lifecycle of an entity (docs/plans/098-the-codebase-made-cohesive.md): a missing id is 404, and the same state
+// again is a no-op. TestPromoteOfATypedEntity holds the answers of a promotion of what is not a plain page.
 func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	s := fresh(t)
 	id, _, err := s.CreatePage(ctx, "cli", "Lifecycle witness", "", "")
@@ -135,8 +137,67 @@ func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	if err := s.Promote(ctx, "cli", id, "place", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Promote(ctx, "cli", id, "person", ""); status(err) != 409 {
-		t.Errorf("promote of a place: %v, want 409", err)
+}
+
+// TestPromoteOfATypedEntity: only a plain page is promoted. A person, a place, a metric or a file promoted to another
+// type is refused by the schema (entities_promote_from_page, D20): a 422 with the sentence of the trigger. A promotion
+// to the type that the entity has already changes no type, so no rule of the schema sees it: the writer refuses it
+// with a 409, and it does not revive a tombstone. A refusal writes nothing.
+func TestPromoteOfATypedEntity(t *testing.T) {
+	s := fresh(t)
+	person, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	place, err := s.CreatePlace(ctx, "cli", "Lake Example", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, err := s.CreatePlace(ctx, "cli", "Old Lake", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Steps", Unit: "n"}); err != nil {
+		t.Fatal(err)
+	}
+	metric, err := s.PageID(ctx, "Steps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const trigger = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
+	for _, c := range []struct {
+		name string
+		id   int64
+		to   string
+		want int
+	}{
+		{"a person to a place", person, "place", 422},
+		{"a place to a person", place, "person", 422},
+		{"a metric to a person", metric, "person", 422},
+		{"a metric to a place", metric, "place", 422},
+		{"a file to a person", file.ID, "person", 422},
+		{"a file to a place", file.ID, "place", 422},
+		{"a person to a person", person, "person", 409},
+		{"a place to a place", place, "place", 409},
+		{"a tombstoned place to a place", gone, "place", 409},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			before := everyRow(t, s)
+			err := s.Promote(ctx, "cli", c.id, c.to, "")
+			if status(err) != c.want || c.want == 422 && !strings.Contains(fmt.Sprint(err), trigger) {
+				t.Fatalf("status %d (%v), want %d", status(err), err, c.want)
+			}
+			if after := everyRow(t, s); after != before {
+				t.Errorf("a refused promotion wrote:\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+		})
 	}
 }
 

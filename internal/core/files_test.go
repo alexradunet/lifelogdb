@@ -283,9 +283,6 @@ func TestAddFileRefuses(t *testing.T) {
 	if old, err := s.PageID(ctx, "Lake.jpg"); err != nil || old != k.ID {
 		t.Fatalf("old file handle: %d %v", old, err)
 	}
-	if err := s.Promote(ctx, "cli", k.ID, "person", ""); status(err) != 409 {
-		t.Errorf("a file page was promoted: %v", err)
-	}
 	if r, err := s.Integrity(ctx); err != nil || !r.OK {
 		t.Errorf("integrity: %+v %v", r, err)
 	}

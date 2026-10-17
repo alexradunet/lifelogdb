@@ -13,9 +13,9 @@ import (
 )
 
 // document: the docs themselves — presence of the threat model's 2075 reading summaries in a fresh database
-// (each table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows); the tree
-// holds together (every decision D1..Dn in its own record, every relative link resolves, every page is reachable
-// from docs/README.md); the totals in schema/README.md match.
+// (each table's inside its CREATE statement, the cross-table ones in a few lifelog_meta rows, which name only what
+// the file has); the tree holds together (every decision D1..Dn in its own record, every relative link resolves,
+// every page is reachable from docs/README.md); the totals in schema/README.md match.
 func document(s *S) {
 	// ---- the 2075 test
 	c := s.fresh()
@@ -71,6 +71,37 @@ func document(s *S) {
 		}
 	}
 	s.K("every lifelog_meta key answers some question (no rule without a question)", len(unused) == 0, slices.Sorted(slices.Values(unused)))
+	// A row names only what the file has (issue 0082): a word with an underscore is a column, a schema object or a
+	// lifelog_meta key of this file, or a pragma, which some row writes as PRAGMA x or x=VALUE.
+	known := map[string]bool{}
+	for k := range meta {
+		known[k] = true
+	}
+	for name := range schema {
+		known[name] = true
+		for _, col := range c.col("select name from pragma_table_info(?)", name) {
+			known[col] = true
+		}
+	}
+	snake := regexp.MustCompile(`(PRAGMA )?\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b(=?)`)
+	named := map[string][][]string{}
+	for k, v := range meta {
+		named[k] = snake.FindAllStringSubmatch(v, -1)
+		for _, m := range named[k] {
+			if m[1] != "" || m[3] != "" {
+				known[m[2]] = true
+			}
+		}
+	}
+	var stale []string
+	for k, ms := range named {
+		for _, m := range ms {
+			if !known[m[2]] {
+				stale = append(stale, k+": "+m[2])
+			}
+		}
+	}
+	s.K("every name with an underscore in a lifelog_meta row is a column, a schema object, a key or a pragma of this file", len(stale) == 0, slices.Sorted(slices.Values(stale)))
 	s.K("import-a-row-once sends an imported body through the save contract (D19)", strings.Contains(s.d.Page("cookbook/import-a-row-once.md"), "run the link sync of [save a body](save-a-body.md)"))
 
 	// ---- the rules live in the file, once

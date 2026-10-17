@@ -1,19 +1,25 @@
 package api_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/internal/photo"
+	"lifelog/internal/photo/phototest"
 )
 
 // TestTheStoresClockIsTheOneClock: the store's clock is in a zone far from UTC, at an instant where the UTC day and
@@ -110,5 +116,89 @@ func TestTheStoresClockIsTheOneClock(t *testing.T) {
 	now = now.Add(time.Hour)
 	if feedbackOf(to) {
 		t.Error("a receipt is shown an hour after it was made, by the store's clock")
+	}
+}
+
+// TestEveryDayFieldReadsTheWordToday: in a zone far from UTC, the word "today" in each field of the catalog whose type
+// is date is the local day of the store's clock, not the UTC day. Each case sends the word in its field and reads back
+// the day that the action wrote or opened. A date field with no case fails the test, so a new day field cannot miss the
+// word. A photo whose EXIF names another day keeps the day of the field, through the multipart form. The word is exact:
+// "Today" is not a day, and a write refuses it with the 422 of the schema's CHECK (open-day, a read, with its own).
+func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
+	const today = "2026-03-11"
+	zone := time.FixedZone("+14", 14*60*60)               // the offset of Pacific/Kiritimati, with no zone database
+	now := time.Date(2026, 3, 10, 11, 30, 0, 0, time.UTC) // 2026-03-11 01:30:00 in the zone; the UTC day is 2026-03-10
+	s := &core.Store{DB: dbtest.New(t), Clock: func() time.Time { return now }, Zone: zone}
+	c := client.InProcess(api.New(s), "cli")
+	ctx := t.Context()
+	catalog := apitest.Must(t)(c.Get(ctx, "/actions"))
+	do := func(action string, v map[string]string) (*siren.Entity, error) {
+		return c.Do(ctx, apitest.Action(t, catalog, action), v)
+	}
+	apitest.Must(t)(do("register-metric", map[string]string{"name": "weight", "unit": "kg"}))
+	n := 0 // each call writes a new title, and sends a new photo
+	title := func(s string) string { n++; return fmt.Sprintf("%s %d", s, n) }
+	cases := map[string]struct { // "action field"
+		send    func(word string) (*siren.Entity, error) // the action with the word in the field
+		refusal string                                   // a part of the message of the refusal of "Today"
+	}{
+		"capture day": {func(w string) (*siren.Entity, error) {
+			return do("capture", map[string]string{"day": w, "text": "Woke early."})
+		}, "CHECK constraint failed: entities_day"},
+		"create-person birth_day": {func(w string) (*siren.Entity, error) {
+			return do("create-person", map[string]string{"title": title("Born"), "birth_day": w})
+		}, "CHECK constraint failed: people_birth_day"},
+		"create-person death_day": {func(w string) (*siren.Entity, error) {
+			return do("create-person", map[string]string{"title": title("Died"), "death_day": w})
+		}, "CHECK constraint failed: people_death_day"},
+		"add-file day": {func(w string) (*siren.Entity, error) {
+			jpg := filepath.Join(t.TempDir(), title("IMG")+".jpg")
+			taken := fmt.Sprintf("2019-06-%02d 07:41:12", n) // the photo's own day in its EXIF, which the field overrides
+			if err := os.WriteFile(jpg, phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: taken}, true), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			return c.DoFiles(ctx, apitest.Action(t, catalog, "add-file"), map[string]string{"title": filepath.Base(jpg), "day": w}, map[string]string{"original": jpg})
+		}, "CHECK constraint failed: entities_day"},
+		"record day": {func(w string) (*siren.Entity, error) {
+			return do("record", map[string]string{"metric": "weight", "day": w, "value": "71"})
+		}, "CHECK constraint failed: measurements_day"},
+		"open-day day": {func(w string) (*siren.Entity, error) {
+			return do("open-day", map[string]string{"day": w})
+		}, "day must be a day"},
+	}
+	var fields []string
+	for _, a := range catalog.Actions {
+		for _, f := range a.Fields {
+			if f.Type != "date" {
+				continue
+			}
+			key := a.Name + " " + f.Name
+			fields = append(fields, key)
+			tc, ok := cases[key]
+			if !ok {
+				t.Errorf("the date field %s has no case here", key)
+				continue
+			}
+			e, err := tc.send("today")
+			if err != nil {
+				t.Errorf("%s with the word today: %v", key, err)
+				continue
+			}
+			got := props(e)["day"]
+			if person, ok := props(e)["person"].(map[string]any); ok { // a person's days are in its details
+				got = person[f.Name]
+			}
+			if got != today {
+				t.Errorf("%s with the word today: the day %v, want %s", key, got, today)
+			}
+			if _, err := tc.send("Today"); apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(err.Error(), tc.refusal) {
+				t.Errorf("%s with the word Today: %v, want a 422 that says %s", key, err, tc.refusal)
+			}
+		}
+	}
+	for key := range cases {
+		if !slices.Contains(fields, key) {
+			t.Errorf("the case %s names no date field of the catalog", key)
+		}
 	}
 }

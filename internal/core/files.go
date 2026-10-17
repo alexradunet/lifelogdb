@@ -146,12 +146,8 @@ func (t *Tx) keep(f FileIn) (k Kept, err error) {
 		if p.Body != "" && f.Body != "" && p.Body != f.Body {
 			return k, Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
 		}
-		res, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID)
-		if err != nil {
+		if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID); err != nil {
 			return k, err
-		}
-		if n, _ := res.RowsAffected(); n != 1 {
-			return k, Conflict("page %d could not become the file", p.ID)
 		}
 		if p.Body == "" && f.Body != "" {
 			if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET body = ? WHERE id = ?`, f.Body, p.ID); err != nil {

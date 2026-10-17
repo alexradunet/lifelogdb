@@ -212,7 +212,7 @@ func (h *server) createPerson(r *http.Request, act spec, src string) (*siren.Ent
 	if err != nil {
 		return nil, err
 	}
-	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), v.Get("birth_day"), v.Get("death_day"), v.Get("category"))
+	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day")), v.Get("category"))
 	if err != nil {
 		return nil, err
 	}

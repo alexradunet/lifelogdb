@@ -7,6 +7,10 @@
 - **Why.** Without it: the auto-created page for `[[Health/Diet]]` is rejected by the title CHECK; a
   writer that swallows the error and commits leaves an orphan `entities` row, and one that does not
   loses the page's text. An "upsert" of links leaves a link behind after the body dropped it. Expanding tags into body markup would rewrite the owner’s prose.
+  A fault of a target's own savepoint is not a bad target, and [save a body](../cookbook/save-a-body.md) says what
+  it does to the save. With such a fault SQLite can end the whole transaction, and a save that goes on then writes
+  outside a transaction: on a full file, step 4 committed alone, and the page kept its old body but lost its links
+  (executed, [issue 0083](../issues/0083-a-fault-of-a-savepoint-is-not-a-skipped-target.md)).
 - **Alternatives.**
   - *Make the database skip a bad target* (a trigger that swallows the page insert, or a title CHECK
     loose enough for any `[[text]]`): a CHECK cannot skip a row, and a title the filesystem cannot hold
