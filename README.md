@@ -159,8 +159,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
   sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
-  readings of the 14 days through it), so a reading's tile has its unit and its line; a series shows its next 5
-  later slots on its own page.
+  readings of the 14 days through it), so a reading's tile has its unit and its line.
   `GET /styleguide` is the style page: every component in every state, with the file each lives in, drawn by the real
   templates on synthetic words. It is presentation, like `/render`: it is not in the catalog and it reads nothing
   from the database.
@@ -351,22 +350,22 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 
 ## Layout
 
-| path | what |
-|---|---|
-| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) |
-| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test |
-| `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, and the parse of a day and an instant; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) |
-| `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files |
-| `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata |
-| `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones |
-| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types, the `Lifelog-Source` header, the JSON writer and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test |
-| `internal/client` | the hypermedia client, transport only: in-process or remote; of this module it imports only `siren`, so it builds no `core`, no `db` and no SQLite |
-| `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool; it imports `client` and `siren`, and no `api` |
-| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program |
-| `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks |
-| `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` |
-| `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) |
-| `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) |
+| path | what | test it at |
+|---|---|---|
+| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
+| `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test | `db.Init` and `db.Open` on a file in `t.TempDir()` |
+| `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, and the parse of a day and an instant; tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) | the pure functions with table tests, and the vectors of the contract page (`TestWikilinkVectors`, `TestTitleKeyVectors`) |
+| `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files | `core.Store` on `dbtest.New`, with a fixed `Clock` for a test of today |
+| `internal/preview` | the picture a file page keeps: decode, scale to 1600 px, EXIF orientation, a JPEG of at most 1 MB with no metadata | `preview.Make` and `preview.Check` on pictures that the test makes |
+| `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones | `photo.Read` on the photos of `phototest`; `FuzzRead` |
+| `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types, the `Lifelog-Source` header, the JSON writer and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test | `api.New` on a store with a fixed clock, through `apitest.Fresh` and `apitest.FreshOn`; the pure functions of the handler (`backOf`, `errorEntity`, `browseQueryOf`) with table tests; `view.Draw` and the pure functions of `view` with table tests |
+| `internal/client` | the hypermedia client, transport only: in-process or remote; of this module it imports only `siren`, so it builds no `core`, no `db` and no SQLite | `client.InProcess` and `client.Remote` on one handler: `TestTheTwoTransportsGiveEqualAnswers` |
+| `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool; it imports `client` and `siren`, and no `api` | `mcp.New` on a client of `apitest.Fresh`; the columns `mcp` and `mcp-remote` of the parity table |
+| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder |
+| `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
+| `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` | `TestSchemaCopyIsCurrent` (`internal/db`) |
+| `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
+| `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) | the contract suites `TestSuites` and the mutants `TestMutants`, on the DDL of `docs/` |
 
 ## Checks
 
