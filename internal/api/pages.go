@@ -152,6 +152,15 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
+// searchProps are the properties of the search answer: the words, the pages whose title starts with them, and a page
+// of the hits.
+type searchProps struct {
+	pageProps
+	Q      string            `json:"q"`
+	Titles []core.TitleMatch `json:"titles"`
+	Hits   []core.Hit        `json:"hits"`
+}
+
 func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
 	q := r.URL.Query().Get("q")
 	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
@@ -164,7 +173,9 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	hits, err := h.s.Search(r.Context(), q, limit+1, offset)
+	hits, props, err := readPage(e, "/search", url.Values{"q": {q}}, limit, offset, func(limit, offset int) ([]core.Hit, error) {
+		return h.s.Search(r.Context(), q, limit, offset)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -174,9 +185,7 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	e.Properties = map[string]any{"q": q, "titles": titles}
-	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
-	e.Properties.(map[string]any)["hits"] = hits
+	e.Properties = searchProps{pageProps: props, Q: q, Titles: titles, Hits: hits}
 	for _, x := range hits {
 		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}

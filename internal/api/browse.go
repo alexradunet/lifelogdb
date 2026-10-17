@@ -224,7 +224,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		}
 	}
 
-	rows, err := h.browseRows(ctx, e, b, sc, limit, offset)
+	rows, page, err := h.browseRows(ctx, e, b, sc, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	}
 	e.Actions = browseActions(b, in, titles)
 
-	props := e.Properties.(map[string]any) // paged made them
+	props := map[string]any{"limit": page.Limit, "offset": page.Offset}
 	props["kind"], props["unfiled"], props["ghosts"], props["media"] = b.kind, b.unfiled, b.ghosts, b.media
 	props["categories"], props["rows"] = cs, rows
 	c := browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
@@ -263,6 +263,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		}
 		props["media_counts"] = mediaCounts{Image: m["image"], Video: m["video"], Audio: m["audio"]}
 	}
+	e.Properties = props
 	return e, nil
 }
 
@@ -299,50 +300,58 @@ func (h *server) categoryNamed(ctx context.Context, title string, cs []core.Cate
 }
 
 // browseRows reads one page of the rows of the list and links its next and previous pages, the filters kept.
-func (h *server) browseRows(ctx context.Context, e *siren.Entity, b browseQuery, sc core.Scope, limit, offset int) ([]browseRow, error) {
+func (h *server) browseRows(ctx context.Context, e *siren.Entity, b browseQuery, sc core.Scope, limit, offset int) ([]browseRow, pageProps, error) {
 	q := b.values("")
 	rows := []browseRow{}
 	switch {
 	case b.ghosts:
-		found, err := h.s.Ghosts(ctx, limit+1, offset)
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.Ghost, error) {
+			return h.s.Ghosts(ctx, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, g := range paged(e, found, "/browse", q, limit, offset) {
+		for _, g := range found {
 			rows = append(rows, browseRow{ID: g.ID, Title: g.Title, Type: "page", Kind: "page"})
 		}
+		return rows, props, nil
 	case b.kind == "page":
-		found, err := h.s.PlainPages(ctx, sc, limit+1, offset)
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.PageRow, error) {
+			return h.s.PlainPages(ctx, sc, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, p := range paged(e, found, "/browse", q, limit, offset) {
+		for _, p := range found {
 			rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "page", Kind: "page", Category: p.Category})
 		}
+		return rows, props, nil
 	case b.kind == "person" || b.kind == "place":
-		found, err := h.s.NamedMentions(ctx, b.kind, sc, limit+1, offset)
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.NamedRow, error) {
+			return h.s.NamedMentions(ctx, b.kind, sc, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, p := range paged(e, found, "/browse", q, limit, offset) {
+		for _, p := range found {
 			row := browseRow{ID: p.ID, Title: p.Title, Type: b.kind, Kind: b.kind, Mentions: &p.Mentions, LastDay: p.LastDay}
 			if p.Picture != 0 {
 				row.Picture = siren.PageHref(p.Picture) + "/preview"
 			}
 			rows = append(rows, row)
 		}
+		return rows, props, nil
 	case b.kind == "media" || b.kind == "document":
-		var found []core.FileRow
-		var err error
-		if b.kind == "media" {
-			found, err = h.s.Media(ctx, b.media, sc, limit+1, offset)
-		} else {
-			found, err = h.s.OtherFiles(ctx, sc, limit+1, offset)
-		}
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.FileRow, error) {
+			if b.kind == "media" {
+				return h.s.Media(ctx, b.media, sc, limit, offset)
+			}
+			return h.s.OtherFiles(ctx, sc, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, f := range paged(e, found, "/browse", q, limit, offset) {
+		for _, f := range found {
 			row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: b.kind, Mentions: &f.Mentions, MIME: f.MIME,
 				FileKind: fileKind(f.MIME), Day: f.Day}
 			if f.Picture {
@@ -350,24 +359,30 @@ func (h *server) browseRows(ctx context.Context, e *siren.Entity, b browseQuery,
 			}
 			rows = append(rows, row)
 		}
+		return rows, props, nil
 	case b.kind == "metric":
-		found, err := h.s.MetricRows(ctx, sc, limit+1, offset)
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.MetricRow, error) {
+			return h.s.MetricRows(ctx, sc, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, m := range paged(e, found, "/browse", q, limit, offset) {
+		for _, m := range found {
 			rows = append(rows, browseRow{ID: m.ID, Title: m.Title, Type: "metric", Kind: "metric", Unit: m.Unit})
 		}
+		return rows, props, nil
 	default: // all, inside a category
-		found, err := h.s.FiledIn(ctx, sc.In, limit+1, offset)
+		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.FiledRow, error) {
+			return h.s.FiledIn(ctx, sc.In, limit, offset)
+		})
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
-		for _, f := range paged(e, found, "/browse", q, limit, offset) {
+		for _, f := range found {
 			rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME)})
 		}
+		return rows, props, nil
 	}
-	return rows, nil
 }
 
 // fileKind is the part of a file's type before the '/': image, video, audio, application, text. A stored type has

@@ -112,12 +112,14 @@ func (h *server) days(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	days, err := h.s.RecentDays(r.Context(), limit+1, offset)
+	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
+	days, props, err := readPage(e, "/days", nil, limit, offset, func(limit, offset int) ([]core.Edge, error) {
+		return h.s.RecentDays(r.Context(), limit, offset)
+	})
 	if err != nil {
 		return nil, err
 	}
-	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
-	days = paged(e, days, "/days", nil, limit, offset)
+	e.Properties = props
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("item", siren.DayHref(d.Title), d.Title))
 	}
