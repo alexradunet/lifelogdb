@@ -172,20 +172,35 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
-// searchProps are the properties of the search answer: the words, the pages whose title starts with them, and a page
-// of the hits.
+// searchProps are the properties of the search answer: the words, their order, the pages whose title starts with
+// them, and a page of the hits.
 type searchProps struct {
 	pageProps
 	Q      string            `json:"q"`
+	Order  string            `json:"order"`
 	Titles []core.TitleMatch `json:"titles"`
 	Hits   []core.Hit        `json:"hits"`
 }
 
+// searchHref is the address of the search for these words in this order. The best match is the default, so its
+// address has no order.
+func searchHref(q, order string) string {
+	v := url.Values{"q": {q}}
+	if order != core.SearchBest {
+		v.Set("order", order)
+	}
+	return "/search?" + v.Encode()
+}
+
 func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
 	q := r.URL.Query().Get("q")
+	order, err := core.SearchOrderOf(r.URL.Query().Get("order"))
+	if err != nil {
+		return nil, err
+	}
 	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
-		Links:   []siren.Link{link("self", "/search?q="+url.QueryEscape(q), "Search"), link("index", "/", "Home")},
-		Actions: []siren.Action{action("search", nil, map[string]any{"q": q})}}
+		Links:   []siren.Link{link("self", searchHref(q, order), "Search"), link("index", "/", "Home")},
+		Actions: []siren.Action{action("search", nil, map[string]any{"q": q, "order": order})}}
 	if strings.TrimSpace(q) == "" { // a q of only blanks has no words: it answers as the empty search does
 		return e, nil
 	}
@@ -193,19 +208,31 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	hits, props, err := readPage(e, "/search", url.Values{"q": {q}}, limit, offset, func(limit, offset int) ([]core.Hit, error) {
-		return h.s.Search(r.Context(), q, limit, offset)
-	})
-	if err != nil {
-		return nil, err
-	}
 	// The pages whose title starts with the words come first, as the names after [[ once did: the search dialog of
-	// the browser is the one way to a page by its title (docs/plans/108-the-browser-made-current.md).
+	// the browser is the one way to a page by its title (docs/plans/108-the-browser-made-current.md). A page is in one
+	// group only, so the hits leave these out.
 	titles, err := h.s.TitlesByPrefix(r.Context(), q, 8)
 	if err != nil {
 		return nil, err
 	}
-	e.Properties = searchProps{pageProps: props, Q: q, Titles: titles, Hits: hits}
+	omit := make([]int64, len(titles))
+	for i, m := range titles {
+		omit[i] = m.PageID
+	}
+	pageQuery := url.Values{"q": {q}}
+	other, otherTitle := core.SearchNewest, "Newest first"
+	if order != core.SearchBest {
+		pageQuery.Set("order", order)
+		other, otherTitle = core.SearchBest, "Best match"
+	}
+	hits, props, err := readPage(e, "/search", pageQuery, limit, offset, func(limit, offset int) ([]core.Hit, error) {
+		return h.s.SearchWith(r.Context(), q, core.SearchOptions{Order: order, Omit: omit}, limit, offset)
+	})
+	if err != nil {
+		return nil, err
+	}
+	e.Links = append(e.Links, link("order", searchHref(q, other), otherTitle))
+	e.Properties = searchProps{pageProps: props, Q: q, Order: order, Titles: titles, Hits: hits}
 	for _, x := range hits {
 		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}

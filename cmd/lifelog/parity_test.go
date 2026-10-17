@@ -373,6 +373,7 @@ func parityRows() []parityRow {
 		{"open-day of today", rowOpenToday},
 		{"the word today in a day field", rowTodayInADayField},
 		{"browse", rowBrowse},
+		{"search order=newest", rowSearchNewest},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
 		{"file-pages with a day page", rowFileADayPage},
@@ -538,6 +539,37 @@ func rowBrowse(x *parityRun) {
 		}
 	}
 	x.refused("browse", map[string]string{"kind": "all"}, http.StatusUnprocessableEntity, "invalid")
+}
+
+// search lists each page once, best match first. With order=newest it goes by the day of a page: a day page by its
+// title, any other page by the day it was made. An unknown order is a 422.
+func rowSearchNewest(x *parityRun) {
+	ctx := x.t.Context()
+	for _, day := range []string{"2021-05-05", "2098-01-01"} {
+		if _, _, err := x.store.Capture(ctx, "cli", day, "A lantern.", nil); err != nil {
+			x.t.Fatal(err)
+		}
+	}
+	if _, _, err := x.store.CreatePage(ctx, "cli", "Shed", "A lantern.", ""); err != nil { // made now: between the days
+		x.t.Fatal(err)
+	}
+	hits := func(args map[string]string) string {
+		x.t.Helper()
+		var out []string
+		for _, h := range props(x.t, x.ok("search", args))["hits"].([]any) {
+			out = append(out, fmt.Sprint(h.(map[string]any)["title"]))
+		}
+		return strings.Join(out, ",")
+	}
+	if got, want := hits(map[string]string{"q": "lantern", "order": "newest"}), "2098-01-01,Shed,2021-05-05"; got != want {
+		x.t.Errorf("search order=newest: %s, want %s", got, want)
+	}
+	if best, plain := hits(map[string]string{"q": "lantern", "order": "best"}), hits(map[string]string{"q": "lantern"}); best != plain || strings.Count(best, ",") != 2 {
+		x.t.Errorf("search order=best: %s, the default: %s; want the same three hits", best, plain)
+	}
+	if msg := x.refused("search", map[string]string{"q": "lantern", "order": "oldest"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, "best, newest") {
+		x.t.Errorf("the refusal %q does not name the orders", msg)
+	}
 }
 
 // create-place with a category makes the place and its part-of link in one write, and the category when it is new.

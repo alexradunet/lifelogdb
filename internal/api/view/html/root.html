@@ -47,13 +47,13 @@
 
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
-{{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words")}}
+{{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words" "outside" "order")}}
 <details class="more-fields"><summary>How to search</summary>
 <ul class="plain"><li>Words find the pages that have all of them.</li><li>"A phrase" finds the words in that order.</li><li><code>word*</code> finds the words that start with it.</li><li><code>a OR b</code> finds either.</li></ul>
 <p><small class="desc">A page whose title starts with the words comes first.</small></p></details>
 {{with .Props}}{{if or .titles .hits}}<div class="sheet list">{{with .titles}}<section class="result-group" aria-label="Pages by title"><div class="panel-head"><h2>Pages by title</h2><span class="meta">{{len .}}</span></div>
 <ul class="plain rows">{{range .}}<li><a href="{{titleHref .title}}">{{$.Date .title}}</a>{{if ne .name .title}} <span class="meta">{{.name}}</span>{{end}}</li>{{end}}</ul></section>{{end}}
-{{with .hits}}<section class="result-group" aria-label="Pages by their words"><div class="panel-head"><h2>Pages by their words</h2></div><ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>
+{{with .hits}}<section class="result-group" aria-label="Pages by their words"><div class="panel-head"><h2>Pages by their words</h2>{{with $.LinkByRel "order"}}<a class="meta" href="{{.Href}}">{{.Title}}</a>{{end}}</div><ul class="plain rows">{{range .}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>
 <div class="snippet">{{mark .snippet}}</div></li>{{end}}</ul></section>{{end}}</div>
 {{else}}<p class="empty">No page matches. Try fewer words, or a prefix*.</p>{{end}}{{end}}
 {{template "pager" .}}

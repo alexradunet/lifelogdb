@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
+	"strings"
+	"time"
 
 	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
@@ -333,16 +336,128 @@ type Hit struct {
 	Snippet string `json:"snippet"`
 }
 
+// The orders of a search: best match first (the default), or newest first.
+const (
+	SearchBest   = "best"
+	SearchNewest = "newest"
+)
+
+// SearchOrders are the values of the order of a search.
+func SearchOrders() []string { return []string{SearchBest, SearchNewest} }
+
+// SearchOrderOf is the order a request names: an empty order is the best match, and an order that is not one of the
+// SearchOrders is a 422.
+func SearchOrderOf(order string) (string, error) {
+	switch order {
+	case "":
+		return SearchBest, nil
+	case SearchBest, SearchNewest:
+		return order, nil
+	}
+	return "", Invalid("order must be one of %s", strings.Join(SearchOrders(), ", "))
+}
+
+// SearchOptions are what a search may ask besides the words. Order is one of the SearchOrders. Omit are pages that
+// are not hits, so the caller can list them in a group of their own and the paging counts only the pages that are left.
+type SearchOptions struct {
+	Order string
+	Omit  []int64
+}
+
 // Search is the hits of an FTS5 query, best first; limit and offset select one page of them.
 func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)
+	return s.SearchWith(ctx, q, SearchOptions{}, limit, offset)
+}
+
+// searchFrom is the live pages that the FTS5 query ? matches: the one definition of a hit.
+const searchFrom = `
 		  FROM entities_fts
 		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
-		 WHERE entities_fts MATCH ?
-		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, q, limit, offset)
+		 WHERE entities_fts MATCH ?`
+
+// SearchWith is Search with options. With the order newest, the hits go by the day of their page, newest first: a day
+// page has the day of its title, any other page the day of its created_at in the zone of the store. Pages of one
+// day keep the order of the best match, then of the id.
+func (s *Store) SearchWith(ctx context.Context, q string, o SearchOptions, limit, offset int) ([]Hit, error) {
+	order, err := SearchOrderOf(o.Order)
+	if err != nil {
+		return nil, err
+	}
+	omit, args := "", []any{q}
+	if len(o.Omit) > 0 {
+		omit = " AND p.id NOT IN (?" + strings.Repeat(", ?", len(o.Omit)-1) + ")"
+		for _, id := range o.Omit {
+			args = append(args, id)
+		}
+	}
+	if order == SearchNewest {
+		return s.searchNewest(ctx, q, omit, args, limit, offset)
+	}
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)`+searchFrom+omit+`
+		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, invalidCause(err, "search %q: %v", q, err)
 	}
 	return list(rows, nil, func(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet} })
+}
+
+// searchNewest reads the id, the day-page day and the created_at of every match, in the order of the best match, sorts
+// them by day (the sort is stable) and cuts the page. Only then does it read the title and the snippet of the
+// pages of the cut. The day of a page in the zone of the store is not a SQL expression: SQLite knows the zone of the
+// process only, and a daylight-saving offset changes with the instant.
+func (s *Store) searchNewest(ctx context.Context, q, omit string, args []any, limit, offset int) ([]Hit, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT p.id, CASE WHEN p.is_journal THEN p.preferred_name_key ELSE '' END, p.created_at`+searchFrom+omit+`
+		 ORDER BY rank, p.id`, args...)
+	if err != nil {
+		return nil, invalidCause(err, "search %q: %v", q, err)
+	}
+	type match struct {
+		id  int64
+		day string
+	}
+	var m match
+	var journalDay, created string
+	var matches []match
+	zone := s.Local().Location()
+	if err := each(rows, nil, []any{&m.id, &journalDay, &created}, func() {
+		m.day = journalDay
+		if t, err := time.Parse(time.RFC3339Nano, created); m.day == "" && err == nil {
+			m.day = t.In(zone).Format(time.DateOnly)
+		}
+		matches = append(matches, m)
+	}); err != nil {
+		return nil, err
+	}
+	slices.SortStableFunc(matches, func(a, b match) int { return -strings.Compare(a.day, b.day) })
+	if offset >= len(matches) {
+		return []Hit{}, nil
+	}
+	matches = matches[offset:min(offset+limit, len(matches))]
+	ids := make([]any, len(matches))
+	for i, x := range matches {
+		ids[i] = x.id
+	}
+	rows, err = s.DB.R.QueryContext(ctx, `
+		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)`+searchFrom+`
+		   AND p.id IN (?`+strings.Repeat(", ?", len(ids)-1)+`)`, append([]any{q}, ids...)...)
+	if err != nil {
+		return nil, invalidCause(err, "search %q: %v", q, err)
+	}
+	found, err := list(rows, nil, func(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet} })
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]Hit, len(found))
+	for _, h := range found {
+		byID[h.ID] = h
+	}
+	out := make([]Hit, 0, len(matches))
+	for _, x := range matches {
+		if h, ok := byID[x.id]; ok { // a page tombstoned between the two reads is not a hit
+			out = append(out, h)
+		}
+	}
+	return out, nil
 }

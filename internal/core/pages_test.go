@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -210,5 +211,117 @@ func TestAnExpiredSearchKeepsItsCause(t *testing.T) {
 	_, err := s.Search(expired, "one", 10, 0)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("the cause is lost: %v", err)
+	}
+}
+
+// TestSearchNewestOrdersByTheDayOfAPage: with the order newest, the hits go by the day of the page, newest first. A
+// day page has the day of its title. Any other page has the local day of its created_at, in the zone of the store, so
+// a plain page made now sits between a day page of the past and one of the future. The day pages here are made by
+// hand (Capture) with fixed days; the expected day of the plain page is read from its created_at, not from the code.
+func TestSearchNewestOrdersByTheDayOfAPage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		zone *time.Location
+	}{
+		{"UTC", time.UTC},
+		{"west of UTC", time.FixedZone("UTC-12", -12*3600)},
+		{"east of UTC", time.FixedZone("UTC+14", 14*3600)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fresh(t)
+			s.Zone = tc.zone
+			plain, _, err := s.CreatePage(ctx, "cli", "Plain note", "needle needle needle", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := s.PageByID(ctx, plain)
+			if err != nil {
+				t.Fatal(err)
+			}
+			created, err := time.Parse(time.RFC3339Nano, p.CreatedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			day := created.In(tc.zone) // the local day of the plain page
+			before, after := day.AddDate(0, 0, -1).Format(time.DateOnly), day.AddDate(0, 0, 1).Format(time.DateOnly)
+			if after >= "2099-03-01" || before <= "2020-03-01" {
+				t.Skipf("the clock of this machine (%s) is outside 2020 to 2099", day.Format(time.DateOnly))
+			}
+			// A wrong zone (UTC, say) puts the plain page on the day before or after its day, so it ties with a day page
+			// next to it. The day page before ranks better than the plain page and the one after ranks worse, so that
+			// a tie sorts them wrong, and the test fails.
+			for d, entry := range map[string]string{"2020-03-01": "needle", before: strings.Repeat("needle ", 6), after: "needle", "2099-03-01": "needle"} {
+				if _, _, err := s.Capture(ctx, "cli", d, entry, nil); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := []string{"2099-03-01", after, "Plain note", before, "2020-03-01"}
+			hits, err := s.SearchWith(ctx, "needle", SearchOptions{Order: SearchNewest}, 10, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, h := range hits {
+				got = append(got, h.Title)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("newest first = %q, want %q", got, want)
+			}
+			// The paging is the same order, cut: the limit and the offset select from the sorted hits.
+			page, err := s.SearchWith(ctx, "needle", SearchOptions{Order: SearchNewest}, 2, 2)
+			if err != nil || len(page) != 2 || page[0].Title != "Plain note" || page[1].Title != before {
+				t.Errorf("limit 2 offset 2 = %+v %v, want Plain note and %s", page, err, before)
+			}
+			// A page in Omit is not a hit, and the paging counts the pages that are left.
+			skipped, err := s.SearchWith(ctx, "needle", SearchOptions{Order: SearchNewest, Omit: []int64{plain}}, 2, 2)
+			if err != nil || len(skipped) != 2 || skipped[0].Title != before || skipped[1].Title != "2020-03-01" {
+				t.Errorf("newest without the plain page, limit 2 offset 2 = %+v %v", skipped, err)
+			}
+		})
+	}
+}
+
+// TestSearchNewestKeepsRankThenIDInADay: pages of one day keep the order of the best match, then the id, as the order
+// best does.
+func TestSearchNewestKeepsRankThenIDInADay(t *testing.T) {
+	s := fresh(t)
+	if _, _, err := s.CreatePage(ctx, "cli", "Alpha", "needle", ""); err != nil {
+		t.Fatal(err)
+	}
+	beta, _, err := s.CreatePage(ctx, "cli", "Beta", "needle needle needle needle", "") // the better match, the later id
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "needle", nil); err != nil {
+		t.Fatal(err)
+	}
+	best, err := s.Search(ctx, "needle", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newest, err := s.SearchWith(ctx, "needle", SearchOptions{Order: SearchNewest}, 10, 0)
+	if err != nil || len(newest) != 3 || newest[0].Title != "2099-01-01" {
+		t.Fatalf("newest = %+v %v, want the day page of 2099 first", newest, err)
+	}
+	if best[0].ID != beta {
+		t.Fatalf("best puts %q first, want Beta: the setup does not rank Beta first", best[0].Title)
+	}
+	if newest[1].ID != beta || newest[2].Title != "Alpha" {
+		t.Errorf("newest puts %q then %q after the day page, want Beta then Alpha (the order of best)", newest[1].Title, newest[2].Title)
+	}
+}
+
+// TestSearchRefusesAnUnknownOrder: the order is one of the SearchOrders. Anything else is a 422 before any read.
+func TestSearchRefusesAnUnknownOrder(t *testing.T) {
+	s := fresh(t)
+	for _, order := range []string{"oldest", "NEWEST", "rank; DROP TABLE entities", " newest"} {
+		if _, err := s.SearchWith(ctx, "needle", SearchOptions{Order: order}, 10, 0); status(err) != 422 {
+			t.Errorf("order %q: status %d (%v), want 422", order, status(err), err)
+		}
+	}
+	for _, order := range []string{"", "best", "newest"} {
+		if _, err := s.SearchWith(ctx, "needle", SearchOptions{Order: order}, 10, 0); err != nil {
+			t.Errorf("order %q: %v, want none", order, err)
+		}
 	}
 }
