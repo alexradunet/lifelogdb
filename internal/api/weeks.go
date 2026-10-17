@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // A week and a year look back over the calendar (docs/plans/097-the-almanac-reflects.md). The week is ISO 8601: it
@@ -29,7 +30,7 @@ func weekOf(s string) (monday time.Time, ok bool) {
 	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC) // 4 January is always in week 1
 	monday = jan4.AddDate(0, 0, -((int(jan4.Weekday())+6)%7)+7*(week-1))
 	y, w := monday.ISOWeek()
-	return monday, week >= 1 && y == year && w == week && core.IsDay(monday.Format(time.DateOnly))
+	return monday, week >= 1 && y == year && w == week && text.IsDay(monday.Format(time.DateOnly))
 }
 
 func weekKey(monday time.Time) string {
@@ -53,7 +54,7 @@ func isYear(year int) bool { return 1 <= year && year <= 9999 }
 var lastDay = time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
 func (h *server) currentWeek(*http.Request) (*Entity, error) {
-	t, _ := core.ParseDay(h.s.Today())
+	t, _ := text.ParseDay(h.s.Today())
 	return nil, redirect{weekHref(t)}
 }
 
@@ -167,10 +168,10 @@ func (h *server) week(r *http.Request) (*Entity, error) {
 	// A link leads only to a page that answers: a week has a page when its Monday is a day, a year when isYear.
 	next, thursday := monday.AddDate(0, 0, 7), monday.AddDate(0, 0, 3)
 	e.Links = []Link{link("self", weekHref(monday), e.Title)}
-	if core.IsDay(before.Format(time.DateOnly)) {
+	if text.IsDay(before.Format(time.DateOnly)) {
 		e.Links = append(e.Links, link("prev", weekHref(before), weekName(before)))
 	}
-	if core.IsDay(next.Format(time.DateOnly)) {
+	if text.IsDay(next.Format(time.DateOnly)) {
 		e.Links = append(e.Links, link("next", weekHref(next), weekName(next)))
 	}
 	e.Links = append(e.Links, link("month", monthHref(thursday), thursday.Format(layoutMonth)))
@@ -191,7 +192,7 @@ type yearMonth struct {
 }
 
 func (h *server) currentYear(*http.Request) (*Entity, error) {
-	t, _ := core.ParseDay(h.s.Today())
+	t, _ := text.ParseDay(h.s.Today())
 	return nil, redirect{yearHref(t.Year())}
 }
 

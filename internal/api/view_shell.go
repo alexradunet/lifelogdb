@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
@@ -29,7 +30,7 @@ type shellView struct {
 func shellOf(ctx context.Context, s *core.Store) *shellView {
 	now := s.Local() // one read of the clock, so today and the zone of the words agree
 	sv := &shellView{Today: now.Format(time.DateOnly), Zone: now.Location()}
-	t, ok := core.ParseDay(sv.Today)
+	t, ok := text.ParseDay(sv.Today)
 	if !ok { // a clock beyond the years that a day can name: the sidebar has no month
 		return sv
 	}

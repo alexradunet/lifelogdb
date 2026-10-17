@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // inUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
@@ -141,7 +142,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if to == "" {
 		to = today
 	}
-	if !core.IsDay(to) {
+	if !text.IsDay(to) {
 		return nil, core.Invalid("to must be an exact day")
 	}
 	allHistory, err := flag(q, "all_history")

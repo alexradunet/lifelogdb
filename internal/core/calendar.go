@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"lifelog/internal/text"
 )
 
 // The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md): what names a day, over a window of
@@ -29,8 +31,8 @@ func checkCalendarWindow(from, through string) error {
 // calendarDays are the days from from through through; nil for a window that is not one. It stops one day after the
 // bound, so the caller can see the window is too long without walking it.
 func calendarDays(from, through string) []time.Time {
-	first, ok1 := ParseDay(from)
-	last, ok2 := ParseDay(through)
+	first, ok1 := text.ParseDay(from)
+	last, ok2 := text.ParseDay(through)
 	if !ok1 || !ok2 {
 		return nil
 	}

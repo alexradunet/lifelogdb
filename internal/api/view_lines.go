@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // The lines of the readings (docs/plans/093-words-phone-and-today.md): the line of a metric's last 14 days on the
@@ -33,7 +33,7 @@ func lineReadings(list []any) []lineReading {
 		m, _ := it.(map[string]any)
 		day, _ := m["day"].(string)
 		value, isNumber := m["value"].(float64)
-		if t, ok := core.ParseDay(day); ok && isNumber { // no day, or no value (a retraction): nothing to draw
+		if t, ok := text.ParseDay(day); ok && isNumber { // no day, or no value (a retraction): nothing to draw
 			rs = append(rs, lineReading{t, day, value})
 		}
 	}
@@ -103,7 +103,7 @@ func smallLine(rs []lineReading, label string, x func(lineReading) float64) temp
 // day. Its label says the first and the last value in words, with their days against today on the clock c, also on
 // a past day.
 func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
-	end, ok := core.ParseDay(day)
+	end, ok := text.ParseDay(day)
 	rs := lineReadings(points)
 	if !ok || len(rs) == 0 {
 		return ""
@@ -159,8 +159,8 @@ func chart(from, to string, readings any) template.HTML {
 			}
 		}
 	}
-	f, ok1 := core.ParseDay(from)
-	t, ok2 := core.ParseDay(to)
+	f, ok1 := text.ParseDay(from)
+	t, ok2 := text.ParseDay(to)
 	if len(rs) == 0 || !ok1 || !ok2 || t.Before(f) {
 		return ""
 	}

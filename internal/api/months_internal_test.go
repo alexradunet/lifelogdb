@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // TestWrittenDaysMarksTheDaysWithAPage: writtenDays gives each day from the first through the last, in order, and
@@ -13,7 +14,7 @@ import (
 func TestWrittenDaysMarksTheDaysWithAPage(t *testing.T) {
 	day := func(s string) time.Time {
 		t.Helper()
-		d, ok := core.ParseDay(s)
+		d, ok := text.ParseDay(s)
 		if !ok {
 			t.Fatalf("%s is not a day", s)
 		}

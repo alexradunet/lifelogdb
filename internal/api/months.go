@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // A month is the calendar of the browser (docs/plans/091-the-browser-for-daily-use.md): each day of a month, whether
@@ -53,7 +54,7 @@ func monthHref(t time.Time) string { return "/months/" + t.Format("2006-01") }
 
 // currentMonth answers with this month's address, as /days/today does with today's.
 func (h *server) currentMonth(*http.Request) (*Entity, error) {
-	t, _ := core.ParseDay(h.s.Today())
+	t, _ := text.ParseDay(h.s.Today())
 	return nil, redirect{monthHref(t)}
 }
 
@@ -74,10 +75,10 @@ func (h *server) month(r *http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"month"}, Title: name, Links: []Link{link("self", monthHref(first), name)},
 		Actions: []Action{action("open-day", nil, nil)}}
 	// A link leads only to a page that answers: a month has a page when its first day is a day.
-	if core.IsDay(prev.Format(time.DateOnly)) {
+	if text.IsDay(prev.Format(time.DateOnly)) {
 		e.Links = append(e.Links, link("prev", monthHref(prev), prev.Format(layoutMonth)))
 	}
-	if core.IsDay(next.Format(time.DateOnly)) {
+	if text.IsDay(next.Format(time.DateOnly)) {
 		e.Links = append(e.Links, link("next", monthHref(next), next.Format(layoutMonth)))
 	}
 	e.Links = append(e.Links, link("days", "/days", "Days"), link("index", "/", "Home"))
@@ -98,7 +99,7 @@ func (h *server) openDay(r *http.Request, act spec, _ string) (*Entity, error) {
 	if day == "" { // the field is optional: no day is today
 		day = h.s.Today()
 	}
-	if !core.IsDay(day) {
+	if !text.IsDay(day) {
 		return nil, core.Invalid("day must be a day, YYYY-MM-DD")
 	}
 	return nil, redirect{dayHref(day)}
@@ -153,8 +154,8 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		firstLines[d.Day] = d.FirstLine
 	}
 	days := []monthDay{}
-	first, _ := core.ParseDay(from)
-	last, _ := core.ParseDay(through)
+	first, _ := text.ParseDay(from)
+	last, _ := text.ParseDay(through)
 	for _, w := range writtenDays(entries, first, last) {
 		day := w.Day
 		days = append(days, monthDay{Day: day, Page: w.Page, FirstLine: firstLines[day], Mood: moods[day],

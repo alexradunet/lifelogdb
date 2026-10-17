@@ -77,8 +77,8 @@ embeds its own copy. They import four packages of the writer, each for one reaso
 
 | package | why |
 |---|---|
-| `internal/text` | the rules that the contract gives a writer to compute: the title predicate, `title_key`, the wikilinks and the `#tags` |
-| `internal/core` | the writer's own save (a body, a capture, a kept file) and its checks of a day and an instant, run on the DDL under test |
+| `internal/text` | the rules that the contract gives a writer to compute: the title predicate, `title_key`, the wikilinks and the `#tags`; and the writer's checks of a day and an instant |
+| `internal/core` | the writer's own save (a body, a capture, a kept file), run on the DDL under test |
 | `internal/db` | the type that `core.Store` writes through, around the suite's own connection |
 | `internal/photo/phototest` | the synthetic JPEG of a file's preview: the DDL checks that a preview starts with the bytes of a JPEG |
 

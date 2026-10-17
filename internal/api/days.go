@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // recentDays is how many of the newest day pages the root shows.
@@ -161,17 +162,17 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, _ := core.ParseDay(day)
+	t, _ := text.ParseDay(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
 		Links:   []Link{link("self", dayHref(day), day)},
 		Actions: []Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
 	// A link leads only to a page that answers: 0000-01-01 has no day before it, and 9999-12-31 none after it.
-	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); core.IsDay(prev) {
+	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); text.IsDay(prev) {
 		e.Links = append(e.Links, link("prev", dayHref(prev), "Previous day"))
 	}
-	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); core.IsDay(next) {
+	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); text.IsDay(next) {
 		e.Links = append(e.Links, link("next", dayHref(next), "Next day"))
 	}
 	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", monthHref(t), t.Format(layoutMonth)))

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): its readings newest first, in one fold a year.
@@ -46,7 +46,7 @@ func (v *view) MetricReadings() metricReadings {
 	for i := len(list) - 1; i >= 0; i-- {
 		m, _ := list[i].(map[string]any)
 		day, _ := m["day"].(string)
-		if !core.IsDay(day) {
+		if !text.IsDay(day) {
 			continue
 		}
 		if n := len(r.Years); n == 0 || r.Years[n-1].Year != day[:4] {
@@ -162,7 +162,7 @@ func (v *view) MetricSections() []metricSection {
 		}
 	}
 	c := v.clock()
-	limit, _ := core.ParseDay(c.today)
+	limit, _ := text.ParseDay(c.today)
 	limit = limit.AddDate(0, 0, -inUseDays)
 	card := func(x any) metricCard {
 		g, _ := x.(map[string]any)
@@ -181,7 +181,7 @@ func (v *view) MetricSections() []metricSection {
 			day, _ := last["day"].(string)
 			k.Value, k.Measurement, k.Day, k.When, k.Count = num(last["value"]), num(last["id"]), day, c.relative(day), n
 			k.Short, _, _ = strings.Cut(k.When, " · ")
-			if t, ok := core.ParseDay(day); ok && !limit.IsZero() && t.Before(limit) {
+			if t, ok := text.ParseDay(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
 			}
 			k.Line = sparkLine(c, name, unit, recent)

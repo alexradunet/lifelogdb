@@ -33,7 +33,7 @@ func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 // day makes that day's page.
 func (t *Tx) CreatePage(title, body, day string) (id int64, r Sync, err error) {
 	switch {
-	case IsDay(title):
+	case text.IsDay(title):
 		day = title
 	case day == "":
 		day = t.today()
@@ -305,13 +305,6 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	}
 	return p, nil
 }
-
-// SnippetOpen and SnippetClose mark a match in a Hit's snippet. They are not brackets, because a body's own text
-// holds [[wikilinks]] and check boxes, and a mark must never be confused with the text.
-const (
-	SnippetOpen  = "⟦"
-	SnippetClose = "⟧"
-)
 
 // Hit is one full-text match (cookbook/full-text-search.md).
 type Hit struct {

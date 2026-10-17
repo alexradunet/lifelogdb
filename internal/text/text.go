@@ -1,6 +1,7 @@
 // Package text computes what every writer must compute identically: the title predicate, title_key, and the
 // wikilinks and #tags a body names. The rules and their vectors live in docs/contract/titles-and-wikilinks.md;
-// this package implements them and states none of its own.
+// this package implements them and states none of its own. It also holds the plain forms that the writer and its
+// view both read (plain.go): a day and an instant that round-trip, and the marks of a line and of a snippet.
 package text
 
 import (

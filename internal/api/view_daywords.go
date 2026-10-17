@@ -4,14 +4,14 @@ import (
 	"strconv"
 	"time"
 
-	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // The calendar in words and numbers: days stepped, ISO weeks, weekdays, and the words of a week.
 
 // addDays is the day n days after day ("" for a day that is not one).
 func addDays(day string, n int) string {
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -20,7 +20,7 @@ func addDays(day string, n int) string {
 
 // isoWeek is the ISO 8601 week of a day, 0 for a day that is not one.
 func isoWeek(day string) int {
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return 0
 	}
@@ -32,12 +32,12 @@ func isoWeek(day string) int {
 // and for a week that has no page because its Monday is not a day (0000-01-01 and 0000-01-02 are in a week of the
 // year -1).
 func weekPage(day string) string {
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return ""
 	}
 	monday := t.AddDate(0, 0, -((int(t.Weekday()) + 6) % 7))
-	if !core.IsDay(monday.Format(time.DateOnly)) {
+	if !text.IsDay(monday.Format(time.DateOnly)) {
 		return ""
 	}
 	return weekHref(monday)
@@ -61,7 +61,7 @@ func sinceLastWeek(mean, previous any) string {
 
 // weekday is the name of a day's weekday, "" for a day that is not one.
 func weekday(day string) string {
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return ""
 	}
@@ -72,7 +72,7 @@ func weekday(day string) string {
 // day beside it, where the year is the page's. Everywhere else a day is written by Date, with its year when it is
 // not this year's.
 func shortDay(day string) string {
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return day
 	}
@@ -81,7 +81,7 @@ func shortDay(day string) string {
 
 // dayOfMonth is the number of a day in its month, for the calendar's cells.
 func dayOfMonth(day string) string {
-	if t, ok := core.ParseDay(day); ok {
+	if t, ok := text.ParseDay(day); ok {
 		return strconv.Itoa(t.Day())
 	}
 	return day
@@ -89,7 +89,7 @@ func dayOfMonth(day string) string {
 
 // monthBand is the band of the calendar leaf: "Oct 2026".
 func monthBand(day string) string {
-	if t, ok := core.ParseDay(day); ok {
+	if t, ok := text.ParseDay(day); ok {
 		return t.Format("Jan 2006")
 	}
 	return ""
@@ -166,7 +166,7 @@ func weeks(list any) [][]any {
 	}
 	m, _ := days[0].(map[string]any)
 	first, _ := m["day"].(string)
-	t, ok := core.ParseDay(first)
+	t, ok := text.ParseDay(first)
 	if !ok {
 		return nil
 	}

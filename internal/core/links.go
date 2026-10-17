@@ -102,7 +102,7 @@ func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, rev
 
 // dayOfTitle is a link target's day: none, except a day page (entities_day_page).
 func dayOfTitle(title string) any {
-	if IsDay(title) {
+	if text.IsDay(title) {
 		return title
 	}
 	return nil

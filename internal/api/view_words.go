@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // The browser's words for a value (docs/plans/093-words-phone-and-today.md): a value is drawn by its type, never by
@@ -24,7 +24,7 @@ type clock struct {
 
 // sameYear reports a time in the year of today; with no today, never, so the year is always written.
 func (c clock) sameYear(t time.Time) bool {
-	today, ok := core.ParseDay(c.today)
+	today, ok := text.ParseDay(c.today)
 	return ok && today.Year() == t.Year()
 }
 
@@ -38,7 +38,7 @@ func (c clock) date(t time.Time) string {
 
 // day says a day as a date; a value that is not a day is returned as it is.
 func (c clock) day(s string) string {
-	t, ok := core.ParseDay(s)
+	t, ok := text.ParseDay(s)
 	if !ok {
 		return s
 	}
@@ -48,11 +48,11 @@ func (c clock) day(s string) string {
 // relative says a day against today: "today", "yesterday · Sun 11 Oct", "tomorrow · Tue 13 Oct",
 // "4 days ago · Thu 8 Oct", "in 3 days · Thu 15 Oct" within 7 days, else the date.
 func (c clock) relative(s string) string {
-	d, ok := core.ParseDay(s)
+	d, ok := text.ParseDay(s)
 	if !ok {
 		return s
 	}
-	today, ok := core.ParseDay(c.today)
+	today, ok := text.ParseDay(c.today)
 	if !ok {
 		return c.date(d)
 	}
@@ -76,7 +76,7 @@ func (c clock) relative(s string) string {
 // instant says an instant in the server's zone: "today, 09:48", "yesterday, 21:14", "Mon 12 Oct, 09:48"; with no
 // zone, in UTC: "Mon 12 Oct 2026, 06:48 UTC". A value that is not an instant is returned as it is.
 func (c clock) instant(s string) string {
-	if !core.IsInstant(s) {
+	if !text.IsInstant(s) {
 		return s
 	}
 	t, err := time.Parse(time.RFC3339Nano, s)
@@ -104,9 +104,9 @@ func (c clock) instant(s string) string {
 func (c clock) timeHTML(s string) template.HTML {
 	esc := template.HTMLEscapeString
 	switch {
-	case core.IsInstant(s):
+	case text.IsInstant(s):
 		return template.HTML(`<time datetime="` + esc(s) + `" title="` + esc(s) + `">` + esc(c.instant(s)) + `</time>`)
-	case core.IsDay(s):
+	case text.IsDay(s):
 		return template.HTML(`<time datetime="` + esc(s) + `">` + esc(c.relative(s)) + `</time>`)
 	}
 	return template.HTML(esc(s))
@@ -193,7 +193,7 @@ func (c clock) writeValue(sb *strings.Builder, x any) {
 		sb.WriteString("</ul>")
 	case string:
 		switch {
-		case core.IsInstant(x) || core.IsDay(x):
+		case text.IsInstant(x) || text.IsDay(x):
 			sb.WriteString(string(c.timeHTML(x)))
 		case strings.Contains(x, "\n") || len(x) > 80:
 			sb.WriteString("<pre>" + esc(x) + "</pre>")

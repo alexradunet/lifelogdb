@@ -122,7 +122,7 @@ func (t *Tx) rename(id int64, newTitle string) (int64, error) {
 	}
 	// Only the day page of a date holds the date's key (entity_names_day_insert, entities_day_identity): here id is
 	// that day page.
-	if target != nil && IsDay(key) {
+	if target != nil && text.IsDay(key) {
 		return 0, Conflict("a day page's canonical date is not renamed")
 	}
 	if target == nil {

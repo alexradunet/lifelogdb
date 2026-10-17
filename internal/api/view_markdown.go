@@ -14,7 +14,6 @@ import (
 	"github.com/yuin/goldmark/util"
 	"golang.org/x/text/unicode/norm"
 
-	"lifelog/internal/core"
 	"lifelog/internal/text"
 )
 
@@ -162,8 +161,8 @@ func enhancedRun(run string) []ast.Node {
 	return nodes
 }
 
-// mark is a search snippet as plain text with its matched words marked: the search puts core.SnippetOpen and
-// core.SnippetClose around them. The text is escaped first, so a snippet can never carry HTML of its own.
+// mark is a search snippet as plain text with its matched words marked: the search puts text.SnippetOpen and
+// text.SnippetClose around them. The text is escaped first, so a snippet can never carry HTML of its own.
 func mark(snippet string) template.HTML {
 	return template.HTML(markRE.ReplaceAllString(template.HTMLEscapeString(plainSnippet(snippet)), "<mark>$1</mark>"))
 }
@@ -174,7 +173,7 @@ func mark(snippet string) template.HTML {
 func plainSnippet(s string) string {
 	var words []string
 	for line := range strings.SplitSeq(s, "\n") {
-		line = core.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
+		line = text.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
 		if line != "" {
 			words = append(words, line)
 		}
@@ -182,4 +181,4 @@ func plainSnippet(s string) string {
 	return strings.NewReplacer("![[", "", "[[", "", "]]", "").Replace(strings.Join(words, " "))
 }
 
-var markRE = regexp.MustCompile(core.SnippetOpen + `([^` + core.SnippetOpen + core.SnippetClose + `]+)` + core.SnippetClose)
+var markRE = regexp.MustCompile(text.SnippetOpen + `([^` + text.SnippetOpen + text.SnippetClose + `]+)` + text.SnippetClose)

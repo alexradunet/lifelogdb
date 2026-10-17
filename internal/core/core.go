@@ -132,36 +132,11 @@ func CheckSource(s string) error {
 	return nil
 }
 
-// ParseDay parses a YYYY-MM-DD local day that round-trips (date(x) IS x). For anything else ok is false and the
-// time is zero.
-func ParseDay(s string) (time.Time, bool) {
-	t, err := time.Parse(time.DateOnly, s)
-	if err != nil || t.Format(time.DateOnly) != s {
-		return time.Time{}, false
-	}
-	return t, true
-}
-
-// IsDay reports a YYYY-MM-DD local day that round-trips (date(x) IS x).
-func IsDay(s string) bool {
-	_, ok := ParseDay(s)
-	return ok
-}
-
-// instantLayout is the layout of a lifelog_meta.instants instant: UTC, milliseconds, Z.
-const instantLayout = "2006-01-02T15:04:05.000Z"
-
-// IsInstant reports a lifelog_meta.instants instant.
-func IsInstant(s string) bool {
-	t, err := time.Parse(instantLayout, s)
-	return err == nil && t.Format(instantLayout) == s
-}
-
 // The checks of a surface's input that every write and read shares, so one refusal has one message.
 
 // checkDay refuses a value that is not a local day (lifelog_meta.days); what names the field.
 func checkDay(what, s string) error {
-	if !IsDay(s) {
+	if !text.IsDay(s) {
 		return Invalid("%s %q is not a day (YYYY-MM-DD)", what, s)
 	}
 	return nil
@@ -169,7 +144,7 @@ func checkDay(what, s string) error {
 
 // checkWindow refuses a window that is not two local days in order, both inclusive.
 func checkWindow(from, through string) error {
-	if !IsDay(from) || !IsDay(through) || from > through {
+	if !text.IsDay(from) || !text.IsDay(through) || from > through {
 		return Invalid("from %q and through %q must be days (YYYY-MM-DD), from first", from, through)
 	}
 	return nil

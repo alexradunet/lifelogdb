@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"regexp"
 	"strings"
+
+	"lifelog/internal/text"
 )
 
 // Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
@@ -171,7 +172,7 @@ func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirs
 // OnThisDay are the live day pages of earlier years that have the month and the day of day, the newest first, and at
 // most limit of them. The text from the sixth character is "MM-DD", so 29 February matches 29 February only.
 func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntry, error) {
-	if !IsDay(day) || limit < 1 {
+	if !text.IsDay(day) || limit < 1 {
 		return nil, Invalid("on this day needs an exact day and a limit")
 	}
 	return s.dayEntries(ctx, `p.day < ? AND substr(p.day, 6) = substr(?, 6)`, "DESC", limit, day, day)
@@ -195,10 +196,6 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	return out, nil
 }
 
-// BlockMark is the markers at the start of a line that a plain-text view cuts: headings, quotes, list items, check
-// boxes ([ ] and [x]). A marker is cut only when a space follows it, so the "#" of a tag and the "-" of a number stay.
-var BlockMark = regexp.MustCompile(`^(?:#{1,6}\s+|>\s*|[-*+]\s+)*(?:\[[ xX]\]\s+)?`)
-
 // firstLineRunes is how long a first line may be before it is cut.
 const firstLineRunes = 160
 
@@ -207,7 +204,7 @@ const firstLineRunes = 160
 func firstLine(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
-		line = strings.TrimSpace(BlockMark.ReplaceAllString(line, ""))
+		line = strings.TrimSpace(text.BlockMark.ReplaceAllString(line, ""))
 		if line == "" {
 			continue
 		}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"lifelog/internal/core"
+	"lifelog/internal/text"
 )
 
 // glanceDays is how many days, the day itself the last, a reading's trend covers.
@@ -48,7 +49,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	for _, m := range ms {
 		units[m.Name] = m.Unit
 	}
-	t, ok := core.ParseDay(day)
+	t, ok := text.ParseDay(day)
 	if !ok {
 		return nil, fmt.Errorf("the trends of %q: not a day", day)
 	}
@@ -70,7 +71,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 // seriesFrom is the from of a series (from, to] that starts the day after t: t as a day, or no lower bound ("") when
 // t is before the first day that a date can name.
 func seriesFrom(t time.Time) string {
-	if from := t.Format(time.DateOnly); core.IsDay(from) {
+	if from := t.Format(time.DateOnly); text.IsDay(from) {
 		return from
 	}
 	return ""
