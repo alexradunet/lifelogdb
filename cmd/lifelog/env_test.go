@@ -86,7 +86,7 @@ func startupLine(t *testing.T, serve func(ctx context.Context, stderr io.Writer)
 }
 
 // servedAt is the scheme and the address of the startup line of serve,
-// "lifelog: serving PATH on SCHEME://ADDRESS[ (NOTE)]".
+// "lifelog: serving PATH on SCHEME://ADDRESS[ (NOTE)] (version V, user_version N)".
 func servedAt(t *testing.T, line string) (scheme, address string) {
 	t.Helper()
 	_, rest, on := strings.Cut(strings.TrimSpace(line), " on ")

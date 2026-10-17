@@ -66,9 +66,14 @@ func drainsOn(ctx context.Context, t *testing.T, binary string, sig os.Signal) {
 			_ = cmd.Wait()
 		}
 	})
-	startup, err := bufio.NewReader(stderr).ReadString('\n')
+	stderrLines := bufio.NewReader(stderr)
+	startup, err := stderrLines.ReadString('\n')
 	if err != nil {
 		t.Fatalf("server startup: %q, %v", startup, err)
+	}
+	// The line says which program serves which file schema: the first thing to read at 2 a.m.
+	if want := "(version " + version + ", user_version 1)"; !strings.HasSuffix(strings.TrimSpace(startup), want) {
+		t.Errorf("server startup: %q, want it to end with %q", startup, want)
 	}
 	scheme, address := servedAt(t, startup)
 	if scheme != "http" {
@@ -127,6 +132,14 @@ func drainsOn(ctx context.Context, t *testing.T, binary string, sig os.Signal) {
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK {
 		t.Fatalf("request completion: status=%s read=%v close=%v", response.Status, readErr, closeErr)
+	}
+	// The stop line follows the drain. The process closes its stderr at exit, so the read ends there.
+	rest, err := io.ReadAll(stderrLines)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rest), "lifelog: stopped serving") {
+		t.Errorf("stderr after the drain: %q, want the stop line", rest)
 	}
 	err = cmd.Wait()
 	waited = true

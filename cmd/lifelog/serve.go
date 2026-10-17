@@ -158,6 +158,18 @@ func serve(ctx context.Context, e env, _ []string) error {
 		return err
 	}
 	srv := &http.Server{Addr: listener.Addr().String(), Handler: networkHandler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
-	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s\n", o.db, scheme, listener.Addr(), note)
-	return serveHTTP(ctx, srv, listener, 10*time.Second)
+	// The file's own user_version, not the constant of this program: the line shows which schema the process serves.
+	var userVersion int64
+	if err := e.store.DB.R.QueryRowContext(ctx, "PRAGMA user_version").Scan(&userVersion); err != nil {
+		return fmt.Errorf("read user_version: %w", err)
+	}
+	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s (version %s, user_version %d)\n", o.db, scheme, listener.Addr(), note, version, userVersion)
+	err = serveHTTP(ctx, srv, listener, 10*time.Second)
+	// After the drain, before the database closes: the log shows that the stop was clean, or why it was not.
+	if err != nil {
+		fmt.Fprintf(e.stderr, "lifelog: stopped serving %s with an error: %v\n", o.db, err)
+	} else {
+		fmt.Fprintf(e.stderr, "lifelog: stopped serving %s\n", o.db)
+	}
+	return err
 }
