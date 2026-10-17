@@ -111,7 +111,7 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 		say("A page of that title became the file.")
 	}
 	if d, ok := take("stored_day"); ok {
-		say("Its own day stays %s.", c.timeHTML(fmt.Sprint(d)))
+		say("Its page keeps the day %s.", c.timeHTML(fmt.Sprint(d)))
 	}
 	if d, ok := take("day"); ok {
 		say("Its own day is %s.", c.timeHTML(fmt.Sprint(d)))
