@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-17, `c867e6c` (master, the merge of plans 121 and 122).
 - **Priority:** P2. **Effort:** M. **Risk:** MEDIUM: one new rule in `schema.sql` and a change of the owner's live
   file, which the owner runs.
-- **Status:** IN PROGRESS on the branch `plan-123-contract-decisions`.
+- **Status:** DONE (2026-10-17), merged into master (`35cd158`) and installed.
 - **Resolves:** the questions of [121's closing record](121-deep-modules-for-agents.md#the-closing-record-2026-10-17)
   and [122's list](122-what-121-left.md#results). The owner's words (2026-10-17): "1. I think so 2. Let's move it to
   schema 4. fix it 5. fix it".
@@ -47,7 +47,7 @@ place by nothing.
 - [x] Each decision: the issue, the docs, `schema.sql` and the suites change together; the baseline is green.
 - [x] The one-off program refuses a file that is not the old schema, and makes a copy of the old schema equal to the
       new one (tested in the scratchpad, never on the live file).
-- [ ] The owner ran the change of the live file; the integrity check passes; the new binary serves.
+- [x] The owner ran the change of the live file; the integrity check passes; the new binary serves.
 
 ## Results
 
@@ -76,3 +76,16 @@ triggers and new values of `lifelog_meta` rows. In one `BEGIN IMMEDIATE` transac
 sets the three rows, compares the file with a fresh file of `NEW.sql`, and runs `integrity_check` and
 `foreign_key_check`. Its tests run on synthetic files only. The owner runs it with `!`; the outcome is recorded below
 when the owner has run it.
+
+The change of the live file, 2026-10-17, run by the owner with `!` commands in this order:
+
+1. `systemctl stop lifelog.service`.
+2. A snapshot with the installed binary of `c867e6c`: `/home/cico/life/snapshots/2026-10-17-plan-123/life-2026-10-17.db`;
+   its restore check: ok (integrity ok, no foreign-key violation, the full-text index ok).
+3. `meta123-bin … --dry-run`: the file was equal to `OLD.sql`; the trigger made, the three rows set, equal to
+   `NEW.sql` inside the transaction, `integrity_check` ok, `foreign_key_check` no rows; rolled back.
+4. `meta123-bin …`: the same, committed; equal to `NEW.sql`; `integrity_check` ok; `foreign_key_check` no rows.
+5. `lifelog get /integrity`: ok (the four integrity checks).
+6. The binary of `35cd158` (the merge of this plan) installed at `/home/cico/.local/bin/lifelog`, the one before it
+   kept as `lifelog.prev`, with the service stopped.
+7. `systemctl start lifelog.service`: "serving /home/cico/dev/lifelogdb/life.db on http://127.0.0.1:7777" at 12:42:10.
