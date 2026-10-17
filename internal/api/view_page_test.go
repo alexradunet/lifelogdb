@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -50,8 +51,11 @@ func submit(h http.Handler, path string, form url.Values, referer string) *httpt
 // with its status. Every page carries what semantic HTML needs: both of this app's sheets under their markers, one
 // main with a way to skip to it, the sidebar's sections, one link at most marked in the whole sidebar (the brand, the
 // sections and the owner's links), a footer, the search dialog, no script at all
-// (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find. A row also names the words
-// that its page shows. Which link of the sidebar a page marks is TestNavMarksThePageTheBrowserIsOn's.
+// (docs/plans/108-the-browser-made-current.md), and no id generated for a template to find. The one exception is the
+// id of a datalist (the form's id, or else the action's name, then the field's name), which the list of its input
+// names: each list has its datalist on the page, and no id is repeated on a page. Lisbon is in a category, so the
+// pages draw datalists. A row also names the words that its page shows. Which link of the sidebar a page marks is
+// TestNavMarksThePageTheBrowserIsOn's.
 func TestEveryViewRenders(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -60,7 +64,7 @@ func TestEveryViewRenders(t *testing.T) {
 	ana := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Ana"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
 	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon", "category": "Cities"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
 	var reading string
@@ -75,6 +79,8 @@ func TestEveryViewRenders(t *testing.T) {
 
 	dayPage := apitest.Href(day, "page")
 	bodies := map[string]string{}
+	ids, lists := regexp.MustCompile(` id="([^"]*)"`), regexp.MustCompile(` list="([^"]*)"`)
+	datalists := 0
 	for _, row := range []struct {
 		path   string
 		status int
@@ -124,6 +130,19 @@ func TestEveryViewRenders(t *testing.T) {
 		if strings.Contains(body, `id="f-`) {
 			t.Errorf("%s carries a generated id: a page is semantic HTML", row.path)
 		}
+		seen := map[string]bool{}
+		for _, m := range ids.FindAllStringSubmatch(body, -1) {
+			if seen[m[1]] {
+				t.Errorf("%s carries the id %q twice", row.path, m[1])
+			}
+			seen[m[1]] = true
+		}
+		for _, m := range lists.FindAllStringSubmatch(body, -1) {
+			if !strings.Contains(body, `<datalist id="`+m[1]+`">`) {
+				t.Errorf("%s has an input with list=%q and no datalist of that id", row.path, m[1])
+			}
+			datalists++
+		}
 		rail, _, _ := strings.Cut(body[strings.Index(body, `<aside class="rail">`)+1:], "</aside>")
 		if n := strings.Count(rail, `aria-current="page"`); n > 1 {
 			t.Errorf("%s marks %d links of the sidebar current, want one at most", row.path, n)
@@ -131,6 +150,9 @@ func TestEveryViewRenders(t *testing.T) {
 	}
 	if strings.Contains(bodies[dayPage], `/promote"`) {
 		t.Error("a day page shows a promote form the API does not offer")
+	}
+	if datalists == 0 {
+		t.Error("no page draws a datalist: the check of list and datalist checks nothing")
 	}
 }
 

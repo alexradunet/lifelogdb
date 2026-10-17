@@ -79,10 +79,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `role="alert"`, a series a `table` with a header row, a write's result and the search an open or a modal `dialog`,
   the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows
   the same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser
-  lets a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find. What a
-  template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an owner-only
-  one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's title and an
-  error's `code` its first words, so no view decides any of them by an action's or a field's name.
+  lets a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find, but the id of
+  a `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's
+  name). What a template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an
+  owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
+  title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is today at a
   glance: the five newest day pages. A day carries its mood and the `save-body` of its day page, so the day view
   edits in place. These are properties and actions of the entities, so every client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
