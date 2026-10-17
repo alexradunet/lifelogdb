@@ -325,9 +325,9 @@ END;
 CREATE TRIGGER measurements_scale_range BEFORE INSERT ON measurements
   WHEN NEW.value IS NOT NULL
 BEGIN
-  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (metrics_unit, D6): every value is a whole
-  -- number inside it. A unit is at most 32 bytes, so each bound has at most 15 digits and is exact as a REAL;
-  -- round() is a core function, not a math one
+  -- a scale names its range as its unit, lo-hi of ASCII digits with lo < hi (metrics_range_order, D6): every value is
+  -- a whole number inside it. As in metrics_range_order, one bound is exact as a REAL and the other is exact or more
+  -- than 10^15, so the two REALs compare as the two numbers do; round() is a core function, not a math one
   SELECT RAISE(ABORT, 'a scale value is a whole number inside the range its unit names (D6)')
    WHERE EXISTS (SELECT 1 FROM metrics m WHERE m.id = NEW.metric_id
                    AND m.unit GLOB '[0-9]*-[0-9]*' AND m.unit NOT GLOB '*[^0-9-]*' AND m.unit NOT GLOB '*-*-*'
