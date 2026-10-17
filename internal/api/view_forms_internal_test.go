@@ -109,6 +109,18 @@ func TestEveryTextAreaOfTheCatalogOffersPreview(t *testing.T) {
 	}
 }
 
+// TestNoActionHasAFieldNamedFormOrBack: a browser form sends its id in form and the page to return to in back, and the
+// handlers ignore both, so no action of the catalog has a field of either name.
+func TestNoActionHasAFieldNamedFormOrBack(t *testing.T) {
+	for _, s := range catalog {
+		for _, fd := range s.Fields {
+			if fd.Name == "form" || fd.Name == "back" {
+				t.Errorf("%s has a field named %s, which the browser sends for itself", s.Name, fd.Name)
+			}
+		}
+	}
+}
+
 // TestSegmentedIsForAFewShortOptions: a field is drawn as a row of radio buttons only when it has 2 to 5 options,
 // none empty and each of 3 characters or fewer; any other field with options is a select. A flag (the options 0 and
 // 1) is one checkbox, unless the action requires it.
