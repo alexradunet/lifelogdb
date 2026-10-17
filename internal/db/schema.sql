@@ -508,6 +508,6 @@ CREATE TRIGGER entities_promote_from_page BEFORE UPDATE OF entity_type ON entiti
 BEGIN
   -- promotion (D20): only a plain page changes its type, to a person, a place, a metric or a file; a typed entity
   -- never changes its type. The foreign key of a typed row also holds a person, a metric and a file, but a place
-  -- has no typed row: this trigger is what keeps a place from becoming a person or a metric
+  -- has no typed row: only this trigger keeps the type of a place
   SELECT RAISE(ABORT, 'only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)');
 END;
