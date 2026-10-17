@@ -511,6 +511,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 | `invalid_link_day_rules` | list | ids of `links` |
 | `invalid_scale_values` | list | ids of `measurements` |
 | `name_key_mismatches` | list | ids of `entity_names` |
+| `schema_drift` | list | the objects of the schema that differ from the DDL this writer embeds, each as `missing`, `extra` or `changed`, a type and a name; not part of `ok` |
 | `full_text_index_ok` | boolean | |
 | `full_text_error` | string | absent when the index is fine |
 
@@ -549,6 +550,7 @@ A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 | `restore_check.invalid_link_day_rules` | list | |
 | `restore_check.invalid_scale_values` | list | |
 | `restore_check.name_key_mismatches` | list | |
+| `restore_check.schema_drift` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
 

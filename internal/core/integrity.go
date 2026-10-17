@@ -8,7 +8,8 @@ import (
 	"lifelog/internal/text"
 )
 
-// IntegrityResult is the check groups of docs/contract/integrity-checks.md; OK when all pass.
+// IntegrityResult is the check groups of docs/contract/integrity-checks.md; OK when all checks of the data pass.
+// SchemaDrift is outside OK (checkSchema says why).
 type IntegrityResult struct {
 	OK                            bool     `json:"ok"`
 	IntegrityCheck                []string `json:"integrity_check"`
@@ -21,6 +22,7 @@ type IntegrityResult struct {
 	InvalidLinkDayRules           []int64  `json:"invalid_link_day_rules"`
 	InvalidScaleValues            []int64  `json:"invalid_scale_values"`
 	NameKeyMismatches             []int64  `json:"name_key_mismatches"`
+	SchemaDrift                   []string `json:"schema_drift"`
 	FullTextIndexOK               bool     `json:"full_text_index_ok"`
 	FullTextError                 string   `json:"full_text_error,omitempty"`
 }
@@ -111,6 +113,9 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 		return nil, err
 	}
 	semanticOK = semanticOK && len(r.NameKeyMismatches) == 0
+	if err := r.checkSchema(ctx, tx); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("integrity: %w", err)
 	}

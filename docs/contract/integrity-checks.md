@@ -1,6 +1,6 @@
 # Integrity checks
 
-Four groups of SQL checks inspect the file structure, stored relationships, the rules that only a trigger holds, and the derived search index. A fifth check, which SQL cannot make, compares the name keys. They read only the file, need no other
+Four groups of SQL checks inspect the file structure, stored relationships, the rules that only a trigger holds, and the derived search index. Two more checks that SQL cannot make compare the name keys and the schema. They read only the file, need no other
 copy, and each catches what the others cannot. Run them before and after an import ([imports](imports.md)) or a
 migration ([D13](../decisions/D13-migrations-and-freeze.md)), on every snapshot ([take a snapshot](../cookbook/take-a-snapshot.md)), and after any writer crashed. Every claim below was executed on the **live**
 file, not on a copy.
@@ -63,6 +63,18 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   This check is not SQL, and the page holds no query for it. The file refuses a change of a key (`entity_names_fixed`),
   so a drift is reported and not repaired: a repair is a change of the schema, which follows the
   [process](../process.md). A writer whose Unicode tables moved finds here the titles whose key moved.
+- **The schema — a file that no longer has the DDL.** The data checks do not see a missing trigger or a changed
+  index: a file edited by hand or by a one-off program can lose a rule while every row stays valid. A writer builds a
+  fresh file from [`schema.sql`](../schema/schema.sql) in a temporary folder and compares the rows of `sqlite_schema`
+  (`type`, `name`, `tbl_name`, `sql`) of the two files, with every run of white space in `sql` folded to one space. It
+  lists each difference by name: `missing` (the DDL has the object and the file has not), `extra` (the file has an
+  object that the DDL has not) and `changed` (both have it, with another text). Two kinds of rows are left out on
+  purpose: the statistics tables (`sqlite_stat1` and its kin), which `PRAGMA optimize` makes and the DDL never names;
+  and the shadow tables of a virtual table (`entities_fts_data` and its kin) with their indexes, which belong to the
+  FTS5 module, whose shape can differ between SQLite versions. The `CREATE VIRTUAL TABLE` row of the index is compared.
+  The autoindexes of the writer's own tables are compared. A schema difference is a finding about the file and the
+  DDL, not damage to the data, so it does not make the data checks fail. A writer does not make this check when it
+  opens the file: a refusal there would lock the owner out of the data. It is a check that the owner asks for.
 - **One view.** A writer runs all the checks above, the name keys included, in one read transaction. Another writer
   that commits meanwhile changes none of their results. The FTS5 check below needs a writer connection and runs after
   them.

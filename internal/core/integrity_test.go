@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -73,6 +74,8 @@ func (c *integrityConn) QueryContext(_ context.Context, query string, _ []driver
 		check = "measurement corrections"
 	} else if strings.Contains(query, "FROM entity_names ORDER BY id") {
 		check = "name keys"
+	} else if strings.Contains(query, "FROM sqlite_schema") {
+		check = "schema drift"
 	}
 	fault := ""
 	if check == c.c.check {
@@ -104,6 +107,9 @@ func (r *integrityRows) Columns() []string {
 	if r.check == "name keys" {
 		return []string{"id", "title", "name_key"}
 	}
+	if r.check == "schema drift" {
+		return []string{"type", "name", "tbl_name", "sql"}
+	}
 	return []string{"value"}
 }
 func (r *integrityRows) Close() error {
@@ -131,6 +137,8 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 		copy(dest, []driver.Value{"measurements", int64(7), "metrics", int64(0)})
 	} else if r.check == "name keys" {
 		copy(dest, []driver.Value{int64(42), "Title", "not the key of Title"})
+	} else if r.check == "schema drift" {
+		copy(dest, []driver.Value{"table", "stray", "stray", "CREATE TABLE stray(a)"})
 	} else if r.check == "integrity_check" {
 		dest[0] = "ok"
 	} else {
@@ -149,6 +157,8 @@ func (r *integrityRows) Next(dest []driver.Value) error {
 			dest[1] = "not an integer"
 		} else if r.check == "name keys" {
 			dest[0] = "not an integer"
+		} else if r.check == "schema drift" {
+			dest[0] = nil
 		} else {
 			dest[0] = "not an integer"
 		}
@@ -166,7 +176,7 @@ func faultIntegrityStore(t *testing.T, c *integrityConnector) *Store {
 
 // integrityCheckNames are the reads of Integrity in the order it runs them.
 var integrityCheckNames = []string{"integrity_check", "foreign_key_check", "orphan entities", "typed link endpoints", "measurement corrections",
-	"measurement correction chains", "journal name ownership", "link day-page rules", "scale ranges", "name keys"}
+	"measurement correction chains", "journal name ownership", "link day-page rules", "scale ranges", "name keys", "schema drift"}
 
 func TestIntegrityReadFailures(t *testing.T) {
 	for i, check := range integrityCheckNames {
@@ -217,7 +227,7 @@ func TestIntegrityDiagnostics(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.OK || !r.FullTextIndexOK {
+			if r.OK == (check != "schema drift") || !r.FullTextIndexOK { // a drift is outside ok
 				t.Errorf("diagnostic semantics: %+v", r)
 			}
 			switch check {
@@ -256,6 +266,10 @@ func TestIntegrityDiagnostics(t *testing.T) {
 			case "scale ranges":
 				if len(r.InvalidScaleValues) != 1 || r.InvalidScaleValues[0] != 42 {
 					t.Errorf("scale diagnostic lost: %+v", r)
+				}
+			case "schema drift":
+				if !slices.Contains(r.SchemaDrift, "extra table stray") {
+					t.Errorf("schema diagnostic lost: %+v", r)
 				}
 			case "name keys":
 				if len(r.NameKeyMismatches) != 1 || r.NameKeyMismatches[0] != 42 {
