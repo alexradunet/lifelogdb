@@ -146,7 +146,7 @@ func (v *view) BrowseList() browseList {
 		l.Rows = rows
 	}
 
-	byTitle := !ghosts && kind != "media" && kind != "document"
+	byTitle := !ghosts && !inDayOrder(kind)
 	if !byTitle || len(l.Rows) < letterGroupsFrom {
 		return l
 	}
@@ -167,6 +167,10 @@ func (v *view) BrowseList() browseList {
 	l.Rows = nil
 	return l
 }
+
+// inDayOrder says that the rows of a kind come newest day first, not in title order: the files (core.Media and
+// core.OtherFiles). A list in day order has no letters.
+func inDayOrder(kind string) bool { return kind == "media" || kind == "document" }
 
 // letterOf is the group of a title: its first letter in upper case, or "#" when it does not start with a letter.
 func letterOf(title string) string {

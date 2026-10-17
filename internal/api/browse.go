@@ -15,12 +15,38 @@ import (
 // (everything, a category, or no category), and the category tree beside it. Each kind keeps its row and its order;
 // the order is fixed here, and there is no sort field.
 
+// browseKind is what Browse knows of one kind of row. A new kind is one row of browseKindTable, with its read in core.
+// The kinds that core lists are the rows; "all" is the row of the list of a category.
+type browseKind struct {
+	chip         string // the words of the chip
+	fileable     bool   // the pick bar offers file-pages
+	tombstonable bool   // the pick bar offers tombstone-pages; the other kinds are deleted from their own page
+	read         func(h *server, ctx context.Context, rd browseRead) ([]browseRow, pageProps, error)
+}
+
+// browseRead is what the read of a kind gets: the entity that takes the links to the next and previous pages, the
+// filters, the scope and the page asked for.
+type browseRead struct {
+	e             *siren.Entity
+	b             browseQuery
+	sc            core.Scope
+	limit, offset int
+}
+
+// browseKindTable has a row for each of the browseKinds. The action that makes a thing of a kind on its list is
+// siren.NewActionOf, because the rail of the browser reads it too.
+var browseKindTable = map[string]browseKind{
+	"page":     {chip: "Pages", fileable: true, tombstonable: true, read: (*server).pageRows},
+	"person":   {chip: "People", fileable: true, read: (*server).namedRows},
+	"place":    {chip: "Places", fileable: true, read: (*server).namedRows},
+	"media":    {chip: "Media", fileable: true, tombstonable: true, read: (*server).fileRows},
+	"document": {chip: "Documents", fileable: true, tombstonable: true, read: (*server).fileRows},
+	"metric":   {chip: "Metrics", fileable: true, read: (*server).metricRows},
+	"all":      {chip: "All", read: (*server).filedRows},
+}
+
 // browseKinds are the values of the field kind; "all" is a chip only inside a category, where it is the first.
 var browseKinds = append(core.BrowseKinds(), "all")
-
-// chipWords are the words of each chip.
-var chipWords = map[string]string{"page": "Pages", "person": "People", "place": "Places", "media": "Media",
-	"document": "Documents", "metric": "Metrics", "all": "All"}
 
 // browseRow is a row of Browse: the thing, its type and its Browse kind, and only what that kind shows.
 type browseRow struct {
@@ -218,7 +244,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		chips = append([]string{"all"}, chips...)
 	}
 	for _, k := range chips {
-		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: siren.BrowseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
+		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: siren.BrowseHref(b.values(k, "ghosts", "media")), Title: browseKindTable[k].chip, Class: []string{k}})
 	}
 	treeKind := url.Values{} // a branch keeps the kind the URL names; All needs a category
 	if b.named && b.kind != "all" {
@@ -238,7 +264,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		}
 	}
 
-	rows, page, err := h.browseRows(ctx, e, b, sc, limit, offset)
+	rows, pg, err := h.browseRows(ctx, browseRead{e: e, b: b, sc: sc, limit: limit, offset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +285,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	}
 	e.Actions = browseActions(b, in, titles)
 
-	props := browseProps{pageProps: page, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Media: b.media,
+	props := browseProps{pageProps: pg, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Media: b.media,
 		Categories: cs, Rows: rows, In: in}
 	props.Counts = browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
 		Document: counts["document"], Metric: counts["metric"], Ghosts: counts["ghosts"]}
@@ -310,90 +336,93 @@ func (h *server) categoryNamed(ctx context.Context, title string, cs []core.Cate
 	return &browseIn{ID: id, Title: p.Title, Path: p.Title}, nil
 }
 
-// browseRows reads one page of the rows of the list and links its next and previous pages, the filters kept.
-func (h *server) browseRows(ctx context.Context, e *siren.Entity, b browseQuery, sc core.Scope, limit, offset int) ([]browseRow, pageProps, error) {
-	q := b.values("")
-	rows := []browseRow{}
-	switch {
-	case b.ghosts:
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.Ghost, error) {
-			return h.s.Ghosts(ctx, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, g := range found {
-			rows = append(rows, browseRow{ID: g.ID, Title: g.Title, Type: "page", Kind: "page"})
-		}
-		return rows, props, nil
-	case b.kind == "page":
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.PageRow, error) {
-			return h.s.PlainPages(ctx, sc, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, p := range found {
-			rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "page", Kind: "page", Category: p.Category})
-		}
-		return rows, props, nil
-	case b.kind == "person" || b.kind == "place":
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.NamedRow, error) {
-			return h.s.NamedMentions(ctx, b.kind, sc, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, p := range found {
-			row := browseRow{ID: p.ID, Title: p.Title, Type: b.kind, Kind: b.kind, Mentions: &p.Mentions, LastDay: p.LastDay}
-			if p.Picture != 0 {
-				row.Picture = siren.PageHref(p.Picture) + "/preview"
-			}
-			rows = append(rows, row)
-		}
-		return rows, props, nil
-	case b.kind == "media" || b.kind == "document":
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.FileRow, error) {
-			if b.kind == "media" {
-				return h.s.Media(ctx, b.media, sc, limit, offset)
-			}
-			return h.s.OtherFiles(ctx, sc, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, f := range found {
-			row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: b.kind, Mentions: &f.Mentions, MIME: f.MIME,
-				FileKind: fileKind(f.MIME), Day: f.Day}
-			if f.Picture {
-				row.Picture = siren.PageHref(f.ID) + "/preview"
-			}
-			rows = append(rows, row)
-		}
-		return rows, props, nil
-	case b.kind == "metric":
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.MetricRow, error) {
-			return h.s.MetricRows(ctx, sc, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, m := range found {
-			rows = append(rows, browseRow{ID: m.ID, Title: m.Title, Type: "metric", Kind: "metric", Unit: m.Unit})
-		}
-		return rows, props, nil
-	default: // all, inside a category
-		found, props, err := readPage(e, "/browse", q, limit, offset, func(limit, offset int) ([]core.FiledRow, error) {
-			return h.s.FiledIn(ctx, sc.In, limit, offset)
-		})
-		if err != nil {
-			return nil, props, err
-		}
-		for _, f := range found {
-			rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME)})
-		}
-		return rows, props, nil
+// browseRows reads one page of the rows of the list and links its next and previous pages, the filters kept. The
+// ghosts are pages that no page links to: their list is not a kind of its own.
+func (h *server) browseRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	if rd.b.ghosts {
+		return h.ghostRows(ctx, rd)
 	}
+	return browseKindTable[rd.b.kind].read(h, ctx, rd)
+}
+
+// readList reads the page of a list of Browse that rd asks for, with the filters kept in its links.
+func readList[T any](rd browseRead, read func(limit, offset int) ([]T, error)) ([]T, pageProps, error) {
+	return readPage(rd.e, "/browse", rd.b.values(""), rd.limit, rd.offset, read)
+}
+
+func (h *server) ghostRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	found, props, err := readList(rd, func(limit, offset int) ([]core.Ghost, error) { return h.s.Ghosts(ctx, limit, offset) })
+	rows := []browseRow{}
+	for _, g := range found {
+		rows = append(rows, browseRow{ID: g.ID, Title: g.Title, Type: "page", Kind: "page"})
+	}
+	return rows, props, err
+}
+
+func (h *server) pageRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	found, props, err := readList(rd, func(limit, offset int) ([]core.PageRow, error) { return h.s.PlainPages(ctx, rd.sc, limit, offset) })
+	rows := []browseRow{}
+	for _, p := range found {
+		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "page", Kind: "page", Category: p.Category})
+	}
+	return rows, props, err
+}
+
+// namedRows are the people or the places, as rd.b.kind says.
+func (h *server) namedRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	kind := rd.b.kind
+	found, props, err := readList(rd, func(limit, offset int) ([]core.NamedRow, error) {
+		return h.s.NamedMentions(ctx, kind, rd.sc, limit, offset)
+	})
+	rows := []browseRow{}
+	for _, p := range found {
+		row := browseRow{ID: p.ID, Title: p.Title, Type: kind, Kind: kind, Mentions: &p.Mentions, LastDay: p.LastDay}
+		if p.Picture != 0 {
+			row.Picture = siren.PageHref(p.Picture) + "/preview"
+		}
+		rows = append(rows, row)
+	}
+	return rows, props, err
+}
+
+// fileRows are the files, as rd.b.kind says: the media (one media kind, or all) or the documents.
+func (h *server) fileRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	kind := rd.b.kind
+	found, props, err := readList(rd, func(limit, offset int) ([]core.FileRow, error) {
+		if kind == "media" {
+			return h.s.Media(ctx, rd.b.media, rd.sc, limit, offset)
+		}
+		return h.s.OtherFiles(ctx, rd.sc, limit, offset)
+	})
+	rows := []browseRow{}
+	for _, f := range found {
+		row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: kind, Mentions: &f.Mentions, MIME: f.MIME,
+			FileKind: fileKind(f.MIME), Day: f.Day}
+		if f.Picture {
+			row.Picture = siren.PageHref(f.ID) + "/preview"
+		}
+		rows = append(rows, row)
+	}
+	return rows, props, err
+}
+
+func (h *server) metricRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	found, props, err := readList(rd, func(limit, offset int) ([]core.MetricRow, error) { return h.s.MetricRows(ctx, rd.sc, limit, offset) })
+	rows := []browseRow{}
+	for _, m := range found {
+		rows = append(rows, browseRow{ID: m.ID, Title: m.Title, Type: "metric", Kind: "metric", Unit: m.Unit})
+	}
+	return rows, props, err
+}
+
+// filedRows are the things filed directly in the category of the list (kind all).
+func (h *server) filedRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	found, props, err := readList(rd, func(limit, offset int) ([]core.FiledRow, error) { return h.s.FiledIn(ctx, rd.sc.In, limit, offset) })
+	rows := []browseRow{}
+	for _, f := range found {
+		rows = append(rows, browseRow{ID: f.ID, Title: f.Title, Type: f.Type, Kind: f.Kind, Category: f.Category, FileKind: fileKind(f.MIME)})
+	}
+	return rows, props, err
 }
 
 // fileKind is the part of a file's type before the '/': image, video, audio, application, text. A stored type has
@@ -404,29 +433,22 @@ func fileKind(mime string) string {
 }
 
 // browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
-// rule 6), and the pick bar's. Every list but All offers file-pages; pages (the ghosts too), media and documents
-// also offer tombstone-pages. People, places and metrics are deleted from their own page.
+// rule 6), and the pick bar's. The ghosts have no New. Every list but All offers file-pages; pages (the ghosts too),
+// media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
-	var values map[string]any
-	if in != nil {
-		values = map[string]any{"category": in.Title}
-	}
 	var out []siren.Action
-	switch {
-	case b.ghosts:
-	case b.kind == "page":
-		out = append(out, action("create-page", nil, values))
-	case b.kind == "person":
-		out = append(out, action("create-person", nil, values))
-	case b.kind == "place":
-		out = append(out, action("create-place", nil, values))
-	case b.kind == "media", b.kind == "document": // a file of any kind: it goes to the list of its type
-		out = append(out, action("add-file", nil, values))
+	if name := siren.NewActionOf(b.kind); name != "" && !b.ghosts {
+		var values map[string]any
+		if in != nil {
+			values = map[string]any{"category": in.Title}
+		}
+		out = append(out, action(name, nil, values))
 	}
-	if b.kind != "all" {
+	k := browseKindTable[b.kind]
+	if k.fileable {
 		out = append(out, withOptions(action("file-pages", nil, nil), "category", categories))
 	}
-	if b.kind == "page" || b.kind == "media" || b.kind == "document" {
+	if k.tombstonable {
 		out = append(out, action("tombstone-pages", nil, nil))
 	}
 	return out

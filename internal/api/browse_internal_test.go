@@ -134,3 +134,17 @@ func TestToBrowse(t *testing.T) {
 		}
 	}
 }
+
+// TestBrowseKindTable: each kind that the field kind accepts has a row with its chip words and its read. A kind that
+// core lists without a row would panic at the first request for it.
+func TestBrowseKindTable(t *testing.T) {
+	for _, k := range browseKinds {
+		row, ok := browseKindTable[k]
+		if !ok || row.chip == "" || row.read == nil {
+			t.Errorf("kind %q has no complete row in browseKindTable: %+v", k, row)
+		}
+	}
+	if len(browseKindTable) != len(browseKinds) {
+		t.Errorf("browseKindTable has %d rows for %d kinds", len(browseKindTable), len(browseKinds))
+	}
+}
