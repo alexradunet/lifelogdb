@@ -8,8 +8,8 @@
 - **Date / baseline:** 2026-10-17, `14083e8` (master).
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM: parts 1 to 10 change the browser's views and three API
   properties; part 11 changes the contract (a new table) and the owner's live file.
-- **Status:** IN REVIEW (owner). The code of all eleven parts is done (2026-10-17). The deploy, the owner's look and
-  the one-off program for the live file wait for the owner (see Result).
+- **Status:** DONE. The code of all eleven parts is done, the live file has `capture_keys`, and the binary is deployed
+  (2026-10-17, see Result).
 - **Resolves:** issue [0085](../issues/0085-a-resent-capture-appends-twice.md) (part 11, with an RFC and a decision).
   The rest is the owner's word after a screenshot review (2026-10-17): "I want to do them all".
 
@@ -241,10 +241,13 @@ synthetic data (desktop and phone, light and dark, nine views): no console error
 Not run: `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` (no `mmdc`), `staticcheck` and `govulncheck` (not
 installed), the race check, Windows.
 
-Open, for the owner:
+The deploy (2026-10-17, on the owner's machine):
 
-- **The live file.** It has no `capture_keys`. On that file the new binary fails every capture that has a key, and
-  the browser's form always sends one; the integrity check also reports the drift. So before the deploy, the one-off
-  program of part 11 (on the pattern of `meta123`, outside the repo) adds the table and its two triggers to
-  `life.db`. It is not written yet.
-- **The deploy.** Build to the install path, restart the service, read its log line, and look at the live app.
+- **The live file.** A one-off program outside the repo, `~/.local/share/lifelog-oneoff/capture129/` (on the pattern
+  of `meta123`), added `capture_keys` and its two triggers to `life.db`.
+- **The binary.** Built to `~/.local/bin/lifelog` (the same file as
+  `~/.local/share/lifelog-oneoff/lifelog-plan129`), with the previous binary kept as `lifelog.prev`.
+  `lifelog.service` restarted at 20:48:46 CEST. Its log line: "serving /home/cico/dev/lifelogdb/life.db on
+  http://127.0.0.1:7777 … (version 0.1.0, user_version 1)".
+- **The check.** The owner ran `lifelog --db life.db get /integrity --human` on the live file: `ok: true`,
+  `integrity_check: ["ok"]`, no `schema_drift`. The owner looked at the live app and closed the plan.
