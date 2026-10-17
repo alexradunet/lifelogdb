@@ -1,16 +1,20 @@
 package api_test
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"lifelog/internal/api"
 	"lifelog/internal/core"
@@ -287,5 +291,57 @@ func TestMultipartTextLimitStopsTheRead(t *testing.T) {
 	unchanged()
 	if read := int64(len(head)) + 16<<20 - firstFields + 1; body.n < read || body.n > read+4096 {
 		t.Fatalf("the handler read %d bytes, want %d to %d: the text up to the limit, one byte, and at most the buffer of the multipart reader", body.n, read, read+4096)
+	}
+}
+
+// TestARefusedLargeRequestClosesTheConnection: through a real server, a JSON or URL-encoded request of more than 20 MiB
+// gets 413 with "Connection: close", and then the server closes the connection: it reads no other request from it.
+// Each request has 1 KiB more than the limit. Without the close, net/http reads the rest of so short a body after the
+// handler, and it keeps the connection open for the next request.
+func TestARefusedLargeRequestClosesTheConnection(t *testing.T) {
+	h, unchanged := limitsHandler(t)
+	defer unchanged()
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	for _, c := range []struct{ path, ct, head, tail string }{
+		{"/pages", "application/json", `{"title":"Overflow","body":"`, `"}`},
+		{"/pages", "application/x-www-form-urlencoded", "title=Overflow&body=", ""},
+		{"/render", "application/x-www-form-urlencoded", "body=", ""},
+	} {
+		conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		size := int64(20<<20 + 1<<10)
+		head := fmt.Sprintf("POST %s HTTP/1.1\r\nHost: %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n%s",
+			c.path, srv.Listener.Addr(), c.ct, size, c.head)
+		// The request is written while the answer is read. A write error is not checked: a server may close the
+		// connection before it reads the whole body.
+		wrote := make(chan struct{})
+		go func() {
+			defer close(wrote)
+			_, _ = io.Copy(conn, io.MultiReader(strings.NewReader(head),
+				generated(size-int64(len(c.head)+len(c.tail))), strings.NewReader(c.tail)))
+		}()
+		if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		r := bufio.NewReader(conn)
+		resp, err := http.ReadResponse(r, nil)
+		if err != nil {
+			t.Fatalf("%s %s: %v", c.path, c.ct, err)
+		}
+		_, err = io.Copy(io.Discard, resp.Body)
+		if err := errors.Join(err, resp.Body.Close()); err != nil {
+			t.Fatalf("%s %s: the answer: %v", c.path, c.ct, err)
+		}
+		if resp.StatusCode != http.StatusRequestEntityTooLarge || !resp.Close {
+			t.Errorf("%s %s: %d, close %v; want 413 and Connection: close", c.path, c.ct, resp.StatusCode, resp.Close)
+		}
+		if _, err := r.ReadByte(); !errors.Is(err, io.EOF) {
+			t.Errorf("%s %s: after the 413, a read of the connection gives %v, want io.EOF: the server keeps the connection open", c.path, c.ct, err)
+		}
+		conn.Close()
+		<-wrote
 	}
 }

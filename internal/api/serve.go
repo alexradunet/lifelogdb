@@ -39,7 +39,7 @@ func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 	}))
-	return guard.Handler(h.mux)
+	return guard.Handler(limitBody(h.mux))
 }
 
 // newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
