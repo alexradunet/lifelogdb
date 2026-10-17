@@ -210,6 +210,11 @@ change follows the process; none is proposed here without an issue first.
     `R` exported; templates still pass form options as pairs, as a template cannot build a struct.
   - Action 12: the JSON keys of a list's properties now come in the order of the struct, not sorted. The names, the
     values and the presence are the same.
+- 2026-10-17: shipped. On the owner's machine the baseline, `staticcheck` (2026.2.2) and `govulncheck` (v1.9.0) were
+  clean; the owner built `/home/cico/.local/bin/lifelog` (the previous binary kept as `lifelog.prev`) and restarted
+  `lifelog.service` at 17:07; its start line reads "version 0.1.0, user_version 1". At 17:09 the owner installed the
+  script and the units from `deploy/`, with this machine's user and paths, and started the snapshot unit once: the
+  snapshot passed its restore check, the script found 8 good snapshots and pruned nothing.
 
 Skills: a-philosophy-of-software-design, code-complete, refactoring, release-it,
 designing-data-intensive-applications. Conflict: Code Complete says "validate input at trust boundaries"; AGENTS.md
