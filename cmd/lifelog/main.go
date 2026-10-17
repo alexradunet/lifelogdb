@@ -360,8 +360,8 @@ func commandConsumesContext(o opts) bool {
 }
 
 // runContext runs the command of the line e.o: its prepare, then the client (a running server over --url, or the
-// handler in-process on the file dbPath names), then its run. An error of the Close of the file (its PRAGMA optimize)
-// is joined to the error of the run.
+// handler in-process on the file dbPath names), then its run. An error of the Close of the file is joined
+// to the error of the run. A failed PRAGMA optimize is not one: Close logs it.
 func runContext(ctx context.Context, e env) (err error) {
 	o := e.o
 	cmd := commandNamed(o.args[0])

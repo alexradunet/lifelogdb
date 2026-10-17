@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -850,8 +851,9 @@ func TestCancelledWriteReportsOnlyTheCancellation(t *testing.T) {
 	}
 }
 
-// TestCloseReportsAFailedOptimize: Close returns the error of PRAGMA optimize, and it still closes the readers.
-func TestCloseReportsAFailedOptimize(t *testing.T) {
+// TestCloseLogsAFailedOptimize: a PRAGMA optimize that fails loses no data, so Close logs it and returns nil: a CLI
+// command that is done must not exit 1 for it. Close still closes the readers.
+func TestCloseLogsAFailedOptimize(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "life.db")
 	if err := Init(t.Context(), p); err != nil {
 		t.Fatal(err)
@@ -860,12 +862,18 @@ func TestCloseReportsAFailedOptimize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	// Deliberate damage: with the writer closed first, PRAGMA optimize cannot run.
 	if err := d.W.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.Close(); err == nil {
-		t.Error("Close = nil, want the error of PRAGMA optimize")
+	if err := d.Close(); err != nil {
+		t.Errorf("Close = %v, want nil: a skipped optimize loses no data", err)
+	}
+	if !strings.Contains(logged.String(), "PRAGMA optimize") {
+		t.Errorf("Close logged %q, want a line about PRAGMA optimize", logged.String())
 	}
 	if err := d.R.PingContext(t.Context()); err == nil {
 		t.Error("the readers are open after Close")
