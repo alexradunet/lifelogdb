@@ -16,7 +16,7 @@ func TestMetricSectionsSayDaysByTheClockOfTheView(t *testing.T) {
 	metric := func(id float64, name, day string) any {
 		return map[string]any{"id": id, "name": name, "unit": "kg", "recent": []any{map[string]any{"id": id * 10, "day": day, "value": 70.0}}}
 	}
-	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}, Props: map[string]any{"today": "2026-01-01",
+	v := &view{Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}, Props: map[string]any{"today": "2026-01-01",
 		"groups": []any{map[string]any{"title": "Not filed", "depth": 0.0, "metrics": []any{metric(1, "weight", "2026-10-14"), metric(2, "ferritin", "2026-07-01")}}}}}
 	s := v.MetricSections()
 	if len(s) != 1 || len(s[0].Cards) != 2 {
@@ -138,7 +138,7 @@ func TestTheTilesOfADay(t *testing.T) {
 	r := func(id float64, metric string, value float64) any {
 		return map[string]any{"id": id, "metric": metric, "value": value}
 	}
-	v := &view{Shell: &shellView{Today: "2026-10-20", Zone: time.UTC}, Props: map[string]any{"day": "2026-10-16",
+	v := &view{Shell: &Shell{Today: "2026-10-20", Zone: time.UTC}, Props: map[string]any{"day": "2026-10-16",
 		"readings": []any{r(5, "weight", 70), r(6, "mood", 3), r(7, "weight", 71), r(8, "weight", 1000000)},
 		"trends": []any{
 			map[string]any{"metric": "mood", "unit": "1-5", "readings": []any{}},
@@ -189,7 +189,7 @@ func TestTheSectionsOfMetrics(t *testing.T) {
 			group("Not filed", "", 0, 0, metric(4, "mood"), metric(5, "steps")),
 		},
 	}
-	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}, Props: props}
+	v := &view{Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}, Props: props}
 	type card struct {
 		ID, Name, Href, Value, Unit, Measurement, Day, When, Short, Note string
 		Count                                                            int

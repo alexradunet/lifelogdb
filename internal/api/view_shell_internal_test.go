@@ -43,7 +43,7 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 // TestMoreIsMarkedOnAPageOfTheOwner: More is marked on a page of the owner's links at its foot, and on no other page.
 // Today's day page marks Today, by the today of the view's words.
 func TestMoreIsMarkedOnAPageOfTheOwner(t *testing.T) {
-	shell := &shellView{Today: "2026-10-16", Zone: time.UTC}
+	shell := &Shell{Today: "2026-10-16", Zone: time.UTC}
 	for path, want := range map[string]bool{
 		"/integrity": true, "/actions": true, "/": false, "/days/2026-10-16": false, "/metrics": false, "/pages/7": false,
 	} {
@@ -52,9 +52,9 @@ func TestMoreIsMarkedOnAPageOfTheOwner(t *testing.T) {
 		}
 	}
 	for _, c := range []struct {
-		shell *shellView
+		shell *Shell
 		want  string
-	}{{shell, "/days/today"}, {nil, "/months/current"}, {&shellView{Today: "2026-10-15"}, "/months/current"}} {
+	}{{shell, "/days/today"}, {nil, "/months/current"}, {&Shell{Today: "2026-10-15"}, "/months/current"}} {
 		var got string
 		for _, it := range (&view{Path: "/days/2026-10-16", Shell: c.shell}).Nav() {
 			if it.Current {

@@ -30,6 +30,6 @@ func (h *server) render(w http.ResponseWriter, r *http.Request) {
 // lines, so a long page is edited without a scroll inside a small box.
 func saveBodyAction(id int64, body, version string) Action {
 	a := action("save-body", idParam(id), map[string]any{"body": body, "version": version})
-	a.field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
+	a.Field("body").Rows = min(max(strings.Count(body, "\n")+2, 12), 40)
 	return a
 }

@@ -26,7 +26,7 @@ func (h *server) find(r *http.Request, act spec, _ string) (*Entity, error) {
 	if id == 0 {
 		return nil, core.NotFound("no page titled %s", title)
 	}
-	return nil, redirect{pageHref(id)}
+	return nil, redirect{PageHref(id)}
 }
 
 func (h *server) page(r *http.Request) (*Entity, error) {
@@ -41,7 +41,7 @@ func (h *server) page(r *http.Request) (*Entity, error) {
 	// In a browser, the page of a live metric is its metric's one page, which carries the page's text, edges and
 	// actions (docs/plans/100-one-page-a-metric.md); a receipt of feedback goes with it. JSON keeps the page.
 	if p := e.Properties.(*core.Page); wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
-		to := metricHref(p.Title)
+		to := MetricHref(p.Title)
 		if t := r.URL.Query().Get("feedback"); t != "" && h.feedback.move(t, r.URL.Path, to) {
 			to += "?" + url.Values{"feedback": {t}}.Encode()
 		}
@@ -56,16 +56,16 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		return nil, err
 	}
 	e := &Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
-		Links: []Link{link("self", pageHref(id), p.Title), link("index", "/", "Home")}}
+		Links: []Link{link("self", PageHref(id), p.Title), link("index", "/", "Home")}}
 	if p.IsDayPage {
 		e.Class = append(e.Class, "day-page")
-		e.Links = append(e.Links, link("day", dayHref(p.Day), "Day view"))
+		e.Links = append(e.Links, link("day", DayHref(p.Day), "Day view"))
 	}
 	if p.File != nil && p.File.Preview {
-		e.Links = append(e.Links, link("preview", pageHref(id)+"/preview", "Picture"))
+		e.Links = append(e.Links, link("preview", PageHref(id)+"/preview", "Picture"))
 	}
 	for _, l := range p.Out {
-		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
+		e.Entities = append(e.Entities, Link{Rel: []string{l.Kind}, Href: PageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}
 	// The categories, read once: the options of file-pages, and which of the pages filed here are categories
 	// themselves (docs/plans/115-categories-to-browse.md).
@@ -83,7 +83,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*Entity, error) {
 		if l.Kind == "part-of" && isCategory(l.ID) {
 			class = append(class, "category")
 		}
-		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: pageHref(l.ID), Title: l.Title, Class: class})
+		e.Entities = append(e.Entities, Link{Rel: []string{"backlink", l.Kind}, Href: PageHref(l.ID), Title: l.Title, Class: class})
 	}
 	var kinds []string
 	if p.DeletedAt != "" {
@@ -177,7 +177,7 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*Entity, error) {
 	hits = paged(e, hits, "/search", url.Values{"q": {q}}, limit, offset)
 	e.Properties.(map[string]any)["hits"] = hits
 	for _, x := range hits {
-		e.Entities = append(e.Entities, link("item", pageHref(x.ID), x.Title))
+		e.Entities = append(e.Entities, link("item", PageHref(x.ID), x.Title))
 	}
 	return e, nil
 }

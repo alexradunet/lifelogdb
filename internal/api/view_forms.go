@@ -148,7 +148,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 // MoreOpen reports folded fields of which one has a value: they are drawn open, so no value is out of sight.
 func (f *formView) MoreOpen() bool {
 	for _, fd := range f.More {
-		if num(fd.Value) != "" {
+		if Num(fd.Value) != "" {
 			return true
 		}
 	}

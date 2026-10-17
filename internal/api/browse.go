@@ -135,8 +135,8 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 	return v
 }
 
-// browseHref is the address of Browse with a query.
-func browseHref(v url.Values) string {
+// BrowseHref is the address of Browse with a query.
+func BrowseHref(v url.Values) string {
 	if len(v) == 0 {
 		return "/browse"
 	}
@@ -170,7 +170,7 @@ func toBrowse(path string, q url.Values) string {
 	if path == "/media" && q.Get("kind") != "" {
 		v.Set("media", q.Get("kind"))
 	}
-	return browseHref(v)
+	return BrowseHref(v)
 }
 
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
@@ -203,7 +203,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 		return nil, err
 	}
 
-	self := browseHref(b.values(""))
+	self := BrowseHref(b.values(""))
 	e := &Entity{Class: []string{"browse"}, Title: "Browse",
 		Links: []Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
 	chips := core.BrowseKinds()
@@ -211,23 +211,23 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 		chips = append([]string{"all"}, chips...)
 	}
 	for _, k := range chips {
-		e.Links = append(e.Links, Link{Rel: []string{"kind"}, Href: browseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
+		e.Links = append(e.Links, Link{Rel: []string{"kind"}, Href: BrowseHref(b.values(k, "ghosts", "media")), Title: chipWords[k], Class: []string{k}})
 	}
 	treeKind := url.Values{} // a branch keeps the kind the URL names; All needs a category
 	if b.named && b.kind != "all" {
 		treeKind.Set("kind", b.kind)
 	}
-	e.Links = append(e.Links, link("everything", browseHref(treeKind), "Everything"))
+	e.Links = append(e.Links, link("everything", BrowseHref(treeKind), "Everything"))
 	unfiled := url.Values{"unfiled": {"1"}}
 	if k := treeKind.Get("kind"); k != "" {
 		unfiled.Set("kind", k)
 	}
-	e.Links = append(e.Links, link("unfiled", browseHref(unfiled), "Not filed"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"))
+	e.Links = append(e.Links, link("unfiled", BrowseHref(unfiled), "Not filed"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"))
 	if b.kind == "media" {
 		for _, m := range []struct{ rel, kind, title string }{{"pictures", "image", "Pictures"}, {"videos", "video", "Videos"}, {"recordings", "audio", "Recordings"}} {
 			v := b.values("", "media")
 			v.Set("media", m.kind)
-			e.Links = append(e.Links, link(m.rel, browseHref(v), m.title))
+			e.Links = append(e.Links, link(m.rel, BrowseHref(v), m.title))
 		}
 	}
 
@@ -236,14 +236,14 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*Entity, error) {
 		return nil, err
 	}
 	for _, row := range rows {
-		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: pageHref(row.ID), Title: row.Title, Class: []string{row.Type}})
+		e.Entities = append(e.Entities, Link{Rel: []string{"item"}, Href: PageHref(row.ID), Title: row.Title, Class: []string{row.Type}})
 	}
 	treeIn := func(title string) string {
 		v := url.Values{"in": {title}}
 		if k := treeKind.Get("kind"); k != "" {
 			v.Set("kind", k)
 		}
-		return browseHref(v)
+		return BrowseHref(v)
 	}
 	var titles []string
 	for _, c := range cs {
@@ -334,7 +334,7 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 		for _, p := range paged(e, found, "/browse", q, limit, offset) {
 			row := browseRow{ID: p.ID, Title: p.Title, Type: b.kind, Kind: b.kind, Mentions: &p.Mentions, LastDay: p.LastDay}
 			if p.Picture != 0 {
-				row.Picture = pageHref(p.Picture) + "/preview"
+				row.Picture = PageHref(p.Picture) + "/preview"
 			}
 			rows = append(rows, row)
 		}
@@ -353,7 +353,7 @@ func (h *server) browseRows(ctx context.Context, e *Entity, b browseQuery, sc co
 			row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: b.kind, Mentions: &f.Mentions, MIME: f.MIME,
 				FileKind: fileKind(f.MIME), Day: f.Day}
 			if f.Picture {
-				row.Picture = pageHref(f.ID) + "/preview"
+				row.Picture = PageHref(f.ID) + "/preview"
 			}
 			rows = append(rows, row)
 		}

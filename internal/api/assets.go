@@ -1,6 +1,6 @@
 package api
 
-// The routes that only a browser asks for: the embedded fonts, the manifest and its icon (webFiles), and the style
+// The routes that only a browser asks for: the embedded fonts, the manifest and its icon (Files), and the style
 // page.
 
 import (
@@ -24,7 +24,7 @@ func fonts(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := webFiles.ReadFile("html/fonts/" + name)
+	b, err := Files.ReadFile("html/fonts/" + name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -126,7 +126,7 @@ func (v *view) StyleParts() styleParts {
 // install serves an embedded file of html/ for a browser's install of the app: the manifest and its icon. The
 // cache says how long a browser keeps it. The file is the same for every request, so it needs no read of the store.
 func install(name, typ, cache string) http.HandlerFunc {
-	b := mustWebFile(name)
+	b := MustFile(name)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", typ)
 		w.Header().Set("Cache-Control", cache)

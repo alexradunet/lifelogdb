@@ -70,7 +70,7 @@ func TestAChartSaysHowManyReadingsItDraws(t *testing.T) {
 	}
 }
 
-// TestAChartWritesItsNumbersInFull: the axis and the title of each point write a value as num does, as the tile and
+// TestAChartWritesItsNumbersInFull: the axis and the title of each point write a value as Num does, as the tile and
 // every other place write it: 1000000, never 1e+06, and 0.00001, never 1e-05.
 func TestAChartWritesItsNumbersInFull(t *testing.T) {
 	readings := []any{map[string]any{"day": "2026-10-12", "value": 0.00001}, map[string]any{"day": "2026-10-14", "value": 1000000.0}}

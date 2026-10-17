@@ -32,7 +32,7 @@ func (v *view) BrowseTree() []*treeNode {
 	links := v.Embedded("category")
 	current := ""
 	if in, _ := props["in"].(map[string]any); in != nil {
-		current = num(in["id"])
+		current = Num(in["id"])
 	}
 	byPath := map[string]*treeNode{}
 	var top []*treeNode
@@ -40,7 +40,7 @@ func (v *view) BrowseTree() []*treeNode {
 		c, _ := x.(map[string]any)
 		path, _ := c["path"].(string)
 		title, _ := c["title"].(string)
-		n := &treeNode{Title: title, Count: num(c["count"]), Current: current != "" && num(c["id"]) == current}
+		n := &treeNode{Title: title, Count: Num(c["count"]), Current: current != "" && Num(c["id"]) == current}
 		if i < len(links) {
 			n.Href = links[i].Href
 		}
@@ -106,11 +106,11 @@ func (v *view) BrowseList() browseList {
 	for i, x := range cats {
 		c, _ := x.(map[string]any)
 		path, _ := c["path"].(string)
-		f := map[string]any{"id": c["id"], "title": c["title"], "count": num(c["count"]), "top": !strings.Contains(path, "/")}
+		f := map[string]any{"id": c["id"], "title": c["title"], "count": Num(c["count"]), "top": !strings.Contains(path, "/")}
 		if i < len(links) {
 			f["href"] = links[i].Href
 		}
-		tree[num(c["id"])] = f
+		tree[Num(c["id"])] = f
 	}
 
 	var l browseList
@@ -118,7 +118,7 @@ func (v *view) BrowseList() browseList {
 	case kind == "page" && !ghosts && !unfiled && in == nil:
 		for _, x := range cats {
 			c, _ := x.(map[string]any)
-			if f := tree[num(c["id"])]; f["top"] == true {
+			if f := tree[Num(c["id"])]; f["top"] == true {
 				l.Folders = append(l.Folders, f)
 			}
 		}
@@ -134,9 +134,9 @@ func (v *view) BrowseList() browseList {
 				l.Rows = append(l.Rows, x)
 				continue
 			}
-			f := tree[num(r["id"])]
+			f := tree[Num(r["id"])]
 			if f == nil { // a category the tree does not draw: nothing live is filed in it
-				f = map[string]any{"id": r["id"], "title": r["title"], "count": "0", "href": browseHref(map[string][]string{"in": {r["title"].(string)}})}
+				f = map[string]any{"id": r["id"], "title": r["title"], "count": "0", "href": BrowseHref(map[string][]string{"in": {r["title"].(string)}})}
 			}
 			l.Folders = append(l.Folders, f)
 		}

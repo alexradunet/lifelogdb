@@ -9,10 +9,10 @@ import (
 	"lifelog/internal/text"
 )
 
-// glanceDays is how many days, the day itself the last, a reading's trend covers.
-const glanceDays = 14
+// GlanceDays is how many days, the day itself the last, a reading's trend covers.
+const GlanceDays = 14
 
-// trend is a metric read on a day: its unit, and its current unassociated readings of the glanceDays days through
+// trend is a metric read on a day: its unit, and its current unassociated readings of the GlanceDays days through
 // the day, oldest first (the series of the cookbook).
 type trend struct {
 	Metric   string       `json:"metric"`
@@ -53,7 +53,7 @@ func (h *server) trends(ctx context.Context, day string, readings []core.Reading
 	if !ok {
 		return nil, fmt.Errorf("the trends of %q: not a day", day)
 	}
-	from := seriesFrom(t.AddDate(0, 0, -glanceDays)) // a series is (from, to]
+	from := seriesFrom(t.AddDate(0, 0, -GlanceDays)) // a series is (from, to]
 	for _, name := range names {
 		rows, err := h.s.Series(ctx, name, from, day)
 		if err != nil {

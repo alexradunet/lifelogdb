@@ -196,12 +196,12 @@ func (h *server) serve(f func(*http.Request) (*Entity, error)) http.HandlerFunc 
 	}
 }
 
-// refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
+// Refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
 // the error and the form as the owner filled it (pageView).
-type refusal struct {
-	entity *Entity    // the error entity
-	href   string     // the refused action's address
-	sent   url.Values // what the form sent
+type Refusal struct {
+	Entity *Entity    // the error entity
+	Href   string     // the refused action's address
+	Sent   url.Values // what the form sent
 }
 
 // refusedOnItsPage answers a browser form that failed with the page it came from, filled in, and reports whether it
@@ -233,7 +233,7 @@ func (h *server) refusedOnItsPage(w http.ResponseWriter, r *http.Request, e *Ent
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	get.Pattern = r.Pattern // a fault of the answer is logged under the route of the POST that the client sent (logFault)
-	answer(w, get, status, page.entity, frame{shell: h.s, refused: &refusal{entity: e, href: r.URL.Path, sent: r.PostForm}})
+	answer(w, get, status, page.entity, frame{shell: h.s, refused: &Refusal{Entity: e, Href: r.URL.Path, Sent: r.PostForm}})
 	return true
 }
 
@@ -286,7 +286,7 @@ func errorEntity(r *http.Request, err error) (*Entity, int) {
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
 		status, code = http.StatusConflict, "exists"
-		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: pageHref(ex.ID), Title: ex.Title})
+		e.Links = append(e.Links, Link{Rel: []string{"existing"}, Href: PageHref(ex.ID), Title: ex.Title})
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
 	default:
@@ -349,7 +349,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 // page with no sidebar: the answer of a guard, of a picture's error and of a refusal before the routes.
 type frame struct {
 	shell    *core.Store // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
-	refused  *refusal    // the refused form that the page shows; nil: none
+	refused  *Refusal    // the refused form that the page shows; nil: none
 	pageOnly bool        // a page for every client, a program too: the answer is presentation and has no JSON form
 }
 
@@ -378,25 +378,25 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *Entity, fr fr
 }
 
 // pageAnswer is the status and the HTML of the page of e. When the page cannot be drawn, a defect of this program,
-// the owner reads the cause in the log and a client never does: the page is drawFailed, with 500.
+// the owner reads the cause in the log and a client never does: the page is DrawFailed, with 500.
 func pageAnswer(r *http.Request, status int, e *Entity, fr frame) (int, []byte) {
-	f := facts{url: r.URL}
+	f := Facts{URL: r.URL}
 	if fr.shell != nil {
-		f.shell = shellOf(r.Context(), fr.shell)
+		f.Shell = shellOf(r.Context(), fr.shell)
 	}
 	if status >= 400 && r.Method == "POST" {
-		f.submitted = r.PostForm.Get("body")
-		if f.submitted == "" {
-			f.submitted = r.PostForm.Get("text")
+		f.Submitted = r.PostForm.Get("body")
+		if f.Submitted == "" {
+			f.Submitted = r.PostForm.Get("text")
 		}
 		if ref, err := url.Parse(r.Referer()); err == nil && ref.Host == r.Host && strings.HasPrefix(ref.Path, "/") {
-			f.back = ref.RequestURI()
+			f.Back = ref.RequestURI()
 		}
 	}
-	b, err := draw(e, f, fr.refused)
+	b, err := Draw(e, f, fr.refused)
 	if err != nil {
-		logFault(r, "the view "+templateOf(e)+" cannot be drawn", err)
-		return http.StatusInternalServerError, []byte(drawFailed)
+		logFault(r, "the view "+TemplateOf(e)+" cannot be drawn", err)
+		return http.StatusInternalServerError, []byte(DrawFailed)
 	}
 	return status, b
 }

@@ -40,7 +40,7 @@ func weekPage(day string) string {
 	if !text.IsDay(monday.Format(time.DateOnly)) {
 		return ""
 	}
-	return weekHref(monday)
+	return WeekHref(monday)
 }
 
 // sinceLastWeek says in words how a week's mean differs from the week before's: previous is nil when that week had
@@ -52,9 +52,9 @@ func sinceLastWeek(mean, previous any) string {
 	case !ok1 || !ok2:
 		return "first week with readings"
 	case m > p:
-		return "up from " + num(p)
+		return "up from " + Num(p)
 	case m < p:
-		return "down from " + num(p)
+		return "down from " + Num(p)
 	}
 	return "same as last week"
 }
@@ -186,8 +186,8 @@ func weeks(list any) [][]any {
 // yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
 func yearPage(month string) string {
 	year, err := strconv.Atoi(month[:min(4, len(month))])
-	if err != nil || !isYear(year) {
+	if err != nil || !IsYear(year) {
 		return ""
 	}
-	return yearHref(year)
+	return YearHref(year)
 }

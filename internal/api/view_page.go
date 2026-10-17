@@ -29,21 +29,21 @@ import (
 // The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
 // its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
-// webFiles are the files of html/: the templates, the two stylesheets, the icon, the manifest, and the fonts with
+// Files are the files of html/: the templates, the two stylesheets, the icon, the manifest, and the fonts with
 // their licences.
 //
 //go:embed html/*.html html/*.css html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
-var webFiles embed.FS
+var Files embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
 var (
-	baseCSS = template.CSS(mustWebFile("base.css"))
-	appCSS  = template.CSS(mustWebFile("app.css"))
+	baseCSS = template.CSS(MustFile("base.css"))
+	appCSS  = template.CSS(MustFile("app.css"))
 )
 
-// mustWebFile is the file of webFiles that has the name name in html/.
-func mustWebFile(name string) []byte {
-	b, err := webFiles.ReadFile("html/" + name)
+// MustFile is the file of Files that has the name name in html/.
+func MustFile(name string) []byte {
+	b, err := Files.ReadFile("html/" + name)
 	if err != nil {
 		panic(err) // the files of html/ are embedded (the sheets, the manifest, the icon): one missing is a build defect
 	}
@@ -69,7 +69,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"dayOfMonth": dayOfMonth,
 	"dict":       dict,
 	"monthBand":  monthBand,
-	"num":        num,
+	"num":        Num,
 	"count":      count,
 	"pathesc":    url.PathEscape,
 	"icon":       icon,
@@ -82,7 +82,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"sinceLast":  sinceLastWeek,
 	"nameWords":  nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
-		if t, ok := monthOf(month); ok {
+		if t, ok := MonthOf(month); ok {
 			return t.Format("January")
 		}
 		return month
@@ -94,7 +94,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"alert":     alertOf,
 	"upTo":      upTo,
 	"beyond":    beyond,
-}).ParseFS(webFiles, "html/*.html"))
+}).ParseFS(Files, "html/*.html"))
 
 // dict is the arguments of a sub-template that needs more than one value: name/value pairs, each name a string.
 func dict(kv ...any) (map[string]any, error) {
@@ -112,9 +112,9 @@ func dict(kv ...any) (map[string]any, error) {
 	return m, nil
 }
 
-// num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
+// Num shows a property's value. A number is written in full, never with an exponent: the JSON client reads every
 // number as a float64, and an id of a million must still make the link /pages/1000000, not /pages/1e+06.
-func num(v any) string {
+func Num(v any) string {
 	switch x := v.(type) {
 	case nil:
 		return ""
@@ -145,7 +145,7 @@ type view struct {
 	Here      string
 	Submitted string
 	Back      string
-	Shell     *shellView   // the sidebar's read; nil when the page is drawn without it
+	Shell     *Shell       // the sidebar's read; nil when the page is drawn without it
 	Refused   *refusedView // a form of this page failed: the alert, and the form as it was sent
 	Sent      url.Values
 	query     url.Values // the page's own query: ?new=<action> and the fields it fills
@@ -174,48 +174,48 @@ func hereOf(u *url.URL) string {
 	return u.EscapedPath() + "?" + q.Encode()
 }
 
-// drawFailed is the page a browser gets when its view cannot be drawn: a 500 that names no internal cause. The
+// DrawFailed is the page a browser gets when its view cannot be drawn: a 500 that names no internal cause. The
 // server's log has the cause.
-const drawFailed = `<!doctype html>
+const DrawFailed = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Error · Lifelog</title></head>
 <body><p role="alert">This page cannot be drawn. The server's log has the cause.</p><p><a href="/">Home</a></p></body></html>
 `
 
-// facts are what a page shows beyond its entity. The one who draws the page reads them from the request and the
+// Facts are what a page shows beyond its entity. The one who draws the page reads them from the request and the
 // store: the address the browser asked for, the shell's read and, for an error that answers a form, the text that
 // form sent and the page it came from.
-type facts struct {
-	url       *url.URL   // the address the browser asked for
-	shell     *shellView // the sidebar's read; nil when the page is drawn without it
-	submitted string     // the body (or the text) that a refused form sent
-	back      string     // the page that a refused form came from, when it is a page of this server
+type Facts struct {
+	URL       *url.URL // the address the browser asked for
+	Shell     *Shell   // the sidebar's read; nil when the page is drawn without it
+	Submitted string   // the body (or the text) that a refused form sent
+	Back      string   // the page that a refused form came from, when it is a page of this server
 }
 
 // pageView is the view of a page: the entity, the facts of the page and the refusal of a form that the page shows,
 // nil for none. It reads nothing, so the same arguments give the same view. Properties that JSON cannot carry (a
 // NaN, an infinity) are an error, so a page is never drawn with its properties left out.
-func pageView(e *Entity, f facts, rf *refusal) (*view, error) {
+func pageView(e *Entity, f Facts, rf *Refusal) (*view, error) {
 	shape, err := jsonShape(e.Properties)
 	if err != nil {
 		return nil, err
 	}
-	v := &view{Entity: e, Props: shape, Path: f.url.Path, Here: hereOf(f.url), Submitted: f.submitted, Back: f.back,
-		Shell: f.shell, query: f.url.Query()}
+	v := &view{Entity: e, Props: shape, Path: f.URL.Path, Here: hereOf(f.URL), Submitted: f.Submitted, Back: f.Back,
+		Shell: f.Shell, query: f.URL.Query()}
 	if rf != nil {
-		props, _ := rf.entity.Properties.(map[string]any)
+		props, _ := rf.Entity.Properties.(map[string]any)
 		code, _ := props["code"].(string)
 		message, _ := props["message"].(string)
 		words := alertOf(code)
-		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.href}
-		v.Sent = rf.sent
+		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.Href}
+		v.Sent = rf.Sent
 	}
 	return v, nil
 }
 
-// draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
+// Draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
 // call of the view that the API makes: f are the facts of the page, and rf is the refused form that the page shows,
 // nil for none.
-func draw(e *Entity, f facts, rf *refusal) ([]byte, error) {
+func Draw(e *Entity, f Facts, rf *Refusal) ([]byte, error) {
 	v, err := pageView(e, f, rf)
 	if err != nil {
 		return nil, err
@@ -223,8 +223,8 @@ func draw(e *Entity, f facts, rf *refusal) ([]byte, error) {
 	return htmlOf(v)
 }
 
-// templateOf names the template that draws an entity: the first of its classes that has one, else "generic".
-func templateOf(e *Entity) string {
+// TemplateOf names the template that draws an entity: the first of its classes that has one, else "generic".
+func TemplateOf(e *Entity) string {
 	for _, c := range e.Class {
 		if n, ok := viewOf[c]; ok {
 			return n
@@ -236,7 +236,7 @@ func templateOf(e *Entity) string {
 // htmlOf is the page of a view, drawn by the template of its entity's class.
 func htmlOf(v *view) ([]byte, error) {
 	var b bytes.Buffer
-	if err := templates.ExecuteTemplate(&b, templateOf(v.Entity), v); err != nil {
+	if err := templates.ExecuteTemplate(&b, TemplateOf(v.Entity), v); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
@@ -244,7 +244,7 @@ func htmlOf(v *view) ([]byte, error) {
 
 // LinkTitle is the title of the entity's link with that rel, "" when it has none.
 func (v *view) LinkTitle(rel string) string {
-	if l := v.linkByRel(rel); l != nil {
+	if l := v.LinkByRel(rel); l != nil {
 		return l.Title
 	}
 	return ""
@@ -252,7 +252,7 @@ func (v *view) LinkTitle(rel string) string {
 
 // Link is the href of the entity's link with that rel, "" when it has none.
 func (v *view) Link(rel string) string {
-	if l := v.linkByRel(rel); l != nil {
+	if l := v.LinkByRel(rel); l != nil {
 		return l.Href
 	}
 	return ""
@@ -427,7 +427,7 @@ func group(list any, key string) []bucket {
 	items, _ := list.([]any)
 	for _, it := range items {
 		m, _ := it.(map[string]any)
-		k := num(m[key])
+		k := Num(m[key])
 		i, ok := at[k]
 		if !ok {
 			i = len(out)

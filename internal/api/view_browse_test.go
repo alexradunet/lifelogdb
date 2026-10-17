@@ -149,7 +149,7 @@ func TestALongListIsInLetterGroups(t *testing.T) {
 // with count. The calendar's items and a year's summary are the tables of TestACalendarItemInWords and
 // TestAYearsSummary.
 func TestTheSitesOfCountSayZeroTheirOwnWay(t *testing.T) {
-	v := &view{Shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}
+	v := &view{Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}}
 	for _, c := range []struct {
 		n               float64
 		media, mentions string

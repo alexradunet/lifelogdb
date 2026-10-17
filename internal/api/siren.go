@@ -214,8 +214,8 @@ func templated(s spec) Action {
 	return a
 }
 
-// linkByRel is the entity's link with that rel, nil when it has none.
-func (e *Entity) linkByRel(rel string) *Link {
+// LinkByRel is the entity's link with that rel, nil when it has none.
+func (e *Entity) LinkByRel(rel string) *Link {
 	for i := range e.Links {
 		for _, r := range e.Links[i].Rel {
 			if r == rel {
@@ -226,8 +226,8 @@ func (e *Entity) linkByRel(rel string) *Link {
 	return nil
 }
 
-// field is the action's field with that name, nil when it has none.
-func (a *Action) field(name string) *Field {
+// Field is the action's field with that name, nil when it has none.
+func (a *Action) Field(name string) *Field {
 	for i := range a.Fields {
 		if a.Fields[i].Name == name {
 			return &a.Fields[i]
@@ -236,27 +236,31 @@ func (a *Action) field(name string) *Field {
 	return nil
 }
 
-func pageHref(id int64) string { return "/pages/" + strconv.FormatInt(id, 10) }
+// PageHref is the address of a page.
+func PageHref(id int64) string { return "/pages/" + strconv.FormatInt(id, 10) }
 
-func dayHref(day string) string { return "/days/" + day }
+// DayHref is the address of a day.
+func DayHref(day string) string { return "/days/" + day }
 
-func measurementHref(id int64) string { return "/measurements/" + strconv.FormatInt(id, 10) }
+// MeasurementHref is the address of a reading.
+func MeasurementHref(id int64) string { return "/measurements/" + strconv.FormatInt(id, 10) }
 
-func metricHref(name string) string { return "/metrics/" + url.PathEscape(name) }
+// MetricHref is the address of a metric, by its name.
+func MetricHref(name string) string { return "/metrics/" + url.PathEscape(name) }
 
 func link(rel, href, title string) Link {
 	return Link{Rel: []string{rel}, Href: href, Title: title}
 }
 
 func selfOf(e *Entity) string {
-	if l := e.linkByRel("self"); l != nil {
+	if l := e.LinkByRel("self"); l != nil {
 		return l.Href
 	}
 	return ""
 }
 
 func withOptions(a Action, field string, opts []string) Action {
-	if f := a.field(field); f != nil {
+	if f := a.Field(field); f != nil {
 		f.Options = opts
 	}
 	return a

@@ -93,10 +93,10 @@ func TestBrowseActions(t *testing.T) {
 		var got []string
 		for _, a := range browseActions(tc.b, tc.in, categories) {
 			s := a.Name
-			if f := a.field("category"); f != nil && f.Value != nil {
+			if f := a.Field("category"); f != nil && f.Value != nil {
 				s += "=" + fmt.Sprint(f.Value)
 			}
-			if f := a.field("category"); f != nil && f.Options != nil {
+			if f := a.Field("category"); f != nil && f.Options != nil {
 				s += fmt.Sprint(f.Options)
 			}
 			got = append(got, s)

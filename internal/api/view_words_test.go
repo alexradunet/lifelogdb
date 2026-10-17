@@ -128,9 +128,9 @@ func TestCountSaysTheNumberAndTheFormOfItsNoun(t *testing.T) {
 // for a page with no shell. A page compares a day with it, not with the today of its entity: here the entity says
 // that today is 15 October and the shell says 16 October, so the page of 16 October is today's page.
 func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
-	shell := &shellView{Today: "2026-10-16", Zone: time.UTC}
+	shell := &Shell{Today: "2026-10-16", Zone: time.UTC}
 	for _, c := range []struct {
-		shell *shellView
+		shell *Shell
 		want  string
 	}{{nil, ""}, {shell, "2026-10-16"}} {
 		if got := (&view{Shell: c.shell}).Today(); got != c.want {
@@ -142,7 +142,7 @@ func TestAPageComparesADayWithTheTodayOfItsWords(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := &Entity{Class: []string{"day"}, Title: "2026-10-16", Properties: map[string]any{"day": "2026-10-16", "today": "2026-10-15", "view": []any{}}}
-	v, err := pageView(e, facts{url: u, shell: shell}, nil)
+	v, err := pageView(e, Facts{URL: u, Shell: shell}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

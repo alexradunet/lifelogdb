@@ -251,7 +251,7 @@ func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
 		strings.Contains(got, "Unit") {
 		t.Errorf("the label option does not give the unit the title Range:\n%s", got)
 	}
-	if got := markup(drawForm(t, a)); !strings.Contains(got, "<label><span>Unit</span>") || a.field("unit").Title != "Unit" {
+	if got := markup(drawForm(t, a)); !strings.Contains(got, "<label><span>Unit</span>") || a.Field("unit").Title != "Unit" {
 		t.Errorf("a form with no label option, or the action, lost the action's title Unit:\n%s", got)
 	}
 }

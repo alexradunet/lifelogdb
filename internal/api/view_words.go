@@ -116,7 +116,7 @@ func (c clock) timeHTML(s string) template.HTML {
 func nameWords(name string) string { return strings.ReplaceAll(name, "_", " ") }
 
 // count says a number and its noun, in the form for that number: "0 readings", "1 reading", "3 more pages". The
-// number is a JSON number (a float64) or a length (an int), written in full (num); any other value is 0. A site that
+// number is a JSON number (a float64) or a length (an int), written in full (Num); any other value is 0. A site that
 // has its own words for 0 ("no recordings") says them before it calls count.
 func count(n any, one, many string) string {
 	f, _ := n.(float64)
@@ -126,7 +126,7 @@ func count(n any, one, many string) string {
 	if f == 1 {
 		return "1 " + one
 	}
-	return num(f) + " " + many
+	return Num(f) + " " + many
 }
 
 // writeValue draws any value by its type (the diagram of plan 093): an object as facts, a list of objects as a table,

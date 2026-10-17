@@ -59,7 +59,7 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*Entity, 
 		Properties: map[string]any{"ids": ids, "count": len(ids)},
 		Links:      []Link{link("self", "/", "Home"), link("index", "/", "Home")}}
 	for _, id := range ids {
-		e.Entities = append(e.Entities, link("item", pageHref(id), strconv.FormatInt(id, 10)))
+		e.Entities = append(e.Entities, link("item", PageHref(id), strconv.FormatInt(id, 10)))
 	}
 	noun := "page"
 	if len(ids) != 1 {

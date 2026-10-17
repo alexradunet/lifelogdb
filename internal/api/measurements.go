@@ -14,18 +14,18 @@ import (
 	"lifelog/internal/text"
 )
 
-// inUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
+// InUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
 // stays offered, a lab marker read twice a year is recorded from its own page (/metrics/{name}).
-const inUseDays = 60
+const InUseDays = 60
 
 // recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
 // registry; the record action itself takes any registered metric.
 func (h *server) recordAction(ctx context.Context, metric, day string) (Action, error) {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
-		a.field("metric").Value = metric
+		a.Field("metric").Value = metric
 	}
-	names, err := h.s.InUse(ctx, day, inUseDays)
+	names, err := h.s.InUse(ctx, day, InUseDays)
 	if err != nil {
 		return Action{}, err
 	}
@@ -78,7 +78,7 @@ func (h *server) metrics(r *http.Request) (*Entity, error) {
 		Actions: []Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
 			withOptions(action("file-pages", nil, nil), "category", titles), withOptions(action("register-metric", nil, nil), "category", titles)}}
 	for _, m := range ms {
-		e.Entities = append(e.Entities, link("item", metricHref(m.Name), m.Name))
+		e.Entities = append(e.Entities, link("item", MetricHref(m.Name), m.Name))
 	}
 	return e, nil
 }
@@ -173,11 +173,11 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		} else {
 			v.Set("from", from)
 		}
-		return metricHref(name) + "?" + v.Encode()
+		return MetricHref(name) + "?" + v.Encode()
 	}
 	self, allHref := seriesHref(allHistory), seriesHref(true)
 	if len(q) == 0 { // asked with no query, the series names itself so: a browser that registers a metric lands on it
-		self = metricHref(name)
+		self = MetricHref(name)
 	}
 	record, err := h.recordAction(ctx, name, today)
 	if err != nil {
@@ -194,11 +194,11 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		}
 		p := page.Properties.(*core.Page)
 		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
-		e.Links = append(e.Links, link("page", pageHref(m.ID), "Page"))
+		e.Links = append(e.Links, link("page", PageHref(m.ID), "Page"))
 		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
-		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), m.Day+" "+num(m.Value)))
+		e.Entities = append(e.Entities, link("reading", MeasurementHref(m.ID), m.Day+" "+Num(m.Value)))
 	}
 	return e, nil
 }
@@ -236,13 +236,13 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		return nil, err
 	}
 	e := &Entity{Class: []string{"measurement"}, Title: fmt.Sprintf("%s on %s", m.Metric, m.Day), Properties: m,
-		Links: []Link{link("self", measurementHref(id), "This reading"), link("day", dayHref(m.Day), m.Day),
-			link("series", metricHref(m.Metric), m.Metric), link("index", "/", "Home")}}
+		Links: []Link{link("self", MeasurementHref(id), "This reading"), link("day", DayHref(m.Day), m.Day),
+			link("series", MetricHref(m.Metric), m.Metric), link("index", "/", "Home")}}
 	if m.Supersedes != 0 {
-		e.Links = append(e.Links, link("supersedes", measurementHref(m.Supersedes), "Corrects"))
+		e.Links = append(e.Links, link("supersedes", MeasurementHref(m.Supersedes), "Corrects"))
 	}
 	if m.SupersededBy != 0 {
-		e.Links = append(e.Links, link("superseded-by", measurementHref(m.SupersededBy), "Corrected by"))
+		e.Links = append(e.Links, link("superseded-by", MeasurementHref(m.SupersededBy), "Corrected by"))
 	} else {
 		ids := idParam(id)
 		e.Actions = []Action{action("correct", ids, nil)}
@@ -251,7 +251,7 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*Entity, erro
 		}
 	}
 	if m.CapturedWith != 0 {
-		e.Links = append(e.Links, link("captured-with", pageHref(m.CapturedWith), "Captured with"))
+		e.Links = append(e.Links, link("captured-with", PageHref(m.CapturedWith), "Captured with"))
 	}
 	return e, nil
 }
@@ -273,7 +273,7 @@ func (h *server) record(r *http.Request, act spec, src string) (*Entity, error) 
 	if id == 0 { // a re-send: the first one stands (docs/contract/imports.md)
 		return &Entity{Class: []string{"result"}, Title: "Already recorded",
 			Properties: map[string]any{"message": "a reading with this import_key was recorded before; nothing changed"},
-			Links:      []Link{link("day", dayHref(v.Get("day")), v.Get("day")), link("index", "/", "Home")}}, nil
+			Links:      []Link{link("day", DayHref(v.Get("day")), v.Get("day")), link("index", "/", "Home")}}, nil
 	}
 	return h.measurementEntity(r.Context(), id)
 }

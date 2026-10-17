@@ -93,7 +93,7 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 
 	// add-file.
 	if id, ok := take("id"); ok {
-		say(`Kept the file: <a href="/pages/%s">its page</a>.`, num(id))
+		say(`Kept the file: <a href="/pages/%s">its page</a>.`, Num(id))
 	}
 	if e, ok := left["existing"].(bool); ok { // add-file's
 		delete(left, "existing")

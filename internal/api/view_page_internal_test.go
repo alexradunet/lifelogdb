@@ -16,7 +16,7 @@ func TestNumWritesNumbersInFull(t *testing.T) {
 		{1000000.0, "1000000"}, {123456789012.0, "123456789012"}, {71.1, "71.1"}, {0.0000001, "0.0000001"},
 		{-2.5, "-2.5"}, {nil, ""}, {"text", "text"}, {int64(7), "7"}, {true, "true"},
 	} {
-		if got := num(c.v); got != c.want {
+		if got := Num(c.v); got != c.want {
 			t.Errorf("num(%v) = %q, want %q", c.v, got, c.want)
 		}
 	}
@@ -35,11 +35,11 @@ func TestPageViewTakesTheRefusalAsAnArgument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sv := &shellView{Today: "2026-10-16"}
+	sv := &Shell{Today: "2026-10-16"}
 	refused := &Entity{Class: []string{"error"}, Properties: map[string]any{"status": 409, "code": "stale_version", "message": "the page changed"}}
 	sent := url.Values{"body": {"my draft"}, "version": {"3"}, "other": {"x"}}
 
-	v, err := pageView(e, facts{url: u, shell: sv}, &refusal{entity: refused, href: "/pages/4/body", sent: sent})
+	v, err := pageView(e, Facts{URL: u, Shell: sv}, &Refusal{Entity: refused, Href: "/pages/4/body", Sent: sent})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestPageViewTakesTheRefusalAsAnArgument(t *testing.T) {
 		t.Errorf("an action that was not refused: %+v", rename)
 	}
 
-	v, err = pageView(e, facts{url: u}, nil)
+	v, err = pageView(e, Facts{URL: u}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

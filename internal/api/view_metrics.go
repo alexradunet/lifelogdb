@@ -94,9 +94,9 @@ func yearSummary(rows []map[string]any, unit string) string {
 	if n == 0 {
 		return s
 	}
-	values := num(lo)
+	values := Num(lo)
 	if hi != lo {
-		values += " to " + num(hi)
+		values += " to " + Num(hi)
 	}
 	if unit != "" {
 		values += " " + unitWords(unit)
@@ -118,7 +118,7 @@ type metricCard struct {
 	Short       string // the first words of When: "2 days ago", or the day when it is not near today
 	Count       int    // how many recent readings the line holds
 	Line        template.HTML
-	Stale       bool // the latest reading is older than inUseDays
+	Stale       bool // the latest reading is older than InUseDays
 	Note        string
 }
 
@@ -157,16 +157,16 @@ func (v *view) MetricSections() []metricSection {
 	if ms, _ := props["metrics"].([]any); ms != nil {
 		for _, x := range ms {
 			if m, _ := x.(map[string]any); m != nil {
-				rows[num(m["id"])] = m
+				rows[Num(m["id"])] = m
 			}
 		}
 	}
 	c := v.clock()
 	limit, _ := text.ParseDay(c.today)
-	limit = limit.AddDate(0, 0, -inUseDays)
+	limit = limit.AddDate(0, 0, -InUseDays)
 	card := func(x any) metricCard {
 		g, _ := x.(map[string]any)
-		id := num(g["id"])
+		id := Num(g["id"])
 		m := rows[id]
 		if m == nil {
 			m = g
@@ -174,12 +174,12 @@ func (v *view) MetricSections() []metricSection {
 		name, _ := m["name"].(string)
 		unit, _ := m["unit"].(string)
 		note, _ := m["note"].(string)
-		k := metricCard{ID: id, Name: name, Href: metricHref(name), Unit: unitWords(unit), Note: note}
+		k := metricCard{ID: id, Name: name, Href: MetricHref(name), Unit: unitWords(unit), Note: note}
 		recent, _ := m["recent"].([]any)
 		if n := len(recent); n > 0 {
 			last, _ := recent[n-1].(map[string]any)
 			day, _ := last["day"].(string)
-			k.Value, k.Measurement, k.Day, k.When, k.Count = num(last["value"]), num(last["id"]), day, c.relative(day), n
+			k.Value, k.Measurement, k.Day, k.When, k.Count = Num(last["value"]), Num(last["id"]), day, c.relative(day), n
 			k.Short, _, _ = strings.Cut(k.When, " · ")
 			if t, ok := text.ParseDay(day); ok && !limit.IsZero() && t.Before(limit) {
 				k.Stale = true
@@ -193,10 +193,10 @@ func (v *view) MetricSections() []metricSection {
 	for _, x := range groups {
 		g, _ := x.(map[string]any)
 		title, _ := g["title"].(string)
-		depth := num(g["depth"])
+		depth := Num(g["depth"])
 		ms, _ := g["metrics"].([]any)
 		if depth == "0" || len(out) == 0 {
-			s := metricSection{Title: title, Page: num(g["page"])}
+			s := metricSection{Title: title, Page: Num(g["page"])}
 			switch {
 			case s.Page != "":
 				s.Anchor = "c-" + s.Page
@@ -225,7 +225,7 @@ func (v *view) MetricSections() []metricSection {
 		if i := strings.Index(path, "/"); i >= 0 {
 			sub = path[i+1:]
 		}
-		k := metricSub{Title: sub, Page: num(g["page"]), Cards: cards}
+		k := metricSub{Title: sub, Page: Num(g["page"]), Cards: cards}
 		if d := newest(cards); d != "" {
 			k.Latest = c.relative(d)
 		}
@@ -270,7 +270,7 @@ func (v *view) ReadingTiles() []readingTile {
 				if tile.ID != "" {
 					tile.More++
 				}
-				tile.ID, tile.Value = num(m["id"]), num(m["value"])
+				tile.ID, tile.Value = Num(m["id"]), Num(m["value"])
 			}
 		}
 		points, _ := t["readings"].([]any)

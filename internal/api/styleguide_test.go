@@ -65,7 +65,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := draw(styleEntity(), facts{url: u, shell: &shellView{Today: "2026-10-16", Zone: time.UTC}}, nil)
+	b, err := Draw(styleEntity(), Facts{URL: u, Shell: &Shell{Today: "2026-10-16", Zone: time.UTC}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestTheStylePageRunsTheRealTemplates(t *testing.T) {
 	}
 
 	defined := map[string]bool{}
-	for _, m := range cssSelector.FindAllStringSubmatch(sheetComments.ReplaceAllString(string(mustWebFile("base.css"))+string(mustWebFile("app.css")), ""), -1) {
+	for _, m := range cssSelector.FindAllStringSubmatch(sheetComments.ReplaceAllString(string(MustFile("base.css"))+string(MustFile("app.css")), ""), -1) {
 		defined[m[1]] = true
 	}
 	if defined["num"] {

@@ -80,7 +80,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	return &Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
-		Links: []Link{link("self", "/", "Lifelog"), link("today", dayHref(today), "Today"), link("days", "/days", "Days"),
+		Links: []Link{link("self", "/", "Lifelog"), link("today", DayHref(today), "Today"), link("days", "/days", "Days"),
 			link("browse", "/browse", "Browse"), link("categories", "/browse", "Categories"), link("people", "/browse?kind=person", "People"),
 			link("places", "/browse?kind=place", "Places"), link("media", "/browse?kind=media", "Media"), link("files", "/browse?kind=document", "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", "/browse?ghosts=1&kind=page", "Ghost pages"), link("actions", "/actions", "All actions"),
@@ -90,7 +90,7 @@ func (h *server) root(r *http.Request) (*Entity, error) {
 	}, nil
 }
 
-func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{dayHref(h.s.Today())} }
+func (h *server) today(*http.Request) (*Entity, error) { return nil, redirect{DayHref(h.s.Today())} }
 
 // dayNamed is the day that a path or a field names. The word "today" is today: the local day of the store's clock, the
 // day that GET /days/today redirects to. capture and open-day read their day through it, so the word has one meaning
@@ -114,7 +114,7 @@ func (h *server) days(r *http.Request) (*Entity, error) {
 	e := &Entity{Class: []string{"days"}, Title: "Days", Links: []Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
 	days = paged(e, days, "/days", nil, limit, offset)
 	for _, d := range days {
-		e.Entities = append(e.Entities, link("item", dayHref(d.Title), d.Title))
+		e.Entities = append(e.Entities, link("item", DayHref(d.Title), d.Title))
 	}
 	return e, nil
 }
@@ -165,19 +165,19 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 	t, _ := text.ParseDay(day)
 	e := &Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Trends: trends, OnThisDay: onThisDay, Today: today},
-		Links:   []Link{link("self", dayHref(day), day)},
+		Links:   []Link{link("self", DayHref(day), day)},
 		Actions: []Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
 	}
 	// A link leads only to a page that answers: 0000-01-01 has no day before it, and 9999-12-31 none after it.
 	if prev := t.AddDate(0, 0, -1).Format(time.DateOnly); text.IsDay(prev) {
-		e.Links = append(e.Links, link("prev", dayHref(prev), "Previous day"))
+		e.Links = append(e.Links, link("prev", DayHref(prev), "Previous day"))
 	}
 	if next := t.AddDate(0, 0, 1).Format(time.DateOnly); text.IsDay(next) {
-		e.Links = append(e.Links, link("next", dayHref(next), "Next day"))
+		e.Links = append(e.Links, link("next", DayHref(next), "Next day"))
 	}
-	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", monthHref(t), t.Format(layoutMonth)))
+	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", MonthHref(t), t.Format(layoutMonth)))
 	if d.PageID != 0 {
-		e.Links = append(e.Links, link("page", pageHref(d.PageID), "The day page"))
+		e.Links = append(e.Links, link("page", PageHref(d.PageID), "The day page"))
 		p, err := h.s.PageByID(ctx, d.PageID)
 		if err != nil {
 			return nil, err
@@ -185,7 +185,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*Entity, error) {
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 	}
 	for _, m := range d.Readings {
-		e.Entities = append(e.Entities, link("reading", measurementHref(m.ID), m.Metric+" "+num(m.Value)))
+		e.Entities = append(e.Entities, link("reading", MeasurementHref(m.ID), m.Metric+" "+Num(m.Value)))
 	}
 	return e, nil
 }

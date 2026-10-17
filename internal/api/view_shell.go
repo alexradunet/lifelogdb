@@ -14,8 +14,8 @@ import (
 // date and this month. It reads the day pages of this month, as GET /months/{month} gives them to every client, once
 // a page, and only for a page (answer): a JSON answer never runs it.
 
-// shellView is what the sidebar shows: today, and the weeks of this month with the days that have a day page.
-type shellView struct {
+// Shell is what the sidebar shows: today, and the weeks of this month with the days that have a day page.
+type Shell struct {
 	Today     string
 	Zone      *time.Location // the zone of today: the words for a time use it
 	Month     string         // "October 2026"
@@ -27,9 +27,9 @@ type shellView struct {
 // shellOf is the sidebar's read of the store s: today, then the month of today and its days that have a day page.
 // The page is drawn even when the read of the month fails: the sidebar then has its sections and today's date but no
 // count or month, and the read that the page is about has already answered on its own.
-func shellOf(ctx context.Context, s *core.Store) *shellView {
+func shellOf(ctx context.Context, s *core.Store) *Shell {
 	now := s.Local() // one read of the clock, so today and the zone of the words agree
-	sv := &shellView{Today: now.Format(time.DateOnly), Zone: now.Location()}
+	sv := &Shell{Today: now.Format(time.DateOnly), Zone: now.Location()}
 	t, ok := text.ParseDay(sv.Today)
 	if !ok { // a clock beyond the years that a day can name: the sidebar has no month
 		return sv
@@ -40,7 +40,7 @@ func shellOf(ctx context.Context, s *core.Store) *shellView {
 	if err != nil { // the page is drawn without the month
 		return sv
 	}
-	sv.Month, sv.MonthHref, sv.Written = first.Format(layoutMonth), monthHref(first), len(entries)
+	sv.Month, sv.MonthHref, sv.Written = first.Format(layoutMonth), MonthHref(first), len(entries)
 	for _, d := range writtenDays(entries, first, last) {
 		sv.Days = append(sv.Days, map[string]any{"day": d.Day, "page": d.Page})
 	}
@@ -92,7 +92,7 @@ func (v *view) NewKinds() []struct{ Title, Href, Icon string } { return newKinds
 // the page's path, else the one with the longest path the page is under. Today's day is Today, not Calendar.
 func (v *view) Nav() []navItem {
 	path := v.Path
-	if today := v.Today(); today != "" && path == dayHref(today) {
+	if today := v.Today(); today != "" && path == DayHref(today) {
 		path = "/days/today"
 	}
 	out := make([]navItem, len(navItems))
