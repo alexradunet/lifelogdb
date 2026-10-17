@@ -390,3 +390,44 @@ func TestTheMeanOfAWeekDoesNotOverflow(t *testing.T) {
 		browse(t, h, "/weeks/"+tc.week)
 	}
 }
+
+// TestTheMeanOfAWeekDividesTheSumOnce: the mean of a week is the sum of its readings divided by their count, and then
+// rounded to two places. A division of each reading before the sum adds a rounding error for each reading, and a
+// mean on the boundary of two places then goes to the wrong side. Week 41 has 24 readings with the sum 81 and the
+// mean 3.375 exactly: 3.38. Week 40 has three readings of 2.675, a float64 a little less than 2.675: 2.67. Week 42
+// has one reading of -1.7105991318142733e171: its mean is that value times 100, rounded, divided by 100, which is
+// -1.710599131814273e171 (the last digit changes).
+func TestTheMeanOfAWeekDividesTheSumOnce(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", weekToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "distance", "unit": "m"}))
+	for _, r := range []struct {
+		day, value string
+		times      int
+	}{
+		{"2026-09-28", "2.675", 3},
+		{"2026-10-05", "3", 4}, {"2026-10-06", "1", 4}, {"2026-10-07", "5", 4}, {"2026-10-08", "8", 3},
+		{"2026-10-09", "1", 3}, {"2026-10-10", "3", 3}, {"2026-10-11", "3", 3},
+		{"2026-10-12", "-1.7105991318142733e171", 1},
+	} {
+		for range r.times {
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "distance", "day": r.day, "value": r.value}))
+		}
+	}
+	for _, tc := range []struct{ week, readings, mean, previous string }{
+		{"2026-W40", "3", "2.67", "<nil>"},
+		{"2026-W41", "24", "3.38", "2.67"},
+		{"2026-W42", "1", "-1.710599131814273e+171", "3.38"},
+	} {
+		w, err := c.Get(t.Context(), "/weeks/"+tc.week)
+		if err != nil {
+			t.Errorf("/weeks/%s: %v", tc.week, err)
+			continue
+		}
+		m := objects(props(w), "metrics")
+		if len(m) != 1 || said(m[0]["readings"]) != tc.readings || said(m[0]["mean"]) != tc.mean || said(m[0]["previous_mean"]) != tc.previous {
+			t.Errorf("%s metrics %v: want %s readings, mean %s, the week before %s", tc.week, m, tc.readings, tc.mean, tc.previous)
+		}
+		browse(t, h, "/weeks/"+tc.week)
+	}
+}

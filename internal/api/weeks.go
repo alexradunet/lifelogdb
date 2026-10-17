@@ -66,26 +66,37 @@ type weekMetric struct {
 	PreviousMean *float64 `json:"previous_mean,omitempty"`
 }
 
-// round2 rounds x to two places. A float64 of 2^53 or more is a whole number, so it has no places to round, and x*100
-// overflows for the largest ones.
+// round2 rounds x to two places. For a value near the largest float64, x*100 overflows: such a value is a whole
+// number, so round2 returns it as it is.
 func round2(x float64) float64 {
-	if math.Abs(x) >= 1<<53 {
+	if math.IsInf(x*100, 0) {
 		return x
 	}
 	return math.Round(x*100) / 100
 }
 
-// mean is the mean of xs, rounded to two places; xs holds one value at least. A reading can be as large as a float64
-// holds (measurements_value_finite), so the sum of two readings can overflow: each value is divided by the count
-// before the sum. Near the largest float64 the rounding of that sum can overflow still, and the mean is never less
-// than the least value or more than the greatest: the mean is held between the two.
+// mean is the mean of xs, rounded to two places; xs holds one value at least. The sum is divided by the count one
+// time: a division of each value adds a rounding error for each value, and a mean on the boundary of two places (81
+// over 24 is 3.375) then goes to the wrong side. A reading can be as large as a float64 holds
+// (measurements_value_finite), so the sum can overflow: only then is each value divided by the count before the sum.
+// Near the largest float64 the rounding of that sum can overflow still, and a mean is never less than the least
+// value or more than the greatest: that mean is held between the two.
 func mean(xs []float64) float64 {
+	n := float64(len(xs))
 	sum, lo, hi := 0.0, xs[0], xs[0]
 	for _, x := range xs {
-		sum += x / float64(len(xs))
+		sum += x
 		lo, hi = min(lo, x), max(hi, x)
 	}
-	return round2(min(max(sum, lo), hi))
+	m := sum / n
+	if math.IsInf(sum, 0) {
+		m = 0
+		for _, x := range xs {
+			m += x / n
+		}
+		m = min(max(m, lo), hi)
+	}
+	return round2(m)
 }
 
 func (h *server) week(r *http.Request) (*Entity, error) {
