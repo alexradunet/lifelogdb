@@ -268,6 +268,10 @@ which fails because the container has no IPv6, before and after the change. Scre
 synthetic data that spans 1998 to 2026, with slim days, birthdays, gaps and a future day page: `/days`,
 `/days?before=2026-08-01`, a week, a month, a year, `/browse`, `/search?q=walk` and `/search?q=walk&kind=day`, on a
 desktop and a phone, light and dark (32 pictures): no console error and no HTTP status of 400 or more.
+The lifetime scale run (`lifescale -profile lifetime -seed 2075 -samples 5`, metadata only, a cloud container with 4
+vCPU, a virtio disk and ext4) passed its known answers; `stream_page`, a page of 30 cards from the middle of 18,262 days
+with 20 readings a day, took 51 to 65 ms in its 5 samples (`search_rare`: 73 to 81 ms). The days query therefore stays
+a merge of the two indexes; the step-back recursive query was not needed.
 
 Not run: `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` (no `mmdc`), `staticcheck` and `govulncheck` (not
 installed), the race check, Windows.
