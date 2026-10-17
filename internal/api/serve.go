@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
@@ -40,7 +43,60 @@ func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 	}))
-	return guard.Handler(limitBody(h.mux))
+	return guard.Handler(limitBody(withDeadlines(defaultLimits, h.mux)))
+}
+
+// The time limits of a request. A server-wide ReadTimeout is wrong here: it would cut an upload, which has no size
+// limit as a whole (limitBody). So the limits are per request, and a multipart form (the upload of a file) has its own.
+type limits struct {
+	request time.Duration // the context of any other request: the whole of its work. Snapshot and integrity-check are the longest.
+	upload  time.Duration // the context of an upload: long, because a large original on a slow link is slow, but not endless
+	stall   time.Duration // the longest an upload may send no byte
+}
+
+var defaultLimits = limits{request: 2 * time.Minute, upload: time.Hour, stall: 2 * time.Minute}
+
+// withDeadlines gives each request a context deadline: l.request, or l.upload for a multipart form. The deadline reaches
+// a query of the store and ends it with context.DeadlineExceeded, which errorEntity answers as 504. A wait for the
+// file's lock ends by busy_timeout (5 s) and not by this deadline: the answer is then busy (503).
+// An upload also gets a read deadline that moves on with each read of its body (stallBody), so a sender that stops
+// is cut after l.stall, and a sender that goes on is not.
+func withDeadlines(l limits, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := l.request
+		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" { // as limitBody
+			limit = l.upload
+			if r.Body != nil {
+				rc := http.NewResponseController(w)
+				if err := rc.SetReadDeadline(time.Now().Add(l.stall)); err == nil {
+					r.Body = stallBody{r.Body, rc, l.stall}
+				} else if !errors.Is(err, http.ErrNotSupported) { // a recorder in a test is not a connection
+					logFault(r, "the upload has no read deadline", err)
+				}
+			}
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), limit)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// stallBody is the body of an upload. Each read moves the read deadline of the connection on by stall. At the end of
+// the body the deadline is cleared: after that the server watches the connection for a client that went away, and a
+// deadline that ran out then would cancel the request while the answer is still being made.
+type stallBody struct {
+	io.ReadCloser
+	rc    *http.ResponseController
+	stall time.Duration
+}
+
+func (b stallBody) Read(p []byte) (int, error) {
+	b.rc.SetReadDeadline(time.Now().Add(b.stall)) // supported: withDeadlines set it once already
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		b.rc.SetReadDeadline(time.Time{})
+	}
+	return n, err
 }
 
 // newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
