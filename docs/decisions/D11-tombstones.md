@@ -8,7 +8,9 @@
   everything else. An import writes through the writer's operations, so it brings a tombstoned page back only as they
   do: a `[[link]]` in a saved body revives it, and the save names it ([save a body](../cookbook/save-a-body.md)). A
   tombstone is never earlier than its row's creation (`entities_deleted_after_created`): a tombstone stamped by a clock that has
-  stepped back behind `created_at` is refused. Tombstoning and un-tombstoning bump `entities.updated_at`
+  stepped back behind `created_at` is refused, and the refused write applies
+  nothing. The owner sets the host clock right and sends the write again. A restore onto a host with a wrong clock
+  meets the same refusal. Tombstoning and un-tombstoning bump `entities.updated_at`
   (`entities_touch`, watching `deleted_at` and `entity_type`, so it cannot re-fire itself under
   `recursive_triggers=ON`, executed).
 - **Rationale.** Retaining a tombstoned row preserves its contents and references for recovery and explicit

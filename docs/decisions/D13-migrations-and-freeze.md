@@ -14,7 +14,12 @@
   `application_id` and supported `user_version`, select explicit columns, and refuse unsupported versions
   until their queries and writes are validated against that version. A migration records any compatibility
   break as well as preserving existing data. The frozen version's full DDL and contract remain the reference
-  for interpreting files at that version.
+  for interpreting files at that version. A writer can run the file (SQLite 3.51.3 or newer) and still be unable to
+  migrate it (a migration needs 3.53, `lifelog_meta.sqlite`): that writer must not migrate; it refuses a file whose
+  `user_version` is below the one it needs, and a writer of 3.53 or newer migrates the file first. A new `entity_type`
+  is a migration, so a reader meets a type it does not know only in a file of a newer `user_version`, which it
+  refuses; a link kind is a row of `link_kinds`, so a reader reads the kinds from that registry and holds no list of
+  its own.
 - **Column order is frozen with the file** (a migration can only append a column), so it is chosen before the
   freeze: `entities.body`, the one large text, is the last column, so that reading `deleted_at` or `entity_type`
   does not walk the overflow pages of a long body (the preview of `files` is last for the same reason). A column

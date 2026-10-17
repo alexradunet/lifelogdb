@@ -44,7 +44,9 @@ make it a second writer, so it is not used ([D14](../decisions/D14-ui-and-tools.
 - **Never `immutable=1`** (Datasette's `-i`): it tells SQLite the file cannot change, so a reader of
   the live file sees stale or inconsistent pages while the app writes. Use the default `mode=ro`.
 - **Keep read transactions short.** A checkpoint cannot reset the WAL while any reader holds a
-  snapshot; a reader that never lets go makes `life.db-wal` grow without bound.
+  snapshot; a reader that never lets go makes `life.db-wal` grow without bound. This is a fact of SQLite
+  that no suite runs: see "checkpoint starvation" in [Write-Ahead Logging](https://sqlite.org/wal.html)
+  ([R65](../research/references.md#r65)).
 - **One machine, a local disk.** WAL needs shared memory between the processes, so `life.db` never
   lives on a network file system (NFS, SMB) or in a folder a sync client (Dropbox, Syncthing,
   iCloud) copies while it is open.
