@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -419,15 +420,43 @@ func TestBrowseKindsGivesACopy(t *testing.T) {
 }
 
 // TestMediaKindsGivesACopy: a caller that changes the list MediaKinds gives does not change the next list, or the
-// condition isMedia that the reads of Browse use.
+// files that the media list of Browse shows.
 func TestMediaKindsGivesACopy(t *testing.T) {
 	kinds := MediaKinds()
 	kinds[0] = "text"
 	if got := strings.Join(MediaKinds(), ","); got != "image,video,audio" {
 		t.Errorf("MediaKinds() = %s after a caller changed its copy, want image,video,audio", got)
 	}
-	if want := mediaKind + ` IN ('image', 'video', 'audio')`; isMedia != want {
-		t.Errorf("isMedia = %s, want %s", isMedia, want)
+	s := fresh(t)
+	for i, f := range []FileIn{
+		{Title: "A photo.jpg", MIME: "image/jpeg"},
+		{Title: "A clip.mp4", MIME: "video/mp4"},
+		{Title: "A memo.m4a", MIME: "audio/mp4"},
+		{Title: "A note.txt", MIME: "text/plain"},
+		{Title: "A scan.pdf", MIME: "application/pdf"},
+	} {
+		f.SHA256, f.Day = sha(byte('a'+i)), "2026-10-01"
+		if _, err := s.AddFile(ctx, "cli", f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(rows []FileRow, err error) string {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, r := range rows {
+			out = append(out, r.Title)
+		}
+		slices.Sort(out)
+		return strings.Join(out, ",")
+	}
+	if got, want := titles(s.Media(ctx, "", Scope{}, 10, 0)), "A clip.mp4,A memo.m4a,A photo.jpg"; got != want {
+		t.Errorf("Media = %s, want %s", got, want)
+	}
+	if got, want := titles(s.OtherFiles(ctx, Scope{}, 10, 0)), "A note.txt,A scan.pdf"; got != want {
+		t.Errorf("OtherFiles = %s, want %s", got, want)
 	}
 }
 
@@ -486,11 +515,11 @@ func TestReadersPage(t *testing.T) {
 	if err != nil || len(ghosts) != 2 || ghosts[0].Title != "Ghost 4" || ghosts[1].Title != "Ghost 5" {
 		t.Errorf("ghosts page: %+v %v", ghosts, err)
 	}
-	hits, err := s.Search(ctx, "pageword", 2, 4)
+	hits, err := s.SearchWith(ctx, "pageword", SearchOptions{}, 2, 4)
 	if err != nil || len(hits) != 1 {
 		t.Errorf("search: %+v %v", hits, err)
 	}
-	all, err := s.Search(ctx, "pageword", 10, 0)
+	all, err := s.SearchWith(ctx, "pageword", SearchOptions{}, 10, 0)
 	if err != nil || len(all) != 5 {
 		t.Errorf("search all: %+v %v", all, err)
 	}

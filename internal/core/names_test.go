@@ -748,7 +748,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	}
 	check := func(query string, want int64) {
 		t.Helper()
-		hits, err := s.Search(ctx, query, 1, 0)
+		hits, err := s.SearchWith(ctx, query, SearchOptions{}, 1, 0)
 		if err != nil || len(hits) != 1 || hits[0].ID != want {
 			t.Fatalf("search %q: %+v %v; want %d", query, hits, err, want)
 		}
@@ -760,7 +760,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	for _, q := range []string{"Blue original", "Sky original", `all_names:"blue sky"`, `all_names:Blue body:original`, `body:"needle original"`} {
 		check(q, id)
 	}
-	empty, err := s.Search(ctx, `body:"Blue needle"`, 10, 0)
+	empty, err := s.SearchWith(ctx, `body:"Blue needle"`, SearchOptions{}, 10, 0)
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("alias must not duplicate body: %+v %v", empty, err)
 	}
@@ -819,7 +819,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("Blue original", id)
-	hits, err := s.Search(ctx, "Rollback", 10, 0)
+	hits, err := s.SearchWith(ctx, "Rollback", SearchOptions{}, 10, 0)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("rollback indexed: %+v %v", hits, err)
 	}
@@ -841,7 +841,7 @@ func TestCanonicalNamesSearchConflictPathsAndRebuild(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", id); err != nil {
 		t.Fatal(err)
 	}
-	hits, err = s.Search(ctx, "replacement", 10, 0)
+	hits, err = s.SearchWith(ctx, "replacement", SearchOptions{}, 10, 0)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("tombstone visible: %+v %v", hits, err)
 	}
@@ -877,11 +877,11 @@ func TestCanonicalSearchRankLimitAndStableTie(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	hits, err := s.Search(ctx, "needle", 1, 0)
+	hits, err := s.SearchWith(ctx, "needle", SearchOptions{}, 1, 0)
 	if err != nil || len(hits) != 1 || hits[0].ID != first {
 		t.Fatalf("ranked limited tie: %+v %v; want %d", hits, err, first)
 	}
-	hits, err = s.Search(ctx, "needle", 10, 0)
+	hits, err = s.SearchWith(ctx, "needle", SearchOptions{}, 10, 0)
 	if err != nil || len(hits) != 2 || hits[0].ID != first || hits[1].ID <= first {
 		t.Fatalf("one document per entity: %+v %v", hits, err)
 	}
@@ -899,7 +899,7 @@ func TestSearchSnippetKeepsTheBracketsOfTheText(t *testing.T) {
 	if _, _, err := s.CreatePage(ctx, "cli", "Plans", "Coffee with [[Ana]]; we planned the [[Garden project]]. - [x] seeds", ""); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := s.Search(ctx, "garden", 10, 0)
+	hits, err := s.SearchWith(ctx, "garden", SearchOptions{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

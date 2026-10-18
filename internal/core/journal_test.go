@@ -192,8 +192,8 @@ func TestFirstLineIsPlainText(t *testing.T) {
 		{"2) the second point", "2) the second point"},
 		{long, long[:160] + "…"},
 	} {
-		if got := firstLine(c.body); got != c.want {
-			t.Errorf("firstLine(%q) = %q, want %q", c.body, got, c.want)
+		if got := plainLines(c.body, 1, firstLineRunes); got != c.want {
+			t.Errorf("first line of %q = %q, want %q", c.body, got, c.want)
 		}
 	}
 }

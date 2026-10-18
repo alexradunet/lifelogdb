@@ -11,17 +11,11 @@ import (
 	"lifelog/internal/text"
 )
 
-// Capture appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md). It
-// gives no key, so a second send of the same capture appends again.
-func (t *Tx) Capture(day, entry string, mood *float64) (id int64, r Sync, err error) {
-	id, r, _, err = t.CaptureWithKey("", day, entry, mood)
-	return id, r, err
-}
-
-// CaptureWithKey is Capture for a sender that may send the capture twice (D28). The key is the sender's, made once for
+// CaptureWithKey appends an entry to a day page, creating or reviving it, with an optional mood (cookbook/capture.md).
+// A sender that may send the capture twice gives a key (D28). The key is the sender's, made once for
 // one capture. A key that the file holds for this source means the capture was added before: nothing is written, and
 // the answer is the day page of that capture and already = true. The key, and the Mood reading of the capture, are
-// written in the same transaction as the entry. A key of "" is no key.
+// written in the same transaction as the entry. A key of "" is no key: a second send appends again.
 func (t *Tx) CaptureWithKey(key, day, entry string, mood *float64) (id int64, r Sync, already bool, err error) {
 	if entry == "" && mood == nil {
 		return 0, r, false, Invalid("nothing to capture: give text, a mood or both")
@@ -70,17 +64,8 @@ func (t *Tx) CaptureWithKey(key, day, entry string, mood *float64) (id int64, r 
 // dayPage is the id of a local day's page: found (revived when tombstoned), or created on its first write
 // (cookbook/capture.md).
 func (t *Tx) dayPage(day string) (int64, error) {
-	p, err := t.lookupKey(day)
-	switch {
-	case err != nil:
-		return 0, err
-	case p == nil:
-		id, err := t.insertPage("page", day, day, day, "")
-		return id, err
-	case p.Deleted:
-		_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET deleted_at = NULL WHERE id = ?`, p.ID)
-	}
-	return p.ID, err
+	id, _, _, err := t.ensurePage(day, day, day)
+	return id, err
 }
 
 // Capture is CaptureWithKey with no key.
@@ -150,7 +135,7 @@ SELECT what, at, detail FROM (
   SELECT 'page' || CASE WHEN p.revision > 1 THEN ' (edited)' ELSE '' END,
          p.updated_at, p_name.title
     FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-   WHERE p.day = :day AND p_name.title <> :day AND p.deleted_at IS NULL
+   WHERE p.day = :day AND NOT p.is_journal AND p.deleted_at IS NULL
   UNION ALL
   SELECT 'at', NULL, pl_name.title
     FROM entities d
@@ -228,7 +213,7 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 	out := []DayEntry{}
 	var e DayEntry
 	if err := each(rows, err, []any{&e.Day, &e.PageID, &e.body}, func() {
-		e.FirstLine = firstLine(e.body)
+		e.FirstLine = plainLines(e.body, 1, firstLineRunes)
 		out = append(out, e)
 	}); err != nil {
 		return nil, err
@@ -240,12 +225,9 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 // Born"), so it is escaped before text.Plain reads the line, and CommonMark does not read it as an ordered list.
 var orderedMark = regexp.MustCompile(`^(\d{1,9})([.)])`)
 
-// firstLineRunes is how long a line of a list of days may be before it is cut.
+// firstLineRunes is how long a line of a list of days may be before it is cut. A day's first line is plainLines(body, 1,
+// firstLineRunes): it is for a list of days, not a rendering.
 const firstLineRunes = 160
-
-// firstLine is the first line of a body that has words, as plainLines gives it. It is for a list of days, not a
-// rendering.
-func firstLine(body string) string { return plainLines(body, 1, firstLineRunes) }
 
 // plainLines are the first n lines of a body that have words, as plain text (text.Plain), joined by a newline: a
 // heading's or a list item's marker cut, the marks of emphasis, code and links cut, an ![[embed]] or an image left out

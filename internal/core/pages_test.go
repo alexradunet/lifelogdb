@@ -210,7 +210,7 @@ func TestAnExpiredSearchKeepsItsCause(t *testing.T) {
 	s := fresh(t)
 	expired, cancel := context.WithDeadline(ctx, time.Now().Add(-time.Second))
 	defer cancel()
-	_, err := s.Search(expired, "one", 10, 0)
+	_, err := s.SearchWith(expired, "one", SearchOptions{}, 10, 0)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("the cause is lost: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestSearchNewestKeepsRankThenIDInADay(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2099-01-01", "needle", nil); err != nil {
 		t.Fatal(err)
 	}
-	best, err := s.Search(ctx, "needle", 10, 0)
+	best, err := s.SearchWith(ctx, "needle", SearchOptions{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

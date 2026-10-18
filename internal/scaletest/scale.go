@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -89,18 +88,18 @@ type Operation struct {
 	Name    string   `json:"name"`
 	Samples []Sample `json:"samples"`
 }
-type Report struct {
-	Manifest       Manifest          `json:"manifest"`
-	Environment    map[string]string `json:"environment"`
-	Pragmas        map[string]string `json:"writer_pragmas"`
-	Build          Sample            `json:"fixture_build"`
-	RootsPerSec    float64           `json:"fixture_root_readings_per_second"`
-	Operations     []Operation       `json:"operations"`
-	StorageBytes   map[string]int64  `json:"storage_bytes"`
-	Directory      string            `json:"directory"`
-	Retained       bool              `json:"retained"`
-	Checks         []string          `json:"checks"`
-	Interpretation []string          `json:"interpretation"`
+
+// Result is what Run measured. Pragmas, SQLite and StorageBytes are read here because only Run sees the open file and
+// its directory before the cleanup; the runner (tools/lifescale) adds the environment and the notes.
+type Result struct {
+	Manifest     Manifest          `json:"manifest"`
+	Pragmas      map[string]string `json:"writer_pragmas"`
+	SQLite       string            `json:"sqlite_version"`
+	Build        Sample            `json:"fixture_build"`
+	Operations   []Operation       `json:"operations"`
+	StorageBytes map[string]int64  `json:"storage_bytes"`
+	Directory    string            `json:"directory"`
+	Retained     bool              `json:"retained"`
 }
 
 type expected struct {
@@ -129,7 +128,7 @@ type fixture struct {
 
 // Run creates a new throwaway directory, validates known answers, then measures
 // operations on the warm writer-built file. It never accepts an existing database.
-func Run(ctx context.Context, options Options) (report *Report, err error) {
+func Run(ctx context.Context, options Options) (report *Result, err error) {
 	p, err := workload(options.Profile)
 	if err != nil {
 		return nil, err
@@ -156,18 +155,7 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 	}
 	defer func() { err = errors.Join(err, d.Close()) }()
 	s := &core.Store{DB: d}
-	report = &Report{Directory: dir, Retained: options.Keep, Environment: environment(options.Storage), Pragmas: map[string]string{}, StorageBytes: map[string]int64{}, Interpretation: []string{
-		"Synthetic production-writer fixture; no private exports and no accelerated SQL loader.",
-		"Logical reproducibility excludes write-clock timestamps; SHA-256 covers ordered generated payloads.",
-		"Queries run warm after construction and validation; reopened files are not cold-disk measurements.",
-		"Go allocation deltas cover the process during each sample, not total process memory.",
-		"Build includes payload generation, previews when selected, transaction commits, corrections and independent oracle bookkeeping.",
-		"Order: each day journals, readings/corrections/retractions, then files; notes follow in 50-note transactions.",
-		"Every seventh day skips a journal capture; preview embeds may still create its day page. Readings shift into adjacent bursts and every fifth eligible reading is backdated three days.",
-		"Approximate payload targets: journals 256-1280 bytes; file text 128/1024/8192; notes 256/1024/4096/16384/65536, multiplied by profile text_multiplier.",
-		"Keyed replay measures core.Record idempotency, not workspace/source-file import throughput.",
-		"Snapshot/restore samples include copy/open only; correctness and integrity checks run outside timing.",
-	}}
+	report = &Result{Directory: dir, Retained: options.Keep, Pragmas: map[string]string{}, StorageBytes: map[string]int64{}}
 	for _, pragma := range []string{"journal_mode", "synchronous", "foreign_keys", "recursive_triggers", "trusted_schema", "busy_timeout", "wal_autocheckpoint", "page_size"} {
 		var value string
 		if err := d.W.QueryRowContext(ctx, "PRAGMA "+pragma).Scan(&value); err != nil {
@@ -175,11 +163,9 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 		}
 		report.Pragmas[pragma] = value
 	}
-	var sqliteVersion string
-	if err := d.R.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&sqliteVersion); err != nil {
+	if err := d.R.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&report.SQLite); err != nil {
 		return nil, err
 	}
-	report.Environment["sqlite"] = sqliteVersion
 	var f *fixture
 	mode := "metadata only"
 	if options.Previews {
@@ -191,7 +177,6 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 		return nil, fmt.Errorf("build profile=%s seed=%d: %w", p.Name, options.Seed, err)
 	}
 	report.Manifest = f.manifest
-	report.RootsPerSec = float64(f.manifest.Roots) / (float64(report.Build.Nanoseconds) / 1e9)
 	progress(options, "Checking all metric leaves, search, backlinks and integrity")
 	// A malformed batch must roll back its valid prefix. The independent row
 	// and leaf checks below detect leakage without timing this control.
@@ -209,7 +194,6 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 	if err := verify(ctx, s, f); err != nil {
 		return nil, fmt.Errorf("fixture profile=%s seed=%d: %w", p.Name, options.Seed, err)
 	}
-	report.Checks = append(report.Checks, "all metric leaves: independent IDs, values, days, scope and ordering", "raw reading count, files and preview byte totals", "rare search and popular backlinks", "malformed batch rolls back its valid prefix", "four integrity groups")
 	progress(options, "Measuring warm workflows (%d samples each)", options.Samples)
 	if err := exercise(ctx, s, f, options.Samples, report); err != nil {
 		return nil, err
@@ -235,7 +219,6 @@ func Run(ctx context.Context, options Options) (report *Report, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("restored fixture: %w", err)
 	}
-	report.Checks = append(report.Checks, "snapshot restored into a distinct file and all known answers checked again")
 	for _, name := range []string{"life.db", "life.db-wal", "life.db-shm", "snapshot.db", "restored.db", "restored.db-wal", "restored.db-shm"} {
 		st, e := os.Stat(filepath.Join(dir, name))
 		if e != nil && !errors.Is(e, os.ErrNotExist) {
@@ -256,6 +239,13 @@ func progress(o Options, format string, args ...any) {
 	}
 }
 
+// build writes the fixture through the production writer, in this order: each day journals, then readings, corrections
+// and retractions, then files; notes follow in 50-note transactions. Every seventh day skips a journal capture, but a
+// preview embed may still create its day page. Readings shift into adjacent bursts and every fifth eligible reading is
+// backdated three days. The payload targets are about 256 to 1280 bytes for a journal, 128, 1024 or 8192 for file
+// text, and 256, 1024, 4096, 16384 or 65536 for a note, all multiplied by the text_multiplier of the profile. The
+// logical digest covers the ordered generated payloads and leaves out the write-clock timestamps. The build time
+// includes payload generation, previews when selected, commits, corrections and the bookkeeping of the oracle.
 func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, error) {
 	f := &fixture{manifest: Manifest{Version: Version, Seed: o.Seed, Profile: p, Anchor: anchor.Format(time.DateOnly), MediaMode: "metadata-only; no preview/storage realism claim"}, pages: map[string]expectedPage{}, backlinks: map[string]bool{}, rare: map[string]bool{}}
 	if o.Previews {
@@ -323,7 +313,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 					f.manifest.RareMatches++
 					f.rare[date] = true
 				}
-				if _, _, e := tx.Capture(date, body, nil); e != nil {
+				if _, _, _, e := tx.CaptureWithKey("", date, body, nil); e != nil {
 					return e
 				}
 				fmt.Fprintf(digest, "journal:%s:%s\n", date, body)
@@ -494,7 +484,7 @@ func verify(ctx context.Context, s *core.Store, f *fixture) error {
 	if raw != f.manifest.Roots+f.manifest.Corrections+f.manifest.Retractions || files != f.manifest.Files || previews != f.manifest.PreviewBytes {
 		return fmt.Errorf("stored totals readings/files/preview bytes=%d/%d/%d", raw, files, previews)
 	}
-	hits, err := s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days, 0)
+	hits, err := s.SearchWith(ctx, "scaleraretoken", core.SearchOptions{}, f.manifest.Profile.Days, 0)
 	if err != nil {
 		return err
 	}
@@ -589,7 +579,7 @@ func checkSeries(got []core.Reading, want []expected) error {
 // so the oracle that verifies the fixture (source import:scale) does not see the probe rows.
 const timedSource = "import:scale-timed"
 
-func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, report *Report) error {
+func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, report *Result) error {
 	f.probes = map[string]probePage{}
 	probeDay := anchor.AddDate(0, 0, f.manifest.Profile.Days+1).Format(time.DateOnly)
 	var editID int64
@@ -605,7 +595,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var captureID int64
 		if err := record(report, "capture_commit", func() error {
 			var e error
-			captureID, _, e = s.Capture(ctx, timedSource, day, "Synthetic timed capture", nil)
+			captureID, _, _, e = s.CaptureWithKey(ctx, timedSource, "", day, "Synthetic timed capture", nil)
 			return e
 		}); err != nil {
 			return err
@@ -696,7 +686,7 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		var hits []core.Hit
 		if err := record(report, "search_rare", func() error {
 			var e error
-			hits, e = s.Search(ctx, "scaleraretoken", f.manifest.Profile.Days, 0)
+			hits, e = s.SearchWith(ctx, "scaleraretoken", core.SearchOptions{}, f.manifest.Profile.Days, 0)
 			return e
 		}); err != nil {
 			return err
@@ -750,7 +740,7 @@ func measure(fn func() error) (Sample, error) {
 	runtime.ReadMemStats(&after)
 	return Sample{elapsed.Nanoseconds(), after.TotalAlloc - before.TotalAlloc, after.Mallocs - before.Mallocs}, err
 }
-func record(report *Report, name string, fn func() error) error {
+func record(report *Result, name string, fn func() error) error {
 	sample, err := measure(fn)
 	if err != nil {
 		return fmt.Errorf("%s: %w", name, err)
@@ -763,36 +753,4 @@ func record(report *Report, name string, fn func() error) error {
 	}
 	report.Operations = append(report.Operations, Operation{name, []Sample{sample}})
 	return nil
-}
-func environment(storage string) map[string]string {
-	out := map[string]string{"go": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH, "logical_cpus": fmt.Sprint(runtime.NumCPU()), "gomaxprocs": fmt.Sprint(runtime.GOMAXPROCS(0)), "storage_description": storage, "cpu": "unavailable", "revision": "unavailable"}
-	if storage == "" {
-		out["storage_description"] = "unspecified; supply -storage for comparable runs"
-	}
-	if raw, err := os.ReadFile("/proc/cpuinfo"); err == nil {
-		for _, line := range strings.Split(string(raw), "\n") {
-			if strings.HasPrefix(line, "model name") {
-				_, name, _ := strings.Cut(line, ":")
-				out["cpu"] = strings.TrimSpace(name)
-				break
-			}
-		}
-	}
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, setting := range info.Settings {
-			switch setting.Key {
-			case "vcs.revision":
-				out["revision"] = setting.Value
-				out["revision_source"] = "build info"
-			case "vcs.modified":
-				out["build_tree_dirty"] = setting.Value
-			}
-		}
-		for _, d := range info.Deps {
-			if d.Path == "modernc.org/sqlite" {
-				out["sqlite_driver"] = d.Version
-			}
-		}
-	}
-	return out
 }

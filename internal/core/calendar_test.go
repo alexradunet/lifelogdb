@@ -29,15 +29,15 @@ func daysFrom(t *testing.T, from, through string) []string {
 // The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md). Every expected value is worked out by
 // hand from the rows the test writes.
 
-func anniversaryLines(as []Anniversary) string {
+func birthdayLines(bs []birthday) string {
 	var out []string
-	for _, a := range as {
-		out = append(out, fmt.Sprintf("%s %s %s %d", a.Day, a.Kind, a.Title, a.Years))
+	for _, b := range bs {
+		out = append(out, b.Day+" "+b.Title)
 	}
 	return strings.Join(out, " | ")
 }
 
-func TestAnniversariesComeBackEachYear(t *testing.T) {
+func TestBirthdaysComeBackEachYear(t *testing.T) {
 	s := fresh(t)
 	person := func(title, birth, death string) int64 {
 		t.Helper()
@@ -60,24 +60,23 @@ func TestAnniversariesComeBackEachYear(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ from, through, want string }{
-		// a birthday before a death on one day; a person not yet born and a tombstoned one are not there
-		{"2031-05-01", "2031-05-31", "2031-05-14 birthday Ana 41 | 2031-05-14 death Ion 11"},
-		// the death day itself has no years
-		{"2020-05-14", "2020-05-14", "2020-05-14 birthday Ana 30 | 2020-05-14 death Ion 0"},
+		// a death day is not a birthday; a person not yet born and a tombstoned one are not there
+		{"2031-05-01", "2031-05-31", "2031-05-14 Ana"},
+		{"2020-05-14", "2020-05-14", "2020-05-14 Ana"},
 		// 29 February is on 28 February in a common year, and on its own day in a leap year
-		{"2031-02-01", "2031-02-28", "2031-02-28 birthday Leap 31"},
-		{"2032-02-27", "2032-03-01", "2032-02-29 birthday Leap 32 | 2032-03-01 birthday Ion 102"},
+		{"2031-02-01", "2031-02-28", "2031-02-28 Leap"},
+		{"2032-02-27", "2032-03-01", "2032-03-01 Ion | 2032-02-29 Leap"},
 		// the birth day itself, and a day before any birth
-		{"2000-02-29", "2000-03-01", "2000-02-29 birthday Leap 0 | 2000-03-01 birthday Ion 70"},
+		{"2000-02-29", "2000-03-01", "2000-03-01 Ion | 2000-02-29 Leap"},
 		{"1929-05-14", "1929-05-14", ""},
 		// a week across the new year
-		{"2031-12-29", "2032-01-04", "2031-12-31 birthday Year end 46 | 2032-01-02 birthday New year 47"},
+		{"2031-12-29", "2032-01-04", "2032-01-02 New year | 2031-12-31 Year end"},
 	} {
-		as, err := s.anniversariesOn(ctx, daysFrom(t, tc.from, tc.through))
+		as, err := s.birthdaysOn(ctx, daysFrom(t, tc.from, tc.through))
 		if err != nil {
 			t.Fatalf("%s to %s: %v", tc.from, tc.through, err)
 		}
-		if got := anniversaryLines(as); got != tc.want {
+		if got := birthdayLines(as); got != tc.want {
 			t.Errorf("%s to %s:\n got %s\nwant %s", tc.from, tc.through, got, tc.want)
 		}
 	}

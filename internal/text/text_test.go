@@ -161,21 +161,35 @@ func TestUnassignedRejected(t *testing.T) {
 	}
 }
 
-// TagAt, read at each '#', finds the tags Candidates finds.
-func TestTagAtAgreesWithCandidates(t *testing.T) {
-	for _, in := range []string{"#run", "a#b", "x #run-club! and #ünï", "#123 #2026a", "#REDIRECT", "##x", "/#x", "(#x) #a_b-"} {
+// TagAt, read at each '#', finds the tags of a line. The lists are written by hand from the tag rules: a tag follows
+// the start of a line or a character that is no letter, digit or '#'; it has tag characters and '-'; a trailing '-'
+// is not part of it; digits alone name no page.
+func TestTagAtFindsTheTagsOfALine(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want []string
+	}{
+		{"#run", []string{"run"}},
+		{"a#b", nil},
+		{"x #run-club! and #ünï", []string{"run-club", "ünï"}},
+		{"#123 #2026a", []string{"2026a"}},
+		{"#REDIRECT", []string{"REDIRECT"}},
+		{"##x", nil},
+		{"/#x", nil},
+		{"(#x) #a_b-", []string{"x", "a_b"}},
+	} {
 		var got []string
 		prev := '\n'
-		for i, r := range in {
+		for i, r := range c.in {
 			if r == '#' {
-				if tag, n := TagAt(prev, in[i:]); n > 0 {
+				if tag, n := TagAt(prev, c.in[i:]); n > 0 {
 					got = append(got, tag)
 				}
 			}
 			prev = r
 		}
-		if want := Candidates(in); strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Errorf("%q: TagAt finds %q, Candidates %q", in, got, want)
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%q: TagAt finds %q, want %q", c.in, got, c.want)
 		}
 	}
 }

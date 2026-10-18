@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 )
 
 // The stream (docs/plans/130-the-explore-pass.md): the days of the record as cards, the newest first, the way the
@@ -75,18 +74,14 @@ func (s *Store) Stream(ctx context.Context, limit, offset int) (cards []Card, mo
 
 // fillCards reads what the cards hold, each read for all of the days at once.
 func (s *Store) fillCards(ctx context.Context, cards []Card, days []string) error {
-	set, err := json.Marshal(days)
-	if err != nil {
-		return err
-	}
 	at := make(map[string]*Card, len(cards))
 	for i := range cards {
 		at[cards[i].Day] = &cards[i]
 	}
 	inSet := `IN (SELECT value FROM json_each(:days))`
-	arg := sql.Named("days", string(set))
+	arg := sql.Named("days", jsonArray(days))
 
-	entries, err := s.dayEntries(ctx, `p.day IN (SELECT value FROM json_each(?))`, "DESC", len(days), string(set))
+	entries, err := s.dayEntries(ctx, `p.day IN (SELECT value FROM json_each(?))`, "DESC", len(days), jsonArray(days))
 	if err != nil {
 		return err
 	}
@@ -125,14 +120,12 @@ func (s *Store) fillCards(ctx context.Context, cards []Card, days []string) erro
 	for _, p := range people {
 		at[p.day].addChip(p.CardItem)
 	}
-	anniversaries, err := s.anniversariesOn(ctx, days)
+	birthdays, err := s.birthdaysOn(ctx, days)
 	if err != nil {
 		return err
 	}
-	for _, a := range anniversaries {
-		if a.Kind == "birthday" {
-			at[a.Day].Birthdays = append(at[a.Day].Birthdays, CardItem{"person", a.ID, a.Title})
-		}
+	for _, b := range birthdays {
+		at[b.Day].Birthdays = append(at[b.Day].Birthdays, CardItem{"person", b.ID, b.Title})
 	}
 	return nil
 }
