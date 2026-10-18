@@ -49,7 +49,7 @@ type serveFlags struct {
 	pub                        *api.PublicOptions // set by prepareServe from the flags of --public
 }
 
-// fileFlags are the flags that only file reads. --day, which capture reads too, is opts.day.
+// fileFlags are the flags that only file and cover read. --day, which capture reads too, is opts.day.
 type fileFlags struct {
 	title, text, preview, mime string
 	dryRun                     bool
@@ -71,6 +71,7 @@ Global flags, anywhere on the line:
 // gives the process's own; a test gives buffers, its own variables and its own clock.
 type env struct {
 	o          opts
+	cmd        *command // the command of the line, set by runContext: its synopsis is the text of an error of use
 	c          *client.Client
 	store      *core.Store
 	stdin      io.ReadCloser // the requests of the MCP server
@@ -88,28 +89,39 @@ type command struct {
 	gap        bool                       // a blank line before its usage: the start of a group
 	usage      string                     // its lines of the usage text; "" for an alias with none of its own
 	flags      []string                   // the flags it takes, besides the global ones
+	refuses    []string                   // the global flags it does not take: it would ignore them
 	setup      bool                       // a setup command of the machine (init, agentic-init): no client, and the OS's interrupt
 	ownHandler bool                       // it builds the handler of its listener (serve): it gets the store and no client
 	prepare    func(o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
 	run        func(ctx context.Context, e env, args []string) error
 }
 
+// synopsis is the first line of the usage of c, without its indent and its text: the words that an error shows.
+func (c command) synopsis() string {
+	line, _, _ := strings.Cut(c.usage, "\n")
+	line = strings.TrimSpace(line)
+	if i := strings.Index(line, "  "); i >= 0 {
+		line = line[:i]
+	}
+	return strings.TrimPrefix(line, "lifelog ")
+}
+
 var commands = []command{
-	{name: "init", setup: true, gap: true,
+	{name: "init", setup: true, gap: true, refuses: []string{"--url", "--source"},
 		usage: "  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)",
 		run:   initDB},
-	{name: "agentic-init", setup: true, flags: []string{"--force"},
+	{name: "agentic-init", setup: true, flags: []string{"--force"}, refuses: []string{"--url", "--source"},
 		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +
 			"                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file\n" +
 			"                                      with another text is kept unless --force",
 		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e) }},
-	{name: "serve", ownHandler: true, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
+	{name: "serve", ownHandler: true, refuses: []string{"--human"}, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
 		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
 			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
 			"                                      the API for other devices: every request needs the owner's token\n" +
 			"                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login",
 		prepare: prepareServe, run: serve},
-	{name: "mcp", flags: []string{"--agent"},
+	{name: "mcp", flags: []string{"--agent"}, refuses: []string{"--human"},
 		usage: "  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)",
 		prepare: func(o opts) (opts, error) {
 			if slices.Contains(o.given, "--source") { // one way to name the writer of MCP: an agent's
@@ -129,7 +141,7 @@ var commands = []command{
 		usage: "  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)",
 		run: func(ctx context.Context, e env, args []string) error {
 			if len(args) != 1 {
-				return errors.New("get PATH")
+				return errors.New(e.cmd.synopsis())
 			}
 			return show(e)(e.c.Get(ctx, "/"+strings.TrimPrefix(args[0], "/"))) // "pages/1" too: some shells rewrite a leading /
 		}},
@@ -137,13 +149,16 @@ var commands = []command{
 		usage: "  lifelog do ACTION [field=value...]  run any action of the catalog (lifelog actions)",
 		run: func(ctx context.Context, e env, args []string) error {
 			if len(args) == 0 {
-				return errors.New("do ACTION [field=value...]")
+				return errors.New(e.cmd.synopsis())
 			}
 			vals := map[string]string{}
 			for _, kv := range args[1:] {
 				k, v, ok := strings.Cut(kv, "=")
 				if !ok {
 					return fmt.Errorf("%q is not field=value", kv)
+				}
+				if _, dup := vals[k]; dup {
+					return fmt.Errorf("%s is given twice", k)
 				}
 				vals[k] = v
 			}
@@ -186,25 +201,17 @@ var commands = []command{
 		usage: "  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases",
 		run: func(ctx context.Context, e env, args []string) error {
 			if len(args) != 2 {
-				return errors.New("rename PAGE-ID NEW-TITLE")
+				return errors.New(e.cmd.synopsis())
 			}
 			return doAction(ctx, e, "rename", map[string]string{"id": args[0], "title": args[1]})
 		}},
 	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--dry-run"},
 		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--dry-run]\n" +
-			"                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
-			"                                      never stored; its text from FILE; a picture made from a JPEG, PNG or\n" +
-			"                                      GIF, else from PICTURE; the title defaults to the file's name. Its own\n" +
-			"                                      day is D, else a photo's EXIF date; a photo with neither has no day,\n" +
-			"                                      another file the day it is kept; --dry-run writes nothing",
+			"                                      keep a file: the add-file action (lifelog actions says the rest)",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
 	{name: "cover", flags: []string{"--title", "--preview"},
 		usage: "  lifelog cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]\n" +
-			"                                      set a page's cover photo (docs/plans/127-a-cover-for-every-page.md):\n" +
-			"                                      PHOTO is a new one, kept with no day and titled T (default: the page's\n" +
-			"                                      title and today; a day page's: its day), its picture from\n" +
-			"                                      PICTURE when it is not a JPEG, PNG or GIF; with no PHOTO, T names\n" +
-			"                                      a kept picture (lifelog get /pages/PAGE-ID/cover lists them)",
+			"                                      set a page's cover: the set-cover action (lifelog actions says the rest)",
 		run: func(ctx context.Context, e env, args []string) error { return setCover(ctx, e, args) }},
 	{name: "snapshot", flags: []string{"--snapshots"},
 		usage: "  lifelog snapshot [--snapshots DIR]  a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
@@ -305,9 +312,12 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 	if len(o.args) > 0 {
 		if cmd := commandNamed(o.args[0]); cmd != nil {
 			for _, f := range o.given {
-				if !slices.Contains(globalFlags, f) && !slices.Contains(cmd.flags, f) {
+				if !slices.Contains(cmd.flags, f) && (!slices.Contains(globalFlags, f) || slices.Contains(cmd.refuses, f)) {
 					return o, fmt.Errorf("%s does not take %s", cmd.name, f)
 				}
+			}
+			if o.dbExplicit && o.url != "" {
+				return o, errors.New("--db and --url name two databases: give one")
 			}
 		}
 	}
@@ -378,6 +388,7 @@ func runContext(ctx context.Context, e env) (err error) {
 	if cmd == nil {
 		return fmt.Errorf("unknown command %q (lifelog help)", o.args[0])
 	}
+	e.cmd = cmd
 	args := o.args[1:]
 	if cmd.prepare != nil {
 		if o, err = cmd.prepare(o); err != nil {

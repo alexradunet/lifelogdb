@@ -11,7 +11,7 @@ import (
 func keepFile(ctx context.Context, e env, args []string) error {
 	o := e.o
 	if len(args) != 1 {
-		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--dry-run]")
+		return errors.New(e.cmd.synopsis())
 	}
 	vals := map[string]string{"original": args[0]}
 	if o.file.title != "" {
@@ -40,7 +40,7 @@ func keepFile(ctx context.Context, e env, args []string) error {
 func setCover(ctx context.Context, e env, args []string) error {
 	o := e.o
 	if len(args) < 1 || len(args) > 2 {
-		return errors.New("cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]: a new PHOTO, or --title of a kept picture")
+		return errors.New(e.cmd.synopsis() + ": a new PHOTO, or --title of a kept picture")
 	}
 	vals := map[string]string{"id": args[0]}
 	if len(args) == 2 {
