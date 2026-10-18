@@ -96,6 +96,9 @@ func TestMarkdownPostParseNFC(t *testing.T) {
 // allocates count the work. Each tag is checked as a title (text.ValidTitle) and becomes a link: that is about 20 KB.
 // The bound is 64 KB for each tag.
 func TestALineOfManyTagsIsDrawnWithWorkInProportionToIt(t *testing.T) {
+	if raceDetector {
+		t.Skip("the race detector makes every allocation larger, so the bytes do not measure the work")
+	}
 	const n = 10000
 	line := strings.Repeat("#a ", n)
 	var before, after runtime.MemStats
