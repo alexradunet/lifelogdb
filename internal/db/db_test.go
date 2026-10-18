@@ -17,16 +17,6 @@ import (
 	"modernc.org/sqlite"
 )
 
-func TestSchemaCopyIsCurrent(t *testing.T) {
-	b, err := os.ReadFile("../../docs/schema/schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b) != schema {
-		t.Fatal("internal/db/schema.sql differs from docs/schema/schema.sql: run `go generate ./...`")
-	}
-}
-
 // Fresh returns an initialised throwaway database.
 func Fresh(t *testing.T) *DB {
 	t.Helper()

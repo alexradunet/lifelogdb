@@ -2,13 +2,10 @@
 // back and refused if wrong, the SQLite version floor, BEGIN IMMEDIATE for every write, and read-only readers.
 package db
 
-//go:generate go run ../../tools/copyschema ../../docs/schema/schema.sql schema.sql
-
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -21,10 +18,9 @@ import (
 	"time"
 
 	"modernc.org/sqlite"
-)
 
-//go:embed schema.sql
-var schema string
+	"lifelog"
+)
 
 // minVersion is the writer's floor (connections.md: the WAL race fixed in 3.51.3).
 const minVersion = 3051003
@@ -214,7 +210,7 @@ func open(ctx context.Context, path string, keep bool) (*DB, error) {
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
 func Init(ctx context.Context, path string) error {
 	return initWith(path, func(w *sql.DB) error {
-		_, err := w.ExecContext(ctx, schema)
+		_, err := w.ExecContext(ctx, lifelog.Schema)
 		return err
 	})
 }

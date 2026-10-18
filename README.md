@@ -21,7 +21,7 @@ The database it writes is specified independently of it, so another program — 
 [issue](docs/issues/README.md) against the docs, not a fix in this code alone.
 
 ```
-go generate ./... && go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
+go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
 lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
@@ -253,8 +253,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
-- **The schema is embedded.** `go generate ./...` copies `docs/schema/schema.sql` into `internal/db`; a test fails
-  when the copy is stale. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
+- **The schema is embedded.** `schema.go` at the root embeds `docs/schema/schema.sql`, and `internal/db` reads it; a change to the DDL
+  is live in the binary at the next build. `lifelog init` refuses an existing file; `Open` refuses a file without Lifelog's
   `application_id`.
 - **Snapshots are the owner's, from any surface** ([take a snapshot](docs/cookbook/take-a-snapshot.md),
   [plan 082](docs/plans/082-snapshot-in-the-catalog.md)). `snapshot` is an owner-only action of the catalog
@@ -433,6 +433,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 
 | path | what | test it at |
 |---|---|---|
+| `schema.go` (root) | `lifelog.Schema`: `docs/schema/schema.sql`, embedded so the binary carries the DDL; `internal/db` reads it | `internal/db` applies it in every test; `tests/` builds from the file itself |
 | `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test | `db.Init` and `db.Open` on a file in `t.TempDir()` |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, the parse of a day and an instant, the markers that a plain-text line cuts (`BlockMark`) and the marks of a match in a snippet of the search (`SnippetOpen`, `SnippetClose`); tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) | the pure functions with table tests, and the vectors of the contract page (`TestWikilinkVectors`, `TestTitleKeyVectors`) |
@@ -444,14 +445,13 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool; it imports `client` and `siren`, and no `api` | `mcp.New` on a client of `apitest.Fresh`; the columns `mcp` and `mcp-remote` of the parity table |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
-| `tools/copyschema` | `go generate`'s copy of `docs/schema/schema.sql` into `internal/db` | `TestSchemaCopyIsCurrent` (`internal/db`) |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
 | `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) | the contract suites `TestSuites` and the mutants `TestMutants`, on the DDL of `docs/` |
 
 ## Checks
 
-`go generate ./... && go vet ./... && go test ./...` — every test builds throwaway databases in a temporary folder:
-the packages from the embedded schema, the suites in `tests/` from `docs/schema/schema.sql` itself (and from broken
+`go vet ./... && go test ./...` — every test builds throwaway databases in a temporary folder:
+the packages from the embedded schema (`schema.go`), the suites in `tests/` from `docs/schema/schema.sql` itself (and from broken
 copies of the docs, the mutants). `go test -short ./...` skips the mutants.
 
 ### Request metadata limits

@@ -75,7 +75,7 @@ Boundary probes roll back every case, including unexpected success under a mutan
 
 **What the suites take from the writer.** The suites keep their own kit (`kit_test.go`), not the writer's
 `dbtest`: they build every database from the `schema.sql` under test, and a mutant changes that file, where the writer
-embeds its own copy. They import four packages of the writer, each for one reason, and no other:
+embeds the file as it is. They import four packages of the writer, each for one reason, and no other:
 
 | package | why |
 |---|---|
