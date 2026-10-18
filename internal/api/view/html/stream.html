@@ -29,11 +29,15 @@
 {{/* day-card is one day of the stream. It takes v (the view) and c (the card). */}}
 {{define "day-card"}}{{$v := .v}}{{with .c}}<article class="day-card{{if not .page_id}} slim{{end}}" aria-label="{{.day}}">
 <div class="card-head"><a class="date" href="/days/{{.day}}">{{.day}}</a><span class="weekday">{{weekday .day}}</span>{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</div>
+<div class="card-body">
 {{with .picture}}<a class="card-cover" href="/days/{{$.c.day}}"><img src="{{.}}" alt="" loading="lazy"></a>{{end}}
+<div class="card-text">
 {{with .words}}<p class="card-words">{{.}}</p>{{end}}
 {{if or .places .people .birthdays}}<ul class="card-chips" aria-label="Places and people">{{range .places}}<li><a href="{{.href}}">{{icon "places"}}{{.title}}</a></li>{{end}}{{range .people}}<li><a href="{{.href}}">{{icon "people"}}{{.title}}</a></li>{{end}}{{with .more_chips}}<li><a href="/days/{{$.c.day}}">+{{num .}}</a></li>{{end}}{{range .birthdays}}<li><a href="{{.href}}">Birthday: {{.title}}</a></li>{{end}}</ul>{{end}}
 {{with .pages}}<p class="card-pages">+ {{count (beyond . 0 $.c.more_pages) "page" "pages"}}: {{range $i, $p := .}}{{if $i}}, {{end}}<a href="{{.href}}">{{.title}}</a>{{end}}{{with $.c.more_pages}}, <a href="/days/{{$.c.day}}">and {{num .}} more</a>{{end}}</p>{{end}}
 {{with .readings}}<p class="meta">{{count . "reading" "readings"}}</p>{{end}}
+</div>
+</div>
 </article>{{end}}{{end}}
 
 {{/* scrubber is the jumps of the stream: the years, the newest first, and the months of the year the page shows. It
