@@ -130,7 +130,7 @@ func TestPublicLoginCookie(t *testing.T) {
 				cookie = c
 			}
 		}
-		if cookie == nil || cookie.Value != testToken || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Secure != tls {
+		if cookie == nil || cookie.Value != testToken || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Secure != tls || cookie.MaxAge != 365*24*60*60 { // one year: an installed app keeps the login
 			t.Fatalf("tls=%v cookie=%+v", tls, cookie)
 		}
 		// The cookie opens the HTML face; a same-origin form writes; a cross-site form with the cookie is refused.

@@ -3,6 +3,9 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"image"
+	"image/png"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -64,8 +67,9 @@ func TestTheFontsAreServedByExactName(t *testing.T) {
 }
 
 // TestTheManifestAndTheIconAreServed: a browser can install the app. The manifest and the icon have their types
-// and a cache; a public listener refuses both without the token; the manifest's share target posts to a route that
-// writes on the local day.
+// and a cache; the PNG icons have the sizes that the manifest declares; a public listener serves the manifest and
+// every icon without the token (they hold nothing of the database); the manifest's share target posts to a route
+// that writes on the local day.
 func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	get := func(h http.Handler, method, path string, headers map[string]string) *httptest.ResponseRecorder {
@@ -81,7 +85,7 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 		StartURL    string `json:"start_url"`
 		Display     string `json:"display"`
 		ThemeColor  string `json:"theme_color"`
-		Icons       []struct{ Src, Purpose string }
+		Icons       []struct{ Src, Sizes, Purpose string }
 		Shortcuts   []struct{ Name, URL string }
 		ShareTarget struct {
 			Action, Method, Enctype string
@@ -97,14 +101,27 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
 		t.Fatalf("the manifest is not JSON: %v", err)
 	}
-	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 2 || len(m.Icons) != 2 ||
+	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 2 || len(m.Icons) != 3 ||
 		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "application/x-www-form-urlencoded" ||
 		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 0 { // a phone's share sheet sends text to capture
 		t.Errorf("the manifest says %+v", m)
 	}
+	wantIcons := [][3]string{{"/assets/icon-192.png", "192x192", "any"}, {"/assets/icon-512.png", "512x512", "any"}, {"/assets/icon-512.png", "512x512", "maskable"}}
+	for n, i := range m.Icons {
+		if n < len(wantIcons) && [3]string{i.Src, i.Sizes, i.Purpose} != wantIcons[n] {
+			t.Errorf("the manifest icon %d is %+v, want %v", n, i, wantIcons[n])
+		}
+	}
 	for _, i := range m.Icons {
-		if i.Src != "/assets/icon.svg" {
-			t.Errorf("the manifest names the icon %q", i.Src)
+		png := get(h, "GET", i.Src, nil)
+		if png.Code != http.StatusOK || png.Header().Get("Content-Type") != "image/png" ||
+			png.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" || png.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("the icon %s: %d %q %q", i.Src, png.Code, png.Header().Get("Content-Type"), png.Header().Get("Cache-Control"))
+			continue
+		}
+		cfg, err := png2config(png.Body.Bytes())
+		if err != nil || fmt.Sprintf("%dx%d", cfg.Width, cfg.Height) != i.Sizes {
+			t.Errorf("the icon %s decodes as %+v (%v), the manifest says %s", i.Src, cfg, err, i.Sizes)
 		}
 	}
 
@@ -126,9 +143,17 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	}
 
 	pub, _ := publicHandler(t, api.PublicOptions{Token: testToken})
-	for _, path := range []string{"/manifest.webmanifest", "/assets/icon.svg"} {
-		if r := get(pub, "GET", path, nil); r.Code != http.StatusUnauthorized {
-			t.Errorf("a public listener serves %s with no token: %d", path, r.Code)
+	if r := get(pub, "GET", "/assets/fonts/OFL-jersey-15.txt", nil); r.Code == http.StatusOK { // the fonts stay behind the token
+		t.Errorf("a public listener serves a font with no token: %d", r.Code)
+	}
+	for _, path := range []string{"/manifest.webmanifest", "/assets/icon.svg", "/assets/icon-192.png", "/assets/icon-512.png"} {
+		for _, method := range []string{"GET", "HEAD"} {
+			if r := get(pub, method, path, nil); r.Code != http.StatusOK {
+				t.Errorf("a public listener refuses %s %s with no token: %d", method, path, r.Code)
+			}
+		}
+		if r := get(pub, "POST", path, nil); r.Code != http.StatusUnauthorized {
+			t.Errorf("a public listener takes POST %s with no token: %d, want 401", path, r.Code)
 		}
 		if r := get(pub, "GET", path, map[string]string{"Authorization": "Bearer " + testToken}); r.Code != http.StatusOK {
 			t.Errorf("a public listener refuses %s with the token: %d", path, r.Code)
@@ -180,4 +205,14 @@ func TestAMultipartPostWithoutFileFieldsIsRefused(t *testing.T) {
 	if n := scalar(t, s, "SELECT CAST(count(*) AS TEXT) FROM entities WHERE body LIKE '%Lost words%'"); n != "0" {
 		t.Errorf("the refused request wrote %s pages", n)
 	}
+}
+
+// png2config reads the size of a PNG without decoding it twice; it fails for a body that is not a PNG.
+func png2config(b []byte) (image.Config, error) {
+	cfg, err := png.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return cfg, err
+	}
+	_, err = png.Decode(bytes.NewReader(b))
+	return cfg, err
 }

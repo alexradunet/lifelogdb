@@ -172,10 +172,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
   sentences by the result shapes of API.md. A day's reading tile is a metric read that day and its last value.
-  `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: two shortcuts (Today, Add to
-  today) and a share target that posts shared text into Capture
-  (`POST /days/today/capture`). There is no service worker, since the server is the owner's own. A public listener
-  refuses all three without the token, as it refuses the fonts.
+  `GET /manifest.webmanifest` and the icons (`/assets/icon.svg`, and `/assets/icon-192.png` and
+  `/assets/icon-512.png` for Android) make the app installable: two shortcuts (Today, Add to today) and a share
+  target that posts shared text into Capture (`POST /days/today/capture`). There is no service worker, since the
+  server is the owner's own. A public listener serves the manifest and the icons (`GET` and `HEAD`) without the
+  token, because a browser fetches them without its cookie and they hold nothing of the database. The fonts stay
+  behind the token.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
   as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
   and a test holds it. What the one script once did ([plan 091](docs/plans/091-the-browser-for-daily-use.md),
@@ -380,8 +382,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   private network (a VPN, a mesh such as Tailscale), and the startup line says so. A reverse proxy that terminates
   TLS works only because it forwards the bearer header unchanged. **The browser:** `GET /login` is the one page served
   without a credential; `POST /login` with the token sets `lifelog_token` (HttpOnly, SameSite=Strict, Secure over
-  TLS) and `POST /logout` clears it; cross-site forms with the cookie are what the origin guard refuses. The CLI and
-  the MCP server with `--url` send `LIFELOG_TOKEN`.
+  TLS, valid for one year so that an installed app stays logged in; a new token file ends it) and `POST /logout`
+  clears it; cross-site forms with the cookie are what the origin guard refuses. The CLI and the MCP server with
+  `--url` send `LIFELOG_TOKEN`.
 
 ## Every action on every surface
 

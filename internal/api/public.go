@@ -99,6 +99,20 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 	return p, nil
 }
 
+// loginMaxAge is one year: an installed app on a phone loses a session cookie when the system ends the app. The
+// owner ends the login by a new token file.
+const loginMaxAge = 365 * 24 * 60 * 60
+
+// installFiles are the files that a browser fetches without its cookie to install the app. They are embedded and
+// static, and they hold nothing of the database. A GET or a HEAD of them needs no token. The fonts are not here:
+// the page fetches them with its cookie.
+var installFiles = map[string]bool{
+	"/manifest.webmanifest": true,
+	"/assets/icon.svg":      true,
+	"/assets/icon-192.png":  true,
+	"/assets/icon-512.png":  true,
+}
+
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if absoluteForm(r) {
 		writeError(w, r, authorityRefusal())
@@ -130,6 +144,9 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case r.URL.Path == "/logout" && r.Method == http.MethodPost:
 		p.logout(w, r)
+		return
+	case installFiles[r.URL.Path] && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+		p.next.ServeHTTP(w, r)
 		return
 	}
 	if !p.authorized(r) {
@@ -179,7 +196,7 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?failed=1", http.StatusSeeOther)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: string(p.token), Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: string(p.token), Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: loginMaxAge})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

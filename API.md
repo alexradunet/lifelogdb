@@ -649,7 +649,7 @@ category is 422 (`links_endpoint_types`). The answer embeds an `item` link to ea
 ### login
 
 `GET /login` on a public listener: the one page served without a credential. `POST /login` with `token` sets the
-cookie and redirects home; `POST /logout` clears it.
+cookie (valid for one year) and redirects home; `POST /logout` clears it.
 
 | property | type | meaning |
 |---|---|---|

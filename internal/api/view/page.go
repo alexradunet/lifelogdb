@@ -1,7 +1,7 @@
 // Package view draws an entity of the API as a page of HTML for a browser: a template per class of entity, and the
 // generic template for any other class. It reads nothing: a page is a function of its entity, the facts of its
 // request and the refused form that it shows (Draw). It imports no store (core or db), and a test holds this. The API
-// (internal/api) calls Draw, and serves the fonts, the manifest and the icon from Files.
+// (internal/api) calls Draw, and serves the fonts, the manifest and the icons from Files.
 package view
 
 import (
@@ -35,10 +35,10 @@ import (
 // The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
 // its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
-// Files are the files of html/: the templates, the two stylesheets, the icon, the manifest, and the fonts with
-// their licences.
+// Files are the files of html/: the templates, the two stylesheets, the icons (one SVG and two PNG), the manifest,
+// and the fonts with their licences.
 //
-//go:embed html/*.html html/*.css html/*.svg html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var Files embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
@@ -51,7 +51,7 @@ var (
 func MustFile(name string) []byte {
 	b, err := Files.ReadFile("html/" + name)
 	if err != nil {
-		panic(err) // the files of html/ are embedded (the sheets, the manifest, the icon): one missing is a build defect
+		panic(err) // the files of html/ are embedded (the sheets, the manifest, the icons): one missing is a build defect
 	}
 	return b
 }
