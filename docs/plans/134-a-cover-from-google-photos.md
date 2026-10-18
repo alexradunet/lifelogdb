@@ -8,7 +8,8 @@
 - **Date / baseline:** 2026-10-18, `ed046b2` (master).
 - **Priority:** P3. **Effort:** M. **Risk:** LOW. The `lifelog` binary, `internal/`, the contract in `docs/` and
   `schema.sql` do not change. The extension is a new Go module in its own folder, and a client of the HTTP API.
-- **Status:** READY.
+- **Status:** IN REVIEW (owner). Built in `41cf962` and `3219e7d`. The real sign-in and the hand test wait for the
+  owner's Google Cloud setup.
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-18)
@@ -136,7 +137,8 @@ All tests are in the extension module. They use synthetic data only. Fakes are o
   - A day that has a cover is never offered.
   - The same photo chosen twice writes one file.
   - When another file holds the title `<day>.jpg`, the new file is `<day> 2.jpg`.
-  - The source of the file page is `import:google-photos` (read through the API or the CLI, never from SQL).
+  - The source of the file page is `import:google-photos`. Not asserted: the API exposes no source of a page. A test
+    with a fake lifelog checks that every request sends `Lifelog-Source: import:google-photos`.
 
 ## Checks
 
@@ -148,12 +150,12 @@ All tests are in the extension module. They use synthetic data only. Fakes are o
 
 ## Done when
 
-- [ ] `extensions/googlephotos/` builds with the standard library only, and imports nothing from `lifelog/internal`.
+- [x] `extensions/googlephotos/` builds with the standard library only, and imports nothing from `lifelog/internal`.
 - [ ] The owner connects once, picks photos in Google's picker, and the page shows each day that has no cover with
       that day's photos.
-- [ ] One click keeps the photo through `add-file` with its day, and the photo is then the day's cover; the page goes
+- [x] One click keeps the photo through `add-file` with its day, and the photo is then the day's cover; the page goes
       to the next day.
-- [ ] A day with no day page gets one; a day with a cover is not offered and is not written.
-- [ ] The tests above pass, the checks above are clean, and the root baseline is green.
-- [ ] The root README links the extension's README.
+- [x] A day with no day page gets one; a day with a cover is not offered and is not written.
+- [x] The tests above pass, the checks above are clean, and the root baseline is green.
+- [x] The root README links the extension's README.
 - [ ] The owner set three covers from a real pick (by hand).
