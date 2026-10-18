@@ -1,5 +1,5 @@
-{{/* The day (docs/plans/095-the-leaf-and-its-margin.md): a calendar leaf heads it, with the weekday, the mood, the
-     previous and next day and Go to a day. Then the sheet and its margin. The sheet is what the owner writes and
+{{/* The day (docs/plans/095-the-leaf-and-its-margin.md): a calendar leaf heads it, with the weekday, the mood, and the
+     previous and next day; the stream goes to a day by its date. Then the sheet and its margin. The sheet is what the owner writes and
      reads: the journal, Capture as its next part, the editor and the pages written this day. The margin is what the
      day asks of the owner: the readings (with Add a reading) and the places. The day of today is Home
      (docs/plans/129-the-ux-pass.md): its margin ends with the last entries. On a narrow screen
@@ -16,7 +16,6 @@
 {{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous day, %s" $prev) "text" $prev)}}{{end}}
 {{- with .Link "next"}}
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{end}}
-{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
 </div>
 </header>
 

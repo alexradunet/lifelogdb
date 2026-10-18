@@ -243,8 +243,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   lock while it runs, so an agent must not start it. `rebuild-search` (`POST /search/rebuild`) is the repair of the
   full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
   rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save
-  ([integrity checks](docs/contract/integrity-checks.md)). `GET /integrity` offers `snapshot` and the two repairs, so
-  the owner reads what needs them and runs them on one page. An agent that imports with the owner asks for them in the conversation.
+  ([integrity checks](docs/contract/integrity-checks.md)). `GET /integrity` offers the two repairs, so the owner
+  reads what needs them and runs them on one page. An agent that imports with the owner asks for them in the conversation.
 - **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
   The owner's decision (2026-10-15): `ask`, the Conversations pages, the chat sidebar and the voice note are
   removed, with the model and transcriber endpoints they needed. The owner talks to `life.db` through a coding
@@ -371,6 +371,52 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   without a credential; `POST /login` with the token sets `lifelog_token` (HttpOnly, SameSite=Strict, Secure over
   TLS) and `POST /logout` clears it; cross-site forms with the cookie are what the origin guard refuses. The CLI and
   the MCP server with `--url` send `LIFELOG_TOKEN`.
+
+## Every action on every surface
+
+The catalog (`GET /actions`) is the one list of what `lifelog` can do, and each action of it is reachable on every
+surface ([AGENTS.md](AGENTS.md#go-implementation)): the API by its route, the CLI by `do ACTION field=value` (and a
+shortcut that wraps it), the MCP server by a tool of the same name with `_` for `-`, and the browser by a form. Each
+thing has one way to do it: one action, one route, one tool, one form where its resource is. A link may lead to that
+form, but no second form, field, flag, route or alias does the same. `/actions` draws every action for a browser,
+the ones with an id or a day too ([plan 131](docs/plans/131-the-pareto-pass.md)). The owner's actions are never MCP
+tools and are refused to an `agent:*` or `import:*` writer. `TestTheTableOfTheSurfacesIsTheCatalog` keeps this
+table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each surface.
+
+| action | API | CLI | MCP tool | browser |
+|---|---|---|---|---|
+| `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
+| `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
+| `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
+| `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
+| `create-place` | `POST /places` | `do create-place` | `create_place` | Browse, Places: New place |
+| `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
+| `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
+| `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person or a place |
+| `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
+| `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
+| `link` | `POST /pages/{id}/links` | `do link` | `link` | a day page, More: Add a typed link |
+| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a page: the x of a category badge, or More: Remove a typed link |
+| `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add by its categories; the pick bar of a list |
+| `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
+| `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |
+| `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | a reading: Retract |
+| `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | a page, More: Rename |
+| `register-metric` | `POST /metrics` | `do register-metric` | none, the owner's | Metrics: New metric |
+| `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
+| `search` | `GET /search` | `do search`, `search` | `search` | the sidebar: Search (the search dialog) |
+| `browse` | `GET /browse` | `do browse` | `browse` | the sidebar: Browse |
+| `find` | `GET /pages` | `do find`, `page` | `find` | a `[[wikilink]]` |
+| `open-day` | `GET /days/go` | `do open-day`, `day` | `open_day` | Calendar: Go to a day |
+| `random-page` | `GET /pages/random` | `do random-page` | `random_page` | Calendar: A random day; a Browse list: A random one |
+| `snapshot` | `POST /snapshots` | `do snapshot`, `snapshot` | none, the owner's | the sidebar: Snapshot |
+| `rebuild-search` | `POST /search/rebuild` | `do rebuild-search` | none, the owner's | Integrity checks: Rebuild search |
+| `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks: Resync links |
+
+The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/months/{m}`,
+`/years/{y}`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
+which the CLI's `get` and the MCP tool `get` read, or the browser's presentation (`/render`, the fonts, the manifest,
+the icon and the pictures), which the CLI and the MCP server do not carry.
 
 ## Layout
 

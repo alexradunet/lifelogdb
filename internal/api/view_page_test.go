@@ -112,7 +112,7 @@ func TestEveryViewRenders(t *testing.T) {
 			`<section class="result-group" aria-label="Days"><div class="panel-head"><h2>Days</h2><a class="meta" href="/search?kind=day&amp;q=ran">Show only these</a>`,
 			`<span class="hit-icon" aria-hidden="true">`}},
 		{"/search?q=ran&kind=day", http.StatusOK, []string{`aria-current="page">Days</a>`, `aria-label="Pages by their words"`, `<input type="hidden" name="kind" value="day">`}},
-		{"/integrity", http.StatusOK, []string{`action="/snapshots"`, `action="/search/rebuild"`, `action="/links/resync"`}},
+		{"/integrity", http.StatusOK, []string{`action="/search/rebuild"`, `action="/links/resync"`}},
 		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
 		{"/years/2026", http.StatusOK, []string{`<a href="/years/2026" aria-current="page">Year</a>`}},
 		{"/months/2026-09", http.StatusOK, []string{`<a href="/months/2026-09" aria-current="page">Month</a>`, `<a href="/days">Days</a>`}},

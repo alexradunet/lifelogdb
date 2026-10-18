@@ -136,7 +136,7 @@ func TestEveryActionFormSendsToItsAction(t *testing.T) {
 			posts[a.Href] = true
 		}
 	}
-	for _, name := range []string{"capture", "open-day"} {
+	for _, name := range []string{"capture", "record"} {
 		if a := apitest.Action(t, day, name); !strings.Contains(body, `<form method="`+a.Method+`" action="`+a.Href+`"`) {
 			t.Errorf("the page of today has no form of %s: %+v", name, a)
 		}

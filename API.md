@@ -262,7 +262,7 @@ action `search` and no properties: a browser draws it as the page to search from
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `open-day`, `set-cover` and `save-body`
+`record`, `set-cover` and `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
@@ -517,7 +517,7 @@ with a `result` sentence; `file-pages` files a metric in a category.
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `snapshot`, `rebuild-search` and `resync-links`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
 
 | property | type | meaning |
 |---|---|---|

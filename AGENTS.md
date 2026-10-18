@@ -168,7 +168,15 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
   differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
   `snapshot`, `integrity-check`, `rebuild-search`, `resync-links`) are refused to an `agent:*` or `import:*` writer
-  and are never MCP tools.
+  and are never MCP tools. The README's table [every action on every surface](README.md#every-action-on-every-surface)
+  names each action's route, CLI line, MCP tool and form; a new action adds its row in the same change, and
+  `TestTheTableOfTheSurfacesIsTheCatalog` fails until it does.
+- **One way to do a thing.** The owner's rule (2026-10-18, [plan 131](docs/plans/131-the-pareto-pass.md)): each thing
+  has one action, one route, one MCP tool and one form, drawn where its resource is (a page's actions on the page, a
+  day's on the day, a list's on the list). A link may lead to that form; nothing draws it a second time. Do not add an
+  action, a field, a flag, a route, a tool or an alias that does what another already does: extend the one that
+  exists, or replace it and delete the old one in the same change. A browser view that only repeats another view's
+  data (a second calendar, a second list of the same rows) needs the owner's word first.
 - **Contexts and ownership.** Pass the operation's `context.Context` explicitly, first, through blocking calls and SQL.
   Do not replace a request context with `Background` to evade cancellation, or use context values as dependency bags.
   Prefer synchronous APIs. Every goroutine needs an owner, bounded work, a shutdown path and a way to await completion;

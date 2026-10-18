@@ -278,7 +278,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	e := &siren.Entity{
 		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Today: today, Recent: recent},
 		Links:   []siren.Link{link("self", siren.DayHref(day), day)},
-		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record, action("open-day", nil, nil)},
+		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record},
 	}
 	// 0000-01-01 has no day before it, and 9999-12-31 none after it.
 	before, after := t.AddDate(0, 0, -1), t.AddDate(0, 0, 1)

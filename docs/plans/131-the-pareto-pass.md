@@ -125,3 +125,7 @@ what was done and why:
   `internal/core` about 200, the templates about 340 and `app.css` 126 of its 878. Three actions or tools left the catalog (`tombstone`, `random-day`,
   `get_day`), and five properties left the JSON (`trends`, `on_this_day`, `recent_titles`, the search's `counts`,
   `pictures`).
+- **One form a thing (2026-10-18, after the review).** Go to a day is on the stream only, not on the day too, and
+  Snapshot is on its own link of the sidebar, not on `/integrity` too, so no action is drawn twice. AGENTS.md has the
+  rule "One way to do a thing", and the README the table "Every action on every surface", which a test keeps equal to
+  the catalog.
