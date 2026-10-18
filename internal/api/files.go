@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -78,7 +77,7 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, 
 // and no sha256 and no mime sends no file (Sent is false), and is not refused here. Url-encoded or JSON (an agent
 // that hashed the file itself): sha256 and mime, and no picture.
 func parseFileForm(r *http.Request, act spec) (fileForm, error) {
-	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" {
+	if !isMultipart(r) {
 		return encodedFileForm(r, act)
 	}
 	m, err := readMultipart(r)
@@ -98,7 +97,7 @@ func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	if in.Preview, err = previewOf(m); err != nil {
 		return fileForm{}, err
 	}
-	dry, err := flagValue("dry_run", m.text.Get("dry_run"))
+	dry, err := flag(m.text, "dry_run")
 	if err != nil {
 		return fileForm{}, err
 	}
@@ -111,7 +110,10 @@ func encodedFileForm(r *http.Request, act spec) (fileForm, error) {
 	if err != nil {
 		return fileForm{}, err
 	}
-	if v.Get("sha256") == "" || v.Get("mime") == "" {
+	switch {
+	case v.Get("sha256") == "" && v.Get("mime") == "": // no file sent, as verifyOriginal says it
+		return fileForm{In: core.FileIn{Title: v.Get("title")}}, nil
+	case v.Get("sha256") == "" || v.Get("mime") == "":
 		return fileForm{}, core.Invalid(errNoFile)
 	}
 	dry, err := flag(v, "dry_run")
@@ -369,25 +371,18 @@ func (h *server) setCover(r *http.Request, act spec, src string) (*siren.Entity,
 	if err != nil {
 		return nil, err
 	}
-	if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" {
-		f, err := parseFileForm(r, act)
-		if err != nil {
-			return nil, err
-		}
-		if f.Sent {
-			k, err := h.s.SetCover(r.Context(), src, id, h.s.Today(), f.In)
-			if err != nil {
-				return nil, err
-			}
-			return withResult(h.pageEntity(r.Context(), id))(k)
-		}
-		return h.setCoverOf(r, src, id, f.In.Title)
-	}
-	v, err := fieldsOf(r, act)
+	f, err := parseFileForm(r, act)
 	if err != nil {
 		return nil, err
 	}
-	return h.setCoverOf(r, src, id, v.Get("title"))
+	if !f.Sent {
+		return h.setCoverOf(r, src, id, f.In.Title)
+	}
+	k, err := h.s.SetCover(r.Context(), src, id, h.s.Today(), f.In)
+	if err != nil {
+		return nil, err
+	}
+	return withResult(h.pageEntity(r.Context(), id))(k)
 }
 
 func (h *server) setCoverOf(r *http.Request, src string, id int64, title string) (*siren.Entity, error) {
@@ -423,7 +418,7 @@ func (h *server) coverChoice(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	self := siren.PageHref(id) + "/cover"
+	self := siren.CoverHref(id)
 	e := &siren.Entity{Class: []string{"cover-choice"}, Title: "Cover of " + p.Title,
 		Links:   []siren.Link{link("self", self, "Set cover photo"), link("page", siren.PageHref(id), p.Title), link("index", "/", "Home")},
 		Actions: []siren.Action{action("set-cover", idParam(id), nil)}}

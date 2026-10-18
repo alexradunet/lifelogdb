@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,23 @@ func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 		}
 		if strings.Join(marked, ",") != tc.fields {
 			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.fields)
+		}
+	}
+}
+
+// TestEveryNumericOptionIsANumber: the MCP server sends an option of a number field as a JSON number, unchecked, so
+// the catalog's own literals are checked here, once.
+func TestEveryNumericOptionIsANumber(t *testing.T) {
+	for _, s := range catalog {
+		for _, fd := range s.Fields {
+			if fd.Type != "number" {
+				continue
+			}
+			for _, o := range fd.Options {
+				if _, err := strconv.ParseFloat(o, 64); err != nil {
+					t.Errorf("%s.%s: the option %q is not a number", s.Name, fd.Name, o)
+				}
+			}
 		}
 	}
 }

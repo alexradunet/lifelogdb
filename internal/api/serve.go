@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -66,7 +65,7 @@ var defaultLimits = limits{request: 2 * time.Minute, upload: time.Hour, stall: 2
 func withDeadlines(l limits, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := l.request
-		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct == "multipart/form-data" { // as limitBody
+		if isMultipart(r) { // as limitBody
 			limit = l.upload
 			if r.Body != nil {
 				rc := http.NewResponseController(w)

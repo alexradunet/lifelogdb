@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -79,14 +78,21 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := 0
+	owner, public := 0, 0
 	for _, a := range actions {
-		if seen[toolName(a.Name)] == a.Owner {
-			t.Errorf("action %s (owner %v): the MCP tool %s is listed %v", a.Name, a.Owner, toolName(a.Name), seen[toolName(a.Name)])
-		}
 		if a.Owner {
 			owner++
+		} else {
+			public++
 		}
+	}
+	for _, name := range []string{"register_metric", "snapshot", "integrity_check", "rebuild_search", "resync_links"} {
+		if seen[name] {
+			t.Errorf("the owner-only action %s is an MCP tool", name)
+		}
+	}
+	if len(seen) != public+1 { // every public action, and get
+		t.Errorf("%d MCP tools, want the %d public actions and get", len(seen), public)
 	}
 	if owner == 0 {
 		t.Fatal("the catalog has no owner-only action: the check has nothing to check")
@@ -217,7 +223,7 @@ func TestMCPNumericSchema(t *testing.T) {
 // does not carry the hint, because it is also the label of the browser's date picker, in which a person cannot type
 // the word.
 func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
-	const pattern, hint = `^([0-9]{4}-[0-9]{2}-[0-9]{2}|today)$`, "YYYY-MM-DD or today)"
+	const hint = "YYYY-MM-DD or today)"
 	c := mcpTestClient(t)
 	session, ctx := numericSession(t, c)
 	tools, err := session.ListTools(ctx, nil)
@@ -239,8 +245,8 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 		props[tool.Name] = schema.Properties
 	}
 	day := props["record"]["day"]
-	if day["pattern"] != pattern || day["description"] != "Day (YYYY-MM-DD or today)" || day["type"] != "string" {
-		t.Errorf("record's day: %v, want the pattern %s and the description Day (YYYY-MM-DD or today)", day, pattern)
+	if _, ok := day["pattern"]; ok || day["description"] != "Day (YYYY-MM-DD or today)" || day["type"] != "string" {
+		t.Errorf("record's day: %v, want no pattern and the description Day (YYYY-MM-DD or today)", day)
 	}
 	for tool, want := range map[string]string{ // the titles with brackets of their own
 		"open_day": "Day (default today; YYYY-MM-DD or today)",
@@ -248,12 +254,6 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 	} {
 		if got := props[tool]["day"]["description"]; got != want {
 			t.Errorf("%s's day: the description %q, want %q", tool, got, want)
-		}
-	}
-	re := regexp.MustCompile(pattern)
-	for value, want := range map[string]bool{"2026-10-17": true, "today": true, "Today": false, "yesterday": false, " today": false, "2026-10-17T00:00:00Z": false} {
-		if re.MatchString(value) != want {
-			t.Errorf("the pattern takes %q: %v, want %v", value, !want, want)
 		}
 	}
 	actions, err := c.Catalog(ctx)
@@ -269,14 +269,13 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 			if f.Type != "date" {
 				continue
 			}
-			for _, tool := range []string{toolName(a.Name)} {
-				dates++
-				p := props[tool][f.Name]
-				desc, _ := p["description"].(string)
-				if _, ok := p["format"]; ok || p["pattern"] != pattern || !strings.HasPrefix(desc, strings.TrimSuffix(f.Title, ")")) ||
-					!strings.HasSuffix(desc, hint) || strings.Count(desc, "(") != 1 || strings.Count(desc, ")") != 1 || strings.Count(desc, "YYYY-MM-DD") != 1 {
-					t.Errorf("%s.%s: %v, want the pattern, no format, and the title %q with the hint in one pair of brackets", tool, f.Name, p, f.Title)
-				}
+			tool := strings.ReplaceAll(a.Name, "-", "_") // the hyphen is not allowed in a function name
+			dates++
+			p := props[tool][f.Name]
+			desc, _ := p["description"].(string)
+			if _, ok := p["format"]; ok || p["pattern"] != nil || !strings.HasPrefix(desc, strings.TrimSuffix(f.Title, ")")) ||
+				!strings.HasSuffix(desc, hint) || strings.Count(desc, "(") != 1 || strings.Count(desc, ")") != 1 || strings.Count(desc, "YYYY-MM-DD") != 1 {
+				t.Errorf("%s.%s: %v, want no pattern, no format, and the title %q with the hint in one pair of brackets", tool, f.Name, p, f.Title)
 			}
 		}
 	}

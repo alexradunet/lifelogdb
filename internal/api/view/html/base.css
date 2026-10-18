@@ -44,7 +44,7 @@
   --ink:#2c2012; --muted:light-dark(#5c4c2f, #463a24); --page-ink:light-dark(#3a2c18, #c9b894); --page-strong:light-dark(#241a0c, #ecdcb2); --page-muted:light-dark(#6a5838, #bfb19c); --rail-ink:light-dark(#d6bb92, #cbb18e);
   --accent:light-dark(#6f4e0e, #f2c14e); --rail-accent:#f2c14e; --accent-ink:light-dark(#6b4a0c, #4f3709); --accent-soft:light-dark(#e9d38c, #e9c974); --on-accent:light-dark(#fff3dc, #1c0d04);
   --link:light-dark(#0a5546, #084337); --link-page:light-dark(#0a5546, #39c6af); --primary:light-dark(#b5400a, #ff955c); --primary-hover:light-dark(#9c3608, #ffa676);
-  --warn:#8f3a12; --warn-ink:#7e3210; --warn-soft:light-dark(#f3d2b0, #edc8a3);
+  --warn:#8f3a12; --warn-ink:#7e3210;
   --done:light-dark(#3f6a22, #3d6621);
   --danger:#a8201f; --danger-ink:light-dark(#8f1d12, #8a1c11); --danger-soft:light-dark(#f3cbbf, #efc3b5); --danger-line:light-dark(#c25a48, #b8503f);
   --mark:#f2c14e; --focus:#0e7f6b; --backdrop:light-dark(#1a0d04b8, #0a0501b8);
