@@ -10,7 +10,7 @@
   three optional fields that the handlers already read (`deleted` of `browse`, `limit` and `offset` of `search`), and
   `q` of `search` becomes optional. One answer changes its status: `add-file` with the title of a person, a place or
   a metric is refused by the trigger (422), not by Go (409). The build loses `go generate`.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner).
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-18)
@@ -213,3 +213,36 @@ tests/README.md lists four personas, and the row stays.)
 - `site/index.html` names nothing the product does not have.
 - The binary is built to its install path, the service restarted, and the deploy noted in the result (the deploy
   waits for the owner when the plan is run elsewhere).
+
+## The result (2026-10-18)
+
+Every part is done, on the branch `plan-133`, by one commit a part and the merges. The diff against `9b056bc` is
+81 files, 994 lines added and 1471 removed (553 of them the schema copy); the Go code without its tests went from
+14933 lines to 14877, because the four defects brought tests and helpers with them. Where the work went another way
+than the text above, this is what was done and why:
+
+- **`Store.Capture` stays.** About a hundred test call sites, in `internal/api`, `cmd/lifelog` and `tests/`, use it
+  as their shortest write. `Tx.Capture` and `Store.Search` are gone; the API and the scale runner call
+  `CaptureWithKey` and `SearchWith`.
+- **A title another file holds keeps its 409.** No trigger sees it (no type changes), and the insert would fail
+  with the message of a primary key. The 409 names the page. A person's, a place's or a metric's title is the
+  trigger's 422, as the owner chose.
+- **`text.Candidates`, `text.AssignedVersion`, `Tx.CaptureWithKey` and `NewMetric` stay exported:** the suites of
+  `tests/`, the scale runner and the API use them.
+- **`view.Draw`, `pageView` and `htmlOf` stay three:** the tests of `view` call the two inner ones.
+- **`monthDay.Readings` stays:** API.md promises it for the month.
+- **The stall test keeps its sleep,** with a comment on the margin: the deadline is wall-clock time, and no signal
+  stands for it. It passed under the race detector.
+- **The scale runner's report** holds the environment and the checks; `scaletest.Run` returns the manifest, the
+  samples and the file sizes. The JSON moved `sqlite` to the top level, and the interpretation is one line that
+  points to tests/README.md.
+- **A 415 has its own code,** `unsupported_media`, found when the share target was tried by hand: `codeOf` had no
+  case for the status, so the answer said `internal`.
+- **The personas row of the README stays:** the review's claim of one mixed workload was wrong.
+
+Checks, on Linux (Go 1.27.2): `gofmt`, `go vet ./...` and `go test ./...` on the merged branch; `staticcheck`
+2026.2.2 clean; `deadcode` finds `Store.Capture` reached by tests only; `govulncheck` v1.9.0: no vulnerabilities;
+`go test -count=1 -shuffle=on ./...` clean; `CGO_ENABLED=1 go test -race -count=1 ./...`: no data race reported, but the contract suites of `tests/` did not finish in the detector's 10-minute timeout; the run with a longer timeout is recorded below when it ends. A fresh
+clone built with no `go generate`. By hand on a synthetic database: the share target's post, the add-file Preview
+through `/render`, a multipart post to capture (415), `do browse deleted=1` and `do search limit=1`. Windows was not
+tested.
