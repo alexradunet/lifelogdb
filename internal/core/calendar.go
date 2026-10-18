@@ -6,42 +6,13 @@ import (
 	"encoding/json"
 	"sort"
 	"strconv"
-	"time"
 
 	"lifelog/internal/text"
 )
 
-// The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md): what names a day, over a window of
-// days. Each read is of rows the schema holds; the anniversaries are the application's reading of a person's days.
-
-// maxCalendarDays bounds the window of a calendar read: a year, so a read never walks an unbounded run of days.
-const maxCalendarDays = 366
-
-// checkCalendarWindow refuses a window that is not from..through, or that is longer than a year.
-func checkCalendarWindow(from, through string) error {
-	if err := checkWindow(from, through); err != nil {
-		return err
-	}
-	if len(calendarDays(from, through)) > maxCalendarDays {
-		return Invalid("a calendar window is at most %d days", maxCalendarDays)
-	}
-	return nil
-}
-
-// calendarDays are the days from from through through; nil for a window that is not one. It stops one day after the
-// bound, so the caller can see the window is too long without walking it.
-func calendarDays(from, through string) []time.Time {
-	first, ok1 := text.ParseDay(from)
-	last, ok2 := text.ParseDay(through)
-	if !ok1 || !ok2 {
-		return nil
-	}
-	var out []time.Time
-	for t := first; !t.After(last) && len(out) <= maxCalendarDays; t = t.AddDate(0, 0, 1) {
-		out = append(out, t)
-	}
-	return out
-}
+// The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md): what names a day, over a set of
+// days. The stream reads them for its cards. Each read is of rows the schema holds; the anniversaries are the
+// application's reading of a person's days.
 
 // Dated is a row the calendar shows on its day: a page that is not a day page and has the day (kind page, or file
 // for a file), or a live place the live day page links with at (place). ID is the page's or the place's. Pages is
@@ -54,21 +25,9 @@ type Dated struct {
 	Pages int
 }
 
-// DatedIn are the dated rows from from through through, by day: the places and the pages in the order of their
-// titles, at most pagesPerDay pages and files a day.
-func (s *Store) DatedIn(ctx context.Context, from, through string, pagesPerDay int) ([]Dated, error) {
-	if err := checkCalendarWindow(from, through); err != nil {
-		return nil, err
-	}
-	if pagesPerDay < 1 {
-		return nil, Invalid("the dated rows need a limit of pages of 1 or more")
-	}
-	return s.dated(ctx, `BETWEEN :from AND :through`, pagesPerDay, sql.Named("from", from), sql.Named("through", through))
-}
-
-// dated is DatedIn for the days that days selects: the rest of a condition on a day column, after the column
-// ("BETWEEN :from AND :through", "IN (SELECT value FROM json_each(:days))"), with its named arguments. The month and
-// the stream share it.
+// dated are the dated rows of the days that days selects, by day: the places and the pages in the order of their
+// titles, at most pagesPerDay pages and files a day. days is the rest of a condition on a day column, after the
+// column ("IN (SELECT value FROM json_each(:days))"), with its named arguments.
 func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ...any) ([]Dated, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT day, kind, id, title, n FROM (
@@ -100,21 +59,9 @@ type Anniversary struct {
 	Years int
 }
 
-// Anniversaries are the anniversaries from from through through, by day, a birthday before a death, then in the
-// order of the people's titles. A day of 29 February comes back on 28 February in a common year.
-func (s *Store) Anniversaries(ctx context.Context, from, through string) ([]Anniversary, error) {
-	if err := checkCalendarWindow(from, through); err != nil {
-		return nil, err
-	}
-	var days []string
-	for _, t := range calendarDays(from, through) {
-		days = append(days, t.Format(time.DateOnly))
-	}
-	return s.anniversariesOn(ctx, days)
-}
-
-// anniversariesOn is Anniversaries on a set of days, which need not be one window: the stream's days can span
-// decades. Each day is an exact day (YYYY-MM-DD).
+// anniversariesOn are the anniversaries on a set of days, by day, a birthday before a death, then in the order of the
+// people's titles. The days need not be one window: the stream's days can span decades. Each day is an exact day
+// (YYYY-MM-DD). A day of 29 February comes back on 28 February in a common year.
 func (s *Store) anniversariesOn(ctx context.Context, days []string) ([]Anniversary, error) {
 	// the days by their month and day ("05-14"), with 29 February on 28 February of a common year
 	on := map[string][]string{}

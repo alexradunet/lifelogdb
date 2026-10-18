@@ -48,7 +48,7 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 	r.Header.Set("Content-Type", mw.FormDataContentType())
 
 	f, err := parseFileForm(r, specOf("add-file"))
-	want := core.FileIn{Title: "Scan", Category: "Letters", SHA256: sum, MIME: "application/pdf", Body: "the text", Day: "2031-05-14"}
+	want := core.FileIn{Title: "Scan", SHA256: sum, MIME: "application/pdf", Body: "the text", Day: "2031-05-14"}
 	if err != nil || !f.Sent || !f.Dry || !reflect.DeepEqual(f.In, want) {
 		t.Errorf("parseFileForm = %+v, %v; want %+v, dry and sent", f, err, want)
 	}

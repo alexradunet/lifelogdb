@@ -34,8 +34,9 @@ const errNoFile = "send the original, or its sha256 and mime"
 // fileForm is a request of add-file or set-cover, read.
 type fileForm struct {
 	In   core.FileIn
-	Dry  bool // dry_run: write nothing, say what keeping the file would do
-	Sent bool // a file was sent: the original, or its sha256 and mime. A form with no file is not refused: the caller decides
+	Dry  bool   // dry_run: write nothing, say what keeping the file would do
+	Sent bool   // a file was sent: the original, or its sha256 and mime. A form with no file is not refused: the caller decides
+	Name string // the original's file name; "" when no original was sent
 }
 
 // addFile keeps a file (docs/cookbook/keep-a-file.md, D9) and answers with its page; Result says what was written.
@@ -48,6 +49,12 @@ func (h *server) addFile(r *http.Request, act spec, src string) (*siren.Entity, 
 		return nil, core.Invalid(errNoFile)
 	}
 	in := f.In
+	if in.Title == "" {
+		in.Title = f.Name
+	}
+	if in.Title == "" { // a sha256 has no name
+		return nil, core.Invalid("missing field title: name the file, or send its original")
+	}
 	in.Day = h.dayNamed(in.Day)
 	if f.Dry {
 		k, err := h.s.TryAddFile(r.Context(), src, in)
@@ -76,7 +83,7 @@ func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	}
 	m, err := readMultipart(r)
 	// A multipart form is read by hand, so net/http fills no r.PostForm. The text that was kept goes there, as ParseForm
-	// would put it: the page to return to and a refused form read it (backOf, Refusal), on an error too.
+	// would put it: the page to return to and the text a refused form sent read it (backOf, submittedText).
 	r.PostForm = m.retained()
 	if err != nil {
 		return fileForm{}, err
@@ -95,7 +102,7 @@ func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	if err != nil {
 		return fileForm{}, err
 	}
-	return fileForm{In: in, Dry: dry, Sent: true}, nil
+	return fileForm{In: in, Dry: dry, Sent: true, Name: m.name}, nil
 }
 
 // encodedFileForm reads a file form that is not multipart: there is no original, so sha256 and mime say which file.
@@ -111,7 +118,7 @@ func encodedFileForm(r *http.Request, act spec) (fileForm, error) {
 	if err != nil {
 		return fileForm{}, err
 	}
-	in := core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}
+	in := core.FileIn{Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}
 	return fileForm{In: in, Dry: dry, Sent: true}, nil
 }
 
@@ -120,6 +127,7 @@ type multipartForm struct {
 	text      url.Values // the fields of fileTextFields, within the budget
 	textBytes int        // the budget used: every text field counts, kept or not
 	original  bool       // an original with a file name was sent
+	name      string     // the original's file name
 	sum, typ  string     // SHA-256 and type of the original
 	picture   []byte     // the original, held, when the writer can read it as a picture and it is not too large
 	given     []byte     // the preview part, when one was sent
@@ -185,7 +193,7 @@ func (m *multipartForm) take(part *multipart.Part, name string) error {
 	case (name == "original" || name == "preview") && part.FileName() == "": // a file input left empty
 		_, err = io.Copy(io.Discard, part)
 	case name == "original":
-		m.original = true
+		m.original, m.name = true, part.FileName()
 		m.sum, m.typ, m.picture, m.meta, err = readOriginal(part)
 	case name == "preview":
 		m.given, err = io.ReadAll(io.LimitReader(part, maxPicture+1))
@@ -231,7 +239,7 @@ func (m *multipartForm) takeText(part *multipart.Part, name string) error {
 // sent with it must be the same) and the type if none was sent. Without an original, the form must send sha256 and
 // mime, or neither: sent is then false, and the file is the one of the form's text only.
 func verifyOriginal(m *multipartForm) (in core.FileIn, sent bool, err error) {
-	in = core.FileIn{Title: m.text.Get("title"), Category: m.text.Get("category"), SHA256: m.text.Get("sha256"), MIME: m.text.Get("mime"),
+	in = core.FileIn{Title: m.text.Get("title"), SHA256: m.text.Get("sha256"), MIME: m.text.Get("mime"),
 		Body: m.text.Get("body"), Day: m.text.Get("day"), Taken: m.meta.Day()}
 	switch {
 	case m.original && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), m.sum):
@@ -241,6 +249,7 @@ func verifyOriginal(m *multipartForm) (in core.FileIn, sent bool, err error) {
 		if in.MIME == "" {
 			in.MIME = m.typ
 		}
+
 	case in.SHA256 == "" && in.MIME == "": // no file sent: the dry_run field is not read
 		return in, false, nil
 	case in.SHA256 == "" || in.MIME == "":
@@ -267,7 +276,7 @@ func previewOf(m *multipartForm) ([]byte, error) {
 }
 
 // fileTextFields are the multipart names parseFileForm retains as text; any other name is dropped unread.
-var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "category", "dry_run", "back"}
+var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "dry_run", "back"}
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a
 // JPEG's EXIF is in its first 64 KB, a HEIC's Exif item near its start); a picture the writer can read is held whole,

@@ -15,7 +15,7 @@ import (
 func TestSetCoverKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	s := fresh(t)
 	pic := phototest.JPEG(8, 8)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,11 +82,11 @@ func TestSetCoverKeepsThePhotoAndShowsItFirst(t *testing.T) {
 func TestSetCoverRefuses(t *testing.T) {
 	s := fresh(t)
 	pic := phototest.JPEG(8, 8)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, err := s.CreatePerson(ctx, "cli", "Gone", "", "", "", "")
+	gone, err := s.CreatePerson(ctx, "cli", "Gone", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestSetCoverRefuses(t *testing.T) {
 // a preview. keep gives no day of its own only to an image/* type, so setCover sets unknownCaptureDay itself.
 func TestSetCoverOfAnyTypeKeepsNoDay(t *testing.T) {
 	s := fresh(t)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,11 +164,11 @@ func TestSetCoverOfAnyTypeKeepsNoDay(t *testing.T) {
 // the delete of a link that the new body does not name.
 func TestRefusedSetCoverOfReturnsNoSync(t *testing.T) {
 	s := fresh(t)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bo, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "", "")
+	bo, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,15 +199,15 @@ func TestRefusedSetCoverOfReturnsNoSync(t *testing.T) {
 func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 	s := fresh(t)
 	pic := phototest.JPEG(8, 8)
-	a, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	a, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "", "")
+	b, err := s.CreatePerson(ctx, "cli", "Bo", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Cy", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "Only words.", ""); err != nil {
@@ -247,11 +247,11 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
 	s := fresh(t)
 	pic := phototest.JPEG(8, 8)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	stray, err := s.CreatePerson(ctx, "cli", "Stray", "", "", "", "")
+	stray, err := s.CreatePerson(ctx, "cli", "Stray", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestEveryPageHasACover(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil { // after the save: a save that links a tombstone revives it
 		t.Fatal(err)
 	}
-	place, err := s.CreatePlace(ctx, "cli", "Shore", "")
+	place, err := s.CreatePlace(ctx, "cli", "Shore")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,11 +344,15 @@ func TestEveryPageHasACover(t *testing.T) {
 func TestTheListsShowTheCover(t *testing.T) {
 	s := fresh(t)
 	pic := phototest.JPEG(8, 8)
-	k, err := s.AddFile(ctx, "cli", FileIn{Title: "Lake.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: pic, Category: "Trips"})
+	k, err := s.AddFile(ctx, "cli", FileIn{Title: "Lake.jpg", SHA256: sha('a'), MIME: "image/jpeg", Preview: pic})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('b'), MIME: "application/pdf", Category: "Trips"}); err != nil {
+	scan, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('b'), MIME: "application/pdf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FilePages(ctx, "cli", []int64{k.ID, scan.ID}, "Trips", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Away", "![[Lake.jpg]]", "Trips"); err != nil {
@@ -357,7 +361,7 @@ func TestTheListsShowTheCover(t *testing.T) {
 	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "words", ""); err != nil {
 		t.Fatal(err)
 	}
-	place, err := s.CreatePlace(ctx, "cli", "Shore", "")
+	place, err := s.CreatePlace(ctx, "cli", "Shore")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,38 +459,34 @@ func TestSetCoverOfAPictureTheBodyEmbeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := func() (string, string, []string) {
+	state := func() (string, string) {
 		t.Helper()
 		p, err := s.PageByID(ctx, trip)
 		if err != nil || p.Cover == nil {
 			t.Fatalf("Trip: %v %+v", err, p)
 		}
-		var others []string
-		for _, c := range p.Pictures {
-			others = append(others, c.Title)
-		}
-		return p.Body, p.Cover.Title, others
+		return p.Body, p.Cover.Title
 	}
-	if body, cover, others := state(); body != start || cover != "A.jpg" || !reflect.DeepEqual(others, []string{"B.jpg"}) {
-		t.Fatalf("at the start: %q %q %v", body, cover, others)
+	if body, cover := state(); body != start || cover != "A.jpg" {
+		t.Fatalf("at the start: %q %q", body, cover)
 	}
 	if _, err := s.SetCoverOf(ctx, "cli", trip, "B.jpg"); err != nil {
 		t.Fatal(err)
 	}
-	if body, cover, others := state(); body != "Swam.\n\n![[b.JPG]] then ![[A.jpg|the lake]]\n\nDinner." || cover != "B.jpg" || !reflect.DeepEqual(others, []string{"A.jpg"}) {
-		t.Errorf("after B: %q %q %v", body, cover, others)
+	if body, cover := state(); body != "Swam.\n\n![[b.JPG]] then ![[A.jpg|the lake]]\n\nDinner." || cover != "B.jpg" {
+		t.Errorf("after B: %q %q", body, cover)
 	}
 	if _, err := s.SetCoverOf(ctx, "cli", trip, "A.jpg"); err != nil {
 		t.Fatal(err)
 	}
-	if body, _, _ := state(); body != start {
+	if body, _ := state(); body != start {
 		t.Errorf("back to A: %q, want %q", body, start)
 	}
 	if _, err := s.SetCoverOf(ctx, "cli", trip, "K.jpg"); err != nil {
 		t.Fatal(err)
 	}
-	if body, cover, others := state(); body != "![[K.jpg]]\n\n"+start || cover != "K.jpg" || !reflect.DeepEqual(others, []string{"A.jpg", "B.jpg"}) {
-		t.Errorf("after K, kept and not embedded: %q %q %v", body, cover, others)
+	if body, cover := state(); body != "![[K.jpg]]\n\n"+start || cover != "K.jpg" {
+		t.Errorf("after K, kept and not embedded: %q %q", body, cover)
 	}
 }
 

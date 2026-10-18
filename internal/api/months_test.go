@@ -6,10 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
 )
 
 // TestTheMonthIsACalendar: each day of a month, whether it has a live day page, its first line and its mood; the
@@ -23,7 +21,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	capture("2031-05-14", map[string]string{"mood": "3"})
 	capture("2031-05-31", map[string]string{"text": "The last day."})
 	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-20")), "capture"), map[string]string{"text": "Scratch"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(gone, "page"))), "tombstone"), nil))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(gone, "page"))), "tombstone-pages"), nil))
 
 	for _, tc := range []struct {
 		month, title, prev, next string
@@ -70,21 +68,19 @@ func TestTheMonthIsACalendar(t *testing.T) {
 			t.Errorf("/months/%s: %v", bad, err)
 		}
 	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/months/current", nil))
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/months/2031-05" {
-		t.Errorf("/months/current: %d %q", rec.Code, rec.Header().Get("Location"))
-	}
 
 	body := browse(t, h, "/months/2031-05")
 	for _, w := range []string{`<table class="calendar">`,
 		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3 · okay</span></a></td>`,
 		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">May day: a walk by the lake.</span><span class="meta">mood 4 · good</span></a></td>`,
 		`<td><a href="/days/2031-05-20"><span class="n">20</span></a></td>`,
-		`aria-label="Previous month, April 2031"`, `aria-label="Next month, June 2031"`, `action="/days/go"`} {
+		`aria-label="Previous month, April 2031"`, `aria-label="Next month, June 2031"`} {
 		if !strings.Contains(body, w) {
 			t.Errorf("the calendar lacks %s", w)
 		}
+	}
+	if strings.Contains(body, `action="/days/go"`) {
+		t.Error("the month draws Go to a day: the day and the stream have it")
 	}
 	// May 2031 starts on a Thursday: three empty cells before it.
 	if !strings.Contains(body, "<tr><td></td><td></td><td></td><td") {
@@ -117,125 +113,6 @@ func TestOpenDayGoesToTheDay(t *testing.T) {
 	}
 }
 
-// TestTheCalendarHoldsEveryDatedThing (docs/plans/101-the-calendar-holds-every-dated-thing.md): a month gives each
-// day what names it, written through the catalog as every client writes it, and the browser draws the cells and Day by
-// day. The expected items are worked out by hand.
-func TestTheCalendarHoldsEveryDatedThing(t *testing.T) {
-	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14
-	ctx := t.Context()
-	root := apitest.Must(t)(c.Get(ctx, "/"))
-	do := func(e *siren.Entity, action string, v map[string]string) *siren.Entity {
-		t.Helper()
-		return apitest.Must(t)(c.Do(ctx, apitest.Action(t, e, action), v))
-	}
-
-	day := do(apitest.Must(t)(c.Get(ctx, "/days/2031-05-14")), "capture", map[string]string{"text": "A walk by the lake.", "mood": "4"})
-	do(root, "register-metric", map[string]string{"name": "weight", "unit": "kg"})
-	do(apitest.Must(t)(c.Get(ctx, "/")), "record", map[string]string{"metric": "weight", "day": "2031-05-14", "value": "80"})
-
-	do(root, "create-person", map[string]string{"title": "Ana", "birth_day": "1990-05-14"})
-	do(root, "create-person", map[string]string{"title": "Ion", "birth_day": "1930-03-01", "death_day": "2020-05-21"})
-
-	do(root, "create-place", map[string]string{"title": "Lake Park"})
-	do(apitest.Must(t)(c.Get(ctx, apitest.Href(day, "page"))), "link", map[string]string{"to": "Lake Park", "kind": "at"})
-	do(root, "add-file", map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("a", 64), "mime": "application/pdf", "day": "2031-05-14"})
-	for i := 1; i <= 21; i++ {
-		do(root, "add-file", map[string]string{"title": fmt.Sprintf("Import %02d.pdf", i), "sha256": fmt.Sprintf("%064x", i), "mime": "application/pdf", "day": "2031-05-20"})
-	}
-
-	month := apitest.Must(t)(c.Get(ctx, "/months/2031-05"))
-	got, extra := map[string][]string{}, map[string]string{}
-	for _, d := range props(month)["days"].([]any) {
-		m := d.(map[string]any)
-		on := m["day"].(string)
-		for _, it := range anyItems(m["items"]) {
-			line := fmt.Sprintf("%v %v", it["kind"], it["title"])
-			for _, k := range []string{"state", "years"} {
-				if v, ok := it[k]; ok {
-					line += fmt.Sprintf(" %s=%v", k, v)
-				}
-			}
-			got[on] = append(got[on], line)
-			// every item leads to its own resource, and that resource is the thing named
-			e, err := c.Get(ctx, it["href"].(string))
-			switch {
-			case err != nil:
-				t.Errorf("%s: %s: %v", on, it["href"], err)
-			case e.Title != it["title"]:
-				t.Errorf("%s: %s is %q, want %q", on, it["href"], e.Title, it["title"])
-			}
-		}
-		if m["more_pages"] != nil || m["readings"] != nil {
-			extra[on] = fmt.Sprintf("more %v readings %v", m["more_pages"], m["readings"])
-		}
-	}
-	imports := []string{}
-	for i := 1; i <= 20; i++ {
-		imports = append(imports, fmt.Sprintf("file Import %02d.pdf", i))
-	}
-	want := map[string][]string{
-		"2031-05-14": {"birthday Ana years=41", "place Lake Park", "file Scan.pdf"},
-		"2031-05-20": imports,
-		"2031-05-21": {"death Ion years=11"},
-	}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("the items of May:\n got %v\nwant %v", got, want)
-	}
-	// The mood is not counted with the readings; 20 files of 20 May are items, and the 21st is counted.
-	if fmt.Sprint(extra) != "map[2031-05-14:more <nil> readings 1 2031-05-20:more 1 readings <nil>]" {
-		t.Errorf("more pages and readings: %v", extra)
-	}
-	// The week of 20 May has the same days.
-	y, w := time.Date(2031, 5, 20, 0, 0, 0, 0, time.UTC).ISOWeek()
-	week := props(apitest.Must(t)(c.Get(ctx, fmt.Sprintf("/weeks/%04d-W%02d", y, w))))
-	for _, d := range week["days"].([]any) {
-		if m := d.(map[string]any); m["day"] == "2031-05-20" && (len(anyItems(m["items"])) != 20 || fmt.Sprint(m["more_pages"]) != "1") {
-			t.Errorf("the week's 20 May: %d items, more %v", len(anyItems(m["items"])), m["more_pages"])
-		}
-	}
-
-	body := browse(t, h, "/months/2031-05")
-	for _, s := range []string{
-		// a cell: three items, each with a square, and the mood; a phone's squares
-		`<span class="item">Ana <small>birthday</small></span><span class="item">Lake Park <small>place</small></span><span class="item">Scan.pdf</span></span>`,
-		`<span class="marks" aria-hidden="true"><i></i><i></i><i></i></span><span class="meta">mood 4 · good</span>`,
-		`<span class="more">and 18 more</span>`,
-		// Day by day: a day a heading, each item a tag, a link to the thing and a note
-		`<h3><a href="/days/2031-05-14">`,
-		`<span class="tag">birthday</span> <a href="/pages/`,
-		`>Ana</a> <small class="agenda-note">41 years</small>`,
-		`>Ion</a> <small class="agenda-note">11 years ago</small>`,
-		`<a href="/days/2031-05-20">and 1 more page</a>`,
-	} {
-		if !strings.Contains(body, s) {
-			t.Errorf("the calendar lacks %s", s)
-		}
-	}
-	// A cell says the mood, not how many readings the day has: 14 May has one reading besides the mood.
-	if strings.Contains(body, "1 reading") {
-		t.Error("a cell of the calendar counts readings")
-	}
-
-	// A month with nothing says so: a fresh file's.
-	_, none, _ := apitest.FreshOn(t, "cli", fixedToday)
-	empty := browse(t, none, "/months/2031-08")
-	for _, s := range []string{"No page, place or birthday has a day in August 2031."} {
-		if !strings.Contains(empty, s) {
-			t.Errorf("an empty month lacks %q", s)
-		}
-	}
-}
-
-// anyItems are the items of a day of the calendar as the JSON client reads them.
-func anyItems(v any) []map[string]any {
-	list, _ := v.([]any)
-	out := make([]map[string]any, 0, len(list))
-	for _, x := range list {
-		out = append(out, x.(map[string]any))
-	}
-	return out
-}
-
 // TestTheFirstMonthOfTheDaysIsACalendar: January 0000 holds the first day that a date can name. Its calendar has its
 // 31 days, a day page on its first day and a reading on its third day.
 func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
@@ -266,17 +143,15 @@ func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
 // today is in it, else of its first day (a week's Thursday), and the stream before the day after the period. The page
 // marks its own level.
 func TestTheZoomLinksEveryLevel(t *testing.T) {
-	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14, a Wednesday of week 20
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14
 	for _, tc := range []struct {
 		page, days, week, month, year string
 	}{
-		{"/months/2031-05", "/days?before=2031-06-01", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
-		{"/months/2031-04", "/days?before=2031-05-01", "/weeks/2031-W14", "/months/2031-04", "/years/2031"},
-		{"/weeks/2031-W20", "/days?before=2031-05-19", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
-		{"/weeks/2031-W01", "/days?before=2031-01-06", "/weeks/2031-W01", "/months/2031-01", "/years/2031"}, // Monday is 2030-12-30
-		{"/years/2031", "/days?before=2032-01-01", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
-		{"/years/2030", "/days?before=2031-01-01", "/weeks/2030-W01", "/months/2030-01", "/years/2030"},
-		{"/months/9999-12", "/days", "/weeks/9999-W48", "/months/9999-12", "/years/9999"},
+		{"/months/2031-05", "/days", "", "/months/2031-05", "/years/2031"},
+		{"/months/2031-04", "/days", "", "/months/2031-04", "/years/2031"},
+		{"/years/2031", "/days", "", "/months/2031-05", "/years/2031"},
+		{"/years/2030", "/days", "", "/months/2030-01", "/years/2030"},
+		{"/months/9999-12", "/days", "", "/months/9999-12", "/years/9999"},
 	} {
 		e := apitest.Must(t)(c.Get(t.Context(), tc.page))
 		got := strings.Join([]string{apitest.Href(e, "days"), apitest.Href(e, "week"), apitest.Href(e, "month"), apitest.Href(e, "year")}, " ")
@@ -285,7 +160,7 @@ func TestTheZoomLinksEveryLevel(t *testing.T) {
 		}
 	}
 	body := browse(t, h, "/months/2031-04")
-	if n := strings.Count(body, `aria-current="page">`); !strings.Contains(body, `<a href="/months/2031-04" aria-current="page">Month</a>`) || strings.Contains(body, "Every day, as a list") || n != 2 {
+	if n := strings.Count(body, `aria-current="page">`); !strings.Contains(body, `<a href="/months/2031-04" aria-current="page">Month</a>`) || strings.Contains(body, ">Week<") || n != 2 {
 		t.Errorf("the month's zoom marks %d links (want its Month and the sidebar's Calendar): %.300s", n, body[strings.Index(body, `aria-label="Zoom"`):])
 	}
 }

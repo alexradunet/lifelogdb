@@ -33,8 +33,10 @@ func (h *server) integrity(r *http.Request, _ spec, _ string) (*siren.Entity, er
 	if err != nil {
 		return nil, err
 	}
+	// The owner's repairs are offered where the owner reads what needs them.
 	return &siren.Entity{Class: []string{"integrity"}, Title: "Integrity checks", Properties: res,
-		Links: []siren.Link{link("self", "/integrity", "Integrity"), link("index", "/", "Home")}}, nil
+		Links:   []siren.Link{link("self", "/integrity", "Integrity"), link("index", "/", "Home")},
+		Actions: []siren.Action{action("rebuild-search", nil, nil), action("resync-links", nil, nil)}}, nil
 }
 
 // rebuildSearch is the owner's repair of the full-text index (docs/contract/integrity-checks.md). The answer is the

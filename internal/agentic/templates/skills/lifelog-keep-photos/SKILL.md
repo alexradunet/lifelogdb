@@ -10,12 +10,15 @@ is. A photo's day is the day the owner gives, else the date in its EXIF. The pag
 it has a picture (step 4). lifelog does not read where a photo was taken.
 
 1. The owner chooses the file. Never pick photos yourself from a library or a folder.
-2. In a shell: `lifelog --source agent:NAME file PATH --dry-run --human` (the program and its `--db` as AGENTS.md names them, so the rows show you as their writer). Tell the owner what it would do: the title, the day, the picture.
-3. A photo with no date in its EXIF gets no day, and no day page shows it: ask the owner for its day, then add
-   `--day YYYY-MM-DD`.
+2. Call the tool `add_file` with `{"original": "/the/absolute/path.jpg", "dry_run": 1}`. Without MCP, the CLI does
+   the same: `lifelog --source agent:NAME do add-file original=PATH dry_run=1 --human` (the program and its `--db` as
+   AGENTS.md names them). Tell the owner what it would do: the title (the file's name, unless you send a title), the
+   day, the picture.
+3. A photo with no date in its EXIF gets no day, and no day page shows it: ask the owner for its day, then send
+   `{"day": "YYYY-MM-DD"}` with the rest.
 4. lifelog makes the picture from a JPEG, PNG or GIF. A photo of another type (a HEIC) gets no picture, and no day
-   page shows it: ask the owner for a JPEG, PNG or GIF of it, then add `--preview PICTURE`.
-5. A PDF or a recording: its text comes first (the owner's transcript, or a text the owner made from it), then
-   `--text TEXTFILE`.
-6. Without `--dry-run`, it writes. Tell the owner the result. One command keeps one file: for several photos, run it
+   page shows it: ask the owner for a JPEG, PNG or GIF of it, then send its path too, `{"preview": "/the/path.jpg"}`.
+5. A PDF or a recording: its text comes first (the owner's transcript, or a text the owner made from it), then send
+   it too, `{"body": "the text"}`.
+6. Without the dry run, it writes. Tell the owner the result. One call keeps one file: for several photos, call it
    once for each photo.

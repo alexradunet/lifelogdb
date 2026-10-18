@@ -97,29 +97,15 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-// NewMetric is what CreateMetric makes in one write: the metric, and, when it is named, its category, a page
-// title; it may be empty.
+// NewMetric is what CreateMetric makes in one write: the metric, its unit and its note.
 type NewMetric struct {
 	Name, Unit, Note string
-	Category         string
 }
 
-// CreateMetric registers a metric and files it in its category (made when no page has that title, as FilePages
-// makes it), in one write: a refusal of either step writes nothing. It reports whether the metric is new, as
-// RegisterMetric does.
+// CreateMetric registers a metric in one write. It reports whether the metric is new, as RegisterMetric does.
+// file-pages files it in a category (docs/plans/131-the-pareto-pass.md, part 2).
 func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (bool, error) {
-	return alone(s, ctx, source, func(t *Tx) (bool, error) {
-		added, err := t.RegisterMetric(m.Name, m.Unit, m.Note)
-		if err != nil || m.Category == "" {
-			return added, err
-		}
-		id, err := t.metricID(m.Name)
-		if err != nil {
-			return false, err
-		}
-		_, err = t.filePages([]int64{id}, m.Category, false)
-		return added, err
-	})
+	return alone(s, ctx, source, func(t *Tx) (bool, error) { return t.RegisterMetric(m.Name, m.Unit, m.Note) })
 }
 
 // Reading is one measurement to record (D7).

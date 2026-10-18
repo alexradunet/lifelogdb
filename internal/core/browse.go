@@ -156,8 +156,8 @@ func (s *Store) FiledIn(ctx context.Context, category int64, limit, offset int) 
 }
 
 // BrowseCounts counts the live things of each Browse kind in the scope, by kind (a kind with none is 0), with "all",
-// the sum of the kinds, and "ghosts", the rows of Ghosts (a ghost page is in no category, so its
-// count does not change with the scope). A day page is not counted.
+// the sum of the kinds, "ghosts", the rows of Ghosts, and "deleted", the tombstones (neither is in a category, so
+// their counts do not change with the scope). A day page is not counted.
 func (s *Store) BrowseCounts(ctx context.Context, sc Scope) (map[string]int, error) {
 	out := map[string]int{"all": 0}
 	for _, k := range browseKinds {
@@ -180,6 +180,11 @@ func (s *Store) BrowseCounts(ctx context.Context, sc Scope) (map[string]int, err
 		return nil, err
 	}
 	out["ghosts"] = ghosts
+	var deleted int
+	if err := s.DB.R.QueryRowContext(ctx, `SELECT count(*) FROM (`+deletedRows+`)`).Scan(&deleted); err != nil {
+		return nil, err
+	}
+	out["deleted"] = deleted
 	return out, nil
 }
 
@@ -309,6 +314,26 @@ const plainGhosts = `SELECT g.id, g.title, g.created_at FROM ghost_pages g JOIN 
 func (s *Store) Ghosts(ctx context.Context, limit, offset int) ([]Ghost, error) {
 	rows, err := s.DB.R.QueryContext(ctx, plainGhosts+` ORDER BY g.created_at, g.id LIMIT ? OFFSET ?`, limit, offset)
 	return list(rows, err, func(g *Ghost) []any { return []any{&g.ID, &g.Title, &g.CreatedAt} })
+}
+
+// Deleted is a tombstone as Browse lists it, so it can be restored from its page: its id, its title, its type
+// (entities.entity_type) and the instant it was deleted.
+type Deleted struct {
+	ID        int64
+	Title     string
+	Type      string
+	DeletedAt string
+}
+
+// deletedRows are the tombstones, a day page among them: a deleted day page is restored from its page as any other.
+const deletedRows = `SELECT p.id, p_name.title, p.entity_type, p.deleted_at
+	FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
+	WHERE p.deleted_at IS NOT NULL`
+
+// DeletedPages is one page of the tombstones, the newest deletion first.
+func (s *Store) DeletedPages(ctx context.Context, limit, offset int) ([]Deleted, error) {
+	rows, err := s.DB.R.QueryContext(ctx, deletedRows+` ORDER BY p.deleted_at DESC, p.id DESC LIMIT ? OFFSET ?`, limit, offset)
+	return list(rows, err, func(d *Deleted) []any { return []any{&d.ID, &d.Title, &d.Type, &d.DeletedAt} })
 }
 
 // RandomDay is the day of a live day page picked at random, up to today: a future day page is a plan, not a day to

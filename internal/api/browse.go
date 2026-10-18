@@ -62,6 +62,8 @@ type browseRow struct {
 	FileKind string `json:"file_kind,omitempty"`
 	Day      string `json:"day,omitempty"`  // a file: its day, as the media list says it
 	Unit     string `json:"unit,omitempty"` // a metric: its unit
+	// DeletedAt is the instant a tombstone was deleted: the list of the deleted only.
+	DeletedAt string `json:"deleted_at,omitempty"`
 }
 
 // browseCounts are the counts of the chips in the scope of the list.
@@ -74,6 +76,7 @@ type browseCounts struct {
 	Metric   int  `json:"metric"`
 	All      *int `json:"all,omitempty"` // inside a category only
 	Ghosts   int  `json:"ghosts"`
+	Deleted  int  `json:"deleted"`
 }
 
 // mediaCounts counts the live files of each media kind in the scope of the media list.
@@ -96,6 +99,7 @@ type browseProps struct {
 	Kind        string          `json:"kind"`
 	Unfiled     bool            `json:"unfiled"`
 	Ghosts      bool            `json:"ghosts"`
+	Deleted     bool            `json:"deleted"`
 	Media       string          `json:"media"`
 	Categories  []core.Category `json:"categories"`
 	Rows        []browseRow     `json:"rows"`
@@ -111,6 +115,7 @@ type browseQuery struct {
 	in      string // the title of the category, "" for none
 	unfiled bool
 	ghosts  bool
+	deleted bool
 	media   string
 }
 
@@ -122,6 +127,9 @@ func browseQueryOf(q url.Values) (browseQuery, error) {
 		return b, err
 	}
 	if b.ghosts, err = flag(q, "ghosts"); err != nil {
+		return b, err
+	}
+	if b.deleted, err = flag(q, "deleted"); err != nil {
 		return b, err
 	}
 	b.named = b.kind != ""
@@ -140,6 +148,8 @@ func browseQueryOf(q url.Values) (browseQuery, error) {
 		return b, core.Invalid("in and unfiled cannot be used together")
 	case b.ghosts && (b.kind != "page" || b.in != "" || b.unfiled):
 		return b, core.Invalid("ghosts is a list of pages: it takes no other kind, no in and no unfiled")
+	case b.deleted && (b.named || b.in != "" || b.unfiled || b.ghosts):
+		return b, core.Invalid("deleted is the list of the tombstones: it takes no kind, no in, no unfiled and no ghosts")
 	case b.media != "" && b.kind != "media":
 		return b, core.Invalid("media needs kind media")
 	case b.media != "" && !slices.Contains(core.MediaKinds(), b.media):
@@ -167,6 +177,9 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 	if b.ghosts {
 		v.Set("ghosts", "1")
 	}
+	if b.deleted {
+		v.Set("deleted", "1")
+	}
 	if b.media != "" {
 		v.Set("media", b.media)
 	}
@@ -174,36 +187,6 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 		v.Del(d)
 	}
 	return v
-}
-
-// oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
-// Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
-// routes of the same paths do not change.
-var oldLists = map[string]url.Values{
-	"/people":     {"kind": {"person"}},
-	"/places":     {"kind": {"place"}},
-	"/media":      {"kind": {"media"}},
-	"/files":      {"kind": {"document"}},
-	"/ghosts":     {"kind": {"page"}, "ghosts": {"1"}},
-	"/categories": {},
-}
-
-// toBrowse is the Browse address of a GET of an old list: its filters, and the limit, the offset and the asked form
-// (new) of the query. The kind of the media list (image, video, audio) is the field media of Browse.
-func toBrowse(path string, q url.Values) string {
-	v := url.Values{}
-	for k, vs := range oldLists[path] {
-		v[k] = slices.Clone(vs)
-	}
-	for _, k := range []string{"limit", "offset", "new"} {
-		if x, ok := q[k]; ok {
-			v[k] = x
-		}
-	}
-	if path == "/media" && q.Get("kind") != "" {
-		v.Set("media", q.Get("kind"))
-	}
-	return siren.BrowseHref(v)
 }
 
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
@@ -244,7 +227,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		chips = append([]string{"all"}, chips...)
 	}
 	for _, k := range chips {
-		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: siren.BrowseHref(b.values(k, "ghosts", "media")), Title: browseKindTable[k].chip, Class: []string{k}})
+		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: siren.BrowseHref(b.values(k, "ghosts", "deleted", "media")), Title: browseKindTable[k].chip, Class: []string{k}})
 	}
 	treeKind := url.Values{} // a branch keeps the kind the URL names; All needs a category
 	if b.named && b.kind != "all" {
@@ -255,7 +238,8 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if k := treeKind.Get("kind"); k != "" {
 		unfiled.Set("kind", k)
 	}
-	e.Links = append(e.Links, link("unfiled", siren.BrowseHref(unfiled), "Not filed"), link("ghosts", siren.GhostsHref(), "Ghost pages"))
+	e.Links = append(e.Links, link("unfiled", siren.BrowseHref(unfiled), "Not filed"), link("ghosts", siren.GhostsHref(), "Ghost pages"),
+		link("deleted", siren.BrowseHref(url.Values{"deleted": {"1"}}), "Deleted"))
 	if b.kind == "media" {
 		for _, m := range []struct{ rel, kind, title string }{{"pictures", "image", "Pictures"}, {"videos", "video", "Videos"}, {"recordings", "audio", "Recordings"}} {
 			v := b.values("", "media")
@@ -285,10 +269,11 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	}
 	e.Actions = browseActions(b, in, titles)
 
-	props := browseProps{pageProps: pg, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Media: b.media,
+	props := browseProps{pageProps: pg, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Deleted: b.deleted, Media: b.media,
 		Categories: cs, Rows: rows, In: in}
 	props.Counts = browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
-		Document: counts["document"], Metric: counts["metric"], Ghosts: counts["ghosts"]}
+		Document: counts["document"], Metric: counts["metric"], Ghosts: counts["ghosts"],
+		Deleted: counts["deleted"]}
 	if in != nil {
 		all := counts["all"]
 		props.Counts.All = &all
@@ -337,10 +322,13 @@ func (h *server) categoryNamed(ctx context.Context, title string, cs []core.Cate
 }
 
 // browseRows reads one page of the rows of the list and links its next and previous pages, the filters kept. The
-// ghosts are pages that no page links to: their list is not a kind of its own.
+// ghosts are pages that no page links to, and the deleted are the tombstones: neither list is a kind of its own.
 func (h *server) browseRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
 	if rd.b.ghosts {
 		return h.ghostRows(ctx, rd)
+	}
+	if rd.b.deleted {
+		return h.deletedRows(ctx, rd)
 	}
 	return browseKindTable[rd.b.kind].read(h, ctx, rd)
 }
@@ -355,6 +343,17 @@ func (h *server) ghostRows(ctx context.Context, rd browseRead) ([]browseRow, pag
 	rows := []browseRow{}
 	for _, g := range found {
 		rows = append(rows, browseRow{ID: g.ID, Title: g.Title, Type: "page", Kind: "page"})
+	}
+	return rows, props, err
+}
+
+// deletedRows are the tombstones, the newest deletion first: each row opens its page, which offers revive
+// (docs/plans/131-the-pareto-pass.md, part 1).
+func (h *server) deletedRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
+	found, props, err := readList(rd, func(limit, offset int) ([]core.Deleted, error) { return h.s.DeletedPages(ctx, limit, offset) })
+	rows := []browseRow{}
+	for _, d := range found {
+		rows = append(rows, browseRow{ID: d.ID, Title: d.Title, Type: d.Type, Kind: d.Type, DeletedAt: d.DeletedAt})
 	}
 	return rows, props, err
 }
@@ -438,14 +437,18 @@ func fileKind(mime string) string {
 	return kind
 }
 
-// browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
-// rule 6), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. Every list but All offers file-pages; pages (the ghosts too),
+// browseActions are the actions of a list: the New of its kind (a new page is filed in the category of the list,
+// rule 6; anything else is filed by file-pages), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. The deleted
+// have no action here: each is restored from its page. Every list but All offers file-pages; pages (the ghosts too),
 // media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
 	var out []siren.Action
+	if b.deleted {
+		return out
+	}
 	if name := siren.NewActionOf(b.kind); name != "" && !b.ghosts {
 		var values map[string]any
-		if in != nil {
+		if in != nil && name == "create-page" {
 			values = map[string]any{"category": in.Title}
 		}
 		out = append(out, action(name, nil, values))

@@ -13,7 +13,7 @@ import (
 
 // TestARefusedWriteReturnsNoResult: a Store method returns the zero result with its error. The write rolled back, so a
 // Sync of the links it made would name pages that do not exist. Capture fills its Sync before the mood reading is
-// refused, and CreatePage and TryAddFile fill theirs before a day as the category is refused.
+// refused, and CreatePage fills its own before a day as the category is refused.
 func TestARefusedWriteReturnsNoResult(t *testing.T) {
 	s := fresh(t)
 	mood := 9.0 // the range of Mood is 1-5 (measurements_scale_range)
@@ -24,10 +24,6 @@ func TestARefusedWriteReturnsNoResult(t *testing.T) {
 	id, r, err = s.CreatePage(ctx, "cli", "Notes", "See [[Sam]]", "2026-10-01")
 	if err == nil || id != 0 || !reflect.DeepEqual(r, Sync{}) {
 		t.Errorf("CreatePage = %d, %+v, %v; want 0, no Sync and the refusal", id, r, err)
-	}
-	k, err := s.TryAddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('a'), MIME: "application/pdf", Body: "See [[Sam]]", Category: "2026-10-01"})
-	if err == nil || !reflect.DeepEqual(k, Kept{}) {
-		t.Errorf("TryAddFile = %+v, %v; want no result and the refusal", k, err)
 	}
 	if sam, err := s.PageID(ctx, "Sam"); err != nil || sam != 0 {
 		t.Errorf("Sam = %d, %v; want no page", sam, err)

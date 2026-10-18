@@ -38,18 +38,18 @@ func cardWords(c Card) string {
 		}
 		return strings.Join(out, ",")
 	}
-	return fmt.Sprintf("%s page=%v picture=%v words=%q mood=%v chips=%s+%d birthdays=%s pages=%s+%d readings=%d quiet=%d",
-		c.Day, c.PageID != 0, c.Picture != 0, c.Words, c.Mood, names(c.Chips), c.MoreChips, names(c.Birthdays), names(c.Pages), c.MorePages, c.Readings, c.QuietAfter)
+	return fmt.Sprintf("%s page=%v picture=%v words=%q mood=%v chips=%s+%d birthdays=%s pages=%s+%d readings=%d",
+		c.Day, c.PageID != 0, c.Picture != 0, c.Words, c.Mood, names(c.Chips), c.MoreChips, names(c.Birthdays), names(c.Pages), c.MorePages, c.Readings)
 }
 
 // TestTheStreamHoldsEveryDayWithSomething: the stream is the days before today with a live day page, a page, a file
-// or a current reading, newest first; a tombstoned day page and a future day are not in it, and before is exclusive.
+// or a current reading, newest first; a tombstoned day page and a future day are not in it.
 func TestTheStreamHoldsEveryDayWithSomething(t *testing.T) {
 	s := streamStore(t)
 	capture := func(day, text string, mood *float64) int64 { t.Helper(); return captured(t, s, day, text, mood) }
-	must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "1990-10-17", "", ""))
-	must[int64](t)(s.CreatePerson(ctx, "cli", "Cara", "", "1990-10-15", "", "")) // a birthday on a day with no card
-	lake := must[int64](t)(s.CreatePlace(ctx, "cli", "Lake", ""))
+	must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "1990-10-17", ""))
+	must[int64](t)(s.CreatePerson(ctx, "cli", "Cara", "", "1990-10-15", "")) // a birthday on a day with no card
+	lake := must[int64](t)(s.CreatePlace(ctx, "cli", "Lake"))
 	capture("2026-10-20", "A plan for a day to come.", nil)
 	today := capture("2026-10-17", "Swam at the lake.\n\n## Then\nAna came by, with [[Ana]].\n![[Nothing kept]]\nline four\nline five", ptr(4))
 	if err := s.Link(ctx, "cli", today, lake, "at", ""); err != nil {
@@ -66,37 +66,27 @@ func TestTheStreamHoldsEveryDayWithSomething(t *testing.T) {
 	must[int64](t)(s.Record(ctx, "cli", Reading{Metric: "Mood", Day: "2026-10-08", Value: 3}))
 	capture("2024-05-01", "Long ago.", nil)
 
-	cards, more := streamPage(t, s, "", 30, 0)
+	cards, more := streamPage(t, s, 30, 0)
 	want := []string{
-		`2026-10-17 page=true picture=false words="Swam at the lake.\nThen\nAna came by, with Ana.\nline four" mood=[4] chips=place:Lake,person:Ana+0 birthdays=person:Ana pages=+0 readings=0 quiet=4`,
-		`2026-10-12 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=+0 readings=1 quiet=0`,
-		`2026-10-11 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=file:Notes.pdf+0 readings=0 quiet=0`,
+		`2026-10-17 page=true picture=false words="Swam at the lake.\nThen\nAna came by, with Ana.\nline four" mood=[4] chips=place:Lake,person:Ana+0 birthdays=person:Ana pages=+0 readings=0`,
+		`2026-10-12 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=+0 readings=1`,
+		`2026-10-11 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=file:Notes.pdf+0 readings=0`,
 		// a file with a picture is shown in the page of its day: that day page has the picture, and no words
-		`2026-10-10 page=true picture=true words="" mood=[] chips=+0 birthdays= pages=file:Lake.jpg+0 readings=0 quiet=1`,
-		`2026-10-08 page=false picture=false words="" mood=[3] chips=+0 birthdays= pages=+0 readings=0 quiet=889`,
-		`2024-05-01 page=true picture=false words="Long ago." mood=[] chips=+0 birthdays= pages=+0 readings=0 quiet=0`,
+		`2026-10-10 page=true picture=true words="" mood=[] chips=+0 birthdays= pages=file:Lake.jpg+0 readings=0`,
+		`2026-10-08 page=false picture=false words="" mood=[3] chips=+0 birthdays= pages=+0 readings=0`,
+		`2024-05-01 page=true picture=false words="Long ago." mood=[] chips=+0 birthdays= pages=+0 readings=0`,
 	}
 	if got := words(cards); got != strings.Join(want, "\n") || more {
 		t.Errorf("the stream (more %v):\n got %s\nwant %s", more, got, strings.Join(want, "\n"))
 	}
 
-	// before is exclusive, and a page of 2 says that more follow; the last card keeps its quiet days.
-	cards, more = streamPage(t, s, "2026-10-12", 2, 0)
-	if got := days(cards); got != "2026-10-11,2026-10-10" || !more || cards[1].QuietAfter != 1 {
-		t.Errorf("before 2026-10-12: %s, more %v, %+v", got, more, cards)
+	// A page of 2 says that more follow, and offset skips days.
+	cards, more = streamPage(t, s, 2, 1)
+	if got := days(cards); got != "2026-10-12,2026-10-11" || !more {
+		t.Errorf("limit 2, offset 1: %s, more %v", got, more)
 	}
-	if cards, more = streamPage(t, s, "2026-10-12", 2, 2); days(cards) != "2026-10-08,2024-05-01" || more {
-		t.Errorf("before 2026-10-12, offset 2: %s, more %v", days(cards), more)
-	}
-	// A before after today shows no future day; the first day is the end of the stream.
-	if cards, _ = streamPage(t, s, "2030-01-01", 1, 0); days(cards) != "2026-10-17" {
-		t.Errorf("before 2030: %s", days(cards))
-	}
-	if cards, _ = streamPage(t, s, "0000-01-01", 5, 0); len(cards) != 0 {
-		t.Errorf("before 0000-01-01: %s", days(cards))
-	}
-	if _, _, err := s.Stream(ctx, "2026-13-01", 5, 0); status(err) != 422 {
-		t.Errorf("before 2026-13-01: %v, want a 422", err)
+	if cards, more = streamPage(t, s, 2, 4); days(cards) != "2026-10-08,2024-05-01" || more {
+		t.Errorf("limit 2, offset 4: %s, more %v", days(cards), more)
 	}
 }
 
@@ -110,9 +100,9 @@ func captured(t *testing.T, s *Store, day, text string, mood *float64) int64 {
 	return id
 }
 
-func streamPage(t *testing.T, s *Store, before string, limit, offset int) ([]Card, bool) {
+func streamPage(t *testing.T, s *Store, limit, offset int) ([]Card, bool) {
 	t.Helper()
-	cards, more, err := s.Stream(ctx, before, limit, offset)
+	cards, more, err := s.Stream(ctx, limit, offset)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +131,7 @@ func TestACardCapsItsChipsAndItsPages(t *testing.T) {
 	s := streamStore(t)
 	var body []string
 	for i := 1; i <= 8; i++ {
-		must[int64](t)(s.CreatePerson(ctx, "cli", fmt.Sprintf("Person %d", i), "", "", "", ""))
+		must[int64](t)(s.CreatePerson(ctx, "cli", fmt.Sprintf("Person %d", i), "", "", ""))
 		body = append(body, fmt.Sprintf("[[Person %d]]", i))
 	}
 	captured(t, s, "2026-10-17", strings.Join(body, " "), nil)
@@ -154,45 +144,13 @@ func TestACardCapsItsChipsAndItsPages(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	cards, _ := streamPage(t, s, "", 30, 0)
+	cards, _ := streamPage(t, s, 30, 0)
 	if len(cards) != 1 {
 		t.Fatalf("cards: %s", words(cards))
 	}
 	c := cards[0]
 	if len(c.Chips) != 6 || c.MoreChips != 1 || c.Chips[0].Title != "Person 1" || len(c.Pages) != 3 || c.MorePages != 2 || c.Pages[0].Title != "Note 1" {
 		t.Errorf("the card: %s", cardWords(c))
-	}
-}
-
-// TestNewerBeforeIsThePageAbove: the page newer than a page of the stream starts before the day after its limit
-// newer days, or is the top.
-func TestNewerBeforeIsThePageAbove(t *testing.T) {
-	s := streamStore(t)
-	for _, d := range []string{"2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-30"} {
-		captured(t, s, d, "x", nil)
-	}
-	for _, tc := range []struct {
-		before, newer string
-		ok            bool
-	}{
-		{"", "", false},
-		{"2026-10-06", "", false}, // nothing newer, up to today: the page is the top
-		{"2026-10-05", "", true},  // one newer day: the top
-		{"2026-10-04", "", true},  // two newer days: the top
-		{"2026-10-03", "2026-10-05", true},
-		{"2026-10-01", "2026-10-03", true},
-	} {
-		newer, ok, err := s.NewerBefore(ctx, tc.before, 2)
-		if err != nil || newer != tc.newer || ok != tc.ok {
-			t.Errorf("NewerBefore(%q, 2) = %q, %v, %v; want %q, %v", tc.before, newer, ok, err, tc.newer, tc.ok)
-		}
-		if tc.newer == "" {
-			continue
-		}
-		cards, _ := streamPage(t, s, tc.newer, 2, 0)
-		if want := map[string]string{"2026-10-05": "2026-10-04,2026-10-03", "2026-10-03": "2026-10-02,2026-10-01"}[tc.newer]; days(cards) != want {
-			t.Errorf("the page before %s: %s, want %s", tc.newer, days(cards), want)
-		}
 	}
 }
 

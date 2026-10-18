@@ -217,11 +217,6 @@ func TestAnswerDrawsByTheFrame(t *testing.T) {
 			}
 		})
 	}
-	page := &caught{header: http.Header{}}
-	answer(page, httptest.NewRequest("GET", "/preview", nil), http.StatusAccepted, e, frame{})
-	if page.entity != e || page.status != http.StatusAccepted {
-		t.Errorf("caught %v %d, want the entity and 202", page.entity, page.status)
-	}
 }
 
 // TestAPageThatCannotBeDrawnNamesNoCause: when a page cannot be drawn (its properties or its result do not encode as

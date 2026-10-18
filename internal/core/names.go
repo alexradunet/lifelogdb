@@ -183,24 +183,3 @@ func (s *Store) TitlesByPrefix(ctx context.Context, prefix string, limit int) ([
 		 ORDER BY n.name_key LIMIT ?`, key, key+"\xff", limit)
 	return list(rows, err, func(m *TitleMatch) []any { return []any{&m.Name, &m.Title, &m.PageID, &m.Type} })
 }
-
-// RecentTitles are the titles that the search box of the browser suggests (docs/plans/130-the-explore-pass.md, part 7):
-// the live pages, people, places and metrics made on or after the day since, or linked from a live day page of a day
-// on or after it, the newest first (by the later of the day it was made, in UTC, and the newest day that links it),
-// at most limit of them. A file and a day page are never one. An older title is one search away: the titles group of
-// a search matches over the whole record.
-func (s *Store) RecentTitles(ctx context.Context, since string, limit int) ([]string, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT n.title FROM (
-		  SELECT p.id, substr(p.created_at, 1, 10) AS d FROM entities p WHERE p.created_at >= :since
-		  UNION ALL
-		  SELECT l.to_id, dp.day FROM entities dp JOIN links l ON l.from_id = dp.id
-		   WHERE dp.day >= :since AND dp.is_journal AND dp.deleted_at IS NULL
-		) x
-		  JOIN entities p ON p.id = x.id AND p.deleted_at IS NULL AND NOT p.is_journal AND p.entity_type IN ('page', 'person', 'place', 'metric')
-		  JOIN entity_names n ON n.entity_id = p.id AND n.name_key = p.preferred_name_key
-		 GROUP BY p.id
-		 ORDER BY max(x.d) DESC, p.preferred_name_key
-		 LIMIT :n`, sql.Named("since", since), sql.Named("n", limit))
-	return list(rows, err, func(t *string) []any { return []any{t} })
-}

@@ -34,12 +34,6 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		{"add-file of a photo with no day, kept before", map[string]any{"id": 7.0, "existing": true, "stored_day": "2026-10-11"},
 			`Kept the file: <a href="/pages/7">its page</a>. | The same original was kept before. | ` +
 				`Its page keeps the day <time datetime="2026-10-11">yesterday · Sun 11 Oct</time>.`},
-		{"add-file filed in a new category", map[string]any{"id": 7.0, "filed": map[string]any{"category": map[string]any{"id": 9.0, "title": "Papers", "path": ""}, "created": true, "added": 1.0, "moved": 0.0}},
-			`Kept the file: <a href="/pages/7">its page</a>. | Put in the new category <a href="/pages?title=Papers">Papers</a>.`},
-		{"add-file filed", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 1.0, "moved": 0.0}},
-			`Put in the category <a href="/pages?title=Papers">Papers</a>.`},
-		{"add-file filed before", map[string]any{"filed": map[string]any{"category": map[string]any{"title": "Papers"}, "created": false, "added": 0.0, "moved": 0.0}},
-			`It was in the category <a href="/pages?title=Papers">Papers</a> already.`},
 		{"a capture sent again", map[string]any{"already": true}, "Already added. Nothing changed."},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},

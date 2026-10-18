@@ -157,7 +157,7 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 			if err := os.WriteFile(jpg, phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: taken}, true), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			return c.DoFiles(ctx, apitest.Action(t, catalog, "add-file"), map[string]string{"title": filepath.Base(jpg), "day": w}, map[string]string{"original": jpg})
+			return c.Do(ctx, apitest.Action(t, catalog, "add-file"), map[string]string{"title": filepath.Base(jpg), "day": w, "original": jpg})
 		}, "CHECK constraint failed: entities_day"},
 		"record day": {func(w string) (*siren.Entity, error) {
 			return do("record", map[string]string{"metric": "weight", "day": w, "value": "71"})

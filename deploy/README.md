@@ -18,7 +18,7 @@ keep the settings that are only on the machine (the user, the paths), and then c
 flowchart LR
     timer["lifelog-snapshot.timer<br/>every night"] --> service["lifelog-snapshot.service"]
     service --> script["lifelog-snapshot"]
-    script --> cmd["lifelog snapshot --to DIR"]
+    script --> cmd["lifelog snapshot --snapshots DIR"]
     cmd -->|"exit 0"| prune["prune: keep the 14 newest<br/>good snapshots"]
     cmd -->|"exit 1"| fail["the script exits 1<br/>no prune"]
     fail --> failed["lifelog-snapshot-failed.service<br/>one line in the journal"]

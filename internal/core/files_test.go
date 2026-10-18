@@ -242,7 +242,7 @@ func TestFilePromotionDay(t *testing.T) {
 
 func TestAddFileRefuses(t *testing.T) {
 	s := fresh(t)
-	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	var ex *ExistsError

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,12 +18,13 @@ import (
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
+	"lifelog/internal/photo/phototest"
 )
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
-// owner's, with get and get_day, each once; the browser's preview is not a tool; browse, get_day and get are marked
-// reads. The tool open_day opens a day, as get_day does in the parity table: get_day is the action open-day under a
-// second name. The built-in tool get reads what no action reads: a month and a day with its trends.
+// owner's, with get, each once; the browser's preview is not a tool, and neither is an alias of an action (get_day,
+// random_day, tombstone: docs/plans/131-the-pareto-pass.md, part 2); browse, open_day and get are marked reads. The
+// built-in tool get reads what no action reads: a month and a day.
 func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	c := mcpTestClient(t)
 	srv, err := New(t.Context(), c, "test")
@@ -60,17 +63,17 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 			t.Fatalf("duplicate MCP tool %q", tool.Name)
 		}
 		seen[tool.Name] = true
-		if (tool.Name == "browse" || tool.Name == "get_day" || tool.Name == "get" || tool.Name == "random_day" || tool.Name == "random_page") && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+		if (tool.Name == "browse" || tool.Name == "open_day" || tool.Name == "get" || tool.Name == "random_page") && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
 			t.Errorf("%s is not marked a read: %+v", tool.Name, tool.Annotations)
 		}
 	}
-	for _, name := range []string{"find", "get", "get_day", "open_day", "random_day", "random_page"} {
+	for _, name := range []string{"find", "get", "open_day", "random_page"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}
 	}
-	if seen["render"] {
-		t.Fatal("the browser's preview was exposed as an MCP tool")
+	if seen["render"] || seen["get_day"] || seen["random_day"] || seen["tombstone"] {
+		t.Fatal("the browser's preview, or an alias that the catalog no longer has, is an MCP tool")
 	}
 	actions, err := c.Catalog(ctx)
 	if err != nil {
@@ -96,9 +99,9 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
 		t.Fatalf("get /months/2031-05 returned %+v", month)
 	}
-	// A day's trends are on this surface too (docs/plans/093-words-phone-and-today.md).
-	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["trends"] == nil {
-		t.Fatalf("get /days/2031-05-14 lacks trends: %v", day)
+	// A day's view is on this surface too.
+	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["view"] == nil {
+		t.Fatalf("get /days/2031-05-14 lacks its view: %v", day)
 	}
 }
 
@@ -240,7 +243,7 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 		t.Errorf("record's day: %v, want the pattern %s and the description Day (YYYY-MM-DD or today)", day, pattern)
 	}
 	for tool, want := range map[string]string{ // the titles with brackets of their own
-		"get_day":  "Day (default today; YYYY-MM-DD or today)",
+		"open_day": "Day (default today; YYYY-MM-DD or today)",
 		"add_file": "Its day (default: a photo's EXIF date, else none; any other file: today; YYYY-MM-DD or today)",
 	} {
 		if got := props[tool]["day"]["description"]; got != want {
@@ -266,11 +269,7 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 			if f.Type != "date" {
 				continue
 			}
-			names := []string{toolName(a.Name)}
-			if a.Name == "open-day" {
-				names = append(names, "get_day") // get_day has the schema of open-day
-			}
-			for _, tool := range names {
+			for _, tool := range []string{toolName(a.Name)} {
 				dates++
 				p := props[tool][f.Name]
 				desc, _ := p["description"].(string)
@@ -281,8 +280,8 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 			}
 		}
 	}
-	if dates < 7 { // capture, create-person (2), add-file, record, open-day and get_day
-		t.Errorf("%d date fields in the tools, want 7 at least", dates)
+	if dates < 6 { // capture, create-person (2), add-file, record and open-day
+		t.Errorf("%d date fields in the tools, want 6 at least", dates)
 	}
 }
 
@@ -306,18 +305,18 @@ func TestMCPNumericArguments(t *testing.T) {
 	// A number is sent as its JSON text: the API's own parser is the one rule for an id, on this surface as on the
 	// CLI and in a browser, so "1e6" reaches the API as written and the API refuses it there (404 no such id).
 	for _, token := range []string{"999999", "1000000", "9007199254740993", "1e6"} {
-		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
+		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "revive", Arguments: json.RawMessage(`{"id":` + token + `}`)})
 		if err != nil || res.IsError {
 			t.Fatalf("%s: %v %v", token, res, err)
 		}
 	}
-	want := []string{"/pages/999999/tombstone", "/pages/1000000/tombstone", "/pages/9007199254740993/tombstone", "/pages/1e6/tombstone"}
+	want := []string{"/pages/999999/revive", "/pages/1000000/revive", "/pages/9007199254740993/revive", "/pages/1e6/revive"}
 	if fmt.Sprint(paths) != fmt.Sprint(want) {
 		t.Fatalf("paths %v want %v", paths, want)
 	}
 	// An argument that is not a number or a string is refused before any call.
 	for _, token := range []string{"{}", "[]"} {
-		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "tombstone", Arguments: json.RawMessage(`{"id":` + token + `}`)})
+		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "revive", Arguments: json.RawMessage(`{"id":` + token + `}`)})
 		if err == nil && !res.IsError {
 			t.Fatalf("accepted %s", token)
 		}
@@ -428,5 +427,20 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// TestAnAgentKeepsAPhotoByItsPath: the tool add_file sends a local file that the agent names by its path, so its
+// picture is kept (docs/plans/131-the-pareto-pass.md, part 1).
+func TestAnAgentKeepsAPhotoByItsPath(t *testing.T) {
+	c := mcpTestClient(t)
+	session, ctx := numericSession(t, c)
+	path := filepath.Join(t.TempDir(), "IMG_0007.jpg")
+	if err := os.WriteFile(path, phototest.JPEG(40, 30), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := callTool(t, ctx, session, "add_file", map[string]any{"original": path})
+	if page.Title != "IMG_0007.jpg" || page.LinkByRel("preview") == nil {
+		t.Fatalf("add_file kept %q with the links %v, want IMG_0007.jpg with its picture", page.Title, page.Links)
 	}
 }

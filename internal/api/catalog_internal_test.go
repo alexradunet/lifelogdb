@@ -64,7 +64,7 @@ func TestDangerIsACatalogAction(t *testing.T) {
 	if len(dangerous) == 0 {
 		t.Error("no action is destructive: the set lost its contents")
 	}
-	for _, name := range []string{"tombstone", "retract"} {
+	for _, name := range []string{"tombstone-pages", "retract"} {
 		if !dangerous[name] {
 			t.Errorf("%s hides or retracts what is there: it is not marked dangerous", name)
 		}

@@ -84,13 +84,13 @@ func firstCovers(ctx context.Context, q queryer, bodies []string) ([]Cover, erro
 	return out, nil
 }
 
-// picturesOf is the cover of one body, nil when it has none, and the other pictures it embeds, after the cover.
-func picturesOf(ctx context.Context, q queryer, body string) (*Cover, []Cover, error) {
+// coverOf is the cover of one body, nil when it has none.
+func coverOf(ctx context.Context, q queryer, body string) (*Cover, error) {
 	pics, err := embeddedPictures(ctx, q, []string{body})
 	if err != nil || len(pics[0]) == 0 {
-		return nil, nil, err
+		return nil, err
 	}
-	return &pics[0][0], pics[0][1:], nil
+	return &pics[0][0], nil
 }
 
 // setPictures sets the picture of each row of a list to its cover: of gives the body of a row and the field to set.

@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **131**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **132**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [131](131-the-pareto-pass.md) | The Pareto pass: every action on every surface, one way to do a thing, and the browser's extras cut | P2 | L | owner word 2026-10-18; `c172ccd` | IN REVIEW (owner) |
 | [130](130-the-explore-pass.md) | The explore pass: Calendar opens on a stream of day cards, with zoom levels, a random day and page, and search by kind | P2 | L | owner word 2026-10-17; `5e5a0d8` | IN REVIEW (owner) |
 | [129](129-the-ux-pass.md) | The UX pass: plain words, quiet pages, the sentence of a mention, one Today, a capture that is safe to send again | P2 | L | owner word 2026-10-17; `14083e8` | DONE |
 | [128](128-smaller-pictures.md) | Smaller pictures: 1280 px at quality 80, inside the contract's 1600 px and 1 MB | P3 | S | owner word 2026-10-17; `29c1628` | DONE |

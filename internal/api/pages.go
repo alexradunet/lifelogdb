@@ -31,7 +31,7 @@ func (h *server) find(r *http.Request, act spec, _ string) (*siren.Entity, error
 }
 
 // randomPage answers with the address of a thing of the kind picked at random (docs/plans/130-the-explore-pass.md,
-// part 5); the kind is page when the request names none.
+// part 5); the kind is page when the request names none, and a day is the day view of a day page.
 func (h *server) randomPage(r *http.Request, act spec, _ string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
@@ -40,6 +40,13 @@ func (h *server) randomPage(r *http.Request, act spec, _ string) (*siren.Entity,
 	kind := v.Get("kind")
 	if kind == "" {
 		kind = "page"
+	}
+	if kind == "day" {
+		day, err := h.s.RandomDay(r.Context())
+		if err != nil {
+			return nil, err
+		}
+		return nil, redirect{siren.DayHref(day)}
 	}
 	id, err := h.s.RandomThing(r.Context(), kind)
 	if err != nil {
@@ -53,16 +60,7 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, e, err := h.loadPage(r.Context(), id)
-	if err != nil {
-		return nil, err
-	}
-	// In a browser, the page of a live metric is its metric's one page, which carries the page's text, edges and
-	// actions (docs/plans/100-one-page-a-metric.md); a receipt of feedback goes with it. JSON keeps the page.
-	if wantsHTML(r) && p.Type == "metric" && p.DeletedAt == "" {
-		return nil, h.redirectKeepingFeedback(r, siren.MetricHref(p.Title))
-	}
-	return e, nil
+	return h.pageEntity(r.Context(), id)
 }
 
 func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error) {
@@ -84,6 +82,9 @@ func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Ent
 	}
 	if p.File != nil && p.File.Preview {
 		e.Links = append(e.Links, link("preview", siren.PageHref(id)+"/preview", "Picture"))
+	}
+	if p.Type == "metric" { // the page of a metric links its readings, and its readings link the page
+		e.Links = append(e.Links, link("series", siren.MetricHref(p.Title), "Readings"))
 	}
 	e.Links = append(e.Links, coverLinks(p)...)
 	for _, l := range p.Out {
@@ -139,8 +140,11 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if p.Type != "file" {
 		out = append(out, action("set-cover", ids, nil))
 	}
+	// file-pages files a page in a category, so link does not offer part-of; unlink takes a page out of one.
+	if linkable := slices.DeleteFunc(slices.Clone(kinds), func(k string) bool { return k == "part-of" }); len(linkable) > 0 {
+		out = append(out, withOptions(action("link", ids, nil), "kind", linkable))
+	}
 	if len(kinds) > 0 {
-		out = append(out, withOptions(action("link", ids, nil), "kind", kinds))
 		out = append(out, withOptions(action("unlink", ids, nil), "kind", kinds))
 	}
 	if slices.Contains(kinds, "part-of") { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
@@ -152,7 +156,7 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 		}
 		out = append(out, withOptions(action("file-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10), "move": "0"}), "category", titles))
 	}
-	return append(out, action("tombstone", ids, nil))
+	return append(out, action("tombstone-pages", nil, map[string]any{"ids": strconv.FormatInt(p.ID, 10)}))
 }
 
 // coverLinks are the links of a page's cover: cover, its picture, when it has one; choose-cover, the pictures it may
@@ -193,7 +197,6 @@ type searchProps struct {
 	Q      string            `json:"q"`
 	Order  string            `json:"order"`
 	Kind   string            `json:"kind"`
-	Counts map[string]int    `json:"counts"`
 	Titles []core.TitleMatch `json:"titles"`
 	Hits   []searchHit       `json:"hits"`
 }
@@ -266,10 +269,6 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	counts, err := h.s.SearchCounts(r.Context(), q, opts)
-	if err != nil {
-		return nil, err
-	}
 	e.Links = append(e.Links, link("order", searchHref(q, other, kind), otherTitle))
 	// The chips of the kinds (docs/plans/130-the-explore-pass.md, part 6), as Browse has them: All, then each kind.
 	for _, k := range append([]string{"all"}, core.SearchKinds()...) {
@@ -284,7 +283,7 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		shown[i] = searchHit{Hit: x, Picture: pictureHref(x.Picture)}
 		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}
-	e.Properties = searchProps{pageProps: props, Q: q, Order: order, Kind: kind, Counts: counts, Titles: titles, Hits: shown}
+	e.Properties = searchProps{pageProps: props, Q: q, Order: order, Kind: kind, Titles: titles, Hits: shown}
 	return e, nil
 }
 
@@ -317,7 +316,7 @@ func (h *server) createPerson(r *http.Request, act spec, src string) (*siren.Ent
 	if err != nil {
 		return nil, err
 	}
-	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day")), v.Get("category"))
+	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day")))
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +328,7 @@ func (h *server) createPlace(r *http.Request, act spec, src string) (*siren.Enti
 	if err != nil {
 		return nil, err
 	}
-	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"), v.Get("category"))
+	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"))
 	if err != nil {
 		return nil, err
 	}
@@ -342,17 +341,6 @@ func (h *server) promote(r *http.Request, act spec, src string) (*siren.Entity, 
 		return nil, err
 	}
 	if err := h.s.Promote(r.Context(), src, id, v.Get("to"), v.Get("name")); err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), id)
-}
-
-func (h *server) tombstone(r *http.Request, _ spec, src string) (*siren.Entity, error) {
-	id, err := idOf(r)
-	if err != nil {
-		return nil, err
-	}
-	if err := h.s.Tombstone(r.Context(), src, id); err != nil {
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), id)

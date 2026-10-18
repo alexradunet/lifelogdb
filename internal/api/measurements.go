@@ -74,7 +74,7 @@ func (h *server) metrics(r *http.Request) (*siren.Entity, error) {
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
 		Links:      []siren.Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []siren.Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
-			withOptions(action("file-pages", nil, nil), "category", titles), withOptions(action("register-metric", nil, nil), "category", titles)}}
+			withOptions(action("file-pages", nil, nil), "category", titles), action("register-metric", nil, nil)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", siren.MetricHref(m.Name), m.Name))
 	}
@@ -131,9 +131,9 @@ func (h *server) series(r *http.Request) (*siren.Entity, error) {
 	return h.seriesEntity(r.Context(), r.PathValue("name"), r.URL.Query())
 }
 
-// seriesEntity is the resource /metrics/{name} serves, the one page of a metric (docs/plans/100-one-page-a-metric.md):
-// its readings, the writes of a reading and of a habit, and, as the metric is a page (D27), the page's text, edges
-// and actions. q is its query (from, to, all_history), nil for the defaults.
+// seriesEntity is the resource /metrics/{name} serves: a metric's readings and the write of a reading. The metric
+// is a page (D27): its text, edges and other actions are the page's, which the link page names. q is its query
+// (from, to), nil for the defaults.
 func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*siren.Entity, error) {
 	today := h.s.Today()
 	to := q.Get("to")
@@ -143,15 +143,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if !text.IsDay(to) {
 		return nil, core.Invalid("to must be an exact day")
 	}
-	allHistory, err := flag(q, "all_history")
-	if err != nil {
-		return nil, err
-	}
-	from := q.Get("from")
-	if allHistory && from != "" {
-		return nil, core.Invalid("all_history cannot select a lower bound")
-	}
-	allHistory = from == "" // no lower bound: every admitted day through to
+	from := q.Get("from") // no lower bound: every admitted day through to
 	m, err := h.metricOf(ctx, name)
 	if err != nil {
 		return nil, err
@@ -163,36 +155,35 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if err != nil {
 		return nil, err
 	}
-	// The series' own address, and the address of all its history: the same query with no lower bound.
-	seriesHref := func(allHistory bool) string {
-		v := url.Values{"to": {to}}
-		if allHistory {
-			v.Set("all_history", "1")
-		} else {
+	// The series' own address, and the address of all its history: the same query with no lower bound. A query of
+	// the defaults is no query, so a browser that registers a metric lands on its bare address.
+	href := func(from string) string {
+		v := url.Values{}
+		if from != "" {
 			v.Set("from", from)
 		}
+		if to != today {
+			v.Set("to", to)
+		}
+		if len(v) == 0 {
+			return siren.MetricHref(name)
+		}
 		return siren.MetricHref(name) + "?" + v.Encode()
-	}
-	self, allHref := seriesHref(allHistory), seriesHref(true)
-	if len(q) == 0 { // asked with no query, the series names itself so: a browser that registers a metric lands on it
-		self = siren.MetricHref(name)
 	}
 	record, err := h.recordAction(ctx, name, today)
 	if err != nil {
 		return nil, err
 	}
-	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows, "all_history": allHistory, "categories": []string(nil)}
+	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows}
 	e := &siren.Entity{Class: []string{"series"}, Title: name, Properties: props,
-		Links:   []siren.Link{link("all-readings", allHref, "All readings"), link("self", self, name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
+		Links:   []siren.Link{link("self", href(from), name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},
 		Actions: []siren.Action{record}}
-	if m != nil { // the metric is a page (D27): the page's text, edges and actions are the series' too, built once
-		p, page, err := h.loadPage(ctx, m.ID)
-		if err != nil {
-			return nil, err
-		}
-		props["categories"], props["id"], props["unit"], props["body"], props["links"], props["backlinks"] = m.Categories, m.ID, m.Unit, p.Body, p.Out, p.In
+	if from != "" {
+		e.Links = append(e.Links, link("all-readings", href(""), "All readings"))
+	}
+	if m != nil {
+		props["unit"] = m.Unit
 		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
-		e.Actions = append(e.Actions, page.Actions...)
 	}
 	for _, m := range rows {
 		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Day+" "+view.Num(m.Value)))
@@ -313,7 +304,7 @@ func (h *server) registerMetric(r *http.Request, act spec, src string) (*siren.E
 	if err != nil {
 		return nil, err
 	}
-	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Category: v.Get("category")}
+	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note")}
 	added, err := h.s.CreateMetric(r.Context(), src, m)
 	if err != nil {
 		return nil, err
@@ -325,9 +316,6 @@ func (h *server) registerMetric(r *http.Request, act spec, src string) (*siren.E
 	result := "New metric " + e.Title
 	if !added {
 		result = e.Title + " exists"
-	}
-	if m.Category != "" {
-		result += ", in " + m.Category
 	}
 	e.Result = result + "."
 	return e, nil

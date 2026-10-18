@@ -87,8 +87,8 @@ func TestBrowseActions(t *testing.T) {
 		{"the ghosts", browseQuery{kind: "page", ghosts: true}, nil, "file-pages[Cousins Family] tombstone-pages"},
 		{"all in Family", browseQuery{kind: "all", in: "Family"}, family, "random-page"},
 		{"pages in Family", browseQuery{kind: "page", in: "Family"}, family, "create-page=Family file-pages[Cousins Family] tombstone-pages random-page"},
-		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person=Family file-pages[Cousins Family] random-page"},
-		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file=Family file-pages[Cousins Family] tombstone-pages random-page"},
+		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person file-pages[Cousins Family] random-page"},
+		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
 	} {
 		var got []string
 		for _, a := range browseActions(tc.b, tc.in, categories) {
@@ -103,34 +103,6 @@ func TestBrowseActions(t *testing.T) {
 		}
 		if strings.Join(got, " ") != tc.want {
 			t.Errorf("%s: %s, want %s", tc.name, strings.Join(got, " "), tc.want)
-		}
-	}
-}
-
-// TestToBrowse: the address in Browse of each old list (docs/plans/117-one-browse-view.md, rule 8). It keeps the
-// filters of the list, and of the query only limit, offset and new; the kind of the media list is the field media.
-func TestToBrowse(t *testing.T) {
-	for _, tc := range []struct{ path, query, want string }{
-		{"/people", "", "/browse?kind=person"},
-		{"/places", "", "/browse?kind=place"},
-		{"/media", "", "/browse?kind=media"},
-		{"/media", "kind=video", "/browse?kind=media&media=video"},
-		{"/files", "", "/browse?kind=document"},
-		{"/ghosts", "", "/browse?ghosts=1&kind=page"},
-		{"/categories", "", "/browse"},
-		{"/people", "limit=3&offset=6", "/browse?kind=person&limit=3&offset=6"},
-		{"/categories", "offset=200", "/browse?offset=200"},
-		{"/media", "kind=image&limit=10&offset=10", "/browse?kind=media&limit=10&media=image&offset=10"},
-		{"/places", "new=create-place", "/browse?kind=place&new=create-place"},
-		{"/files", "new=add-file&title=Scan", "/browse?kind=document&new=add-file"},
-		{"/people", "kind=place&in=Family", "/browse?kind=person"},
-	} {
-		q, err := url.ParseQuery(tc.query)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := toBrowse(tc.path, q); got != tc.want {
-			t.Errorf("toBrowse(%s?%s) = %s, want %s", tc.path, tc.query, got, tc.want)
 		}
 	}
 }

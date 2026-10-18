@@ -85,7 +85,7 @@ func TestClientCancellation(t *testing.T) {
 					case "POST":
 						_, err = c.Do(ctx, siren.Action{Method: "POST", Href: "/"}, nil)
 					default:
-						_, err = c.DoFiles(ctx, siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+						_, err = c.Do(ctx, siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, map[string]string{"original": path})
 					}
 					result <- err
 				}()
@@ -201,7 +201,7 @@ func TestClientCancellationEarlyRefusal(t *testing.T) {
 	c := InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(403); w.Write([]byte(`{}`)) }), "cli")
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.DoFiles(context.Background(), siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, nil, map[string]string{"original": path})
+		_, err := c.Do(context.Background(), siren.Action{Method: "POST", Href: "/", Fields: []siren.Field{{Name: "original", Type: "file"}}}, map[string]string{"original": path})
 		done <- err
 	}()
 	select {

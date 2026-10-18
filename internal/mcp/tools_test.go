@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,7 +16,6 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	}{
 		{"catalog collision", []siren.Action{{Name: "same-name"}, {Name: "same_name"}}, `"same_name"`},
 		{"built-in get", []siren.Action{{Name: "get"}}, `"get"`},
-		{"built-in get day", []siren.Action{{Name: "get-day"}}, `"get_day"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tools(tc.actions)
@@ -32,26 +32,8 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	for _, x := range list {
 		names = append(names, x.name)
 	}
-	if got, want := strings.Join(names, " "), "find import_find open_day get_day get"; got != want {
+	if got, want := strings.Join(names, " "), "find import_find open_day get"; got != want {
 		t.Fatalf("tools = %s, want %s", got, want)
-	}
-}
-
-// TestGetDayIsOpenDay: get_day is the action open-day under the name of a read, so there is no get_day when open-day
-// is not a tool: it is absent, or it is the owner's.
-func TestGetDayIsOpenDay(t *testing.T) {
-	for _, actions := range [][]siren.Action{{{Name: "find"}}, {{Name: "find"}, {Name: "open-day", Owner: true}}} {
-		list, err := tools(actions)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var names []string
-		for _, x := range list {
-			names = append(names, x.name)
-		}
-		if got := strings.Join(names, " "); got != "find get" {
-			t.Errorf("tools(%v) = %s, want find get", actions, got)
-		}
 	}
 }
 
@@ -88,17 +70,19 @@ func TestArgumentsFlattenToFormValues(t *testing.T) {
 	}
 }
 
-// TestToolsCarryNoFileField is the one allowed difference of the MCP surface: a file (a recording, a picture) is
-// sent by the CLI or a browser; the tool keeps the action's other fields.
-func TestToolsCarryNoFileField(t *testing.T) {
+// TestAFileFieldIsTheIsPathOfALocalFile: a file field of an action (a recording, a picture) is a string in the
+// tool's schema, the path of a local file, which the MCP server reads and sends as the CLI does
+// (docs/plans/131-the-pareto-pass.md, part 1).
+func TestAFileFieldIsThePathOfALocalFile(t *testing.T) {
 	list, err := tools([]siren.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
-		{Name: "audio", Type: "file", Accept: "audio/*"}}}})
+		{Name: "audio", Type: "file", Title: "A recording", Accept: "audio/*"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	props, _ := list[0].schema["properties"].(map[string]any)
-	if _, ok := props["audio"]; ok || props["text"] == nil || props["day"] == nil {
+	audio, _ := props["audio"].(map[string]any)
+	if audio["type"] != "string" || !strings.Contains(fmt.Sprint(audio["description"]), "path of a local file") || props["text"] == nil || props["day"] == nil {
 		t.Errorf("the tool's properties: %v", props)
 	}
 }

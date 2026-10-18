@@ -30,11 +30,6 @@ func TestALineDrawsOnlyTheReadingsWithADayAndANumber(t *testing.T) {
 			t.Errorf("%s first: the chart does not count 2 readings:\n%s", name, got)
 		}
 
-		got = string(trendLine(c, "weight", "kg", "2026-10-16", readings))
-		if want := `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight from 70 kg 2 days ago · Wed 14 Oct to 80 kg today"><polyline points="98.8,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`; got != want {
-			t.Errorf("%s first: the trend line is\n%s\nwant\n%s", name, got, want)
-		}
-
 		got = string(sparkLine(c, "weight", "kg", readings))
 		if want := `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 2 readings, from 70 kg 2 days ago · Wed 14 Oct to 80 kg today"><polyline points="4.0,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`; got != want {
 			t.Errorf("%s first: the spark line is\n%s\nwant\n%s", name, got, want)
@@ -44,9 +39,6 @@ func TestALineDrawsOnlyTheReadingsWithADayAndANumber(t *testing.T) {
 	none := []any{map[string]any{"day": "not a day", "value": 1.0}, map[string]any{"day": "2026-10-14", "value": nil}}
 	if got := chart("2026-10-12", "2026-10-16", none); got != "" {
 		t.Errorf("a chart with no reading to draw is drawn:\n%s", got)
-	}
-	if got := trendLine(c, "weight", "kg", "2026-10-16", none); got != "" {
-		t.Errorf("a trend line with no reading to draw is drawn:\n%s", got)
 	}
 	if got := sparkLine(c, "weight", "kg", none); got != "" {
 		t.Errorf("a spark line with no reading to draw is drawn:\n%s", got)
@@ -85,30 +77,20 @@ func TestAChartWritesItsNumbersInFull(t *testing.T) {
 	}
 }
 
-// TestTheWordsOfASmallLine: the label of a trend line and of a spark line, with one reading and with more, says each
-// value with its unit in words and its day against today on the clock; a value with no unit has no gap. A trend is
-// placed by its day among the 14 days through its day, and the day may be past: here today is 16 October.
+// TestTheWordsOfASmallLine: the label of a spark line, with one reading and with more, says each value with its unit
+// in words and its day against today on the clock: here today is 16 October.
 func TestTheWordsOfASmallLine(t *testing.T) {
 	c := clock{today: "2026-10-16"}
 	r := func(day string, value float64) any { return map[string]any{"day": day, "value": value} }
 	for _, tc := range []struct {
 		name, got, want string
 	}{
-		{"a trend of one reading", string(trendLine(c, "weight", "kg", "2026-10-16", []any{r("2026-10-16", 70)})),
-			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: one reading in 14 days, 70 kg today"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
-		{"a trend of a past day", string(trendLine(c, "weight", "kg", "2026-10-10", []any{r("2026-10-01", 70), r("2026-10-04", 72), r("2026-10-10", 71)})),
-			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight from 70 kg Thu 1 Oct to 71 kg 6 days ago · Sat 10 Oct"><polyline points="38.5,24.0 64.3,4.0 116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
-		{"a trend with no unit", string(trendLine(c, "walk", "", "2026-10-16", []any{r("2026-10-16", 1)})),
-			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="walk: one reading in 14 days, 1 today"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
-		{"a trend of a scale", string(trendLine(c, "mood", "1-5", "2026-10-16", []any{r("2026-10-15", 3), r("2026-10-16", 4)})),
-			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="mood from 3 of 5 yesterday · Thu 15 Oct to 4 of 5 today"><polyline points="107.4,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`},
 		{"a spark of one reading", string(sparkLine(c, "ferritin", "ug/L", []any{r("2025-04-12", 85)})),
 			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="ferritin: one reading, 85 ug/L Sat 12 Apr 2025"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
 		{"a spark of three readings", string(sparkLine(c, "weight", "kg", []any{r("2026-10-06", 72), r("2026-10-11", 70), r("2026-10-16", 71)})),
 			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 3 readings, from 72 kg Tue 6 Oct to 71 kg today"><polyline points="4.0,4.0 60.0,24.0 116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`},
 		{"a spark of one day", string(sparkLine(c, "weight", "kg", []any{r("2026-10-16", 70), r("2026-10-16", 71)})),
 			`<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: 2 readings, from 70 kg today to 71 kg today"><polyline points="116.0,24.0 116.0,4.0 "/><circle cx="116.0" cy="4.0" r="2.5"/></svg>`},
-		{"a trend of no day", string(trendLine(c, "weight", "kg", "not a day", []any{r("2026-10-16", 70)})), ""},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s:\n%s\nwant\n%s", tc.name, tc.got, tc.want)
@@ -184,15 +166,14 @@ func TestTheChartSaysItsEndsInWords(t *testing.T) {
 func TestALineOfReadingsNearTheLimitHasItsPlaces(t *testing.T) {
 	c := clock{today: "2026-10-16"}
 	for _, line := range []struct {
-		first, second             float64
-		trend, spark, chartPoints string
+		first, second      float64
+		spark, chartPoints string
 	}{
-		{1e308, -1e308, "81.5,4.0 98.8,24.0", "4.0,4.0 116.0,24.0", "48.0,14.0 337.0,164.0"},
-		{0, 5e-324, "81.5,24.0 98.8,4.0", "4.0,24.0 116.0,4.0", "48.0,164.0 337.0,14.0"},
+		{1e308, -1e308, "4.0,4.0 116.0,24.0", "48.0,14.0 337.0,164.0"},
+		{0, 5e-324, "4.0,24.0 116.0,4.0", "48.0,164.0 337.0,14.0"},
 	} {
 		rs := []any{map[string]any{"day": "2026-10-12", "value": line.first}, map[string]any{"day": "2026-10-14", "value": line.second}}
 		for _, tc := range []struct{ name, got, want string }{
-			{"a trend", string(trendLine(c, "x", "m", "2026-10-16", rs)), `<polyline points="` + line.trend + ` "/>`},
 			{"a spark", string(sparkLine(c, "x", "m", rs)), `<polyline points="` + line.spark + ` "/>`},
 			{"a chart", string(chart("2026-10-12", "2026-10-16", rs)), `<polyline points="` + line.chartPoints + ` "/>`},
 		} {

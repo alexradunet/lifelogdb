@@ -96,7 +96,7 @@ func TestSaveBodyResentWithAStaleVersionIsANoop(t *testing.T) {
 
 func TestEditRevisionNoopRollbackAndTypedMutation(t *testing.T) {
 	s := fresh(t)
-	id, err := s.CreatePerson(ctx, "cli", "Person witness", "Name", "", "", "")
+	id, err := s.CreatePerson(ctx, "cli", "Person witness", "Name", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,14 +277,14 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 	var err error
 	err = s.Do(ctx, "cli", func(tx *Tx) (e error) { id, _, e = tx.CreatePage("Plain note", "text", day); return })
 	add("plain page", id, err)
-	id, err = s.CreatePerson(ctx, "cli", "Sam Sample", "Sam Sample", "1990-01-02", "", "")
+	id, err = s.CreatePerson(ctx, "cli", "Sam Sample", "Sam Sample", "1990-01-02", "")
 	add("person", id, err)
 	err = s.Do(ctx, "cli", func(tx *Tx) (e error) {
 		id, _, e = tx.CreatePage("Linked note", "met [[Sam Sample]] at [[Lakeside]] #health", day)
 		return
 	})
 	add("page with wikilinks", id, err)
-	id, err = s.CreatePlace(ctx, "cli", "Harbour", "")
+	id, err = s.CreatePlace(ctx, "cli", "Harbour")
 	add("place", id, err)
 	_, err = s.CreateMetric(ctx, "cli", NewMetric{Name: "Sleep", Unit: "h", Note: "hours slept, see [[Lakeside]]"})
 	if err == nil {

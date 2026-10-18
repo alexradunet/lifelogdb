@@ -10,14 +10,13 @@ import (
 	"lifelog/internal/text"
 )
 
-// The lines of the readings (docs/plans/093-words-phone-and-today.md): the line of a metric's last 14 days on the
-// tile of a day (trendLine), the line of a metric's recent readings on its card (sparkLine), and the chart of a
-// series on the page of its metric (chart). The tile and the card are in metrics.go. A line draws only the
-// readings that have a day and a number: a retraction has no number.
+// The lines of the readings (docs/plans/093-words-phone-and-today.md): the line of a metric's recent readings on its
+// card (sparkLine), and the chart of the readings of a metric (chart). The card is in metrics.go. A line draws only
+// the readings that have a day and a number: a retraction has no number.
 //
 // One drawer, plot, places the readings of each line: across by the line's own placement of a day, and up between
-// the least and the greatest value. trendLine and sparkLine are a placement and one call of smallLine; chart is a
-// placement, one call of plot, and its axes.
+// the least and the greatest value. sparkLine is a placement and one call of smallLine; chart is a placement, one
+// call of plot, and its axes.
 
 // lineReading is a reading that a line draws: its day, as a time and as written, and its value.
 type lineReading struct {
@@ -99,25 +98,6 @@ func smallLine(rs []lineReading, label string, x func(lineReading) float64) temp
 		template.HTMLEscapeString(strings.Join(strings.Fields(label), " ")), points, x(last), y(last.value)))
 }
 
-// trendLine draws a trend as a small line: one point per reading, placed by its day among the 14 days through the
-// day. Its label says the first and the last value in words, with their days against today on the clock c, also on
-// a past day.
-func trendLine(c clock, metric, unit, day string, points []any) template.HTML {
-	end, ok := text.ParseDay(day)
-	rs := lineReadings(points)
-	if !ok || len(rs) == 0 {
-		return ""
-	}
-	label := metric + " from " + readingWords(c, rs[0], unit) + " to " + readingWords(c, rs[len(rs)-1], unit)
-	if len(rs) == 1 {
-		label = metric + ": one reading in 14 days, " + readingWords(c, rs[0], unit)
-	}
-	return smallLine(rs, label, func(r lineReading) float64 {
-		back := end.Sub(r.t).Hours() / 24 // 0 on the day, 13 on the first of the 14
-		return 4 + (float64(GlanceDays-1)-back)*112/float64(GlanceDays-1)
-	})
-}
-
 // sparkLine draws a metric's recent readings as a small line: each point placed by its day between the first
 // reading and the last, so a marker read twice a year is drawn as it was read. Its label says how many readings,
 // and the first and the last value in words, with their days against today on the clock c.
@@ -195,6 +175,3 @@ func chart(from, to string, readings any) template.HTML {
 	sb.WriteString(`</svg>`)
 	return template.HTML(sb.String())
 }
-
-// GlanceDays is how many days, the day itself the last, a reading's trend covers.
-const GlanceDays = 14

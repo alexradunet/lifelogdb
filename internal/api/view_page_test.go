@@ -64,7 +64,8 @@ func TestEveryViewRenders(t *testing.T) {
 	ana := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Ana"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
 	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon", "category": "Cities"}))
+	lisbon := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, lisbon, "file-pages"), map[string]string{"category": "Cities"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
 	var reading string
@@ -75,7 +76,7 @@ func TestEveryViewRenders(t *testing.T) {
 	draft := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, draft, "rename"), map[string]string{"title": "Essay"}))
 	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone"), nil))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone-pages"), nil))
 
 	dayPage := apitest.Href(day, "page")
 	bodies := map[string]string{}
@@ -89,15 +90,16 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/actions", http.StatusOK, nil},
 		{"/actions?new=snapshot", http.StatusOK, []string{`<details class="action" open><summary class="button">Take a snapshot`}}, // the rail's Snapshot link
 		{"/days", http.StatusOK, []string{`<article class="day-card" aria-label="`, `<article class="day-card slim" aria-label="2026-09-28">`,
-			`<p class="quiet-gap">· `, `<a href="/days" aria-current="page">Days</a>`, `</svg>Ana</a>`, `<nav class="stream-side panel" aria-label="Years and months">`,
-			`<form class="tiny" method="GET" action="/days/random"><button class="quiet">A random day</button></form>`}},
+			`<a href="/days" aria-current="page">Days</a>`, `</svg>Ana</a>`,
+			`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
 		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in", `<div class="snippet">Ran with Sam and Ana #running</div>`}},
-		{"/browse", http.StatusOK, []string{`accesskey="k" list="search-q">`, `placeholder="A page's title, or words of a body" list="search-q">`, `<datalist id="search-q"><option value="`, `<option value="Essay">`}},
-		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="person"><button class="quiet">A random page</button></form>`}},
+		{"/browse", http.StatusOK, []string{`placeholder="A page's title, or words of a body">`, `<span class="first">Essay</span>`}},
+		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="person"><button class="quiet">A random one</button></form>`}},
+		{"/browse?deleted=1", http.StatusOK, []string{`<span class="first">Scratch</span>`}},
 		{"/browse?kind=place", http.StatusOK, nil},
 		{"/browse?ghosts=1", http.StatusOK, nil},
 		{"/metrics", http.StatusOK, nil},
@@ -106,15 +108,14 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/measurements/1", http.StatusOK, nil},
 		{reading, http.StatusOK, []string{`action="/measurements/`, "Correct"}},
 		{"/search", http.StatusOK, nil},
-		{"/search?q=ran", http.StatusOK, []string{`<nav class="kinds chips" aria-label="Kind">`, `<a href="/search?q=ran" aria-current="page">All <small>1</small></a>`,
-			`<section class="result-group" aria-label="Days"><div class="panel-head"><h2>Days <small>1</small></h2><a class="meta" href="/search?kind=day&amp;q=ran">All 1</a>`,
+		{"/search?q=ran", http.StatusOK, []string{`<nav class="kinds chips" aria-label="Kind">`, `<a href="/search?q=ran" aria-current="page">All</a>`,
+			`<section class="result-group" aria-label="Days"><div class="panel-head"><h2>Days</h2><a class="meta" href="/search?kind=day&amp;q=ran">Show only these</a>`,
 			`<span class="hit-icon" aria-hidden="true">`}},
-		{"/search?q=ran&kind=day", http.StatusOK, []string{`aria-current="page">Days <small>1</small></a>`, `aria-label="Pages by their words"`, `<input type="hidden" name="kind" value="day">`}},
-		{"/integrity", http.StatusOK, nil},
+		{"/search?q=ran&kind=day", http.StatusOK, []string{`aria-current="page">Days</a>`, `aria-label="Pages by their words"`, `<input type="hidden" name="kind" value="day">`}},
+		{"/integrity", http.StatusOK, []string{`action="/search/rebuild"`, `action="/links/resync"`}},
 		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
-		{"/weeks/2026-W40", http.StatusOK, []string{`<a href="/weeks/2026-W40" aria-current="page">Week</a>`}},
 		{"/years/2026", http.StatusOK, []string{`<a href="/years/2026" aria-current="page">Year</a>`}},
-		{"/months/2026-09", http.StatusOK, []string{`<a href="/months/2026-09" aria-current="page">Month</a>`, `<a href="/days?before=2026-10-01">Days</a>`}},
+		{"/months/2026-09", http.StatusOK, []string{`<a href="/months/2026-09" aria-current="page">Month</a>`, `<a href="/days">Days</a>`}},
 		{apitest.Href(draft, "self"), http.StatusOK, nil},
 		{opens(t, h, "Essay"), http.StatusOK, nil},
 		{"/pages/999999", http.StatusNotFound, nil},
@@ -199,8 +200,8 @@ func TestADestructiveActionDrawsADangerButton(t *testing.T) {
 	if body := browse(t, h, apitest.Href(p, "self")); !strings.Contains(body, `<button class="danger">Delete</button>`) {
 		t.Errorf("a page that offers a tombstone draws no danger button: %.400s", body)
 	}
-	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, p, "tombstone"), nil))
-	body := browse(t, h, apitest.Href(gone, "self"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, p, "tombstone-pages"), nil))
+	body := browse(t, h, apitest.Href(p, "self"))
 	if !strings.Contains(body, "<button>Restore</button>") {
 		t.Errorf("a deleted page offers no plain Restore: %.400s", body)
 	}
@@ -253,59 +254,20 @@ func TestBrowserKeepsWhatAFailedSaveSent(t *testing.T) {
 	}
 }
 
-// TestARefusedSaveComesBackOnItsPage: a form that names its page (back) is answered with that page, with the error's
-// status, the alert first and the form filled, open and described by the alert. The page has its sidebar (the rail).
-func TestARefusedSaveComesBackOnItsPage(t *testing.T) {
+// TestARefusedSaveAnswersWithTheErrorPage: a refused form is answered with the error page in the shell, with the
+// error's status (docs/plans/131-the-pareto-pass.md, part 3): the alert, the text the form sent, which nothing has
+// saved, and a link Back to the page it came from.
+func TestARefusedSaveAnswersWithTheErrorPage(t *testing.T) {
 	h, self, action, version := staleSave(t)
 	rec := submit(h, action, url.Values{"body": {"my <long> draft"}, "version": {version}, "back": {self}}, self)
 	body := rec.Body.String()
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status %d, want 409: %.400s", rec.Code, body)
 	}
-	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-		t.Errorf("Cache-Control %q, want no-store", got)
-	}
-	for _, want := range []string{"<title>Not saved · Diet · Lifelog</title>", `class="rail"`,
-		`role="alert" id="refused" tabindex="-1" autofocus>`, "my &lt;long&gt; draft</textarea>",
-		`<details open><summary>Edit</summary>`, `<form method="POST" action="` + action + `" aria-describedby="refused"`,
-		`value="` + version + `"`} {
+	for _, want := range []string{"<h1>Not saved</h1>", `class="rail"`, `role="alert"`, `aria-label="What you sent"`,
+		"my &lt;long&gt; draft</textarea>", `<a href="` + self + `">Back</a>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the refused page lacks %s", want)
-		}
-	}
-	if n := strings.Count(body, "autofocus"); n != 1 {
-		t.Errorf("%d autofocus on the refused page, want 1 (the alert)", n)
-	}
-	if strings.Contains(body, `aria-label="What you sent"`) {
-		t.Error("the refused page also shows the error view's copy of the text")
-	}
-}
-
-// TestARefusedPageKeepsTheHeadersOfItsPage: the refused page is the answer of the GET of its page, with that GET's
-// headers. Here the page's address holds the receipt of an earlier save that no GET took (feedback), so the GET
-// takes it and sets Referrer-Policy and Cache-Control. The refused page keeps both.
-func TestARefusedPageKeepsTheHeadersOfItsPage(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
-	save, self := apitest.Action(t, p, "save-body"), apitest.Href(p, "self")
-	var version string
-	for _, f := range save.Fields {
-		if f.Name == "version" {
-			version, _ = f.Value.(string)
-		}
-	}
-	saved := submit(h, save.Href, url.Values{"body": {"v2"}, "version": {version}, "back": {self}}, self)
-	back := saved.Header().Get("Location")
-	if saved.Code != http.StatusSeeOther || !strings.HasPrefix(back, self+"?feedback=") {
-		t.Fatalf("the first save: %d to %q, want 303 to %s with a receipt", saved.Code, back, self)
-	}
-	rec := submit(h, save.Href, url.Values{"body": {"v3"}, "version": {version}, "back": {back}}, back)
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `role="alert" id="refused"`) {
-		t.Fatalf("the stale save: %d %.300s, want 409 on its page", rec.Code, rec.Body.String())
-	}
-	for name, want := range map[string]string{"Referrer-Policy": "no-referrer", "Cache-Control": "no-store"} {
-		if got := rec.Header().Get(name); got != want {
-			t.Errorf("%s %q, want %q, the header of the GET of the page", name, got, want)
 		}
 	}
 }
@@ -345,10 +307,10 @@ func TestARefusedPageThatCannotBeSentIsLogged(t *testing.T) {
 	}
 }
 
-// TestAnEmptySaveComesBackOnItsPage: the browser marks the body required, but a client that does not check the form
-// (or an old browser) can still send an empty body. The save is refused 422 on its page, with the alert, and the page
-// keeps its body and its version.
-func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
+// TestAnEmptySaveIsRefused: the browser marks the body required, but a client that does not check the form (or an old
+// browser) can still send an empty body. The save is refused 422 with the alert, and the page keeps its body and its
+// version.
+func TestAnEmptySaveIsRefused(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Diet", "body": "v1"}))
 	save := apitest.Action(t, p, "save-body")
@@ -360,7 +322,7 @@ func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
 	}
 	rec := submit(h, save.Href, url.Values{"body": {""}, "version": {version}, "back": {apitest.Href(p, "self")}}, apitest.Href(p, "self"))
 	body := rec.Body.String()
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert" id="refused"`) || !strings.Contains(body, "missing field body") {
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, "missing field body") {
 		t.Errorf("an empty browser save: %d %.400s", rec.Code, body)
 	}
 	after := apitest.Must(t)(c.Get(t.Context(), apitest.Href(p, "self"))).Properties.(map[string]any)
@@ -369,30 +331,15 @@ func TestAnEmptySaveComesBackOnItsPage(t *testing.T) {
 	}
 }
 
-// TestARefusedCaptureComesBackOnToday: a capture refused from the page of today (Home) comes back on that page with
-// the text still in the box. A capture that a stale page sent with back=/ gets the plain error view: Home is a
-// redirect, and the refusal keeps the text there too.
-func TestARefusedCaptureComesBackOnToday(t *testing.T) {
-	_, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the form posts to that day, and today's capture is that day's
-	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/days/2026-10-12"}}, "")
+// TestARefusedCaptureKeepsItsText: a capture refused from the page of today (Home) is answered with the error page,
+// which keeps the text, so nothing is lost, and links Back to the page.
+func TestARefusedCaptureKeepsItsText(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", "2026-10-12")
+	rec := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "/")
 	body := rec.Body.String()
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("status %d, want 422: %.400s", rec.Code, body)
-	}
-	for _, want := range []string{"<title>Not saved · 2026-10-12 · Lifelog</title>", `aria-label="Capture"`, "Add to today", `role="alert" id="refused"`,
-		">A note that must not be lost.</textarea>", `aria-describedby="refused"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("today, refused, lacks %s", want)
-		}
-	}
-	if n := strings.Count(body, "autofocus"); n != 1 {
-		t.Errorf("%d autofocus on the refused page, want 1 (the alert)", n)
-	}
-
-	old := submit(h, "/days/2026-10-12/capture", url.Values{"text": {"A note that must not be lost."}, "mood": {"9"}, "back": {"/"}}, "")
-	if old.Code != http.StatusUnprocessableEntity || !strings.Contains(old.Body.String(), `aria-label="What you sent"`) ||
-		!strings.Contains(old.Body.String(), "A note that must not be lost.") {
-		t.Errorf("back=/: %d, want the error view that keeps the text: %.400s", old.Code, old.Body.String())
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `aria-label="What you sent"`) ||
+		!strings.Contains(body, "A note that must not be lost.") || !strings.Contains(body, `<a href="/">Back</a>`) {
+		t.Errorf("a refused capture: %d, want the error view that keeps the text: %.400s", rec.Code, body)
 	}
 }
 

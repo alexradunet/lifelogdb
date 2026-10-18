@@ -12,6 +12,7 @@
 <h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
 {{if not $p.deleted_at}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
 {{if $p.is_day_page}}<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
+{{with .Link "series"}}<p class="sub"><a href="{{.}}">Its readings</a></p>{{end}}
 </div></header>
 
 {{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: restore it to bring it back.</p>
@@ -47,24 +48,22 @@
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
 <div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Link "choose-cover") (.Action "tombstone")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
-{{with .Link "choose-cover"}}<a class="button" href="{{.}}">{{if $p.cover}}Change cover photo{{else}}Set cover photo{{end}}</a>{{end}}
+{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
-{{template "boxed" (form (.Action "tombstone"))}}</div></section>{{end}}
+{{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}</div></section>{{end}}
 </div>
 </div>
 {{template "foot" .}}{{end}}
 
-{{/* cover is the cover of a page or a day at the head of its margin: the picture as a square, then the other pictures
-     its body embeds as small squares, each a form of set-cover with its title (one press makes it the cover, no
-     script), and a last square that opens the picker of every kept picture (choose-cover). Nothing when there is no
-     cover. On a narrow screen it comes before the sheet (app.css). */}}
-{{define "cover"}}{{$p := .Props}}{{$set := .Action "set-cover"}}{{$choose := .Link "choose-cover"}}{{with $p.cover}}<section class="cover-box" aria-label="Cover photo">
-<figure class="cover"><img src="/pages/{{num .id}}/preview" alt="{{.title}}"></figure>
-{{if or (and $set $p.pictures) $choose}}<ul class="plain cover-thumbs" aria-label="Other pictures">{{if $set}}{{range $p.pictures}}<li><form method="post" action="{{$set.Href}}"><input type="hidden" name="back" value="{{$.Here}}"><input type="hidden" name="title" value="{{.title}}"><button type="submit" title="Make {{.title}} the cover"><img src="/pages/{{num .id}}/preview" alt="{{.title}}" loading="lazy"></button></form></li>{{end}}{{end}}{{with $choose}}<li><a class="more" href="{{.}}" title="Every kept picture"><span aria-hidden="true">+</span><span class="sr">Change cover photo</span></a></li>{{end}}</ul>{{end}}
+{{/* cover is the cover of a page or a day at the head of its margin: the picture as a square, and the one link to the
+     picker of every kept picture and of a new photo (choose-cover; docs/plans/131-the-pareto-pass.md, part 2). The
+     link alone when there is no cover. On a narrow screen it comes before the sheet (app.css). */}}
+{{define "cover"}}{{$p := .Props}}{{$choose := .Link "choose-cover"}}{{if or $p.cover $choose}}<section class="cover-box" aria-label="Cover photo">
+{{with $p.cover}}<figure class="cover"><img src="/pages/{{num .id}}/preview" alt="{{.title}}"></figure>{{end}}
+{{with $choose}}<p class="sub"><a href="{{.}}">{{if $p.cover}}Change cover photo{{else}}Set cover photo{{end}}</a></p>{{end}}
 </section>{{end}}{{end}}
 
 {{/* cover-choice is GET /pages/{id}/cover: the page's cover, a new photo to send, and the kept pictures as tiles.

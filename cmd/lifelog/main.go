@@ -32,12 +32,12 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, agent, mood, day, to, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
-	human, dbExplicit, force                                bool
-	args                                                    []string // the words of the line that are no flag
-	given                                                   []string // the flags the line named
-	serve                                                   serveFlags
-	file                                                    fileFlags
+	db, url, source, agent, mood, day, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
+	human, dbExplicit, force                            bool
+	args                                                []string // the words of the line that are no flag
+	given                                               []string // the flags the line named
+	serve                                               serveFlags
+	file                                                fileFlags
 }
 
 // serveFlags are the flags that only serve reads.
@@ -51,8 +51,8 @@ type serveFlags struct {
 
 // fileFlags are the flags that only file reads. --day, which capture reads too, is opts.day.
 type fileFlags struct {
-	title, text, preview, mime, category string
-	dryRun                               bool
+	title, text, preview, mime string
+	dryRun                     bool
 }
 
 // globalFlags are the flags every command takes.
@@ -112,6 +112,9 @@ var commands = []command{
 	{name: "mcp", flags: []string{"--agent"},
 		usage: "  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)",
 		prepare: func(o opts) (opts, error) {
+			if slices.Contains(o.given, "--source") { // one way to name the writer of MCP: an agent's
+				return o, errors.New("mcp writes as agent:NAME: name the agent with --agent, not --source")
+			}
 			name := o.agent
 			if name == "" {
 				name = "mcp"
@@ -187,14 +190,13 @@ var commands = []command{
 			}
 			return doAction(ctx, e, "rename", map[string]string{"id": args[0], "title": args[1]})
 		}},
-	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--category", "--dry-run"},
-		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--category C]\n" +
-			"                  [--dry-run]         keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
+	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--dry-run"},
+		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--dry-run]\n" +
+			"                                      keep a file (docs/cookbook/keep-a-file.md): the original is hashed,\n" +
 			"                                      never stored; its text from FILE; a picture made from a JPEG, PNG or\n" +
 			"                                      GIF, else from PICTURE; the title defaults to the file's name. Its own\n" +
 			"                                      day is D, else a photo's EXIF date; a photo with neither has no day,\n" +
-			"                                      another file the day it is kept; --category files its page in the\n" +
-			"                                      category page C in the same write; --dry-run writes nothing",
+			"                                      another file the day it is kept; --dry-run writes nothing",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
 	{name: "cover", flags: []string{"--title", "--preview"},
 		usage: "  lifelog cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]\n" +
@@ -204,21 +206,18 @@ var commands = []command{
 			"                                      PICTURE when it is not a JPEG, PNG or GIF; with no PHOTO, T names\n" +
 			"                                      a kept picture (lifelog get /pages/PAGE-ID/cover lists them)",
 		run: func(ctx context.Context, e env, args []string) error { return setCover(ctx, e, args) }},
-	{name: "snapshot", flags: []string{"--to"},
-		usage: "  lifelog snapshot [--to DIR]         a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
+	{name: "snapshot", flags: []string{"--snapshots"},
+		usage: "  lifelog snapshot [--snapshots DIR]  a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
-			"                                      server's folder (serve --snapshots), and --to is refused",
+			"                                      server's folder (serve --snapshots), and --snapshots is refused",
 		prepare: func(o opts) (opts, error) {
-			if o.url != "" && o.to != "" {
-				return o, errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --to")
+			if o.url != "" && o.snapshots != "" {
+				return o, errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --snapshots")
 			}
-			if o.url == "" {
-				o.snapshots = o.to
-				if o.snapshots != "" {
-					// Refused before the database is opened: a mistaken folder leaves life.db untouched.
-					if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
-						return o, err
-					}
+			if o.url == "" && o.snapshots != "" {
+				// Refused before the database is opened: a mistaken folder leaves life.db untouched.
+				if _, err := db.CheckSnapshotDir(o.snapshots); err != nil {
+					return o, err
 				}
 			}
 			return o, nil
@@ -260,8 +259,8 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 	o := opts{db: getenv("LIFELOG_DB"), token: getenv("LIFELOG_TOKEN"), source: "cli"}
 	o.serve.addr = "127.0.0.1:7777"
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.serve.addr,
-		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day, "--to": &o.to,
-		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime, "--category": &o.file.category,
+		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day,
+		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime,
 		"--token-file": &o.serve.tokenFile, "--tls-cert": &o.serve.tlsCert, "--tls-key": &o.serve.tlsKey, "--snapshots": &o.snapshots}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {

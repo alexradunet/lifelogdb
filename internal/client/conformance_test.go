@@ -102,7 +102,7 @@ func TestTheTwoTransportsGiveEqualAnswers(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			return c.DoFiles(ctx, a, map[string]string{"title": "Notes"}, map[string]string{"original": notes})
+			return c.Do(ctx, a, map[string]string{"title": "Notes", "original": notes})
 		}, want: map[string]string{"title": `"Notes"`, "file": `{"mime":"text/plain","preview":false,"sha256":"` + notesSHA256 + `"}`}},
 		{name: "a 404", send: get("/pages/424242"),
 			status: 404, want: map[string]string{"status": "404", "code": `"not_found"`}},

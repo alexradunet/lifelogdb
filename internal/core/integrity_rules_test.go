@@ -36,7 +36,7 @@ func TestIntegrityDetectsALinkThatBreaksADayPageRule(t *testing.T) {
 			}
 			if rule.kind == "at" {
 				var err error
-				if to, err = s.CreatePlace(ctx, "cli", "Harbour", ""); err != nil {
+				if to, err = s.CreatePlace(ctx, "cli", "Harbour"); err != nil {
 					t.Fatal(err)
 				}
 			}

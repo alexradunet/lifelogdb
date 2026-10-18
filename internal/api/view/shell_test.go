@@ -14,7 +14,6 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/days/2026-01-01": "/days",
 		"/days/today":      "/days/today",
 		"/months/2026-10":  "/days",
-		"/weeks/2026-W41":  "/days",
 		"/years/2026":      "/days",
 		"/integrity":       "/integrity",
 		"/browse":          "/browse",
@@ -22,7 +21,6 @@ func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 		"/metrics/TSH":     "/metrics",
 		"/pages/7":         "",
 		"/search":          "",
-		"/styleguide":      "",
 		"/measurements/1":  "",
 	} {
 		var got string

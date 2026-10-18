@@ -16,11 +16,10 @@ import (
 // the caller gives one, else Taken, else today for ordinary files. Unknown-capture mode follows
 // docs/cookbook/keep-a-file.md: a photo with no day of its own has no day, and goes in no day page. dayOf finds that
 // mode for a photo (an image/* type); setCover gives it to a file of any type (unknownCaptureDay). A photo's
-// position is never read (D21). Category is the title of the category to file the page in ("" for none).
+// position is never read (D21).
 type FileIn struct {
 	unknownCaptureDay bool // no day of its own, whatever the type: only setCover sets it (dayOf)
 	Title             string
-	Category          string
 	SHA256            string
 	MIME              string
 	Body              string
@@ -41,24 +40,11 @@ type Kept struct {
 	DaySync      *Sync  `json:"day_sync,omitempty"`      // the links synchronized when appending to its day
 	Day          string `json:"day,omitempty"`           // its own day: the caller's, or the one its metadata gives
 	Embedded     bool   `json:"embedded,omitempty"`      // it was appended to its day's page
-	Filed        *Filed `json:"filed,omitempty"`         // what filing it in the category named did; none when no category was named
 }
 
-// AddFile keeps a file (keep), then, when f names a category, files its page there in the same write, as FilePages
-// does (docs/plans/117-one-browse-view.md, rule 6). The page the original's hash names already is filed too. A
-// tombstoned page is not filed: for it nothing is written. A day as the category refuses the whole write, as fileNew
-// says.
+// AddFile keeps a file (keep). file-pages files its page in a category (docs/plans/131-the-pareto-pass.md, part 2).
 func (t *Tx) AddFile(f FileIn) (Kept, error) {
-	k, err := t.keep(f)
-	if err != nil || f.Category == "" || k.Deleted {
-		return k, err
-	}
-	filed, err := t.filePages([]int64{k.ID}, f.Category, false)
-	if err != nil {
-		return k, err
-	}
-	k.Filed = &filed
-	return k, nil
+	return t.keep(f)
 }
 
 // dayKind says what the day of a file kept means.
@@ -295,9 +281,6 @@ func (s *Store) TryAddFile(ctx context.Context, source string, f FileIn) (Kept, 
 	}
 	if !k.Existing {
 		k.ID = 0
-	}
-	if k.Filed != nil && k.Filed.Created {
-		k.Filed.Category.ID = 0
 	}
 	return k, nil
 }

@@ -18,7 +18,7 @@ and this page disagree, so a property here is a property on the wire.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
-  for `add-file` and `set-picture`, `multipart/form-data`.
+  for `add-file` and `set-cover`, `multipart/form-data`.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
   on this server.
@@ -48,10 +48,10 @@ or a `q` of blanks only, it answers with no hits ([search](#search)). A field of
 `YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
 value that is not empty is refused (422 `invalid`).
 
-Two reads answer `303` to a thing picked at random ([plan 130](docs/plans/130-the-explore-pass.md)): `random-day`
-(`GET /days/random`), to the day of a live day page up to today, and `random-page` (`GET /pages/random?kind=`), to a
-live thing of a Browse kind (`page` by default, or `all`), never a day page and never a ghost page. Each is a 404 when
-there is nothing to pick; another kind is 422.
+One read answers `303` to a thing picked at random ([plan 130](docs/plans/130-the-explore-pass.md)): `random-page`
+(`GET /pages/random?kind=`), to a live thing of a Browse kind (`page` by default, or `all`), never a day page and never
+a ghost page; with `kind=day`, to the day of a live day page up to today. It is a 404 when there is nothing to pick;
+another kind is 422.
 
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
@@ -71,34 +71,17 @@ An error is an entity of class `error` with `properties`:
 
 `/days`, `/browse` and `/search` take `limit` (1–500; defaults 30 for days, 50 for search, 200 for browse) and
 `offset` (0 or more), carry both in their properties, and link `next` when a further row exists and `prev` past the
-first page. `/days` pages by day first: `before` comes before `offset`, `next` is the days before the last card's day
-and `prev` the newer days ([days](#days)). Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
-
-## The old addresses of the lists
-
-A `GET` of a list that [browse](#browse) replaced answers `308 Permanent Redirect` to its Browse address, with its
-`limit`, `offset` and `new` kept (docs/plans/117-one-browse-view.md):
-
-| old address | answers 308 to |
-|---|---|
-| `/people` | `/browse?kind=person` |
-| `/places` | `/browse?kind=place` |
-| `/media`, `/media?kind=image` | `/browse?kind=media`, `/browse?kind=media&media=image` |
-| `/files` | `/browse?kind=document` |
-| `/ghosts` | `/browse?ghosts=1&kind=page` |
-| `/categories` | `/browse` |
-
-The `POST` routes of `/people`, `/places` and `/files` (`create-person`, `create-place`, `add-file`) do not change.
+first page. Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
 
 ## Classes
 
 ### root
 
-`GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered `303` to `/days/{today}`,
-the page of today, and a receipt of feedback goes with it. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
+`GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered with the
+[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
 (`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
-`week` (this week), `year` (this year). Actions: `capture` (for today), `search`,
+`year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`,
 `create-page`, `create-person`, `create-place`, `add-file`,
 `record`, `register-metric` (owner), `snapshot` (owner).
@@ -112,38 +95,27 @@ the page of today, and a receipt of feedback goes with it. Links: `today`, `days
 | `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker, the marks of emphasis, code and links, and the brackets of a wikilink cut (a link shows its label), an embed or an image left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
 | `recent[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
-| `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
-| `on_this_day[].day` | day | the day |
-| `on_this_day[].page_id` | integer | the day page's id |
-| `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
-| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
-| `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
-| `recent_titles` | list | the titles a search box may suggest ([plan 130](docs/plans/130-the-explore-pass.md)): the live pages, people, places and metrics made in the last 90 days or linked from a live day page of the last 90 days, the newest first, at most 200; never a file or a day page; empty when none |
 
 ### actions
 
-`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs.
+`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With `new=<action>` and a value
+for each path field of that action (`/actions?new=rename&id=12`), that one action has its `href` filled in, as a
+resource offers it; a browser, which cannot fill a path from a form, opens an action so.
 
 ### days
 
 `GET /days`: the stream ([plan 130](docs/plans/130-the-explore-pass.md)), the way the Calendar opens: one page of the
 days of the record as cards, the newest first, each an embedded `item` link to its day. A day is in the stream when it
 holds something: a live entity with that day (its day page, a page, a file) or a current reading. A day after today is
-never in it. The query, all optional:
+never in it. The query takes `limit` and `offset`, as every list; 30 and 0 by default.
 
-- `before`: a day, `YYYY-MM-DD`: only the days before it (it is not one of them); a value that is not a day is 422.
-  Without it, the page starts at today.
-- `limit` and `offset`: as every list; 30 and 0 by default. `offset` skips days after `before`.
-
-Links: `prev` (Newer days: the page above, `/days` at the top; absent on the top page), `next` (Older days:
-`before` the last card's day; absent on the oldest page), the zoom: `days` (`/days`), `week`, `month` and `year` (the
-period of the top card's day, or of today when the page has no card; a period that has no page is absent), `index`.
-Actions: `open-day`, `random-day`.
+Links: `prev` (Newer days; absent on the top page), `next` (Older days; absent on the oldest page), the zoom: `days`
+(`/days`), `month` and `year` (the period of the top card's day, or of today when the page has no card; a period that
+has no page is absent), `index`. Actions: `open-day`, `random-page` with `kind` day.
 
 | property | type | meaning |
 |---|---|---|
 | `today` | day | this machine's local day |
-| `before` | string | the `before` of the request; empty on the top page |
 | `limit` | integer | the page size used |
 | `offset` | integer | the days skipped |
 | `cards[]` | list | the days of the page, the newest first |
@@ -168,19 +140,6 @@ Actions: `open-day`, `random-day`.
 | `cards[].pages[].href` | string | the page |
 | `cards[].more_pages` | integer | the pages and files after the first 3; absent when none |
 | `cards[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
-| `cards[].quiet_after` | integer | the count of days with nothing between this card and the next older card; absent when none, and on the oldest card of the record |
-| `on_this_day[]` | list | on the top page only (no `before`, `offset` 0): the live day pages of earlier years on today's month and day, as `on_this_day[]` of the root |
-| `on_this_day[].day` | day | the day |
-| `on_this_day[].page_id` | integer | the day page's id |
-| `on_this_day[].first_line` | string | the first line of its body, as `recent[]` of the root; absent when none |
-| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
-| `on_this_day[].picture` | string | the address of the picture of the day page's cover; absent when it has none |
-| `years[]` | list | the jumps of the scrubber: each year from the year of the oldest day of the stream to today's, the newest first; empty when the stream is empty |
-| `years[].year` | string | the year, `YYYY` |
-| `years[].href` | string | the page of the days before the first day of the next year |
-| `months[]` | list | the twelve months of the year of the top card (or of today), December first; empty when the stream is empty |
-| `months[].month` | string | the month, `YYYY-MM` |
-| `months[].href` | string | the page of the days before the first day of the next month |
 
 ### browse
 
@@ -193,25 +152,28 @@ with the category tree beside them. The query, all optional:
 - `unfiled`: `0` or `1`: only what is in no category. A deleted category is not one: what is filed only there is in
   no category.
 - `ghosts`: `0` or `1`: only the rows of the `ghost_pages` view, a day page left out.
+- `deleted`: `0` or `1`: only the tombstones, of any type, a day page among them: each row opens its page, which
+  offers `revive`.
 - `media`: `image`, `video` or `audio`: one media kind.
 - `limit` and `offset`: as every list; 200 and 0 by default.
 
 A combination with no meaning is refused (422): `all` without `in`; `in` with `unfiled`; `ghosts` with a kind other
-than `page`, or with `in` or `unfiled`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
+than `page`, or with `in` or `unfiled`; `deleted` with a kind, `in`, `unfiled` or `ghosts`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
 that cannot be a category (a person, a place, a file, a metric or a day) is a 422, and of a deleted page a 409.
 A page is a plain page: a day page is in no list. Media and documents are the files, split by the first part of their
 type. Orders: pages, people, places and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
-first, then by title; ghosts oldest first.
+first, then by title; ghosts oldest first; the deleted the newest deletion first.
 
 A category is a page that something is `part-of` (D26). Each row is an embedded `item` link (class: the row's
 `type`), and each category of the tree an embedded `category` link to Browse in that category (it keeps a `kind` the
 query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, a `kind` link for each chip (class:
-its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
+its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, `deleted`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
-with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
-refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
-too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts.
+and inside a category `create-page` with `category` filled: it makes the page and files it there in one write, and a
+refusal of either step writes nothing (the other kinds are filed by `file-pages`); `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
+too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts. The deleted
+offer no action.
 
 | property | type | meaning |
 |---|---|---|
@@ -222,6 +184,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `in.path` | string | its path in the tree, or its title when nothing is filed in it |
 | `unfiled` | boolean | the list is of what is in no category |
 | `ghosts` | boolean | the list is of the ghost pages |
+| `deleted` | boolean | the list is of the tombstones |
 | `media` | string | the media kind read, or `""` |
 | `counts` | object | the live things of each kind in the scope of the list (everything, the category, or no category) |
 | `counts.page` | integer | the plain pages |
@@ -232,6 +195,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `counts.metric` | integer | the metrics |
 | `counts.all` | integer | inside a category only: the sum of the kinds |
 | `counts.ghosts` | integer | the rows of `ghost_pages`, in any scope |
+| `counts.deleted` | integer | the tombstones, in any scope |
 | `media_counts` | object | `kind=media` only: the live files of each media kind in the scope of the list, whatever `media` this page reads |
 | `media_counts.image` | integer | the pictures |
 | `media_counts.video` | integer | the videos |
@@ -245,7 +209,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `rows[].id` | integer | the page's id |
 | `rows[].title` | string | its title |
 | `rows[].type` | string | its `entity_type` |
-| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric` |
+| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric`; in the list of the deleted, its `entity_type` |
 | `rows[].category` | boolean | a page that is a category; absent otherwise |
 | `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
 | `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
@@ -254,6 +218,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
 | `rows[].day` | string | a file (not in `all`): its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
 | `rows[].unit` | string | a metric: its unit; absent for a count or a habit |
+| `rows[].deleted_at` | instant | the list of the deleted only: when it was deleted |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
@@ -277,7 +242,6 @@ action `search` and no properties: a browser draws it as the page to search from
 | `q` | string | the query |
 | `order` | string | the order of `hits`: `best` or `newest` |
 | `kind` | string | the kind of `hits`; empty for every kind |
-| `counts` | object | the hits of every page of the search by kind (`day`, `page`, `person`, `place`, `file`, each 0 when none) and `all`, their sum; the `titles` are not counted, and `kind` does not change a count |
 | `titles[]` | list | the live pages whose name key starts with the title key of `q` (as [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), at most 8, in key order |
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
@@ -298,7 +262,7 @@ action `search` and no properties: a browser draws it as the page to search from
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `open-day`, `set-cover` and `save-body`
+`record`, `set-cover` and `save-body`
 of the day page once it exists (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
@@ -314,18 +278,6 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `view[].detail` | string | the body, the page title, the place, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
 | `readings[]` | list | the day's readings, each a reading (below) with its id, to correct one |
 | `mood` | list | the values of the day's current Mood readings, in the order they were recorded (the Mood metric found by its name key); empty when none |
-| `trends[]` | list | one for each metric with a current reading on the day, in the order of `readings` |
-| `trends[].metric` | string | the metric's name |
-| `trends[].unit` | string | its unit (`''` for a count or a habit, a range such as `1-5` for a scale) |
-| `trends[].readings[]` | list | its current readings in the 14 days through the day, oldest first (the series of the cookbook) |
-| `trends[].readings[].day` | day |  |
-| `trends[].readings[].value` | number |  |
-| `on_this_day[]` | list | the live day pages of earlier years with the same month and day of the month, at most 10, the newest first; empty when none; 29 February matches 29 February only |
-| `on_this_day[].day` | day | the day |
-| `on_this_day[].page_id` | integer | the day page's id |
-| `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
-| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
-| `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
 | `today` | day | this machine's local day |
 | `recent[]` | list | on the day of today only: the 5 newest live day pages up to today, as `recent[]` of [the root](#root); absent on any other day, and when there is none |
 | `recent[].day` | day | the day |
@@ -337,10 +289,6 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
-| `pictures[]` | list | the other pictures of the day page, as `pictures[]` of [a page](#page-person-place-file) |
-| `pictures[].id` | integer | |
-| `pictures[].title` | string | |
-| `pictures[].embed` | string | |
 
 The **reading** shape (`readings[]` here and in a series; a measurement's own properties):
 
@@ -357,11 +305,10 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 
 ### month
 
-`GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
-of a month. Links: `prev`, `next` (the months before and after; 0000-01 has no `prev` and 9999-12 no `next`), the
-zoom (as `/days` has it): `days` (the stream before the first day of the next month), `week`, `month` and `year` (of
-today when today is in the month, else of its first day; a period that has no page is absent), `index`. Embedded: a `day` link to each day of the month. Actions: `open-day`. Each day holds what
-names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
+`GET /months/{YYYY-MM}` (a value that is not a month is 422): the calendar of a month. Links: `prev`, `next` (the
+months before and after; 0000-01 has no `prev` and 9999-12 no `next`), the zoom (as `/days` has it): `days`
+(`/days`), `month` and `year` (of today when today is in the month, else of its first day; a period that has no page
+is absent), `index`. Embedded: a `day` link to each day of the month. The day view holds the rest of a day.
 
 | property | type | meaning |
 |---|---|---|
@@ -372,56 +319,15 @@ names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 | `days[].page` | boolean | a live day page exists for it |
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the births and deaths, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | the title of the page |
-| `days[].items[].href` | string | the item's own resource: the page |
-| `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
-| `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
-
-### week
-
-`GET /weeks/{YYYY-Www}` (`/weeks/current` redirects to this week; a value that is not a week, or a week number the
-year does not have, is 422): a look back over an ISO 8601 week, Monday first. Links: `prev`, `next` (the weeks before
-and after; 0000-W01 has no `prev` and 9999-W52 no `next`), the zoom (as `/days` has it): `days` (the stream before
-the Monday after the week), `week`, `month` and `year` (of today when today is in the week, else of its Thursday, so
-the year is the ISO year; the year 0000 has no page and no `year` link), `index`. Embedded: a `day` link to each day of the week. Actions:
-`open-day`.
-
-| property | type | meaning |
-|---|---|---|
-| `week` | string | the week, `YYYY-Www` (the ISO year) |
-| `from` | day | the Monday |
-| `through` | day | the Sunday; 9999-12-31, a Friday, in 9999-W52 |
-| `today` | day | this machine's local day |
-| `days[]` | list | the days from `from` through `through`, in order (as `days[]` of the month): seven, and five in 9999-W52 |
-| `days[].day` | day | the day |
-| `days[].page` | boolean | a live day page exists for it |
-| `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
-| `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `days[].items[]` | list | every other thing that names the day, in this order: the births and deaths, the places and the pages; absent when none |
-| `days[].items[].kind` | string | `birthday` or `death` (a live person's birth or death day, and its day in each later year; 29 February is on 28 February in a common year); `place` (a live place that the live day page links with `at`); `page` or `file` (a live page that is not a day page and has the day, by title, at most 20 a day) |
-| `days[].items[].title` | string | the title of the page |
-| `days[].items[].href` | string | the item's own resource: the page |
-| `days[].items[].years` | integer | a birthday's or a death's: the whole years since the day the person's row holds; absent on that day |
-| `days[].more_pages` | integer | the pages and files of the day after the first 20 in `items[]`; absent when none |
-| `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
-| `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
-| `metrics[]` | list | each metric with a current reading in the week, by name |
-| `metrics[].metric` | string | the metric's name |
-| `metrics[].unit` | string | its unit; empty for a metric with none |
-| `metrics[].readings` | integer | how many such readings the week holds |
-| `metrics[].mean` | number | their mean, rounded to the most decimals that a reading of this metric has in the week and the week before, at least 1 and at most 6 |
-| `metrics[].previous_mean` | number | the mean of the week before, in the same way; absent when that week had no reading |
 
 ### year
 
-`GET /years/{YYYY}` (`/years/current` redirects to this year; a value that is not a year, 0001 to 9999, is 422): the
-twelve months of a year. Links: `prev`, `next` (the years before and after; 0001 has no `prev` and 9999 no `next`),
-the zoom (as `/days` has it): `days` (the stream before the next 1 January), `week`, `month` and `year` (of today when
-today is in the year, else of 1 January), `index`. Embedded: a `month` link to each month. Actions: `open-day`.
+`GET /years/{YYYY}` (a value that is not a year, 0001 to 9999, is 422): the twelve months of a year. Links: `prev`,
+`next` (the years before and after; 0001 has no `prev` and 9999 no `next`), the zoom (as `/days` has it): `days`
+(`/days`), `month` and `year` (of today when today is in the year, else of 1 January), `index`. Embedded: a `month`
+link to each month.
 
 | property | type | meaning |
 |---|---|---|
@@ -439,20 +345,21 @@ today is in the year, else of 1 January), `index`. Embedded: a `month` link to e
 ### page, person, place, file
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
-tombstoned page adds `deleted`. Links: `day` (a day page's day view), `preview` (a file's picture), `cover` (the
+tombstoned page adds `deleted`. Links: `day` (a day page's day view), `series` (a metric's readings), `preview` (a
+file's picture), `cover` (the
 picture of the page's cover, when it has one), `choose-cover` (the [pictures it may take](#cover-choice): a live page that
 is not a file). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote`, `rename`, `link` and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+cannot empty a page), `promote`, `rename`, `link` (with the kinds this type may start, but `part-of`: `file-pages`
+files a page) and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
-filed in it in one write), `set-cover` (a live page that is not a file), `tombstone`, or `revive` alone on a deleted page. In a browser, the page of a
-live metric answers 303 to its series, the metric's one page, which carries this page's text, links and actions. The
-writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
+filed in it in one write), `set-cover` (a live page that is not a file), `tombstone-pages` with `ids` this page, or
+`revive` alone on a deleted page. The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. A page's cover is the first live file with a preview that its body embeds; a file page has none, its own
-picture stands for it. A browser draws the cover as a square at the head of the margin, with the other `pictures`
-under it, and leaves that embed out of the body.
+picture stands for it. A browser draws the cover as a square at the head of the margin, with one link to the
+[picker](#cover-choice), and leaves that embed out of the body.
 `set-cover` (`POST /pages/{id}/cover`) puts `![[title]]` first in the body, unless that file is the page's
 cover already; a file the body embeds already trades places with the cover's embed, each with its label, so the body
 keeps each picture once. It takes a new photo as `original` (and
@@ -484,10 +391,6 @@ that is not a kept picture, or a file page, is refused (422).
 | `cover.id` | integer | the file's page id (its picture is `GET /pages/{id}/preview`) |
 | `cover.title` | string | the file's title |
 | `cover.embed` | string | the title as the body's embed writes it, which may be an alias: a reader that draws the cover apart from the body leaves out the first embed of that title |
-| `pictures[]` | list | the other live files with a preview that the body embeds, after the cover, each once, in the order of the body; absent when none |
-| `pictures[].id` | integer | the file's page id |
-| `pictures[].title` | string | its title: the `title` that `set-cover` takes |
-| `pictures[].embed` | string | the title as the body's embed writes it |
 | `links[]` | list | the typed links this page starts |
 | `links[].kind` | string | the link kind (`wikilink`, `at`, `part-of`) |
 | `links[].id` | integer | the other page's id |
@@ -551,18 +454,16 @@ and `retract`: to remove a reading, retract it. The properties are the reading's
 
 ### series
 
-`GET /metrics/{name}?from=&to=&all_history=`: the one page of a metric. Its
-readings over `(from, to]`, or with no `from` every reading through `to` (`all_history=1` says the same; `to` is today
-by default). An alias names the metric too. Links: `self` (`/metrics/{name}` when asked with no query),
-`all-readings`, `up` (metrics), `page` (the metric's page). Embedded: `reading` links. Actions: `record`
-(this metric). A live metric is a page
-(D27), so its page's actions are here too: `save-body`, `rename`, `link`, `unlink`,
-[`file-pages`](#filed) (this metric) and `tombstone`.
+`GET /metrics/{name}?from=&to=`: the readings of a metric over `(from, to]`, or with no `from` every reading through
+`to` (`to` is today by default). An alias names the metric too. Links: `self` (with the query that is not a
+default; `/metrics/{name}` when there is none), `all-readings` (with a `from` only: the same with no `from`), `up`
+(metrics), `page` (the metric's page, which holds its text, its links and its other actions: a live metric is a
+page, D27). Embedded: `reading` links. Actions: `record` (this metric).
 
 | property | type | meaning |
 |---|---|---|
 | `metric` | string | the name (an alias asked for gives the metric's name) |
-| `from` | day | the exclusive lower bound; empty in all-history mode |
+| `from` | day | the exclusive lower bound; empty for all history |
 | `to` | day | the inclusive upper bound |
 | `readings[]` | list | the readings (the reading shape), oldest first |
 | `readings[].id` | integer | |
@@ -573,33 +474,15 @@ by default). An alias names the metric too. Links: `self` (`/metrics/{name}` whe
 | `readings[].import_key` | string | |
 | `readings[].value` | number | |
 | `readings[].captured_with_id` | integer | |
-| `categories` | list | the paths of the categories it is filed in (`biomarkers/iron`) |
-| `id` | integer | the metric's page id; absent when the name is no live metric |
-| `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent likewise |
-| `body` | string | its page's text, CommonMark; absent likewise |
-| `links[]` | list | the typed links its page starts (the page's shape); absent likewise |
-| `links[].kind` | string | |
-| `links[].id` | integer | |
-| `links[].title` | string | |
-| `links[].entity_type` | string | |
-| `links[].note` | string | |
-| `links[].context` | string | always absent: only a backlink has a context |
-| `backlinks[]` | list | the links that end at its page (the page's shape); absent likewise |
-| `backlinks[].kind` | string | |
-| `backlinks[].id` | integer | |
-| `backlinks[].title` | string | |
-| `backlinks[].entity_type` | string | |
-| `backlinks[].note` | string | |
-| `backlinks[].context` | string | for a `wikilink`: the words of the block of that page that names this one; absent when none |
-| `all_history` | boolean | no `from` was named: every admitted day through `to` was selected |
+| `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent when the name is no live metric |
 
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
-[`file-pages`](#filed) and `register-metric` (owner), each with the category titles as the options of `category`. A browser draws each metric as a card: its latest reading and the
-line of its recent readings ([plan 112](docs/plans/112-metrics-as-cards.md)). `register-metric` takes `category` (a
-page title, made when missing): one write makes the metric and files it. A refusal of either step writes nothing. Its answer is the metric's [series](#series), with a `result` sentence
-([plan 113](docs/plans/113-new-metric-on-metrics.md)).
+[`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner). A
+browser draws each metric as a card: its latest reading and the line of its recent readings
+([plan 112](docs/plans/112-metrics-as-cards.md)). The answer of `register-metric` is the metric's [series](#series),
+with a `result` sentence; `file-pages` files a metric in a category.
 
 | property | type | meaning |
 |---|---|---|
@@ -634,7 +517,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
 
 | property | type | meaning |
 |---|---|---|
@@ -722,11 +605,11 @@ by the code of a body save, in one write. A page whose links are right is not wr
 
 ### tombstoned
 
-`POST /pages/tombstone` (`tombstone-pages`): the one field `ids` names
-the pages, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
+`POST /pages/tombstone` (`tombstone-pages`, the one delete of the catalog): the one field `ids` names
+the pages, one or several, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
 id is tombstoned in one write, or none is: an id no row has is 404, and a row tombstoned already is left as it is. The
 answer embeds an `item` link to each; `result` says the count in words, which a browser form shows on the list it
-returns to. `self` is `/`.
+returns to (`back`), or home. `self` is `/`.
 
 | property | type | meaning |
 |---|---|---|
@@ -803,12 +686,3 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `day_sync.skipped` | list | |
 | `day` | day | its own day: the `day` sent, else the EXIF date of a photo; absent when it has neither, or when its page is deleted |
 | `embedded` | boolean | `![[title]]` was appended to its day page |
-| `filed` | object | what filing it in `category` did, as [filed](#filed) says it; absent when no `category` was sent or its page is deleted |
-| `filed.category` | object | the category page; in a dry run that would make it, its `id` is 0 |
-| `filed.category.id` | integer | its id |
-| `filed.category.title` | string | its title |
-| `filed.category.path` | string | empty here |
-| `filed.category.count` | integer | absent here |
-| `filed.created` | boolean | the category page was made by this action |
-| `filed.added` | integer | 1 when the part-of link is new, 0 when the file was in the category already |
-| `filed.moved` | integer | always 0: `add-file` removes no link |

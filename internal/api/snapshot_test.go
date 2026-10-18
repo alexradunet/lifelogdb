@@ -81,14 +81,7 @@ func TestSnapshotIsTheOwnersFromAnySurface(t *testing.T) {
 	if rec.Code != 303 || !strings.HasPrefix(rec.Header().Get("Location"), "/?feedback=") {
 		t.Fatalf("browser form: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	req = httptest.NewRequest("GET", rec.Header().Get("Location"), nil)
-	req.Header.Set("Accept", "text/html")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if to := rec.Header().Get("Location"); rec.Code != 303 || !strings.HasPrefix(to, "/days/"+today+"?feedback=") { // Home is the page of today
-		t.Fatalf("Home with the receipt: %d %q, want 303 to the page of today", rec.Code, to)
-	}
-	req = httptest.NewRequest("GET", rec.Header().Get("Location"), nil)
+	req = httptest.NewRequest("GET", rec.Header().Get("Location"), nil) // Home is the page of today
 	req.Header.Set("Accept", "text/html")
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
