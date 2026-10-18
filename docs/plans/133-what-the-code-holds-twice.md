@@ -242,7 +242,7 @@ than the text above, this is what was done and why:
 
 Checks, on Linux (Go 1.27.2): `gofmt`, `go vet ./...` and `go test ./...` on the merged branch; `staticcheck`
 2026.2.2 clean; `deadcode` finds `Store.Capture` reached by tests only; `govulncheck` v1.9.0: no vulnerabilities;
-`go test -count=1 -shuffle=on ./...` clean; `CGO_ENABLED=1 go test -race -count=1 ./...`: no data race reported, but the contract suites of `tests/` did not finish in the detector's 10-minute timeout; the run with a longer timeout is recorded below when it ends. A fresh
+`go test -count=1 -shuffle=on ./...` clean; `CGO_ENABLED=1 go test -race -count=1 ./...`: no data race in any package; the suites of `tests/` need `-timeout` above the default ten minutes under the detector (702 s here), and one allocation-budget test of `view` is skipped under it, since the instrumentation makes every allocation larger (`4102459`). A fresh
 clone built with no `go generate`. By hand on a synthetic database: the share target's post, the add-file Preview
 through `/render`, a multipart post to capture (415), `do browse deleted=1` and `do search limit=1`. Windows was not
 tested.
