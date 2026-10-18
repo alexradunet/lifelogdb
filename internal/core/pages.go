@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -26,7 +25,7 @@ func (t *Tx) saveBody(id int64, body, version string) (Sync, error) {
 			return Sync{}, err
 		}
 		if !same {
-			return Sync{}, conflictCode(siren.CodeStaleVersion, "page %d changed since version %q (now %q): read it again", id, version, p.Version)
+			return Sync{}, conflictCode(CodeStaleVersion, "page %d changed since version %q (now %q): read it again", id, version, p.Version)
 		}
 	}
 	return t.SetBody(id, body)
@@ -83,8 +82,12 @@ func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) err
 	if err := checkTitle("title", title); err != nil {
 		return 0, err
 	}
-	if p, err := t.lookup(title); err != nil || p != nil {
-		return 0, orExists(err, p, title)
+	p, err := t.lookup(title)
+	if err != nil {
+		return 0, err
+	}
+	if p != nil {
+		return 0, &ExistsError{p.ID, title}
 	}
 	id, err := t.insertPage(typ, title, text.TitleKey(title), day, body)
 	if err != nil || extra == nil {
@@ -118,20 +121,18 @@ func (t *Tx) promote(id int64, typ, name string) error {
 	}
 	if typ == "person" {
 		if name == "" {
-			if err := t.tx.QueryRowContext(t.ctx, `SELECT title FROM entity_names WHERE entity_id = ? AND name_key = (SELECT preferred_name_key FROM entities WHERE id = entity_id)`, id).Scan(&name); err != nil {
+			p, err := t.findPage(false, `e.id = ?`, id)
+			if err != nil {
 				return err
 			}
+			name = p.Title
 		}
 		_, err = t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name) VALUES (?, ?)`, id, name)
 	}
 	return err
 }
 
-// tombstone and revive are Store.Tombstone and Store.Revive in t.
-func (t *Tx) tombstone(id int64) error { return t.setDeleted(id, true) }
-
-func (t *Tx) revive(id int64) error { return t.setDeleted(id, false) }
-
+// setDeleted tombstones or revives the entity (Store.Tombstone and Store.Revive in t). The same state again changes nothing.
 func (t *Tx) setDeleted(id int64, deleted bool) error {
 	var tombstoned bool
 	err := t.tx.QueryRowContext(t.ctx, `SELECT deleted_at IS NOT NULL FROM entities WHERE id = ?`, id).Scan(&tombstoned)
@@ -208,13 +209,13 @@ func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name 
 
 // Revive clears entities.deleted_at (D11). A missing id is 404; the same state again changes nothing.
 func (s *Store) Revive(ctx context.Context, source string, id int64) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.revive(id) })
+	return s.Do(ctx, source, func(t *Tx) error { return t.setDeleted(id, false) })
 }
 
 // tombstonePages is Store.Tombstone in t.
 func (t *Tx) tombstonePages(ids []int64) error {
 	for _, id := range ids {
-		if err := t.tombstone(id); err != nil {
+		if err := t.setDeleted(id, true); err != nil {
 			return err
 		}
 	}
@@ -256,9 +257,9 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	p := &Page{ID: id}
 	var day, deleted sql.NullString
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at
+		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at, e.is_journal
 		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted)
+		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.IsDayPage)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no page %d", id)
 	}
@@ -266,7 +267,6 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 		return nil, err
 	}
 	p.Day, p.DeletedAt = day.String, deleted.String
-	p.IsDayPage = p.Day != "" && p.Day == p.Title
 	if p.Type == "person" {
 		var b, d sql.NullString
 		p.Person = &Person{}
@@ -403,11 +403,6 @@ func (o SearchOptions) where() (string, []any, error) {
 	return cond, args, nil
 }
 
-// Search is the hits of an FTS5 query, best first; limit and offset select one page of them.
-func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit, error) {
-	return s.SearchWith(ctx, q, SearchOptions{}, limit, offset)
-}
-
 // searchFrom is the live pages that the FTS5 query ? matches: the one definition of a hit.
 const searchFrom = `
 		  FROM entities_fts
@@ -415,7 +410,7 @@ const searchFrom = `
 		  LEFT JOIN files f ON f.id = p.id
 		 WHERE entities_fts MATCH ?`
 
-// SearchWith is Search with options. With the order newest, the hits go by the day of their page, newest first: a day
+// SearchWith is the hits of an FTS5 query, best first; limit and offset select one page of them. With the order newest, the hits go by the day of their page, newest first: a day
 // page has the day of its title, any other page the day of its created_at in the zone of the store. Pages of one
 // day keep the order of the best match, then of the id.
 func (s *Store) SearchWith(ctx context.Context, q string, o SearchOptions, limit, offset int) ([]Hit, error) {

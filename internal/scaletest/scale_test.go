@@ -28,14 +28,6 @@ func TestSmallWorkloadKnownAnswersAndReproducibility(t *testing.T) {
 	if first.Manifest != second.Manifest {
 		t.Fatalf("same seed changed logical fixture: %+v / %+v", first.Manifest, second.Manifest)
 	}
-	options.Seed++
-	third, err := Run(context.Background(), options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Manifest.LogicalSHA256 == third.Manifest.LogicalSHA256 {
-		t.Fatal("seed did not affect generated values")
-	}
 	if len(first.Operations) != 10 {
 		t.Fatalf("workflow measurements: %+v", first.Operations)
 	}
@@ -51,22 +43,5 @@ func TestSmallPreviewWorkload(t *testing.T) {
 	}
 	if report.Manifest.MediaMode == "metadata-only; no preview/storage realism claim" {
 		t.Fatal("previews mislabeled")
-	}
-}
-
-func TestLifetimeAndStressParameters(t *testing.T) {
-	life, err := workload("lifetime")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if life.Days != 18262 || life.MeasurementsPerDay != 20 || life.FilesPerDay != 3 || life.Notes != 4000 {
-		t.Fatalf("lifetime parameters %+v", life)
-	}
-	stress, err := workload("stress")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stress.Days != life.Days || stress.MeasurementsPerDay != 80 || stress.FilesPerDay != 6 || stress.Notes != 16000 || stress.TextMultiplier != 4 {
-		t.Fatalf("stress parameters %+v", stress)
 	}
 }

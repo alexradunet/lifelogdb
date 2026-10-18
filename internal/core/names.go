@@ -95,11 +95,21 @@ type ExistsError struct {
 
 func (e *ExistsError) Error() string { return "a page titled " + e.Title + " already exists" }
 
-func orExists(err error, p *pageRef, title string) error {
-	if err != nil {
-		return err
+// ensurePage is the id of the page that holds the key: found (revived when tombstoned), or created as a plain page
+// with the title and the day (nil for none) on its first mention (cookbook/capture.md, cookbook/save-a-body.md).
+func (t *Tx) ensurePage(title, key string, day any) (id int64, created, revived bool, err error) {
+	p, err := t.lookupKey(key)
+	switch {
+	case err != nil:
+		return 0, false, false, err
+	case p == nil:
+		id, err = t.insertPage("page", title, key, day, "")
+		return id, true, false, err
+	case p.Deleted:
+		_, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET deleted_at = NULL WHERE id = ?`, p.ID)
+		return p.ID, false, err == nil, err
 	}
-	return &ExistsError{p.ID, title}
+	return p.ID, false, false, nil
 }
 
 // rename is Store.Rename in t. A day page keeps its date, and a date is the name of its day page alone: the

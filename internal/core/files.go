@@ -42,11 +42,6 @@ type Kept struct {
 	Embedded     bool   `json:"embedded,omitempty"`      // it was appended to its day's page
 }
 
-// AddFile keeps a file (keep). file-pages files its page in a category (docs/plans/131-the-pareto-pass.md, part 2).
-func (t *Tx) AddFile(f FileIn) (Kept, error) {
-	return t.keep(f)
-}
-
 // dayKind says what the day of a file kept means.
 type dayKind int
 
@@ -80,9 +75,9 @@ func (t *Tx) dayOf(f FileIn) fileDay {
 	return fileDay{Day: t.today(), Kind: dayKept}
 }
 
-// keep keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
+// AddFile keeps a file: the page the original's hash names already, or a new file page, or a plain page of the title
 // promoted to the file (docs/cookbook/keep-a-file.md); then its own day (ownDay).
-func (t *Tx) keep(f FileIn) (Kept, error) {
+func (t *Tx) AddFile(f FileIn) (Kept, error) {
 	// the hash and the type are normalized here and held by files_sha256 and files_mime; the days by entities_day
 	f.SHA256 = strings.ToLower(strings.TrimSpace(f.SHA256))
 	f.MIME = NormalMIME(f.MIME)
@@ -159,12 +154,12 @@ func (t *Tx) keepNew(f FileIn, d fileDay) (k Kept, err error) {
 		if k.ID, err = t.insertPage("file", f.Title, text.TitleKey(f.Title), nullIfEmpty(d.Day), f.Body); err != nil {
 			return k, err
 		}
-	case p.Type == "page": // a day page is never a file: entities_day_page_plain refuses the update
+	case p.Type == "file": // another original under a title in use: the schema cannot see it, and the 409 names the page
+		return k, &ExistsError{p.ID, p.Title}
+	default: // a day page, a person, a place or a metric is never a file: the schema refuses the update
 		if body, err = t.promoteToFile(&k, p, f, d); err != nil {
 			return k, err
 		}
-	default:
-		return k, &ExistsError{p.ID, p.Title}
 	}
 	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO files(id, sha256, mime, preview) VALUES (?, ?, ?, ?)`, k.ID, f.SHA256, f.MIME, f.Preview); err != nil {
 		return k, err
@@ -180,11 +175,11 @@ func (t *Tx) keepNew(f FileIn, d fileDay) (k Kept, err error) {
 // promoteToFile makes the plain page p the page of the file f, and sets k to say so. It returns the text of the
 // page: the text of p, or that of f when p has none. Two different texts are never merged.
 func (t *Tx) promoteToFile(k *Kept, p *pageRef, f FileIn, d fileDay) (body string, err error) {
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
+		return "", err
+	}
 	if p.Body != "" && f.Body != "" && p.Body != f.Body {
 		return "", Conflict("%s already has text of its own: give the file another title (two texts are never merged)", p.Title)
-	}
-	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'file', deleted_at = NULL WHERE id = ? AND entity_type = 'page'`, p.ID); err != nil {
-		return "", err
 	}
 	body = f.Body
 	if p.Body == "" && f.Body != "" {

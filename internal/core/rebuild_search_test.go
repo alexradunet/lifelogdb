@@ -44,7 +44,7 @@ func TestRebuildSearchRepairsADriftedIndex(t *testing.T) {
 	if err != nil || !repaired.OK || !repaired.FullTextIndexOK {
 		t.Fatalf("after the rebuild: %+v %v", repaired, err)
 	}
-	hits, err := s.Search(ctx, "Bridge", 10, 0)
+	hits, err := s.SearchWith(ctx, "Bridge", SearchOptions{}, 10, 0)
 	if err != nil || len(hits) == 0 {
 		t.Errorf("the rebuilt index finds no page: %+v %v", hits, err)
 	}

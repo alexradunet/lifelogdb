@@ -207,12 +207,11 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, count(DISTINCT lp.id),
-		       coalesce(max(CASE WHEN lp_name.title = lp.day THEN lp.day END), ''), p.body
+		       coalesce(max(CASE WHEN lp.is_journal THEN lp.day END), ''), p.body
 		  FROM entities p
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN links l ON l.to_id = p.id
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
-		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
 		 WHERE p.entity_type = ? AND p.deleted_at IS NULL AND `+where+`
 		 GROUP BY p.id, p_name.title
 		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(append([]any{typ}, args...), limit, offset)...)
@@ -278,14 +277,13 @@ func (s *Store) filesWhere(ctx context.Context, cond string, condArgs []any, sc 
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, f.mime, f.preview IS NOT NULL,
-		       coalesce(p.day, max(CASE WHEN lp_name.title = lp.day THEN lp.day END), '') AS day,
+		       coalesce(p.day, max(CASE WHEN lp.is_journal THEN lp.day END), '') AS day,
 		       count(DISTINCT lp.id)
 		  FROM entities p
 		  JOIN files f ON f.id = p.id
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN links l ON l.to_id = p.id
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
-		  LEFT JOIN entity_names lp_name ON lp_name.entity_id = lp.id AND lp_name.name_key = lp.preferred_name_key
 		 WHERE p.deleted_at IS NULL AND `+cond+` AND `+where+`
 		 GROUP BY p.id, p_name.title, f.mime, f.preview IS NOT NULL
 		 ORDER BY day DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`, append(append(condArgs, args...), limit, offset)...)

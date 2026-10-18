@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/db"
 )
 
@@ -26,7 +25,7 @@ func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *Integ
 	}
 	path, err := db.Snapshot(ctx, s.DB.Path(), dir, now)
 	if errors.Is(err, db.ErrRefused) {
-		return "", nil, &Error{Status: http.StatusUnprocessableEntity, Msg: err.Error(), Code: siren.CodeSnapshotRefused, Err: err}
+		return "", nil, &Error{Status: http.StatusUnprocessableEntity, Msg: err.Error(), Code: CodeSnapshotRefused, Err: err}
 	}
 	if err != nil {
 		return "", nil, err

@@ -249,8 +249,8 @@ func TestIntegrityRunsUnderItsDeadline(t *testing.T) {
 		t.Fatalf("%d statements noted; want %d", len(c.deadlines), len(integrityCheckNames)+1)
 	}
 	for i, d := range c.deadlines {
-		if d.IsZero() || d.After(end.Add(IntegrityDeadline)) || !d.After(start.Add(IntegrityDeadline-time.Minute)) {
-			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, IntegrityDeadline, start, end)
+		if d.IsZero() || d.After(end.Add(integrityDeadline)) || !d.After(start.Add(integrityDeadline-time.Minute)) {
+			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, integrityDeadline, start, end)
 		}
 	}
 }

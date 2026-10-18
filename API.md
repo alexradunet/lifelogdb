@@ -520,7 +520,7 @@ with a `result` sentence; `file-pages` files a metric in a category.
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds, below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
 
 | property | type | meaning |
 |---|---|---|

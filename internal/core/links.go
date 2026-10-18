@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 
 	"lifelog/internal/text"
@@ -19,6 +18,17 @@ type Sync struct {
 	Skipped []string `json:"skipped,omitempty"`
 }
 
+// wikilinkIDs are the ids of the pages that the wikilink rows of the page id point to.
+func wikilinkIDs(ctx context.Context, q queryer, id int64) (map[int64]bool, error) {
+	targets := map[int64]bool{}
+	var to int64
+	rows, err := q.QueryContext(ctx, `SELECT to_id FROM links WHERE from_id = ? AND kind = 'wikilink'`, id)
+	if err := each(rows, err, []any{&to}, func() { targets[to] = true }); err != nil {
+		return nil, err
+	}
+	return targets, nil
+}
+
 // syncWikilinks is cookbook/save-a-body.md steps 1-4, after the body is written. A target that fails in steps 1-3 is
 // skipped when its savepoint rolls it back alone. A fault of the savepoint itself fails the save: the SAVEPOINT or the
 // RELEASE failed, or the savepoint could not roll back. The state of the transaction is then not known.
@@ -29,10 +39,8 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 	}
 	keys, titles, rejected := text.Targets(body, own)
 	r := Sync{Linked: []string{}, Skipped: rejected}
-	before := map[int64]bool{}
-	var to int64
-	rows, err := t.tx.QueryContext(t.ctx, `SELECT to_id FROM links WHERE from_id = ? AND kind = 'wikilink'`, pageID)
-	if err := each(rows, err, []any{&to}, func() { before[to] = true }); err != nil {
+	before, err := wikilinkIDs(t.ctx, t.tx, pageID)
+	if err != nil {
 		return Sync{}, err
 	}
 	ids := []int64{}
@@ -68,35 +76,18 @@ func (t *Tx) syncWikilinks(pageID int64, body string) (Sync, error) {
 			r.Revived = append(r.Revived, title)
 		}
 	}
-	idsJSON, _ := json.Marshal(ids)
 	_, err = t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND kind = 'wikilink'
-	                       AND to_id NOT IN (SELECT value FROM json_each(?))`, pageID, string(idsJSON))
+	                       AND to_id NOT IN (SELECT value FROM json_each(?))`, pageID, jsonArray(ids))
 	return r, err
 }
 
 func (t *Tx) linkTarget(pageID int64, key, title string) (id int64, created, revived bool, err error) {
-	var deleted sql.NullString
-	err = t.tx.QueryRowContext(t.ctx, `SELECT id, deleted_at FROM entities WHERE id = (SELECT entity_id FROM entity_names WHERE name_key = ?)`, key).
-		Scan(&id, &deleted)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		if id, err = t.insertPage("page", title, key, dayOfTitle(title), ""); err != nil {
-			return
-		}
-		created = true
-	case err != nil:
-		return
-	case id == pageID:
-		return id, false, false, nil
-	case deleted.Valid:
-		if _, err = t.tx.ExecContext(t.ctx, `UPDATE entities SET deleted_at = NULL WHERE id = ?`, id); err != nil {
-			return
-		}
-		revived = true
+	if id, created, revived, err = t.ensurePage(title, key, dayOfTitle(title)); err != nil || id == pageID {
+		return id, false, false, err
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO links(from_id, to_id, kind, created_at, source) VALUES (?, ?, 'wikilink', `+nowSQL+`, ?)
 	                    ON CONFLICT(from_id, to_id, kind) DO NOTHING`, pageID, id, t.source)
-	return
+	return id, created, revived, err
 }
 
 // dayOfTitle is a link target's day: none, except a day page (entities_day_page).
@@ -190,8 +181,7 @@ func (s *Store) addContexts(ctx context.Context, id int64, in []Edge) error {
 	if err != nil {
 		return err
 	}
-	ids, _ := json.Marshal(sources)
-	rows, err = s.DB.R.QueryContext(ctx, `SELECT id, body FROM entities WHERE id IN (SELECT value FROM json_each(?))`, string(ids))
+	rows, err = s.DB.R.QueryContext(ctx, `SELECT id, body FROM entities WHERE id IN (SELECT value FROM json_each(?))`, jsonArray(sources))
 	contexts := make(map[int64]string, len(sources))
 	var from int64
 	var body string

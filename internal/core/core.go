@@ -4,12 +4,12 @@ package core
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/db"
 	"lifelog/internal/text"
 
@@ -101,8 +101,18 @@ func conflictCode(code, format string, a ...any) error {
 	return &Error{Status: http.StatusConflict, Msg: fmt.Sprintf(format, a...), Code: code}
 }
 
+// The codes of the failures that core names. The API sends them as the code of a problem, and siren holds the same
+// strings for the clients, which must not import core (internal/api/codes_test.go compares the two).
+const (
+	CodeStaleVersion    = "stale_version"    // a page saved from a version that is not the current one
+	CodeSnapshotRefused = "snapshot_refused" // the snapshot action refused its target
+	// CodeBusy is the code of a write that met a locked file (SQLITE_BUSY): the CLI and the service write one file,
+	// and a write can wait longer than busy_timeout for the other.
+	CodeBusy = "busy"
+)
+
 // refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write that found the
-// file locked (SQLITE_BUSY, with its extended codes) is a 503 with siren.CodeBusy: its transaction rolled back, so nothing was
+// file locked (SQLITE_BUSY, with its extended codes) is a 503 with CodeBusy: its transaction rolled back, so nothing was
 // applied and a retry is safe. A write whose
 // rollback failed (db.RollbackError) is a fault, whatever its fn returned: the transaction can be open or kept in part.
 // Its text keeps the error of fn, and its chain only the error of the rollback, so no surface reads it as a refusal.
@@ -123,12 +133,19 @@ func refused(err error) error {
 		return &Error{Status: http.StatusUnprocessableEntity, Msg: se.Error()}
 	}
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_BUSY {
-		return &Error{Status: http.StatusServiceUnavailable, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: siren.CodeBusy, Err: err}
+		return &Error{Status: http.StatusServiceUnavailable, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: CodeBusy, Err: err}
 	}
 	return err
 }
 
 // The checks of a surface's input that every write and read shares, so one refusal has one message.
+
+// jsonArray is a list of strings or ids as a JSON array, for a query that reads it with json_each. A value of these
+// types always encodes, so it has no error. A nil list is "null": give an empty list.
+func jsonArray[T string | int64](list []T) string {
+	b, _ := json.Marshal(list)
+	return string(b)
+}
 
 // checkDay refuses a value that is not a local day (lifelog_meta.days); what names the field.
 func checkDay(what, s string) error {
