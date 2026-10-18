@@ -113,7 +113,8 @@ func newServer(s *core.Store) *server {
 		"tombstone": h.tombstone, "revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
 		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
-		"search": h.search, "browse": h.browse, "find": h.find, "open-day": h.openDay, "snapshot": h.snapshot,
+		"search": h.search, "browse": h.browse, "find": h.find, "open-day": h.openDay, "random-day": h.randomDay,
+		"random-page": h.randomPage, "snapshot": h.snapshot,
 		"rebuild-search": h.rebuildSearch, "resync-links": h.resyncLinks,
 	})
 	// The routes that are not actions: the resources, the old lists, the editor's helpers and the files of the browser.

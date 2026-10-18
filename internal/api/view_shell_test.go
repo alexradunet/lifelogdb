@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -57,7 +58,7 @@ func TestTheSidebarMarksTodayOnTodaysDay(t *testing.T) {
 	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, `<a href="/days/today" aria-current="page" accesskey="t">`) {
 		t.Errorf("today's day does not mark Today:\n%s", sidebar(body))
 	}
-	if body := browse(t, h, "/days/"+dayOf(-1)); !strings.Contains(body, `<a href="/months/current" aria-current="page">`) {
+	if body := browse(t, h, "/days/"+dayOf(-1)); !strings.Contains(body, `<a href="/days" aria-current="page">`) {
 		t.Errorf("another day does not mark Calendar:\n%s", sidebar(body))
 	}
 }
@@ -89,7 +90,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /months/current /metrics /browse popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /days /metrics /browse popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if !strings.Contains(bar[1], `<a href="/browse" aria-current="page">`) || strings.Contains(bar[1], `class="here"`) {
@@ -184,7 +185,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 				marked = append(marked, m[3])
 			}
 		}
-		if want := "Today=/days/today Calendar=/months/current Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
+		if want := "Today=/days/today Calendar=/days Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
 			t.Errorf("%s: the sections are %v, want %s", path, got, want)
 		}
 		if strings.Join(marked, " ") != current {
@@ -193,5 +194,24 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 		if strings.Contains(body, `aria-label="The record"`) || strings.Count(sidebar(body), `href="/browse"`) != 1 {
 			t.Errorf("%s: the rail has a group of the record, or a second link to Browse", path)
 		}
+	}
+}
+
+// TestTheSearchBoxSuggestsRecentTitles: the rail's search and the search dialog name one datalist of the titles of the
+// last 90 days (docs/plans/130-the-explore-pass.md, part 7). With no such title (a clock years after every page was
+// made) there is no datalist and no list attribute, as when its read fails.
+func TestTheSearchBoxSuggestsRecentTitles(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Garden notes"}))
+	body := browse(t, h, "/browse")
+	if strings.Count(body, `list="search-q"`) != 2 || strings.Count(body, `<datalist id="search-q">`) != 1 || !strings.Contains(body, `<option value="Garden notes">`) {
+		t.Errorf("the search box of a page with recent titles: %.400s", body[strings.Index(body, "<datalist"):])
+	}
+	if titles := props(apitest.Must(t)(c.Get(t.Context(), "/")))["recent_titles"]; !strings.Contains(fmt.Sprint(titles), "Garden notes") {
+		t.Errorf("the root's recent_titles: %v", titles)
+	}
+	_, later, _ := apitest.FreshOn(t, "cli", "2099-01-01")
+	if body := browse(t, later, "/browse"); strings.Contains(body, "search-q") {
+		t.Error("a page with no recent title draws the datalist")
 	}
 }

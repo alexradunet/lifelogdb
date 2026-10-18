@@ -248,7 +248,7 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 	if !strings.Contains(browse(t, h, "/years/2027"), "0 days written") {
 		t.Error("a year with no page does not say that no day is written")
 	}
-	if !strings.Contains(browse(t, h, "/months/2026-10"), `<a href="/years/2026">The year</a>`) {
+	if !strings.Contains(browse(t, h, "/months/2026-10"), `<a href="/years/2026">Year</a>`) {
 		t.Error("a month does not link to its year")
 	}
 }
@@ -321,10 +321,10 @@ func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
 		{"/weeks/0000-W01", "next,month"},
 		{"/weeks/0000-W02", "prev,next,month"},
 		{"/weeks/9999-W52", "prev,month,year"},
-		{"/months/0000-01", "next"},
-		{"/months/9999-12", "prev"},
-		{"/years/0001", "next"},
-		{"/years/9999", "prev"},
+		{"/months/0000-01", "next,month"},
+		{"/months/9999-12", "prev,month,year"},
+		{"/years/0001", "next,month,year"},
+		{"/years/9999", "prev,month,year"},
 	} {
 		e, err := c.Get(t.Context(), tc.page)
 		if err != nil {

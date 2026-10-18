@@ -48,6 +48,11 @@ or a `q` of blanks only, it answers with no hits ([search](#search)). A field of
 `YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
 value that is not empty is refused (422 `invalid`).
 
+Two reads answer `303` to a thing picked at random ([plan 130](docs/plans/130-the-explore-pass.md)): `random-day`
+(`GET /days/random`), to the day of a live day page up to today, and `random-page` (`GET /pages/random?kind=`), to a
+live thing of a Browse kind (`page` by default, or `all`), never a day page and never a ghost page. Each is a 404 when
+there is nothing to pick; another kind is 422.
+
 **Types** in the tables: `string`, `integer`, `number`, `boolean`, `day` (a local day, `YYYY-MM-DD`), `instant`
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
 when it has no value.
@@ -64,9 +69,10 @@ An error is an entity of class `error` with `properties`:
 
 ## Pages of a list
 
-`/days`, `/browse` and `/search` take `limit` (1–500; defaults 60 for days, 50 for search, 200 for browse) and
+`/days`, `/browse` and `/search` take `limit` (1–500; defaults 30 for days, 50 for search, 200 for browse) and
 `offset` (0 or more), carry both in their properties, and link `next` when a further row exists and `prev` past the
-first page. Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
+first page. `/days` pages by day first: `before` comes before `offset`, `next` is the days before the last card's day
+and `prev` the newer days ([days](#days)). Orders: days newest first; search by rank, or newest first with `order=newest` ([search](#search)); browse by the kind of its rows ([browse](#browse)).
 
 ## The old addresses of the lists
 
@@ -112,6 +118,7 @@ the page of today, and a receipt of feedback goes with it. Links: `today`, `days
 | `on_this_day[].first_line` | string | the first line of its body (as `recent[]` of the root); absent when the body is empty |
 | `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `on_this_day[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
+| `recent_titles` | list | the titles a search box may suggest ([plan 130](docs/plans/130-the-explore-pass.md)): the live pages, people, places and metrics made in the last 90 days or linked from a live day page of the last 90 days, the newest first, at most 200; never a file or a day page; empty when none |
 
 ### actions
 
@@ -119,12 +126,61 @@ the page of today, and a receipt of feedback goes with it. Links: `today`, `days
 
 ### days
 
-`GET /days`: one page of the live day pages, newest first, each an embedded `item` link to its day.
+`GET /days`: the stream ([plan 130](docs/plans/130-the-explore-pass.md)), the way the Calendar opens: one page of the
+days of the record as cards, the newest first, each an embedded `item` link to its day. A day is in the stream when it
+holds something: a live entity with that day (its day page, a page, a file) or a current reading. A day after today is
+never in it. The query, all optional:
+
+- `before`: a day, `YYYY-MM-DD`: only the days before it (it is not one of them); a value that is not a day is 422.
+  Without it, the page starts at today.
+- `limit` and `offset`: as every list; 30 and 0 by default. `offset` skips days after `before`.
+
+Links: `prev` (Newer days: the page above, `/days` at the top; absent on the top page), `next` (Older days:
+`before` the last card's day; absent on the oldest page), the zoom: `days` (`/days`), `week`, `month` and `year` (the
+period of the top card's day, or of today when the page has no card; a period that has no page is absent), `index`.
+Actions: `open-day`, `random-day`.
 
 | property | type | meaning |
 |---|---|---|
+| `today` | day | this machine's local day |
+| `before` | string | the `before` of the request; empty on the top page |
 | `limit` | integer | the page size used |
-| `offset` | integer | the rows skipped |
+| `offset` | integer | the days skipped |
+| `cards[]` | list | the days of the page, the newest first |
+| `cards[].day` | day | the day |
+| `cards[].page_id` | integer | the live day page's id; absent on a slim card, a day with no day page |
+| `cards[].words` | string | the first 4 lines of the day page's body that have words, as plain text (as `recent[].first_line` of the root), joined by a newline; absent when none |
+| `cards[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
+| `cards[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
+| `cards[].places[]` | list | the live places the live day page links with `at`, by title; absent when none |
+| `cards[].places[].title` | string | the title of the place |
+| `cards[].places[].href` | string | the place's page |
+| `cards[].people[]` | list | the live people the live day page links with a wikilink, by title, after the places, so that the places and the people are 6 at most; absent when none |
+| `cards[].people[].title` | string | the title of the person |
+| `cards[].people[].href` | string | the person's page |
+| `cards[].more_chips` | integer | the places and the people after the first 6; absent when none |
+| `cards[].birthdays[]` | list | the live people born on the month and day of the card (29 February is on 28 February in a common year); a birthday is only on a day that has a card; absent when none |
+| `cards[].birthdays[].title` | string | the title of the person |
+| `cards[].birthdays[].href` | string | the person's page |
+| `cards[].pages[]` | list | the live pages and files with the day that are not day pages, by title, 3 at most; absent when none |
+| `cards[].pages[].kind` | string | `page` or `file` |
+| `cards[].pages[].title` | string | the title of the page |
+| `cards[].pages[].href` | string | the page |
+| `cards[].more_pages` | integer | the pages and files after the first 3; absent when none |
+| `cards[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
+| `cards[].quiet_after` | integer | the count of days with nothing between this card and the next older card; absent when none, and on the oldest card of the record |
+| `on_this_day[]` | list | on the top page only (no `before`, `offset` 0): the live day pages of earlier years on today's month and day, as `on_this_day[]` of the root |
+| `on_this_day[].day` | day | the day |
+| `on_this_day[].page_id` | integer | the day page's id |
+| `on_this_day[].first_line` | string | the first line of its body, as `recent[]` of the root; absent when none |
+| `on_this_day[].mood` | list | the values of the day's current Mood readings; absent when none |
+| `on_this_day[].picture` | string | the address of the picture of the day page's cover; absent when it has none |
+| `years[]` | list | the jumps of the scrubber: each year from the year of the oldest day of the stream to today's, the newest first; empty when the stream is empty |
+| `years[].year` | string | the year, `YYYY` |
+| `years[].href` | string | the page of the days before the first day of the next year |
+| `months[]` | list | the twelve months of the year of the top card (or of today), December first; empty when the stream is empty |
+| `months[].month` | string | the month, `YYYY-MM` |
+| `months[].href` | string | the page of the days before the first day of the next month |
 
 ### browse
 
@@ -155,7 +211,7 @@ its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there t
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
 refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
-too), `media` and `document`.
+too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts.
 
 | property | type | meaning |
 |---|---|---|
@@ -203,11 +259,15 @@ too), `media` and `document`.
 
 ### search
 
-`GET /search?q=&order=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+`GET /search?q=&order=&kind=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
 `order` is optional: `best` (the default) lists the best match first; `newest` lists the newest day first. The day of a
 page is its title when it is a day page, and else the local day of its `created_at` (in the zone of the writer). Pages of
 one day keep the order of the best match. Any other `order` is a 422 (`invalid`) that names the two. Links: `self`,
-`index`, `order` (the same words in the other order, titled `Newest first` or `Best match`), `prev` and `next`.
+`index`, `order` (the same words in the other order, titled `Newest first` or `Best match`), `prev` and `next`, and a
+`kind` link for each chip ([plan 130](docs/plans/130-the-explore-pass.md)): `All`, then `Days`, `Pages`, `People`,
+`Places` and `Files`, each with `class` its kind (`all` for All) and the same words and order.
+`kind` is optional: `day`, `page` (a metric is one), `person`, `place` or `file` lists only the hits of that kind; with
+none, every kind. Any other `kind` is a 422 (`invalid`).
 A page is in one list only: the `hits` leave out the pages that `titles` lists, and the paging counts the pages that are left.
 With no `q`, or a `q` of blanks only (spaces, tabs, a no-break space or another Unicode space), the answer has the
 action `search` and no properties: a browser draws it as the page to search from.
@@ -216,6 +276,8 @@ action `search` and no properties: a browser draws it as the page to search from
 |---|---|---|
 | `q` | string | the query |
 | `order` | string | the order of `hits`: `best` or `newest` |
+| `kind` | string | the kind of `hits`; empty for every kind |
+| `counts` | object | the hits of every page of the search by kind (`day`, `page`, `person`, `place`, `file`, each 0 when none) and `all`, their sum; the `titles` are not counted, and `kind` does not change a count |
 | `titles[]` | list | the live pages whose name key starts with the title key of `q` (as [titles and wikilinks](docs/contract/titles-and-wikilinks.md) folds a title), at most 8, in key order |
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
@@ -225,6 +287,8 @@ action `search` and no properties: a browser draws it as the page to search from
 | `hits[].id` | integer | the page's id |
 | `hits[].title` | string | its title |
 | `hits[].snippet` | string | the matching text, matches in `⟦`…`⟧` (U+27E6, U+27E7: never brackets, which a body's text uses) |
+| `hits[].kind` | string | `day` (a day page), `page` (a page or a metric), `person`, `place` or `file` |
+| `hits[].picture` | string | the address of the picture of its cover, or of a file's own picture; absent when it has none |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
@@ -294,8 +358,9 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 ### month
 
 `GET /months/{YYYY-MM}` (`/months/current` redirects to this month; a value that is not a month is 422): the calendar
-of a month. Links: `prev`, `next` (the months before and after; 0000-01 has no `prev` and 9999-12 no `next`), `days`
-(the list of day pages). Embedded: a `day` link to each day of the month. Actions: `open-day`. Each day holds what
+of a month. Links: `prev`, `next` (the months before and after; 0000-01 has no `prev` and 9999-12 no `next`), the
+zoom (as `/days` has it): `days` (the stream before the first day of the next month), `week`, `month` and `year` (of
+today when today is in the month, else of its first day; a period that has no page is absent), `index`. Embedded: a `day` link to each day of the month. Actions: `open-day`. Each day holds what
 names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 
 | property | type | meaning |
@@ -320,8 +385,9 @@ names it ([plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)).
 
 `GET /weeks/{YYYY-Www}` (`/weeks/current` redirects to this week; a value that is not a week, or a week number the
 year does not have, is 422): a look back over an ISO 8601 week, Monday first. Links: `prev`, `next` (the weeks before
-and after; 0000-W01 has no `prev` and 9999-W52 no `next`), `month` (the month of the week's Thursday), `year` (the ISO
-year; absent in the year 0000, which has no page), `index`. Embedded: a `day` link to each day of the week. Actions:
+and after; 0000-W01 has no `prev` and 9999-W52 no `next`), the zoom (as `/days` has it): `days` (the stream before
+the Monday after the week), `week`, `month` and `year` (of today when today is in the week, else of its Thursday, so
+the year is the ISO year; the year 0000 has no page and no `year` link), `index`. Embedded: a `day` link to each day of the week. Actions:
 `open-day`.
 
 | property | type | meaning |
@@ -354,7 +420,8 @@ year; absent in the year 0000, which has no page), `index`. Embedded: a `day` li
 
 `GET /years/{YYYY}` (`/years/current` redirects to this year; a value that is not a year, 0001 to 9999, is 422): the
 twelve months of a year. Links: `prev`, `next` (the years before and after; 0001 has no `prev` and 9999 no `next`),
-`index`. Embedded: a `month` link to each month. Actions: `open-day`.
+the zoom (as `/days` has it): `days` (the stream before the next 1 January), `week`, `month` and `year` (of today when
+today is in the year, else of 1 January), `index`. Embedded: a `month` link to each month. Actions: `open-day`.
 
 | property | type | meaning |
 |---|---|---|

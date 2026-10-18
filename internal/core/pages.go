@@ -329,11 +329,48 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	return p, nil
 }
 
-// Hit is one full-text match (cookbook/full-text-search.md).
+// Hit is one full-text match (cookbook/full-text-search.md): its page, the snippet, its kind (SearchKinds) and the
+// file whose preview stands for it (Picture): its cover, or a file's own preview; 0 when there is none.
 type Hit struct {
 	ID      int64  `json:"id"`
 	Title   string `json:"title"`
 	Snippet string `json:"snippet"`
+	Kind    string `json:"kind"`
+	Picture int64  `json:"-"`
+	body    string // read for Picture
+	preview bool
+}
+
+// searchKinds are the kinds a search groups its hits by (docs/plans/130-the-explore-pass.md, part 6), in the order of
+// the groups. A metric is a page: its page is words, as a page is.
+var searchKinds = []string{"day", "page", "person", "place", "file"}
+
+// SearchKinds are the kinds of a hit (searchKinds), as a copy.
+func SearchKinds() []string { return slices.Clone(searchKinds) }
+
+// searchKind is the kind of the hit p.
+const searchKind = `CASE WHEN p.is_journal THEN 'day' WHEN p.entity_type = 'metric' THEN 'page' ELSE p.entity_type END`
+
+// hitColumns are the columns of a hit, in the order of hitFields.
+const hitColumns = `p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24), ` + searchKind + `, p.body, f.preview IS NOT NULL`
+
+func hitFields(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet, &h.Kind, &h.body, &h.preview} }
+
+// withPictures sets the picture of each hit: the cover of its body, or a file's own preview. One query serves the
+// hits.
+func (s *Store) withPictures(ctx context.Context, hits []Hit) ([]Hit, error) {
+	err := setPictures(ctx, s.DB.R, hits, func(h *Hit) (string, *int64) {
+		if h.Kind == "file" {
+			return "", &h.Picture
+		}
+		return h.body, &h.Picture
+	})
+	for i := range hits {
+		if hits[i].preview {
+			hits[i].Picture = hits[i].ID
+		}
+	}
+	return hits, err
 }
 
 // The orders of a search: best match first (the default), or newest first.
@@ -359,9 +396,32 @@ func SearchOrderOf(order string) (string, error) {
 
 // SearchOptions are what a search may ask besides the words. Order is one of the SearchOrders. Omit are pages that
 // are not hits, so the caller can list them in a group of their own and the paging counts only the pages that are left.
+// Kind is one of the SearchKinds, or "" for every kind.
 type SearchOptions struct {
 	Order string
 	Omit  []int64
+	Kind  string
+}
+
+// where is the condition of the options on a hit p after the match, with its arguments: Omit and Kind.
+func (o SearchOptions) where() (string, []any, error) {
+	var cond string
+	var args []any
+	if len(o.Omit) > 0 {
+		cond = " AND p.id NOT IN (?" + strings.Repeat(", ?", len(o.Omit)-1) + ")"
+		for _, id := range o.Omit {
+			args = append(args, id)
+		}
+	}
+	switch {
+	case o.Kind == "":
+	case slices.Contains(searchKinds, o.Kind):
+		cond += " AND " + searchKind + " = ?"
+		args = append(args, o.Kind)
+	default:
+		return "", nil, Invalid("kind must be one of %s", strings.Join(searchKinds, ", "))
+	}
+	return cond, args, nil
 }
 
 // Search is the hits of an FTS5 query, best first; limit and offset select one page of them.
@@ -373,6 +433,7 @@ func (s *Store) Search(ctx context.Context, q string, limit, offset int) ([]Hit,
 const searchFrom = `
 		  FROM entities_fts
 		  JOIN entities p ON p.id = entities_fts.rowid JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
+		  LEFT JOIN files f ON f.id = p.id
 		 WHERE entities_fts MATCH ?`
 
 // SearchWith is Search with options. With the order newest, the hits go by the day of their page, newest first: a day
@@ -383,23 +444,45 @@ func (s *Store) SearchWith(ctx context.Context, q string, o SearchOptions, limit
 	if err != nil {
 		return nil, err
 	}
-	omit, args := "", []any{q}
-	if len(o.Omit) > 0 {
-		omit = " AND p.id NOT IN (?" + strings.Repeat(", ?", len(o.Omit)-1) + ")"
-		for _, id := range o.Omit {
-			args = append(args, id)
-		}
+	omit, rest, err := o.where()
+	if err != nil {
+		return nil, err
 	}
+	args := append([]any{q}, rest...)
 	if order == SearchNewest {
 		return s.searchNewest(ctx, q, omit, args, limit, offset)
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)`+searchFrom+omit+`
+		SELECT `+hitColumns+searchFrom+omit+`
 		 ORDER BY rank, p.id LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	if err != nil {
 		return nil, invalidCause(err, "search %q: %v", q, err)
 	}
-	return list(rows, nil, func(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet} })
+	hits, err := list(rows, nil, hitFields)
+	if err != nil {
+		return nil, err
+	}
+	return s.withPictures(ctx, hits)
+}
+
+// SearchCounts counts the hits of an FTS5 query by kind (SearchKinds, a kind with none is 0), with "all", their sum.
+// The options' Omit leave pages out, as from the hits; their Kind and Order do not change a count.
+func (s *Store) SearchCounts(ctx context.Context, q string, o SearchOptions) (map[string]int, error) {
+	o.Kind = ""
+	omit, rest, err := o.where()
+	if err != nil {
+		return nil, err
+	}
+	kinds, err := groupCounts(s.DB.R.QueryContext(ctx, `SELECT `+searchKind+`, count(*)`+searchFrom+omit+` GROUP BY 1`, append([]any{q}, rest...)...))
+	if err != nil {
+		return nil, invalidCause(err, "search %q: %v", q, err)
+	}
+	out := map[string]int{"all": 0}
+	for _, k := range searchKinds {
+		out[k] = kinds[k]
+		out["all"] += kinds[k]
+	}
+	return out, nil
 }
 
 // searchNewest reads the id, the day-page day and the created_at of every match, in the order of the best match, sorts
@@ -441,13 +524,16 @@ func (s *Store) searchNewest(ctx context.Context, q, omit string, args []any, li
 		ids[i] = x.id
 	}
 	rows, err = s.DB.R.QueryContext(ctx, `
-		SELECT p.id, p_name.title, snippet(entities_fts, 2, '⟦', '⟧', '…', 24)`+searchFrom+`
+		SELECT `+hitColumns+searchFrom+`
 		   AND p.id IN (?`+strings.Repeat(", ?", len(ids)-1)+`)`, append([]any{q}, ids...)...)
 	if err != nil {
 		return nil, invalidCause(err, "search %q: %v", q, err)
 	}
-	found, err := list(rows, nil, func(h *Hit) []any { return []any{&h.ID, &h.Title, &h.Snippet} })
+	found, err := list(rows, nil, hitFields)
 	if err != nil {
+		return nil, err
+	}
+	if found, err = s.withPictures(ctx, found); err != nil {
 		return nil, err
 	}
 	byID := make(map[int64]Hit, len(found))

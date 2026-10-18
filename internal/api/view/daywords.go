@@ -184,11 +184,21 @@ func weeks(list any) [][]any {
 	return out
 }
 
-// yearPage is the address of the page of a month's year, YYYY-MM; "" for the year 0000, which has no page.
-func yearPage(month string) string {
-	year, err := strconv.Atoi(month[:min(4, len(month))])
-	if err != nil || !siren.IsYear(year) {
+// yearsAgo is how long before today a day was, in whole years, as On this day says it: "1 year ago", "3 years ago".
+// A day after today, or less than a year before it, is "this year". A year is whole on the month and day of its day:
+// 29 February is a year older on 1 March of a common year.
+func yearsAgo(day, today string) string {
+	d, ok1 := text.ParseDay(day)
+	t, ok2 := text.ParseDay(today)
+	if !ok1 || !ok2 {
 		return ""
 	}
-	return siren.YearHref(year)
+	n := t.Year() - d.Year()
+	if t.Month() < d.Month() || t.Month() == d.Month() && t.Day() < d.Day() {
+		n--
+	}
+	if n < 1 {
+		return "this year"
+	}
+	return Count(n, "year ago", "years ago")
 }

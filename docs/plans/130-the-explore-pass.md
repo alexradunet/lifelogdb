@@ -9,7 +9,7 @@
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM: the views, the `/days` list (its page size and its items change)
   and three new catalog actions or fields. Nothing for the schema or the contract: every read uses tables and indexes
   that exist.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner).
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-17)
@@ -245,3 +245,40 @@ expected values checked by hand.
 - All seven parts are in, every check above passes (or is named as not run), and the screenshots are with the owner.
 - The deploy waits for the owner's word: keep the previous binary, build to the install path, restart the service,
   read its log line, and the owner looks at the live app.
+
+## Result
+
+All seven parts were done in one session on 2026-10-17, on the owner's word ("implement plan 130"), in a cloud
+container. The container has no service and no live file, so nothing was deployed. Parts 1 to 4 are one commit: each
+of them changes the same entity, `/days`.
+
+| part | what was done, where it departs from the plan |
+|---|---|
+| 1 | `core.Stream` reads `limit+1` days and gives back the page and `more`, so that the last card has its `quiet_after`; the handler does not use `readPage`. The `next` and `prev` links keep `limit` when it is not 30. A `before` after today shows no future day. `plainLines` cuts each line at 160 characters. The `list` template is gone. |
+| 2 | The days of a page are a `UNION` of `entities_day` and `measurements_day`: `EXPLAIN QUERY PLAN` shows a merge of the two indexes in day order, with no temporary b-tree, so `LIMIT` ends the read. The cards cost 8 queries, whatever their count: the days, the day pages, their covers, the moods, the readings, the pages and places, the people and the birthdays. `NewerBefore`, the scrubber (`FirstDay`) and On this day add their own reads. `FirstDay` reads `ORDER BY day LIMIT 1`, not `min()`, which walks every row. The places and the people are 6 chips together, then `more_chips`, a property the plan did not name. A file with a picture is shown in the page of its day, so its day has a day page with a cover and no words, not a slim card. |
+| 3 | The zoom of a week is anchored on its Thursday, not its Monday, when today is not in it: ISO 8601 gives a week the year of its Thursday, and the old `month` link of a week was the Thursday's. The months of the scrubber go from December to January, as the stream goes. `yearPage` and `yearOf` had no caller left and are gone. |
+| 4 | As planned. `yearsAgo` says "this year" for a day less than a year before today. |
+| 5 | A random day is up to today: a future day page is a plan, not a day to rediscover. A random thing is not limited to the category of the list, only to its kind. |
+| 6 | A group of the hits names its total and links to its chip ("All N"). A hit's title is the last text of its link, after the cover or the icon. |
+| 7 | The titles are ordered by the later of the UTC day a thing was made and the newest day that links it. The Mood metric, which the schema makes with the file, is a recent title of a new file. |
+
+Checks, on Linux: `gofmt -l` (no output); `go generate ./... && go vet ./... && go test ./...` after each part, and
+`go test -count=1 -shuffle=on ./...` after parts 5 and 6 (and so after 2): all pass except `TestHTTPAuthority/[::1]:0`,
+which fails because the container has no IPv6, before and after the change. Screenshots on a review server with
+synthetic data that spans 1998 to 2026, with slim days, birthdays, gaps and a future day page: `/days`,
+`/days?before=2026-08-01`, a week, a month, a year, `/browse`, `/search?q=walk` and `/search?q=walk&kind=day`, on a
+desktop and a phone, light and dark (32 pictures): no console error and no HTTP status of 400 or more.
+The lifetime scale run (`lifescale -profile lifetime -seed 2075 -samples 5`, metadata only, a cloud container with 4
+vCPU, a virtio disk and ext4) passed its known answers; `stream_page`, a page of 30 cards from the middle of 18,262 days
+with 20 readings a day, took 51 to 65 ms in its 5 samples (`search_rare`: 73 to 81 ms). The days query therefore stays
+a merge of the two indexes; the step-back recursive query was not needed.
+
+Not run: `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` (no `mmdc`), `staticcheck` and `govulncheck` (not
+installed), the race check, Windows.
+
+Open, for the owner:
+
+- **The review.** The screenshots are with the owner; the owner reviews all the parts before the deploy.
+- **Plan 129 on the live file.** The live file must have `capture_keys` before this binary runs on it (above).
+- **The deploy.** Keep the previous binary, build to the install path, restart the service, read its log line, and
+  look at the live app.

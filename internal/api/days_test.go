@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 )
 
@@ -317,7 +318,7 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 	file := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"),
 		map[string]string{"title": "Lake.jpg", "day": older}, map[string]string{"original": jpg}))
 	preview := apitest.Href(file, "preview")
-	for _, route := range []string{"/", "/days/" + fixedToday} {
+	for _, route := range []string{"/", "/days/" + fixedToday, "/days"} {
 		var got []string
 		for _, x := range props(apitest.Must(t)(c.Get(t.Context(), route)))["on_this_day"].([]any) {
 			m := x.(map[string]any)
@@ -327,6 +328,16 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 			t.Errorf("%s on_this_day = %q, want %q", route, got, want)
 		}
 		if route == "/" { // the JSON root carries the property; the browser's Home is the page of today
+			continue
+		}
+		if route == "/days" { // the stream draws the strip of the years, each with its cover
+			body := browse(t, h, route)
+			for _, w := range []string{`<section class="on-this-day panel" aria-label="On this day">`, `<img class="cover-picture" src="` + preview + `" alt="" loading="lazy"><span class="date">2 years ago</span><span class="first">Two years ago.</span>`,
+				`<a href="/days/` + old + `"><span class="date">4 years ago</span>`} {
+				if !strings.Contains(body, w) {
+					t.Errorf("%s lacks %s", route, w)
+				}
+			}
 			continue
 		}
 		body := browse(t, h, route)
@@ -452,4 +463,64 @@ func withoutReceiptOrNot(location string) string {
 	q.Del("feedback")
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// TestTheStreamPagesByDay: /days is the days with something, the newest first (docs/plans/130-the-explore-pass.md):
+// next is the older days before the last card's day, prev the newer days or the top. The days with nothing between
+// two cards are quiet_after; the first page carries On this day, and a later page does not; a before that is not a
+// day is a 422.
+func TestTheStreamPagesByDay(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // 2031-05-14
+	for day, text := range map[string]string{fixedToday: "Today.", dayOf(-1): "Yesterday.", dayOf(-2): "Two days ago.", "2030-05-14": "A year ago.", "2031-05-20": "Not yet."} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
+	}
+	cards := func(e *siren.Entity) string {
+		var out []string
+		for _, x := range props(e)["cards"].([]any) {
+			m := x.(map[string]any)
+			out = append(out, fmt.Sprintf("%v:%v:%v", m["day"], m["words"], m["quiet_after"]))
+		}
+		return strings.Join(out, " ")
+	}
+	top := apitest.Must(t)(c.Get(t.Context(), "/days?limit=2"))
+	if got, want := cards(top), "2031-05-14:Today.:<nil> 2031-05-13:Yesterday.:<nil>"; got != want {
+		t.Errorf("the top page: %s, want %s", got, want)
+	}
+	if apitest.Href(top, "next") != "/days?before=2031-05-13&limit=2" || apitest.Href(top, "prev") != "" {
+		t.Errorf("the top page links next %q, prev %q", apitest.Href(top, "next"), apitest.Href(top, "prev"))
+	}
+	if got := len(props(top)["on_this_day"].([]any)); got != 1 {
+		t.Errorf("the top page has %d days on this day, want 1", got)
+	}
+	for rel, want := range map[string]string{"days": "/days", "week": "/weeks/2031-W20", "month": "/months/2031-05", "year": "/years/2031"} {
+		if got := apitest.Href(top, rel); got != want {
+			t.Errorf("the zoom link %s is %q, want %q", rel, got, want)
+		}
+	}
+	if got := fmt.Sprint(props(top)["years"]); got != "[map[href:/days?before=2032-01-01 year:2031] map[href:/days?before=2031-01-01 year:2030]]" {
+		t.Errorf("years: %s", got)
+	}
+	older := apitest.Must(t)(c.Get(t.Context(), apitest.Href(top, "next")))
+	if got, want := cards(older), "2031-05-12:Two days ago.:362 2030-05-14:A year ago.:<nil>"; got != want {
+		t.Errorf("the older page: %s, want %s", got, want)
+	}
+	if apitest.Href(older, "next") != "" || apitest.Href(older, "prev") != "/days?limit=2" || props(older)["on_this_day"] != nil {
+		t.Errorf("the older page links next %q, prev %q, on this day %v", apitest.Href(older, "next"), apitest.Href(older, "prev"), props(older)["on_this_day"])
+	}
+	for _, bad := range []string{"/days?before=x", "/days?before=2031-02-30", "/days?before=2031-05-14&limit=0"} {
+		if _, err := c.Get(t.Context(), bad); apitest.Status(err) != 422 {
+			t.Errorf("%s: %v, want a 422", bad, err)
+		}
+	}
+
+	body := browse(t, h, "/days")
+	for _, want := range []string{`<article class="day-card" aria-label="2031-05-14">`, `<p class="card-words">Today.</p>`, `<p class="quiet-gap">· 362 quiet days ·</p>`,
+		`<span class="date">1 year ago</span><span class="first">A year ago.</span>`, `<a href="/days?before=2031-01-01">2030</a>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the stream lacks %s", want)
+		}
+	}
+	if strings.Contains(body, "Not yet.") {
+		t.Error("the stream shows a day after today")
+	}
 }

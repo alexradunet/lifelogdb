@@ -999,3 +999,58 @@ func TestTitlesByPrefixFoldsLikeATitleKey(t *testing.T) {
 		t.Errorf("a blank prefix: %v", err)
 	}
 }
+
+// TestRecentTitlesAreMadeOrLinkedLately: the titles of the search box are the live pages, people, places and metrics
+// made on or after the day since, or linked from a live day page of a day on or after it, the newest first; never a
+// file, a day page or a tombstoned page. The old pages are inserted by direct SQL with an old created_at (bulk setup:
+// created_at never changes).
+func TestRecentTitlesAreMadeOrLinkedLately(t *testing.T) {
+	s := fresh(t)
+	if err := s.Do(ctx, "cli", func(tx *Tx) error {
+		for _, title := range []string{"Old friend", "Forgotten"} {
+			var id int64
+			key := strings.ToLower(title)
+			if err := tx.tx.QueryRowContext(ctx, `INSERT INTO entities(entity_type, preferred_name_key, body, created_at, updated_at, source)
+			    VALUES ('page', ?, 'Old words.', '2000-01-01T00:00:00.000Z', '2000-01-01T00:00:00.000Z', 'cli') RETURNING id`, key).Scan(&id); err != nil {
+				return err
+			}
+			if _, err := tx.tx.ExecContext(ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, title, key); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2026-03-01", "Met [[Old friend]].", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Capture(ctx, "cli", "2025-01-01", "Thought of [[Forgotten]].", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Fresh page", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	gone, _, err := s.CreatePage(ctx, "cli", "Gone", "", "")
+	if err == nil {
+		err = s.Tombstone(ctx, "cli", gone)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: strings.Repeat("d", 64), MIME: "application/pdf"}); err != nil {
+		t.Fatal(err)
+	}
+	// Made now (the clock of SQLite, after 2026-03-01): Fresh page, and Mood, which the schema makes with the file;
+	// one day orders by title. Linked on 2026-03-01: Old friend.
+	got, err := s.RecentTitles(ctx, "2026-01-01", 200)
+	if err != nil || strings.Join(got, "|") != "Fresh page|Mood|Old friend" {
+		t.Errorf("RecentTitles since 2026-01-01: %q, %v; want Fresh page, Mood, Old friend", got, err)
+	}
+	if got, err := s.RecentTitles(ctx, "2026-01-01", 1); err != nil || strings.Join(got, "|") != "Fresh page" {
+		t.Errorf("RecentTitles with a limit of 1: %q, %v", got, err)
+	}
+	if got, err := s.RecentTitles(ctx, "2024-12-01", 200); err != nil || strings.Join(got, "|") != "Fresh page|Mood|Old friend|Forgotten" {
+		t.Errorf("RecentTitles since 2024-12-01: %q, %v", got, err)
+	}
+}

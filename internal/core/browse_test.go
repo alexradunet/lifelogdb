@@ -609,3 +609,59 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		}
 	}
 }
+
+// TestARandomPickIsLiveAndOfItsKind: a random day is a live day page up to today; a random thing is a live thing of
+// its kind, never a day page and never a ghost page. With one live and one tombstoned candidate, every pick is the
+// live one. A kind with nothing is a 404, a kind that is not one a 422.
+func TestARandomPickIsLiveAndOfItsKind(t *testing.T) {
+	s := streamStore(t) // today is 2026-10-17
+	if _, err := s.RandomDay(ctx); status(err) != 404 {
+		t.Errorf("a random day of an empty record: %v, want a 404", err)
+	}
+	captured(t, s, "2026-10-01", "Kept.", nil)
+	gone := captured(t, s, "2026-10-02", "Deleted.", nil)
+	captured(t, s, "2026-11-01", "A plan.", nil)
+	if err := s.Tombstone(ctx, "cli", gone); err != nil {
+		t.Fatal(err)
+	}
+	ana := must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "", "", ""))
+	bob := must[int64](t)(s.CreatePerson(ctx, "cli", "Bob", "", "", "", ""))
+	if err := s.Tombstone(ctx, "cli", bob); err != nil {
+		t.Fatal(err)
+	}
+	// A ghost page: empty, unlinked and older than 30 days (bulk setup by direct SQL, as TestBrowseCountsTheGhostPages
+	// does: created_at never changes).
+	if err := s.Do(ctx, "cli", func(tx *Tx) error {
+		var id int64
+		if err := tx.tx.QueryRowContext(ctx, `INSERT INTO entities(entity_type, preferred_name_key, body, created_at, updated_at, source)
+		    VALUES ('page', 'ghost', '', '2000-01-01T00:00:00.000Z', '2000-01-01T00:00:00.000Z', 'cli') RETURNING id`).Scan(&id); err != nil {
+			return err
+		}
+		_, err := tx.tx.ExecContext(ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, 'Ghost', 'ghost')`, id)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for range 20 {
+		if day, err := s.RandomDay(ctx); err != nil || day != "2026-10-01" {
+			t.Fatalf("a random day: %q, %v; want 2026-10-01, the one live day page up to today", day, err)
+		}
+		if id, err := s.RandomThing(ctx, "person"); err != nil || id != ana {
+			t.Fatalf("a random person: %d, %v; want Ana %d", id, err, ana)
+		}
+		// all: Ana, the Mood metric, and no day page, no ghost
+		id, err := s.RandomThing(ctx, "all")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p, err := s.PageByID(ctx, id); err != nil || p.IsDayPage || p.Title == "Ghost" || p.DeletedAt != "" {
+			t.Fatalf("a random thing of all: %+v, %v", p, err)
+		}
+	}
+	if _, err := s.RandomThing(ctx, "page"); status(err) != 404 {
+		t.Errorf("a random page with only a ghost and day pages: %v, want a 404", err)
+	}
+	if _, err := s.RandomThing(ctx, "day"); status(err) != 422 {
+		t.Errorf("the kind day: %v, want a 422", err)
+	}
+}

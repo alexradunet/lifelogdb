@@ -60,11 +60,11 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 			t.Fatalf("duplicate MCP tool %q", tool.Name)
 		}
 		seen[tool.Name] = true
-		if (tool.Name == "browse" || tool.Name == "get_day" || tool.Name == "get") && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
+		if (tool.Name == "browse" || tool.Name == "get_day" || tool.Name == "get" || tool.Name == "random_day" || tool.Name == "random_page") && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
 			t.Errorf("%s is not marked a read: %+v", tool.Name, tool.Annotations)
 		}
 	}
-	for _, name := range []string{"find", "get", "get_day", "open_day"} {
+	for _, name := range []string{"find", "get", "get_day", "open_day", "random_day", "random_page"} {
 		if !seen[name] {
 			t.Fatalf("MCP tools lack %q; have %v", name, seen)
 		}

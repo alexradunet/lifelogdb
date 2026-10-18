@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"slices"
 	"strings"
 )
@@ -307,4 +309,35 @@ const plainGhosts = `SELECT g.id, g.title, g.created_at FROM ghost_pages g JOIN 
 func (s *Store) Ghosts(ctx context.Context, limit, offset int) ([]Ghost, error) {
 	rows, err := s.DB.R.QueryContext(ctx, plainGhosts+` ORDER BY g.created_at, g.id LIMIT ? OFFSET ?`, limit, offset)
 	return list(rows, err, func(g *Ghost) []any { return []any{&g.ID, &g.Title, &g.CreatedAt} })
+}
+
+// RandomDay is the day of a live day page picked at random, up to today: a future day page is a plan, not a day to
+// rediscover (docs/plans/130-the-explore-pass.md). A 404 when there is none.
+func (s *Store) RandomDay(ctx context.Context) (string, error) {
+	var day string
+	err := s.DB.R.QueryRowContext(ctx, `SELECT p.day FROM entities p WHERE p.is_journal AND p.deleted_at IS NULL AND p.day <= ?
+		ORDER BY random() LIMIT 1`, s.Today()).Scan(&day)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", NotFound("no day page yet")
+	}
+	return day, err
+}
+
+// RandomThing is the id of a live thing of a Browse kind (BrowseKinds, or "all" for any of them) picked at random. It
+// is never a day page, as Browse holds none, and never a ghost page, which has nothing to show. A kind that is not one
+// is a 422; a kind with nothing in it, a 404.
+func (s *Store) RandomThing(ctx context.Context, kind string) (int64, error) {
+	if kind != "all" && !slices.Contains(browseKinds, kind) {
+		return 0, Invalid("kind must be one of %s or all", strings.Join(browseKinds, ", "))
+	}
+	var id int64
+	err := s.DB.R.QueryRowContext(ctx, `
+		SELECT p.id FROM entities p LEFT JOIN files f ON f.id = p.id
+		 WHERE p.deleted_at IS NULL AND NOT p.is_journal AND (?1 = 'all' OR `+browseKind+` = ?1)
+		   AND p.id NOT IN (SELECT id FROM (`+plainGhosts+`))
+		 ORDER BY random() LIMIT 1`, kind).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, NotFound("nothing of the kind %s yet", kind)
+	}
+	return id, err
 }

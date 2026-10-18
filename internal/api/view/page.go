@@ -86,8 +86,6 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"addDays":       addDays,
 	"week":          isoWeek,
 	"weekPage":      weekPage,
-	"yearOf":        func(month string) string { return month[:min(4, len(month))] },
-	"yearPage":      yearPage,
 	"sinceLast":     sinceLastWeek,
 	"nameWords":     nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
@@ -103,6 +101,8 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"alert":     alertOf,
 	"upTo":      upTo,
 	"beyond":    beyond,
+	"yearsAgo":  yearsAgo,
+	"kindIcon":  kindIcon,
 }).ParseFS(Files, "html/*.html"))
 
 // newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one
@@ -140,7 +140,7 @@ func Num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
-	"days": "list", "search": "search", "browse": "browse",
+	"days": "stream", "search": "search", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",

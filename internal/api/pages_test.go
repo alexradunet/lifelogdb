@@ -24,7 +24,8 @@ func TestSearchListsTitlesFirst(t *testing.T) {
 	draft := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Gardening draft"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, draft, "rename"), map[string]string{"title": "Allotment"}))
 	body := browse(t, h, "/search?q=garden")
-	titles, words := strings.Index(body, `aria-label="Pages by title"`), strings.Index(body, `aria-label="Pages by their words"`)
+	// The hits are in groups by kind (docs/plans/130-the-explore-pass.md, part 6): these are all pages.
+	titles, words := strings.Index(body, `aria-label="Pages by title"`), strings.Index(body, `<section class="result-group" aria-label="Pages">`)
 	if titles < 0 || words < 0 || titles > words {
 		t.Fatalf("the search does not list the pages by title first:\n%.3000s", body)
 	}

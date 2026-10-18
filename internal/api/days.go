@@ -4,7 +4,10 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"lifelog/internal/api/siren"
@@ -15,6 +18,19 @@ import (
 
 // recentDays is how many of the newest day pages the root shows.
 const recentDays = 5
+
+// The title suggestions of the search box (docs/plans/130-the-explore-pass.md, part 7): the titles of the last 90
+// days, at most 200 of them, about 8 KB on each page.
+const (
+	recentTitleDays = 90
+	recentTitleMax  = 200
+)
+
+// recentTitles are the titles the search box suggests, by the clock of the store s.
+func recentTitles(ctx context.Context, s *core.Store) ([]string, error) {
+	since := s.Local().AddDate(0, 0, -recentTitleDays).Format(time.DateOnly)
+	return s.RecentTitles(ctx, since, recentTitleMax)
+}
 
 // recentDay is a day page as the root lists it: the day, the first line of its body, its mood and the address of the
 // picture of its cover. Picture hides the id of the embedded entry, which has no JSON name.
@@ -85,13 +101,17 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	titles, err := recentTitles(ctx, h.s)
+	if err != nil {
+		return nil, err
+	}
 	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
 		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &siren.Entity{
 		Class: []string{"root"}, Title: "Lifelog",
-		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay},
+		Properties: map[string]any{"today": today, "recent": recent, "on_this_day": onThisDay, "recent_titles": titles},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
 			link("browse", siren.BrowseHref(nil), "Browse"), link("categories", siren.BrowseHref(nil), "Categories"), link("people", siren.BrowseKindHref("person"), "People"),
 			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
@@ -137,23 +157,174 @@ func neighbourLinks(prev, next neighbour) []siren.Link {
 	return out
 }
 
+// The stream (docs/plans/130-the-explore-pass.md): /days is the days of the record as cards, the newest first. A page
+// is the days before before, offset days skipped, at most limit of them; next is the older days, prev the newer.
+
+// streamLimit is the count of the cards of a page of the stream when the request names none.
+const streamLimit = 30
+
+// cardChip is a place, a person or a birthday of a card, with the address of its page.
+type cardChip struct {
+	Title string `json:"title"`
+	Href  string `json:"href"`
+}
+
+// cardPage is a page or a file of a card (Kind), with its address.
+type cardPage struct {
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+	Href  string `json:"href"`
+}
+
+// dayCard is a card of the stream as the API shows it (core.Card). A slim card, a day with no day page, has no page_id
+// and no words.
+type dayCard struct {
+	Day        string     `json:"day"`
+	PageID     int64      `json:"page_id,omitempty"`
+	Words      string     `json:"words,omitempty"`
+	Mood       []float64  `json:"mood,omitempty"`
+	Picture    string     `json:"picture,omitempty"`
+	Places     []cardChip `json:"places,omitempty"`
+	People     []cardChip `json:"people,omitempty"`
+	MoreChips  int        `json:"more_chips,omitempty"`
+	Birthdays  []cardChip `json:"birthdays,omitempty"`
+	Pages      []cardPage `json:"pages,omitempty"`
+	MorePages  int        `json:"more_pages,omitempty"`
+	Readings   int        `json:"readings,omitempty"`
+	QuietAfter int        `json:"quiet_after,omitempty"`
+}
+
+// cardOf is a card of the store as the API shows it.
+func cardOf(c core.Card) dayCard {
+	chip := func(it core.CardItem) cardChip { return cardChip{Title: it.Title, Href: siren.PageHref(it.ID)} }
+	d := dayCard{Day: c.Day, PageID: c.PageID, Words: c.Words, Mood: c.Mood, Picture: pictureHref(c.Picture),
+		MoreChips: c.MoreChips, MorePages: c.MorePages, Readings: c.Readings, QuietAfter: c.QuietAfter}
+	for _, it := range c.Chips {
+		if it.Kind == "place" {
+			d.Places = append(d.Places, chip(it))
+		} else {
+			d.People = append(d.People, chip(it))
+		}
+	}
+	for _, it := range c.Birthdays {
+		d.Birthdays = append(d.Birthdays, chip(it))
+	}
+	for _, it := range c.Pages {
+		d.Pages = append(d.Pages, cardPage{Kind: it.Kind, Title: it.Title, Href: siren.PageHref(it.ID)})
+	}
+	return d
+}
+
+// streamHref is the address of a page of the stream: the days before before ("" for the top), with limit and offset
+// when they are not the defaults.
+func streamHref(before string, limit, offset int) string {
+	v := url.Values{}
+	if before != "" {
+		v.Set("before", before)
+	}
+	if limit != streamLimit {
+		v.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		v.Set("offset", strconv.Itoa(offset))
+	}
+	if len(v) == 0 {
+		return "/days"
+	}
+	return "/days?" + v.Encode()
+}
+
+// yearJump and monthJump are a year and a month of the scrubber: its name and the page of the stream that starts
+// after it.
+type (
+	yearJump struct {
+		Year string `json:"year"`
+		Href string `json:"href"`
+	}
+	monthJump struct {
+		Month string `json:"month"`
+		Href  string `json:"href"`
+	}
+)
+
 func (h *server) days(r *http.Request) (*siren.Entity, error) {
-	limit, offset, err := pageOf(r, 60)
+	ctx := r.Context()
+	limit, offset, err := pageOf(r, streamLimit)
 	if err != nil {
 		return nil, err
 	}
-	e := &siren.Entity{Class: []string{"days"}, Title: "Days", Links: []siren.Link{link("self", "/days", "Days"), link("index", "/", "Home")}}
-	days, props, err := readPage(e, "/days", nil, limit, offset, func(limit, offset int) ([]core.Edge, error) {
-		return h.s.RecentDays(r.Context(), limit, offset)
-	})
+	before, today := r.URL.Query().Get("before"), h.s.Today()
+	cards, more, err := h.s.Stream(ctx, before, limit, offset)
 	if err != nil {
 		return nil, err
+	}
+	e := &siren.Entity{Class: []string{"days"}, Title: "Days",
+		Links:   []siren.Link{link("self", streamHref(before, limit, offset), "Days"), link("index", "/", "Home")},
+		Actions: []siren.Action{action("open-day", nil, nil), action("random-day", nil, nil)}}
+	if offset > 0 {
+		e.Links = append(e.Links, link("prev", streamHref(before, limit, max(offset-limit, 0)), "Newer days"))
+	} else if newer, ok, err := h.s.NewerBefore(ctx, before, limit); err != nil {
+		return nil, err
+	} else if ok {
+		e.Links = append(e.Links, link("prev", streamHref(newer, limit, 0), "Newer days"))
+	}
+	if more {
+		e.Links = append(e.Links, link("next", streamHref(cards[len(cards)-1].Day, limit, 0), "Older days"))
+	}
+	// The zoom is anchored on the top card's day, so Week, Month and Year open the period the page shows.
+	anchor := today
+	if len(cards) > 0 {
+		anchor = cards[0].Day
+	}
+	at, _ := text.ParseDay(anchor)
+	e.Links = append(e.Links, zoomLinks(at, "/days")...)
+	shown := []dayCard{}
+	for _, c := range cards {
+		shown = append(shown, cardOf(c))
+		e.Entities = append(e.Entities, link("item", siren.DayHref(c.Day), c.Day))
+	}
+	years, months, err := h.scrubber(ctx, at, today)
+	if err != nil {
+		return nil, err
+	}
+	props := map[string]any{"today": today, "before": before, "limit": limit, "offset": offset, "cards": shown,
+		"years": years, "months": months}
+	if before == "" && offset == 0 { // On this day is on the first page only
+		onThisDay, err := h.onThisDay(ctx, today)
+		if err != nil {
+			return nil, err
+		}
+		props["on_this_day"] = onThisDay
 	}
 	e.Properties = props
-	for _, d := range days {
-		e.Entities = append(e.Entities, link("item", siren.DayHref(d.Title), d.Title))
-	}
 	return e, nil
+}
+
+// scrubber are the jumps of the stream: each year from the first dated year to today's, the newest first, and the
+// twelve months of the year of at. A jump leads to the page of the days before the first day after it, so a year with
+// nothing in it shows the next older card.
+func (h *server) scrubber(ctx context.Context, at time.Time, today string) ([]yearJump, []monthJump, error) {
+	years, months := []yearJump{}, []monthJump{}
+	first, err := h.s.FirstDay(ctx)
+	if err != nil || first == "" {
+		return years, months, err
+	}
+	from, _ := text.ParseDay(first)
+	to, _ := text.ParseDay(today)
+	jump := func(t time.Time) string { // the page before t; the top for a day that is not one
+		if day := t.Format(time.DateOnly); text.IsDay(day) {
+			return streamHref(day, streamLimit, 0)
+		}
+		return "/days"
+	}
+	for y := to.Year(); y >= from.Year(); y-- {
+		years = append(years, yearJump{Year: fmt.Sprintf("%04d", y), Href: jump(time.Date(y+1, time.January, 1, 0, 0, 0, 0, time.UTC))})
+	}
+	for m := time.December; m >= time.January; m-- {
+		t := time.Date(at.Year(), m, 1, 0, 0, 0, 0, time.UTC)
+		months = append(months, monthJump{Month: t.Format("2006-01"), Href: jump(t.AddDate(0, 1, 0))})
+	}
+	return years, months, nil
 }
 
 // dayView is a day as the API shows it: the cookbook's day view, and beside it the day's mood and the day the

@@ -80,6 +80,7 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Route probe"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "A day for random-day."}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
 	page, reading := strings.TrimPrefix(apitest.Href(p, "self"), "/pages/"), strings.TrimPrefix(apitest.Href(m, "self"), "/measurements/")

@@ -13,6 +13,7 @@
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime" "more" "preview,dry_run")}}{{end}}
+{{template "random" (.Action "random-page")}}
 </div></header>
 <div class="browse">
 <nav class="browse-side panel" aria-label="Categories">{{template "browse-tree" .}}</nav>

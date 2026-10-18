@@ -30,6 +30,24 @@ func (h *server) find(r *http.Request, act spec, _ string) (*siren.Entity, error
 	return nil, redirect{siren.PageHref(id)}
 }
 
+// randomPage answers with the address of a thing of the kind picked at random (docs/plans/130-the-explore-pass.md,
+// part 5); the kind is page when the request names none.
+func (h *server) randomPage(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	kind := v.Get("kind")
+	if kind == "" {
+		kind = "page"
+	}
+	id, err := h.s.RandomThing(r.Context(), kind)
+	if err != nil {
+		return nil, err
+	}
+	return nil, redirect{siren.PageHref(id)}
+}
+
 func (h *server) page(r *http.Request) (*siren.Entity, error) {
 	id, err := idOf(r)
 	if err != nil {
@@ -168,35 +186,52 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	return out, nil
 }
 
-// searchProps are the properties of the search answer: the words, their order, the pages whose title starts with
-// them, and a page of the hits.
+// searchProps are the properties of the search answer: the words, their order and kind, the pages whose title starts
+// with them, the hits of this page and the count of the hits of each kind.
 type searchProps struct {
 	pageProps
 	Q      string            `json:"q"`
 	Order  string            `json:"order"`
+	Kind   string            `json:"kind"`
+	Counts map[string]int    `json:"counts"`
 	Titles []core.TitleMatch `json:"titles"`
-	Hits   []core.Hit        `json:"hits"`
+	Hits   []searchHit       `json:"hits"`
 }
 
-// searchHref is the address of the search for these words in this order. The best match is the default, so its
-// address has no order.
-func searchHref(q, order string) string {
+// searchHit is a hit with the address of its picture: its cover, or a file's own; absent when it has none.
+type searchHit struct {
+	core.Hit
+	Picture string `json:"picture,omitempty"`
+}
+
+// searchKindTitles are the words of the chips of a search, by kind.
+var searchKindTitles = map[string]string{"all": "All", "day": "Days", "page": "Pages", "person": "People", "place": "Places", "file": "Files"}
+
+// searchHref is the address of the search for these words in this order, of this kind. The best match and every kind
+// are the defaults, so their address names neither.
+func searchHref(q, order, kind string) string {
 	v := url.Values{"q": {q}}
 	if order != core.SearchBest {
 		v.Set("order", order)
+	}
+	if kind != "" {
+		v.Set("kind", kind)
 	}
 	return "/search?" + v.Encode()
 }
 
 func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
-	q := r.URL.Query().Get("q")
+	q, kind := r.URL.Query().Get("q"), r.URL.Query().Get("kind")
 	order, err := core.SearchOrderOf(r.URL.Query().Get("order"))
 	if err != nil {
 		return nil, err
 	}
+	if kind != "" && !slices.Contains(core.SearchKinds(), kind) {
+		return nil, core.Invalid("kind must be one of %s", strings.Join(core.SearchKinds(), ", "))
+	}
 	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
-		Links:   []siren.Link{link("self", searchHref(q, order), "Search"), link("index", "/", "Home")},
-		Actions: []siren.Action{action("search", nil, map[string]any{"q": q, "order": order})}}
+		Links:   []siren.Link{link("self", searchHref(q, order, kind), "Search"), link("index", "/", "Home")},
+		Actions: []siren.Action{action("search", nil, map[string]any{"q": q, "order": order, "kind": kind})}}
 	if strings.TrimSpace(q) == "" { // a q of only blanks has no words: it answers as the empty search does
 		return e, nil
 	}
@@ -221,17 +256,35 @@ func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		pageQuery.Set("order", order)
 		other, otherTitle = core.SearchBest, "Best match"
 	}
+	if kind != "" {
+		pageQuery.Set("kind", kind)
+	}
+	opts := core.SearchOptions{Order: order, Omit: omit, Kind: kind}
 	hits, props, err := readPage(e, "/search", pageQuery, limit, offset, func(limit, offset int) ([]core.Hit, error) {
-		return h.s.SearchWith(r.Context(), q, core.SearchOptions{Order: order, Omit: omit}, limit, offset)
+		return h.s.SearchWith(r.Context(), q, opts, limit, offset)
 	})
 	if err != nil {
 		return nil, err
 	}
-	e.Links = append(e.Links, link("order", searchHref(q, other), otherTitle))
-	e.Properties = searchProps{pageProps: props, Q: q, Order: order, Titles: titles, Hits: hits}
-	for _, x := range hits {
+	counts, err := h.s.SearchCounts(r.Context(), q, opts)
+	if err != nil {
+		return nil, err
+	}
+	e.Links = append(e.Links, link("order", searchHref(q, other, kind), otherTitle))
+	// The chips of the kinds (docs/plans/130-the-explore-pass.md, part 6), as Browse has them: All, then each kind.
+	for _, k := range append([]string{"all"}, core.SearchKinds()...) {
+		chip := k
+		if k == "all" {
+			chip = ""
+		}
+		e.Links = append(e.Links, siren.Link{Rel: []string{"kind"}, Href: searchHref(q, order, chip), Title: searchKindTitles[k], Class: []string{k}})
+	}
+	shown := make([]searchHit, len(hits))
+	for i, x := range hits {
+		shown[i] = searchHit{Hit: x, Picture: pictureHref(x.Picture)}
 		e.Entities = append(e.Entities, link("item", siren.PageHref(x.ID), x.Title))
 	}
+	e.Properties = searchProps{pageProps: props, Q: q, Order: order, Kind: kind, Counts: counts, Titles: titles, Hits: shown}
 	return e, nil
 }
 

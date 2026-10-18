@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lifelog/internal/photo/phototest"
 )
 
 func TestPeoplePlacesAndPromotion(t *testing.T) {
@@ -329,5 +331,63 @@ func TestSearchRefusesAnUnknownOrder(t *testing.T) {
 		if _, err := s.SearchWith(ctx, "needle", SearchOptions{Order: order}, 10, 0); err != nil {
 			t.Errorf("order %q: %v, want none", order, err)
 		}
+	}
+}
+
+// TestSearchByKind: a hit has its kind (a day page is a day, a metric a page), the counts are the hits of each kind
+// with their sum, a kind keeps only its hits in either order, and another kind is a 422. A hit's picture is its
+// cover, or a file's own preview.
+func TestSearchByKind(t *testing.T) {
+	s := streamStore(t)
+	captured(t, s, "2026-10-01", "A lantern by the lake.", nil)
+	if _, _, err := s.CreatePage(ctx, "cli", "Shed", "A lantern.", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	ana := must[int64](t)(s.PageID(ctx, "Ana"))
+	page := must[*Page](t)(s.PageByID(ctx, ana))
+	if _, err := s.SaveBody(ctx, "cli", ana, "Ana keeps a lantern.", page.Version); err != nil {
+		t.Fatal(err)
+	}
+	must[bool](t)(s.CreateMetric(ctx, "cli", NewMetric{Name: "Lantern hours", Note: "A lantern lit."}))
+	pic := must[Kept](t)(s.AddFile(ctx, "cli", FileIn{Title: "Lantern.jpg", SHA256: strings.Repeat("c", 64), MIME: "image/jpeg", Body: "A lantern at night.", Preview: phototest.JPEG(8, 8)}))
+	if _, err := s.SetCoverOf(ctx, "cli", ana, "Lantern.jpg"); err != nil {
+		t.Fatal(err)
+	}
+
+	hits := must[[]Hit](t)(s.SearchWith(ctx, "lantern", SearchOptions{}, 50, 0))
+	kinds := map[string]string{}
+	for _, h := range hits {
+		kinds[h.Title] = h.Kind
+		if want := map[string]int64{"Ana": pic.ID, "Lantern.jpg": pic.ID}[h.Title]; h.Picture != want {
+			t.Errorf("the picture of %s is %d, want %d", h.Title, h.Picture, want)
+		}
+	}
+	want := map[string]string{"2026-10-01": "day", "Shed": "page", "Ana": "person", "Lantern hours": "page", "Lantern.jpg": "file"}
+	if fmt.Sprint(kinds) != fmt.Sprint(want) {
+		t.Errorf("the kinds of the hits: %v, want %v", kinds, want)
+	}
+	counts := must[map[string]int](t)(s.SearchCounts(ctx, "lantern", SearchOptions{Kind: "person"}))
+	if got := fmt.Sprint(counts); got != "map[all:5 day:1 file:1 page:2 person:1 place:0]" {
+		t.Errorf("the counts: %s", got)
+	}
+	shed := must[int64](t)(s.PageID(ctx, "Shed"))
+	if got := must[map[string]int](t)(s.SearchCounts(ctx, "lantern", SearchOptions{Omit: []int64{shed}})); got["page"] != 1 || got["all"] != 4 {
+		t.Errorf("the counts without Shed: %v", got)
+	}
+	for _, order := range SearchOrders() {
+		only := must[[]Hit](t)(s.SearchWith(ctx, "lantern", SearchOptions{Order: order, Kind: "page"}, 50, 0))
+		var titles []string
+		for _, h := range only {
+			titles = append(titles, h.Title)
+		}
+		if slices.Sort(titles); strings.Join(titles, ",") != "Lantern hours,Shed" {
+			t.Errorf("the pages, %s: %v", order, titles)
+		}
+	}
+	if _, err := s.SearchWith(ctx, "lantern", SearchOptions{Kind: "metric"}, 50, 0); status(err) != 422 {
+		t.Errorf("the kind metric: %v, want a 422", err)
 	}
 }

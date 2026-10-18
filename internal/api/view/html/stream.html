@@ -1,0 +1,56 @@
+{{/* The stream (docs/plans/130-the-explore-pass.md): the Calendar opens on the days of the record as cards, the
+     newest first, 30 a page, then Older days. A card holds up to four plain lines of the journal, the mood, the cover,
+     the places and the people as chips, the birthdays, and the pages of the day; a day with no day page is a slim card
+     with no words. Between two cards, the days with nothing are a quiet marker. On the first page, On this day is a
+     strip at the top. Beside the cards the scrubber jumps to a year or a month; in a narrow column it is a closed fold
+     above them. Days, Week, Month and Year are the zoom of the Calendar. */}}
+{{define "stream"}}{{template "head" .}}{{$s := .Props}}
+<header class="page-head"><div class="what"><h1>Days</h1>{{template "zoom" (dict "v" . "current" "days")}}</div>
+<div class="tools">
+{{template "random" (.Action "random-day")}}
+{{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+</div></header>
+{{with $s.on_this_day}}<section class="on-this-day panel" aria-label="On this day">
+<div class="panel-head"><h2>On this day</h2></div>
+<ul class="plain strip">{{range .}}<li><a href="/days/{{.day}}">{{template "cover-picture" .}}<span class="date">{{yearsAgo .day $.Today}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}</a></li>{{end}}</ul>
+</section>{{end}}
+<div class="stream">
+<div class="stream-main">
+{{if $s.years}}<details class="stream-fold panel"><summary>Jump to a year or a month</summary>{{template "scrubber" $s}}</details>{{end}}
+{{range $s.cards}}{{template "day-card" (dict "v" $ "c" .)}}
+{{with .quiet_after}}<p class="quiet-gap">· {{count . "quiet day" "quiet days"}} ·</p>{{end}}
+{{else}}<p class="empty">Nothing yet. A day is here when it has a journal, a page, a file or a reading.</p>{{end}}
+{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Newer days</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Older days →</a>{{end}}</nav>{{end}}
+</div>
+{{if $s.years}}<nav class="stream-side panel" aria-label="Years and months">{{template "scrubber" $s}}</nav>{{end}}
+</div>
+{{template "foot" .}}{{end}}
+
+{{/* day-card is one day of the stream. It takes v (the view) and c (the card). */}}
+{{define "day-card"}}{{$v := .v}}{{with .c}}<article class="day-card{{if not .page_id}} slim{{end}}" aria-label="{{.day}}">
+<div class="card-head"><a class="date" href="/days/{{.day}}">{{.day}}</a><span class="weekday">{{weekday .day}}</span>{{with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</div>
+{{with .picture}}<a class="card-cover" href="/days/{{$.c.day}}"><img src="{{.}}" alt="" loading="lazy"></a>{{end}}
+{{with .words}}<p class="card-words">{{.}}</p>{{end}}
+{{if or .places .people .birthdays}}<ul class="card-chips" aria-label="Places and people">{{range .places}}<li><a href="{{.href}}">{{icon "places"}}{{.title}}</a></li>{{end}}{{range .people}}<li><a href="{{.href}}">{{icon "people"}}{{.title}}</a></li>{{end}}{{with .more_chips}}<li><a href="/days/{{$.c.day}}">+{{num .}}</a></li>{{end}}{{range .birthdays}}<li><a href="{{.href}}">Birthday: {{.title}}</a></li>{{end}}</ul>{{end}}
+{{with .pages}}<p class="card-pages">+ {{count (beyond . 0 $.c.more_pages) "page" "pages"}}: {{range $i, $p := .}}{{if $i}}, {{end}}<a href="{{.href}}">{{.title}}</a>{{end}}{{with $.c.more_pages}}, <a href="/days/{{$.c.day}}">and {{num .}} more</a>{{end}}</p>{{end}}
+{{with .readings}}<p class="meta">{{count . "reading" "readings"}}</p>{{end}}
+</article>{{end}}{{end}}
+
+{{/* scrubber is the jumps of the stream: the years, the newest first, and the months of the year the page shows. It
+     takes the properties of the stream. */}}
+{{define "scrubber"}}<nav class="kinds" aria-label="Years">{{range .years}}<a href="{{.href}}">{{.year}}</a>{{end}}</nav>
+<nav class="kinds" aria-label="Months">{{range .months}}<a href="{{.href}}">{{monthName .month}}</a>{{end}}</nav>{{end}}
+
+{{/* zoom is the levels of the Calendar (docs/plans/130-the-explore-pass.md, part 3): Days, Week, Month and Year, the
+     one the page is marked, then Today. It takes v (the view) and current (days, week, month or year). */}}
+{{define "zoom"}}{{$v := .v}}{{$c := .current}}<nav class="kinds chips zoom" aria-label="Zoom">
+{{- with $v.Link "days"}}<a href="{{.}}"{{if eq $c "days"}} aria-current="page"{{end}}>Days</a>{{end}}
+{{- with $v.Link "week"}}<a href="{{.}}"{{if eq $c "week"}} aria-current="page"{{end}}>Week</a>{{end}}
+{{- with $v.Link "month"}}<a href="{{.}}"{{if eq $c "month"}} aria-current="page"{{end}}>Month</a>{{end}}
+{{- with $v.Link "year"}}<a href="{{.}}"{{if eq $c "year"}} aria-current="page"{{end}}>Year</a>{{end}}
+<a href="/days/today">Today</a></nav>{{end}}
+
+{{/* random is a quiet button that opens a thing picked at random (docs/plans/130-the-explore-pass.md, part 5): a GET
+     form of the action, with its prefilled fields hidden (the kind of the Browse list). Nothing is drawn without the
+     action. The rail's New stays the one loud button. */}}
+{{define "random"}}{{with .}}<form class="tiny" method="GET" action="{{.Href}}">{{range .Fields}}{{$f := .}}{{with .Value}}<input type="hidden" name="{{$f.Name}}" value="{{num .}}">{{end}}{{end}}<button class="quiet">{{.Title}}</button></form>{{end}}{{end}}

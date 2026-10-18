@@ -190,10 +190,13 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{before, siren.WeekHref(before), weekName(before)},
 		neighbour{next, siren.WeekHref(next), weekName(next)})...)
-	e.Links = append(e.Links, link("month", siren.MonthHref(thursday), thursday.Format(layoutMonth)))
-	if siren.IsYear(thursday.Year()) {
-		e.Links = append(e.Links, link("year", siren.YearHref(thursday.Year()), strconv.Itoa(thursday.Year())))
+	// The zoom of a week is anchored on today when today is in it, else on its Thursday: ISO 8601 gives a week the
+	// year of its Thursday, and a week that starts in one month has its Thursday in the month of most of its days.
+	anchor := thursday
+	if t, ok := text.ParseDay(today); ok && !t.Before(monday) && !t.After(sunday) {
+		anchor = t
 	}
+	e.Links = append(e.Links, zoomLinks(anchor, streamAfter(sunday))...)
 	e.Links = append(e.Links, link("index", "/", "Home"))
 	e.Properties = map[string]any{"week": siren.WeekKey(monday), "from": from, "through": through, "today": today,
 		"days": days, "metrics": metrics}
@@ -257,6 +260,7 @@ func (h *server) year(r *http.Request) (*siren.Entity, error) {
 	if siren.IsYear(year + 1) {
 		e.Links = append(e.Links, link("next", siren.YearHref(year+1), fmt.Sprintf("%04d", year+1)))
 	}
+	e.Links = append(e.Links, zoomLinks(anchorIn(h.s.Today(), first, last), streamAfter(last))...)
 	e.Links = append(e.Links, link("index", "/", "Home"))
 	e.Properties = map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months}
 	return e, nil

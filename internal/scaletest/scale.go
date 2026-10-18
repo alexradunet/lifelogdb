@@ -678,6 +678,20 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 			}
 			delete(want, r.ID) // A duplicate cannot stand in for a missing reading.
 		}
+		// A page of the stream from the middle of the record (docs/plans/130-the-explore-pass.md): its days are
+		// before the day asked, newest first, and the capture of this sample is not on it.
+		var cards []core.Card
+		if err := record(report, "stream_page", func() error { var e error; cards, _, e = s.Stream(ctx, date, 30, 0); return e }); err != nil {
+			return err
+		}
+		if len(cards) == 0 && hasJournal {
+			return fmt.Errorf("the stream before %s is empty", date)
+		}
+		for j, c := range cards {
+			if c.Day >= date || j > 0 && c.Day >= cards[j-1].Day {
+				return fmt.Errorf("the stream before %s is out of order at %s", date, c.Day)
+			}
+		}
 		var hits []core.Hit
 		if err := record(report, "search_rare", func() error {
 			var e error

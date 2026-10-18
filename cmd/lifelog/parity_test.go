@@ -391,6 +391,9 @@ func parityRows() []parityRow {
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 		parityRow{"set-cover by a kept title", rowSetCover},
 		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
+		parityRow{"random-day", rowRandomDay},
+		parityRow{"random-page kind=person", rowRandomPage},
+		parityRow{"search kind=person", rowSearchKind},
 	)
 }
 
@@ -467,6 +470,53 @@ func rowFind(x *parityRun) {
 		x.t.Errorf("find Ana: %q %v %v", e.Title, apitest.Href(e, "self"), p)
 	}
 	x.refused("find", map[string]string{"title": "Nobody"}, http.StatusNotFound, "not_found")
+}
+
+// random-day is the day view of a live day page picked at random, up to today (docs/plans/130-the-explore-pass.md): with
+// one live day page up to today, a tombstoned one and one after today, it is the live one. With none, a 404.
+func rowRandomDay(x *parityRun) {
+	ctx := x.t.Context()
+	x.refused("random-day", nil, http.StatusNotFound, "not_found")
+	for _, day := range []string{"2021-05-05", "2022-06-06", "2098-01-01"} {
+		if _, _, err := x.store.Capture(ctx, "cli", day, "A day.", nil); err != nil {
+			x.t.Fatal(err)
+		}
+	}
+	gone, err := x.store.PageID(ctx, "2022-06-06")
+	if err == nil {
+		err = x.store.Tombstone(ctx, "cli", gone)
+	}
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	for range 5 {
+		if e := x.ok("random-day", nil); e.Title != "2021-05-05" || e.Class[0] != "day" {
+			x.t.Errorf("random-day: %v %q, want the day 2021-05-05", e.Class, e.Title)
+		}
+	}
+}
+
+// random-page is a live thing of the kind picked at random: never a tombstoned one. A kind with nothing is a 404, a
+// kind that is not one a 422.
+func rowRandomPage(x *parityRun) {
+	ctx := x.t.Context()
+	if _, err := x.store.CreatePerson(ctx, "cli", "Ana", "", "", "", ""); err != nil {
+		x.t.Fatal(err)
+	}
+	bob, err := x.store.CreatePerson(ctx, "cli", "Bob", "", "", "", "")
+	if err == nil {
+		err = x.store.Tombstone(ctx, "cli", bob)
+	}
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	for range 5 {
+		if e := x.ok("random-page", map[string]string{"kind": "person"}); e.Title != "Ana" || e.Class[0] != "person" {
+			x.t.Errorf("random-page kind=person: %v %q, want Ana", e.Class, e.Title)
+		}
+	}
+	x.refused("random-page", map[string]string{"kind": "place"}, http.StatusNotFound, "not_found")
+	x.refused("random-page", map[string]string{"kind": "day"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // open-day is the day view of a day; it is a read, so it makes no day page.
@@ -605,6 +655,30 @@ func rowSearchNewest(x *parityRun) {
 	if msg := x.refused("search", map[string]string{"q": "lantern", "order": "oldest"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, "best, newest") {
 		x.t.Errorf("the refusal %q does not name the orders", msg)
 	}
+}
+
+// search with a kind lists only the hits of that kind, and counts every kind (docs/plans/130-the-explore-pass.md); a
+// kind that is not one is a 422.
+func rowSearchKind(x *parityRun) {
+	ctx := x.t.Context()
+	if _, _, err := x.store.Capture(ctx, "cli", "2021-05-05", "A lantern.", nil); err != nil {
+		x.t.Fatal(err)
+	}
+	if _, err := x.store.CreatePerson(ctx, "cli", "Keeper of the lantern", "", "", "", ""); err != nil {
+		x.t.Fatal(err)
+	}
+	e := x.ok("search", map[string]string{"q": "lantern", "kind": "person"})
+	p := props(x.t, e)
+	var hits []string
+	for _, h := range p["hits"].([]any) {
+		h := h.(map[string]any)
+		hits = append(hits, fmt.Sprint(h["kind"], " ", h["title"]))
+	}
+	if counts := p["counts"].(map[string]any); strings.Join(hits, ",") != "person Keeper of the lantern" || p["kind"] != "person" ||
+		counts["all"] != json.Number("2") || counts["day"] != json.Number("1") || counts["person"] != json.Number("1") {
+		x.t.Errorf("search kind=person: %v, kind %v, counts %v", hits, p["kind"], p["counts"])
+	}
+	x.refused("search", map[string]string{"q": "lantern", "kind": "metric"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // create-place with a category makes the place and its part-of link in one write, and the category when it is new.

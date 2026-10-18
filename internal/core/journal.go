@@ -171,13 +171,18 @@ func (s *Store) Moods(ctx context.Context, from, through string) (map[string][]f
 	if err := checkWindow(from, through); err != nil {
 		return nil, err
 	}
+	return s.moods(ctx, `me.day BETWEEN ? AND ?`, from, through)
+}
+
+// moods is Moods for the days that a condition on me.day selects.
+func (s *Store) moods(ctx context.Context, cond string, args ...any) (map[string][]float64, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT me.day, me.value
 		  FROM measurement_values me
 		  JOIN entities e ON e.id = me.metric_id AND e.deleted_at IS NULL
 		  JOIN entity_names n ON n.entity_id = me.metric_id AND n.name_key = 'mood'
-		 WHERE me.day BETWEEN ? AND ?
-		 ORDER BY me.day, me.id`, from, through)
+		 WHERE `+cond+`
+		 ORDER BY me.day, me.id`, args...)
 	out := map[string][]float64{}
 	var day string
 	var v float64
@@ -244,26 +249,34 @@ func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, a
 // Born"), so it is escaped before text.Plain reads the line, and CommonMark does not read it as an ordered list.
 var orderedMark = regexp.MustCompile(`^(\d{1,9})([.)])`)
 
-// firstLineRunes is how long a first line may be before it is cut.
+// firstLineRunes is how long a line of a list of days may be before it is cut.
 const firstLineRunes = 160
 
-// firstLine is the first line of a body that has text, as plain text (text.Plain): a heading's or a list item's marker
-// cut, the marks of emphasis, code and links cut, an ![[embed]] or an image left out (a picture is not words, and a
-// cover goes first in the body), the brackets of a [[wikilink]] cut, and cut with "…" after 160 characters. A line
-// with no words is passed over. It is for a list of days, not a rendering.
-func firstLine(body string) string {
+// firstLine is the first line of a body that has words, as plainLines gives it. It is for a list of days, not a
+// rendering.
+func firstLine(body string) string { return plainLines(body, 1, firstLineRunes) }
+
+// plainLines are the first n lines of a body that have words, as plain text (text.Plain), joined by a newline: a
+// heading's or a list item's marker cut, the marks of emphasis, code and links cut, an ![[embed]] or an image left out
+// (a picture is not words, and a cover goes first in the body), the brackets of a [[wikilink]] cut, and each line cut
+// with "…" after runes characters. A line with no words is passed over.
+func plainLines(body string, n, runes int) string {
+	var out []string
 	for line := range strings.SplitSeq(body, "\n") {
+		if len(out) == n {
+			break
+		}
 		line = text.BlockMark.ReplaceAllString(strings.TrimSpace(line), "")
 		line = text.Plain(orderedMark.ReplaceAllString(line, `$1\$2`))
 		if line == "" {
 			continue
 		}
-		if r := []rune(line); len(r) > firstLineRunes {
-			line = strings.TrimSpace(string(r[:firstLineRunes])) + "…"
+		if r := []rune(line); len(r) > runes {
+			line = strings.TrimSpace(string(r[:runes])) + "…"
 		}
-		return line
+		out = append(out, line)
 	}
-	return ""
+	return strings.Join(out, "\n")
 }
 
 // RecentDays is one page of the day pages, newest first.
