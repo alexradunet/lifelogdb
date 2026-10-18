@@ -4,10 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
-	"time"
-
-	"lifelog/internal/text"
 )
 
 // The stream (docs/plans/130-the-explore-pass.md): the days of the record as cards, the newest first, the way the
@@ -34,40 +30,19 @@ type CardItem struct {
 // day page). Picture is the day page's cover (0 for none). Chips are its places (the at links of the day page) then
 // its people (the wikilinks of the day page to a live person), at most cardChips, and MoreChips the rest. Birthdays
 // are the people born on its month and day. Pages are its pages and files, at most cardPages, and MorePages the rest.
-// Readings are its current readings other than the Mood's. QuietAfter is the count of days with nothing between this
-// card and the next older one; 0 for the oldest card of the record.
+// Readings are its current readings other than the Mood's.
 type Card struct {
-	Day        string
-	PageID     int64
-	Words      string
-	Picture    int64
-	Mood       []float64
-	Chips      []CardItem
-	MoreChips  int
-	Birthdays  []CardItem
-	Pages      []CardItem
-	MorePages  int
-	Readings   int
-	QuietAfter int
-}
-
-// streamLast is the newest day a stream page that starts before before may show: the day before before, and never
-// after today, since a future day is not in the stream. An empty before is the top of the stream. ok is false when
-// no day is left (before is 0000-01-01).
-func (s *Store) streamLast(before string) (string, bool, error) {
-	last := s.Today()
-	if before == "" {
-		return last, true, nil
-	}
-	t, ok := text.ParseDay(before)
-	if !ok {
-		return "", false, Invalid("before %q must be a day, YYYY-MM-DD", before)
-	}
-	prev := t.AddDate(0, 0, -1).Format(time.DateOnly)
-	if !text.IsDay(prev) {
-		return "", false, nil
-	}
-	return min(last, prev), true, nil
+	Day       string
+	PageID    int64
+	Words     string
+	Picture   int64
+	Mood      []float64
+	Chips     []CardItem
+	MoreChips int
+	Birthdays []CardItem
+	Pages     []CardItem
+	MorePages int
+	Readings  int
 }
 
 // streamDays is the query of the days of the stream up to :last, the newest first.
@@ -76,15 +51,11 @@ const streamDays = `
 	UNION
 	SELECT me.day FROM measurement_values me JOIN entities m ON m.id = me.metric_id AND m.deleted_at IS NULL WHERE me.day <= :last`
 
-// Stream is one page of the stream: the days before before ("" for the top, today first), offset days skipped, at
-// most limit cards. more says that an older card exists after the page. A day that is not a day for before is a 422.
-func (s *Store) Stream(ctx context.Context, before string, limit, offset int) (cards []Card, more bool, err error) {
-	last, ok, err := s.streamLast(before)
-	if err != nil || !ok {
-		return []Card{}, false, err
-	}
+// Stream is one page of the stream: the days up to today, the newest first, offset days skipped, at most limit
+// cards; a future day is not in the stream. more says that an older card exists after the page.
+func (s *Store) Stream(ctx context.Context, limit, offset int) (cards []Card, more bool, err error) {
 	rows, err := s.DB.R.QueryContext(ctx, streamDays+` ORDER BY day DESC LIMIT :n OFFSET :off`,
-		sql.Named("last", last), sql.Named("n", limit+1), sql.Named("off", offset))
+		sql.Named("last", s.Today()), sql.Named("n", limit+1), sql.Named("off", offset))
 	days, err := list(rows, err, func(d *string) []any { return []any{d} })
 	if err != nil {
 		return nil, false, err
@@ -92,9 +63,6 @@ func (s *Store) Stream(ctx context.Context, before string, limit, offset int) (c
 	cards = make([]Card, len(days))
 	for i, d := range days {
 		cards[i].Day = d
-		if i+1 < len(days) {
-			cards[i].QuietAfter = daysBetween(days[i+1], d) - 1
-		}
 	}
 	if more = len(cards) > limit; more {
 		cards, days = cards[:limit], days[:limit]
@@ -103,13 +71,6 @@ func (s *Store) Stream(ctx context.Context, before string, limit, offset int) (c
 		return cards, false, nil
 	}
 	return cards, more, s.fillCards(ctx, cards, days)
-}
-
-// daysBetween is the count of days from a to b, two exact days, a first.
-func daysBetween(a, b string) int {
-	ta, _ := text.ParseDay(a)
-	tb, _ := text.ParseDay(b)
-	return int(tb.Sub(ta).Hours()/24 + 0.5)
 }
 
 // fillCards reads what the cards hold, each read for all of the days at once.
@@ -206,39 +167,4 @@ func (s *Store) cardPeople(ctx context.Context, days sql.NamedArg) ([]dayPerson,
 		p.Kind = "person"
 		return []any{&p.day, &p.ID, &p.Title}
 	})
-}
-
-// NewerBefore is the before of the page of the stream that is newer than the page that starts before before, for a
-// page of limit cards: "" when that page is the top of the stream. ok is false when no newer day exists: the page is
-// the top.
-func (s *Store) NewerBefore(ctx context.Context, before string, limit int) (newer string, ok bool, err error) {
-	if before == "" {
-		return "", false, nil
-	}
-	if _, _, err := s.streamLast(before); err != nil {
-		return "", false, err
-	}
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT day FROM (`+streamDays+`) WHERE day >= :before ORDER BY day LIMIT :n`,
-		sql.Named("last", s.Today()), sql.Named("before", before), sql.Named("n", limit+1))
-	days, err := list(rows, err, func(d *string) []any { return []any{d} })
-	switch {
-	case err != nil:
-		return "", false, err
-	case len(days) == 0:
-		return "", false, nil
-	case len(days) <= limit:
-		return "", true, nil
-	}
-	return days[limit], true, nil
-}
-
-// FirstDay is the oldest day of the stream, "" when the record holds no day up to today. The UNION of streamDays is a
-// merge of its two indexes in day order, so the first row ends the read; a min() would walk every row.
-func (s *Store) FirstDay(ctx context.Context) (string, error) {
-	var day string
-	err := s.DB.R.QueryRowContext(ctx, streamDays+` ORDER BY day LIMIT 1`, sql.Named("last", s.Today())).Scan(&day)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	return day, err
 }

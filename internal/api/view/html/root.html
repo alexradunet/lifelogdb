@@ -1,7 +1,7 @@
 {{/* search (docs/plans/130-the-explore-pass.md, part 6): Pages by title first, the fast way to a known page. Then the
-     chips of the kinds, each with its count over every hit. With no kind, the hits of this page are in groups in a
-     fixed order (Days, Pages, People, Places, Files), each heading with its total and a link to its chip; with a kind,
-     one list, paged. Each hit has its cover, or the icon of its kind. */}}
+     chips of the kinds. With no kind, the hits of this page are in groups in a fixed order (Days, Pages, People,
+     Places, Files), each heading with a link to its chip; with a kind, one list, paged. Each hit has its cover, or the
+     icon of its kind. */}}
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
 {{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words" "outside" "order" "hide" "kind")}}
@@ -10,10 +10,10 @@
 <p><small class="desc">A page whose title starts with the words comes first.</small></p></details>
 {{with .Props}}{{$p := .}}{{if or .titles .hits}}<div class="sheet list">{{with .titles}}<section class="result-group" aria-label="Pages by title"><div class="panel-head"><h2>Pages by title</h2><span class="meta">{{len .}}</span></div>
 <ul class="plain rows">{{range .}}<li><a href="{{titleHref .title}}">{{$.Date .title}}</a>{{if ne .name .title}} <span class="meta">{{.name}}</span>{{end}}</li>{{end}}</ul></section>{{end}}
-{{with $.LinksOf "kind"}}<nav class="kinds chips" aria-label="Kind">{{range .}}{{$k := index .Class 0}}<a href="{{.Href}}"{{if or (eq $k $p.kind) (and (eq $k "all") (not $p.kind))}} aria-current="page"{{end}}>{{.Title}} <small>{{num (index $p.counts $k)}}</small></a>{{end}}</nav>{{end}}
+{{with $.LinksOf "kind"}}<nav class="kinds chips" aria-label="Kind">{{range .}}{{$k := index .Class 0}}<a href="{{.Href}}"{{if or (eq $k $p.kind) (and (eq $k "all") (not $p.kind))}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>{{end}}
 {{with .hits}}{{if $p.kind}}<section class="result-group" aria-label="Pages by their words"><div class="panel-head"><h2>Pages by their words</h2>{{with $.LinkByRel "order"}}<a class="meta" href="{{.Href}}">{{.Title}}</a>{{end}}</div>
 <ul class="plain rows">{{range .}}{{template "hit" (dict "v" $ "h" .)}}{{end}}</ul></section>
-{{else}}{{range $.HitGroups}}<section class="result-group" aria-label="{{.Title}}"><div class="panel-head"><h2>{{.Title}} <small>{{num (index $p.counts .Kind)}}</small></h2><a class="meta" href="{{.Href}}">All {{num (index $p.counts .Kind)}}</a></div>
+{{else}}{{range $.HitGroups}}<section class="result-group" aria-label="{{.Title}}"><div class="panel-head"><h2>{{.Title}}</h2><a class="meta" href="{{.Href}}">Show only these</a></div>
 <ul class="plain rows">{{range .Hits}}{{template "hit" (dict "v" $ "h" .)}}{{end}}</ul></section>
 {{end}}{{with $.LinkByRel "order"}}<p class="sub"><a href="{{.Href}}">{{.Title}}</a></p>{{end}}{{end}}{{end}}</div>
 {{else}}<p class="empty">No page matches. Try fewer words, or a prefix*.</p>{{end}}{{end}}

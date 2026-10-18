@@ -219,15 +219,6 @@ func (s *Store) DayEntries(ctx context.Context, from, through string, newestFirs
 	return s.dayEntries(ctx, `p.day BETWEEN ? AND ?`, order, limit, from, through)
 }
 
-// OnThisDay are the live day pages of earlier years that have the month and the day of day, the newest first, and at
-// most limit of them. The text from the sixth character is "MM-DD", so 29 February matches 29 February only.
-func (s *Store) OnThisDay(ctx context.Context, day string, limit int) ([]DayEntry, error) {
-	if !text.IsDay(day) || limit < 1 {
-		return nil, Invalid("on this day needs an exact day and a limit")
-	}
-	return s.dayEntries(ctx, `p.day < ? AND substr(p.day, 6) = substr(?, 6)`, "DESC", limit, day, day)
-}
-
 // dayEntries reads the live day pages that a condition on p.day selects. order is ASC or DESC, never user text.
 func (s *Store) dayEntries(ctx context.Context, cond, order string, limit int, args ...any) ([]DayEntry, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
@@ -277,12 +268,6 @@ func plainLines(body string, n, runes int) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
-}
-
-// RecentDays is one page of the day pages, newest first.
-func (s *Store) RecentDays(ctx context.Context, limit, offset int) ([]Edge, error) {
-	return s.edges(ctx, `SELECT 'day', p.id, p_name.title, 'page', '' FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
-	                      WHERE p.is_journal AND p.deleted_at IS NULL ORDER BY p.day DESC LIMIT ? OFFSET ?`, limit, offset)
 }
 
 // CapturedDay is the local day of the page that the source's capture with the key was added to: the day that stands

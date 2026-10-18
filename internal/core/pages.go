@@ -178,30 +178,17 @@ func (s *Store) CreatePage(ctx context.Context, source, title, body, category st
 	return m.id, m.sync, err
 }
 
-// CreatePerson makes the person and, with a category, files it there in the same write, as CreatePage does
-// (docs/plans/117-one-browse-view.md, rule 6).
-func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death, category string) (int64, error) {
-	return alone(s, ctx, source, func(t *Tx) (int64, error) {
-		id, err := t.CreatePerson(title, name, birth, death)
-		if err != nil {
-			return 0, err
-		}
-		return id, t.fileNew(id, category)
-	})
+// CreatePerson makes the person. file-pages files it in a category (docs/plans/131-the-pareto-pass.md, part 2).
+func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, death string) (int64, error) {
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.CreatePerson(title, name, birth, death) })
 }
 
-// CreatePlace makes the place and, with a category, files it there in the same write, as CreatePage does.
-func (s *Store) CreatePlace(ctx context.Context, source, title, category string) (int64, error) {
-	return alone(s, ctx, source, func(t *Tx) (int64, error) {
-		id, err := t.CreatePlace(title)
-		if err != nil {
-			return 0, err
-		}
-		return id, t.fileNew(id, category)
-	})
+// CreatePlace makes the place. file-pages files it in a category.
+func (s *Store) CreatePlace(ctx context.Context, source, title string) (int64, error) {
+	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.CreatePlace(title) })
 }
 
-// fileNew files a thing made in this write in the category titled category ("" for none), as FilePages files it:
+// fileNew files a page made in this write in the category titled category ("" for none), as FilePages files it:
 // a missing category is made, and a day as the category refuses the whole write: entities_day_page refuses a plain
 // page with a day's title, and links_endpoint_types a part-of link to a day page that exists.
 func (t *Tx) fileNew(id int64, category string) error {
@@ -219,17 +206,12 @@ func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name 
 	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name) })
 }
 
-// Tombstone and Revive set or clear entities.deleted_at (D11): nothing is ever deleted. A missing id is 404; the same
-// state again changes nothing.
-func (s *Store) Tombstone(ctx context.Context, source string, id int64) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.tombstone(id) })
-}
-
+// Revive clears entities.deleted_at (D11). A missing id is 404; the same state again changes nothing.
 func (s *Store) Revive(ctx context.Context, source string, id int64) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.revive(id) })
 }
 
-// tombstonePages is Store.TombstonePages in t.
+// tombstonePages is Store.Tombstone in t.
 func (t *Tx) tombstonePages(ids []int64) error {
 	for _, id := range ids {
 		if err := t.tombstone(id); err != nil {
@@ -239,9 +221,9 @@ func (t *Tx) tombstonePages(ids []int64) error {
 	return nil
 }
 
-// TombstonePages tombstones every page named, in one write (D11): a page that is tombstoned already is left as it
-// is, and an id no entity has is a 404 that writes nothing.
-func (s *Store) TombstonePages(ctx context.Context, source string, ids []int64) error {
+// Tombstone sets entities.deleted_at of every page named, in one write (D11): nothing is ever deleted. A page that
+// is tombstoned already is left as it is, and an id no entity has is a 404 that writes nothing.
+func (s *Store) Tombstone(ctx context.Context, source string, ids ...int64) error {
 	return s.Do(ctx, source, func(t *Tx) error { return t.tombstonePages(ids) })
 }
 
@@ -259,11 +241,8 @@ type Page struct {
 	Person    *Person `json:"person,omitempty"`
 	File      *File   `json:"file,omitempty"`
 	Cover     *Cover  `json:"cover,omitempty"` // nil for a file page, and for a page with no cover
-	// Pictures are the other pictures the body embeds, after the cover, each once, in the order of the body: each
-	// may become the cover (SetCoverOf).
-	Pictures []Cover `json:"pictures,omitempty"`
-	Out      []Edge  `json:"links"`
-	In       []Edge  `json:"backlinks"`
+	Out       []Edge  `json:"links"`
+	In        []Edge  `json:"backlinks"`
 }
 
 type Person struct {
@@ -303,7 +282,7 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			Scan(&p.File.SHA256, &p.File.MIME, &p.File.Preview); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
-	} else if p.Cover, p.Pictures, err = picturesOf(ctx, s.DB.R, p.Body); err != nil {
+	} else if p.Cover, err = coverOf(ctx, s.DB.R, p.Body); err != nil {
 		return nil, err
 	}
 	// outgoing edges to live entities
@@ -463,26 +442,6 @@ func (s *Store) SearchWith(ctx context.Context, q string, o SearchOptions, limit
 		return nil, err
 	}
 	return s.withPictures(ctx, hits)
-}
-
-// SearchCounts counts the hits of an FTS5 query by kind (SearchKinds, a kind with none is 0), with "all", their sum.
-// The options' Omit leave pages out, as from the hits; their Kind and Order do not change a count.
-func (s *Store) SearchCounts(ctx context.Context, q string, o SearchOptions) (map[string]int, error) {
-	o.Kind = ""
-	omit, rest, err := o.where()
-	if err != nil {
-		return nil, err
-	}
-	kinds, err := groupCounts(s.DB.R.QueryContext(ctx, `SELECT `+searchKind+`, count(*)`+searchFrom+omit+` GROUP BY 1`, append([]any{q}, rest...)...))
-	if err != nil {
-		return nil, invalidCause(err, "search %q: %v", q, err)
-	}
-	out := map[string]int{"all": 0}
-	for _, k := range searchKinds {
-		out[k] = kinds[k]
-		out["all"] += kinds[k]
-	}
-	return out, nil
 }
 
 // searchNewest reads the id, the day-page day and the created_at of every match, in the order of the best match, sorts

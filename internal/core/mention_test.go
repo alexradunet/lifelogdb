@@ -7,7 +7,7 @@ import "testing"
 // Another kind of edge has no sentence. A source that names the page only in a code span has none.
 func TestBacklinksShowTheSentenceOfEachMention(t *testing.T) {
 	s := fresh(t)
-	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", "")
+	ana, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

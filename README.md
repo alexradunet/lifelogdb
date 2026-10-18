@@ -30,7 +30,7 @@ lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
 lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
-lifelog snapshot --to ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
+lifelog snapshot --snapshots ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
 lifelog cover 12 lake.jpg                  # a new photo as page 12's cover; `lifelog cover 12 --title Lake.jpg` takes a kept one
@@ -76,12 +76,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it
-  changed, so a reload never posts twice; a refused one shows the text it sent. A form may name the page
-  to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to the
-  list. A value that is not a plain path is ignored, and a JSON client never follows it
-  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). A form with an id sends it in `form` (not a field of any
-  action either), so a page that draws one action in several forms (New metric) shows a refusal in the form that
-  was sent and in no other.
+  changed, so a reload never posts twice. A refused one is answered with the error page: the alert, the text it
+  sent and a link Back to the page it came from ([plan 131](docs/plans/131-the-pareto-pass.md)). A form may name the
+  page to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to
+  the list. A value that is not a plain path is ignored, and a JSON client never follows it
+  ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a flag,
   the options 0 and 1 in a field that the action does not require, one checkbox that sends 1 or nothing; a field of 2
   to 5 short options a `fieldset` of radio buttons; a `pages` field with `options` a text input with a `datalist` of
@@ -95,33 +94,29 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
   title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.
 - **The browser for daily use** ([plan 091](docs/plans/091-the-browser-for-daily-use.md)). The root is the entry point
-  of the API, with the five newest day pages; a browser's `GET /` goes to the page of today ([plan 129](docs/plans/129-the-ux-pass.md)),
-  which holds the same lists in its margin. A day carries its mood and the `save-body` of its day page, so the day view
+  of the API, with the five newest day pages; a browser's `GET /` is answered with the page of today
+  ([plan 129](docs/plans/129-the-ux-pass.md)), which holds the same list in its margin. A day carries its mood and the `save-body` of its day page, so the day view
   edits in place. These are properties and actions of the entities, so every client gets them ([API.md](API.md)). `/months/{YYYY-MM}` is the calendar of a month (each day, whether it has a
-  page, its first line, its mood and its readings, and every other thing that names the day: a
-  birthday or a death each year, a place, a page or a file; under the calendar, Day by
-  day links each one: [plan 101](docs/plans/101-the-calendar-holds-every-dated-thing.md)),
-  and the catalog action `open-day` goes to a day by its date, or to today with no date. Every field of the catalog
-  whose type is `date` reads the word `today` as the server's local day. The handlers read today from one clock,
-  which a test fixes. The day and the root carry `on_this_day`, the
-  day pages of the same date in earlier years, which the margin shows (and the strip at the top of the stream).
-  `/weeks/{YYYY-Www}` is the week (its days, its
-  readings against the week before) and `/years/{YYYY}` the year (twelve months);
+  page, its first line, its cover, its mood and its readings; the day view holds the rest), and the catalog action
+  `open-day` goes to a day by its date, or to today with no date. Every field of the catalog whose type is `date`
+  reads the word `today` as the server's local day. The handlers read today from one clock, which a test fixes.
+  `/years/{YYYY}` is the year (twelve months);
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
   else the icon of a person.
 - **A cover for every page** ([plan 127](docs/plans/127-a-cover-for-every-page.md)). A page's cover is the first live
   file with a preview that its body embeds (`![[Ana.jpg]]`); a day page's first photo is its cover with no action. A
   file page has none: its own picture stands for it. The browser draws the cover as a square at the head of the
-  margin of the page and the day (first on a phone), with the other pictures of the body under it, each one press
-  from being the cover (it trades places with the cover's embed), and leaves that embed out of the body; a Browse row
+  margin of the page and the day (first on a phone), with one link to the picker under it, and leaves that embed out
+  of the body; a Browse row
   starts with it as a small square (a person's is round), and the row's `picture` gives its href. The calendar draws
   a day's cover behind its square cell, under a veil of the parchment that keeps the words readable. The schema has no link for it, by the owner's choice (2026-10-15, again
   2026-10-17): an embed is how any page shows a picture, so every surface can set it. `set-cover` sets it: a new
   photo (the browser, and `lifelog cover PAGE-ID PHOTO`) or a kept picture by its title (`lifelog cover PAGE-ID
   --title T`, and an agent by either, a new photo by its path).
-  `GET /pages/{id}/cover` is the picker: the kept pictures as tiles, each a form of its title, and the form of a new
-  photo. The new photo goes in no day page.
+  `GET /pages/{id}/cover` is the picker, the one way to set a cover in a browser: the kept pictures as tiles, each a
+  form of its title (one the body embeds already trades places with the cover's embed), and the form of a new photo.
+  The new photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
   Calendar, Metrics and Browse), this month with its written days, and the owner's links. Under 900 px it is a phone's layout
@@ -159,7 +154,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
     the APCA Lc logged beside it.
   - Draw a value by its type, never by its name.
   - Make every form work with no script.
-  - Answer a refused form on its own page, filled, with the alert first.
+  - Answer a refused form with the error page: the alert first, the text it sent, and Back.
   - Make every empty state name the way forward.
 
   Each part
@@ -176,11 +171,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   A value is drawn by its type, never by its property's name ([plan 093](docs/plans/093-words-phone-and-today.md)):
   a day in words near today ("yesterday · Sun 11 Oct"), an instant in the clock of the server's day ("today, 09:48",
   the exact instant kept in its `<time>` element), an object of the generic view as facts, and a write's result in
-  sentences by the result shapes of API.md. The day carries `trends` (each metric read that day, its unit and its
-  readings of the 14 days through it), so a reading's tile has its unit and its line.
-  `GET /styleguide` is the style page: every component in every state, with the file each lives in, drawn by the real
-  templates on synthetic words. It is presentation, like `/render`: it is not in the catalog and it reads nothing
-  from the database.
+  sentences by the result shapes of API.md. A day's reading tile is a metric read that day and its last value.
   `GET /manifest.webmanifest` and `GET /assets/icon.svg` make the app installable: two shortcuts (Today, Add to
   today) and a share target that posts shared text into Capture
   (`POST /days/today/capture`). There is no service worker, since the server is the owner's own. A public listener
@@ -189,8 +180,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
   and a test holds it. What the one script once did ([plan 091](docs/plans/091-the-browser-for-daily-use.md),
   [plan 094](docs/plans/094-the-command-list.md)), the browser does by itself: the **search dialog** is a `dialog`
-  the server draws on every page of the shell, with the search form inside, which the top bar's Search opens by its
-  command (`commandfor`) and Escape or a tap outside closes (`closedby="any"`); `/search` lists the pages whose title
+  the server draws on every page of the shell, with the search form inside, the one search box of the shell: the
+  rail's Search and the top bar's open it by their command (`commandfor`), and Escape or a tap outside closes it
+  (`closedby="any"`); `/search` lists the pages whose title
   starts with the words before the pages whose words match, so a page is one search away by its title. The phone's
   sheet of sections is a popover; the toast is an open `dialog` in the flow of the page, which Escape and its own
   Close close. The keys are the browser's **access keys**, with its own modifier (Alt in Chromium, Alt+Shift in
@@ -203,7 +195,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   button (a boxed danger already takes two presses, and a tombstone has Restore), and the command list's ranking of
   this page's actions.
   `POST /render` is presentation, not a capability: no catalog action names it and it answers HTML only, so it, the
-  fonts, the style page, the manifest, the icon, the world outline and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
+  fonts, the manifest, the icon, the world outline and the pictures (`GET /pages/{id}/preview`, `GET /previews`) are the
   routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
@@ -224,13 +216,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
-- **One page a metric** ([plan 100](docs/plans/100-one-page-a-metric.md)). `/metrics/{name}` is the metric's one
-  page: Record first, its readings newest first in a fold a year, and, as a metric is
-  a page (D27), its page's text, links, backlinks and actions, taken from the page's own entity. Its readings are
-  `(from, to]`; with no `from`, every admitted day through `to`, on every surface (`all_history=1` says the same and
-  allows no `from`). The All readings link leads a window back to the
-  whole. In a browser, the page of a live metric (`/pages/{id}`) answers 303 to it, with its feedback; JSON keeps
-  the page.
+- **The readings of a metric** ([plan 100](docs/plans/100-one-page-a-metric.md), [plan 131](docs/plans/131-the-pareto-pass.md)).
+  `/metrics/{name}` is a metric's readings: Record first, then its readings newest first in a fold a year. Its
+  readings are `(from, to]`; with no `from`, every admitted day through `to`, on every surface. The All readings link
+  leads a window back to the whole. A metric is a page (D27): its text, links, backlinks, categories and other
+  actions are on its page (`/pages/{id}`), and each of the two links the other.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
   `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.
@@ -271,48 +261,44 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   (`POST /snapshots`): refused to an `agent:*` or `import:*` writer, never an MCP tool, offered at the root to the owner, and in a browser by the rail's Snapshot link (`/actions?new=snapshot`). It takes
   no path: the file lands in the folder `serve --snapshots DIR` names, or beside `life.db`, named by the local day
   and never overwritten; it refuses a folder inside a git work tree, and its restore check opens the snapshot with
-  `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--to DIR]` is the
-  action in-process, `--to` choosing the folder; with `--url` the server's folder is the one, and `--to` is refused.
+  `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--snapshots DIR]` is
+  the action in-process, `--snapshots` choosing the folder, as it does for `serve`; with `--url` the server's folder is
+  the one, and `--snapshots` is refused.
   Restoring stays the manual procedure of the cookbook.
-- **Several rows deleted at once** ([plan 107](docs/plans/107-delete-several-at-once.md)). `tombstone-pages`
-  (`POST /pages/tombstone`) takes `ids`, separated by spaces or
-  commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. Browse offers it
-  on pages (the ghost pages too), media and documents, so the browser draws a box on each row or tile and one
-  danger button, which counts the checked boxes (a CSS counter, no script) and returns to the list with the count;
-  the CLI's `do` and the MCP tools carry it as any action. It is a danger, not the owner's alone, and a revive undoes it.
+- **One delete, of one row or several** ([plan 107](docs/plans/107-delete-several-at-once.md),
+  [plan 131](docs/plans/131-the-pareto-pass.md)). `tombstone-pages` (`POST /pages/tombstone`) takes `ids`, separated
+  by spaces or commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. A page
+  offers it with its own id as Delete, which returns to the page and its Restore. Browse offers it on pages (the ghost
+  pages too), media and documents, so the browser draws a box on each row or tile and one danger button, which counts
+  the checked boxes (a CSS counter, no script) and returns to the list with the count; the CLI's `do` and the MCP
+  tools carry it as any action. It is a danger, not the owner's alone, and a revive undoes it.
 - **Metrics as cards, filed in groups** ([plan 112](docs/plans/112-metrics-as-cards.md)). `/metrics` draws each
   group as a grid of cards, with a jump bar to the groups: a card is a metric's latest value, its day and the line
   of its newest 30 readings, muted when the latest is older than 60 days. Every card has the same four lines, so the
   cards of a row are of one height: the name, the value (a dash and the unit with no reading), the line (a dashed
-  rule with none), and a foot with the day in short words and a quiet + Add; the whole day and the count of readings
-  are the day's title ([plan 120](docs/plans/120-a-tidy-board.md)). `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
+  rule with none), and a foot with the day in short words; the whole day and the count of readings are the day's
+  title ([plan 120](docs/plans/120-a-tidy-board.md)). `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
   missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **The stream, the zoom, a random thing and search by kind** ([plan 130](docs/plans/130-the-explore-pass.md)). The
   Calendar opens on the stream, `GET /days`: the days of the record as cards, the newest first, 30 a page, then Older
   days. A day is in the stream when it holds something: its day page, a page or a file with its day, or a current
-  reading. A day after today is not in it. `before` (a day, exclusive) comes first and `offset` after it. A card holds
+  reading. A day after today is not in it. It pages by `limit` and `offset`, as every list. A card holds
   up to four plain lines of the journal, the mood, the cover only (a preview is 100–300 KB, so no other picture), the
   places and the people as chips, the birthdays, and three pages, then a count. A day with no day page is a slim card
-  with no words, and the empty days between two cards are a quiet line, with no streak. Every read of a page of the
-  stream takes its days as one set, not a window: 30 sparse cards can span decades. On the first page, On this day is
-  a strip at the top; the margin of a day keeps its own. Days, Week, Month and Year are the zoom of the Calendar: one
-  row of chips, with Today, and the links `days`, `week`, `month` and `year`. A scrubber of years and months is beside
-  the cards (a closed fold on a phone). `random-day` (`GET /days/random`) and `random-page` (`GET /pages/random`,
-  `kind`) are reads that answer 303 to a thing picked at random: a quiet button on the stream and on Browse. A random
-  page is never a day page, so Browse still holds no day. `search` takes `kind` (day, page, person, place, file), and
-  its answer has `counts`: the page draws Pages by title first, then chips with the counts, then the hits in groups by
-  kind, each with its cover or the icon of its kind. The root's `recent_titles` are the titles of the last 90 days, at
-  most 200, and the rail's search and the search dialog suggest them from one `datalist` (`search-q`). The cost is
-  about 8 KB on each page, and Safari matches only the start of a title; an older title is one search away, since
-  Pages by title matches over the whole record.
+  with no words. Every read of a page of the stream takes its days as one set, not a window: 30 sparse cards can span
+  decades. Days, Month and Year are the zoom of the Calendar: one row of chips, with Today, and the links `days`,
+  `month` and `year`. `random-page` (`GET /pages/random`, `kind`) is a read that answers 303 to a thing picked at
+  random, and with `kind=day` to a day: a quiet button on the stream and on Browse. `search` takes `kind` (day, page,
+  person, place, file): the page draws Pages by title first, then the chips of the kinds, then the hits in groups by
+  kind, each with its cover or the icon of its kind.
 - **Browse** ([plan 117](docs/plans/117-one-browse-view.md)). A category is a page, and anything is filed in it by
   `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may be in several, and a category
   shows everything filed in it, whatever its type. `GET /browse` (the catalog action `browse`) is one list with two
   filters: the kind of its rows (Pages, People, Places, Media, Documents, Metrics, each chip with its count; All
   inside a category, where it is the first chip and the default) and where it looks (Everything, what is filed
-  directly in a category, or Not filed, which follows the kind). The category tree, by path with a count each, is
-  beside the list; on a phone it is a closed fold above the chips. Each kind keeps its row and its order: a person
+  directly in a category, or Not filed, which follows the kind). The category tree, by path with a count each, is one
+  fold: beside the list and always open in a wide column, a closed fold above the chips on a phone. Each kind keeps its row and its order: a person
   has a face, the mentions and the last day; media are tiles, newest day first, with the picture a file keeps or the
   icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
   files, as rows. The ghost pages are a filter of Pages, and so are the deleted (`deleted=1`), the newest
@@ -320,40 +306,33 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   deletes pages, media and documents. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
   Search, and it meets the things through its mentions (the owner's word, 2026-10-15); a day page is never filed
   ([D26](docs/decisions/D26-metric-categories.md)), so a day page's `link` does not offer `part-of`. The sidebar has Today, Calendar,
-  Metrics and Browse; a phone's bottom bar is the same four with More. The old lists (`/people`, `/places`,
-  `/media`, `/files`, `/ghosts`, `/categories`) answer 308 to their Browse address, with `limit`, `offset` and
-  `new` kept; the POST routes of those paths do not change. A category page has one section, Filed here: the
+  Metrics and Browse; a phone's bottom bar is the same four with More. A category page has one section, Filed here: the
   sub-categories first, then the rest by title, a type badge on what is not a page, and Open in Browse; its
-  margin's Backlinks does not list `part-of`. `create-page`, `create-person`, `create-place` and `add-file` take an
-  optional `category`: the thing is made and filed there in one write, a missing category made as `file-pages`
-  makes it, and a day as the category refuses the whole write (`entities_day_page` when the day has no page,
-  `links_endpoint_types` when it has one). Browse in a category fills it in each New form, and a category page
-  offers New page here. `add-file` files the page of the same original when it exists, unless that page is deleted.
+  margin's Backlinks does not list `part-of`. One way files a thing ([plan 131](docs/plans/131-the-pareto-pass.md)):
+  `file-pages`, and `unlink` with `part-of` takes it out (the x of a category badge); `link` does not offer
+  `part-of`. `create-page` takes an optional `category`: the page is made and filed there in one write, a missing
+  category made as `file-pages` makes it, and a day as the category refuses the whole write (`entities_day_page`
+  when the day has no page, `links_endpoint_types` when it has one). Browse in a category fills it in its New page,
+  and a category page offers New page here.
   Rejected by the owner: exclusive membership, a manual order and a syntax in the body that files a page.
 - **Fold and find** ([plan 118](docs/plans/118-fold-and-find.md); the owner's choice, 2026-10-15). In the browser
   only, and with no script, Browse and the Metrics board fold; the JSON and the catalog do not change. The tree folds
-  each category that has categories under it, open on the path to the current branch. On Pages in Everything the top
-  categories are folder tiles before the list, and they are not rows of it; inside a category, the categories under
-  it are the folders. A list in title order with more than 30 rows is in letter groups with a letter bar; with more
-  than 100 rows the groups are closed and are the index, a grid of letter slabs with no bar
-  ([plan 119](docs/plans/119-the-finish.md)). The Metrics board folds each group and each category under it, and the
-  line of a fold says its count and the day of its newest reading; the link to the category and + New metric here
-  are the foot of the fold. `/metrics?view=list` draws one row a metric in place of the
-  cards; `view` is a word of the page, as `new` is, and a form of the page returns to the same view.
+  each category that has categories under it, open on the path to the current branch. A category is a row of the
+  list with its badge, and a long list pages ([plan 131](docs/plans/131-the-pareto-pass.md)). The Metrics board
+  folds each group and each category under it, and the line of a fold says its count and the day of its newest
+  reading; the link to the category is the foot of the fold.
 - **One way to make a thing** ([plan 114](docs/plans/114-one-way-to-do-a-thing.md)). The rail's New is a menu of the
   kinds; each kind is made on its list of Browse, whose header has its New button (a file on the media list, a
   metric on `/metrics`).
   `?new=<action>` opens that action's form on any page, and a query parameter that names a field fills it in. The
   catalog's titles say one verb for one meaning: New makes a thing, Add adds to one, Remove takes away, Restore
-  brings back. The action names do not change. A number card and a day's reading tile have + Add, one value for
-  that day. A page and a metric show their categories as badges, each with x, and + Add (`file-pages` with this
-  page). The lists of Browse and the Metrics board act on several things the same way: Select shows the boxes, and one bar holds
+  brings back. The action names do not change. A reading is added on the day (the boxed Add a reading of the day;
+  New's Reading opens it on the page of today) and on the metric's readings. A page shows its categories as badges,
+  each with x, and + Add (`file-pages` with this page). The lists of Browse and the Metrics board act on several things the same way: Select shows the boxes, and one bar holds
   the count and a button for each action the list offers.
-- **New metric, new category and a reading from `/metrics`** ([plan 113](docs/plans/113-new-metric-on-metrics.md)).
-  New metric is in the header of `/metrics` and under each category's heading, not on the page of today. It asks what you
-  record: a number with its unit, a score with its range, or done or not done (a 0/1 habit). Its category is
-  made when it is new. `register-metric` takes `category`, and does both in one write. New
-  category opens the file bar. Each number card has a +, which records one value for today.
+- **New metric** ([plan 113](docs/plans/113-new-metric-on-metrics.md)). New metric is one form in the header of
+  `/metrics`, not on the page of today: a name, a unit (kg; a range such as 1-5 for a score; nothing for done or not
+  done) and a note. The pick bar of the board files metrics in a category, made when it is new.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1280 px, turned upright by EXIF,
@@ -365,7 +344,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day comes from its EXIF
   (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte); its position is
   never read ([D21](docs/decisions/D21-location-history.md), [plan 116](docs/plans/116-strip-to-the-core.md)).
-  `lifelog file` keeps one file, with `--dry-run`, and `--category` files it in the same write. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
+  `lifelog file` keeps one file, with `--dry-run`. Unknown capture-local day follows [keep a file](docs/cookbook/keep-a-file.md).
 - **`serve` is local-only unless the owner says `--public`.** Without the flag `serve` is what it was: `life.db`
   holds health data, and the API is for this machine. The default bind is `127.0.0.1:7777`; `--addr` accepts numeric
   loopback IPs or `localhost` with a numeric port (0 selects an ephemeral port, printed at startup), and nothing else.

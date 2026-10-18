@@ -9,7 +9,7 @@
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub">{{with weekPage .Title}}<a class="date" href="{{.}}">week {{week $.Title}}</a>{{end}}{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
+<p class="sub">{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
 <div class="tools">
 {{- $prev := shortDay (addDays .Title -1)}}{{$next := shortDay (addDays .Title 1)}}
 {{- with .Link "prev"}}
@@ -23,7 +23,7 @@
 <div class="sheet-margin">
 <div class="sheet">
 <section class="journal" aria-label="Journal">
-<div class="panel-head"><h2>Journal</h2>{{if not $d.cover}}{{with .Link "choose-cover"}}<a href="{{.}}">Set cover photo</a>{{end}}{{end}}{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
+<div class="panel-head"><h2>Journal</h2>{{with .Link "page"}}<a href="{{.}}">The day page</a>{{end}}</div>
 {{$embed := ""}}{{with $d.cover}}{{$embed = .embed}}{{end}}
 {{range $p.Journal}}<div class="prose journal-text">{{markdownCover . $embed}}</div>{{end}}
 {{if not $p.Journal}}<p class="empty">{{if $today}}Nothing written today yet. <a href="#capture">Add to today</a> below.{{else}}Nothing written on this day. <a href="#capture">Add to it</a> below.{{end}}</p>{{end}}
@@ -42,14 +42,12 @@
 
 <div class="margin">
 {{template "cover" .}}
-{{template "onthisday" (dict "v" $ "days" $d.on_this_day)}}
 {{- if or $d.readings (.Action "record")}}
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
 {{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
-{{template "reading-link" (dict "id" .ID "value" .Value "unit" .Unit)}}
-{{.Line}}{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}
-{{template "add-reading" (dict "action" ($.Action "record") "metric" .Metric "unit" .Unit "day" $d.day "today" $.Today "back" $.Here)}}</div>{{end}}</div>{{end}}
+{{template "reading-link" (dict "id" .ID "value" .Value)}}
+{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}</div>{{end}}</div>{{end}}
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
 </section>{{end}}

@@ -83,7 +83,7 @@ func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	}
 	m, err := readMultipart(r)
 	// A multipart form is read by hand, so net/http fills no r.PostForm. The text that was kept goes there, as ParseForm
-	// would put it: the page to return to and a refused form read it (backOf, Refusal), on an error too.
+	// would put it: the page to return to and the text a refused form sent read it (backOf, submittedText).
 	r.PostForm = m.retained()
 	if err != nil {
 		return fileForm{}, err
@@ -118,7 +118,7 @@ func encodedFileForm(r *http.Request, act spec) (fileForm, error) {
 	if err != nil {
 		return fileForm{}, err
 	}
-	in := core.FileIn{Title: v.Get("title"), Category: v.Get("category"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}
+	in := core.FileIn{Title: v.Get("title"), SHA256: v.Get("sha256"), MIME: v.Get("mime"), Body: v.Get("body"), Day: v.Get("day")}
 	return fileForm{In: in, Dry: dry, Sent: true}, nil
 }
 
@@ -239,7 +239,7 @@ func (m *multipartForm) takeText(part *multipart.Part, name string) error {
 // sent with it must be the same) and the type if none was sent. Without an original, the form must send sha256 and
 // mime, or neither: sent is then false, and the file is the one of the form's text only.
 func verifyOriginal(m *multipartForm) (in core.FileIn, sent bool, err error) {
-	in = core.FileIn{Title: m.text.Get("title"), Category: m.text.Get("category"), SHA256: m.text.Get("sha256"), MIME: m.text.Get("mime"),
+	in = core.FileIn{Title: m.text.Get("title"), SHA256: m.text.Get("sha256"), MIME: m.text.Get("mime"),
 		Body: m.text.Get("body"), Day: m.text.Get("day"), Taken: m.meta.Day()}
 	switch {
 	case m.original && in.SHA256 != "" && !strings.EqualFold(strings.TrimSpace(in.SHA256), m.sum):
@@ -276,7 +276,7 @@ func previewOf(m *multipartForm) ([]byte, error) {
 }
 
 // fileTextFields are the multipart names parseFileForm retains as text; any other name is dropped unread.
-var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "category", "dry_run", "back"}
+var fileTextFields = []string{"title", "sha256", "mime", "body", "day", "dry_run", "back"}
 
 // readOriginal hashes the original as it streams, and keeps its first megabyte for its metadata (photo.Read: a
 // JPEG's EXIF is in its first 64 KB, a HEIC's Exif item near its start); a picture the writer can read is held whole,

@@ -135,12 +135,8 @@ func TestPublicLoginCookie(t *testing.T) {
 		}
 		// The cookie opens the HTML face; a same-origin form writes; a cross-site form with the cookie is refused.
 		with := map[string]string{"Accept": "text/html", "Cookie": api.CookieName + "=" + cookie.Value}
-		home := request(h, "GET", "/", "", with) // Home is the page of today
-		if home.Code != 303 || !strings.HasPrefix(home.Header().Get("Location"), "/days/") {
-			t.Fatalf("home with the cookie: %d %q", home.Code, home.Header().Get("Location"))
-		}
-		if rec := request(h, "GET", home.Header().Get("Location"), "", with); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Capture") {
-			t.Fatalf("the page of today with the cookie: %d", rec.Code)
+		if home := request(h, "GET", "/", "", with); home.Code != 200 || !strings.Contains(home.Body.String(), "Capture") { // Home is the page of today
+			t.Fatalf("home with the cookie: %d", home.Code)
 		}
 		same := map[string]string{"Accept": "text/html", "Cookie": with["Cookie"], "Sec-Fetch-Site": "same-origin"}
 		if rec := request(h, "POST", "/days/2031-01-02/capture", "text=form", same); rec.Code != 303 {

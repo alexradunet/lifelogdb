@@ -94,7 +94,7 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	if res, _ := again.Result.(map[string]any); err != nil || res["existing"] != true || apitest.Href(again, "self") != apitest.Href(e, "self") {
 		t.Errorf("the same original again: %v %+v", err, again.Result)
 	}
-	if got := names(e); got != "save-body,rename,link,unlink,file-pages,tombstone" {
+	if got := names(e); got != "save-body,rename,unlink,file-pages,tombstone-pages" {
 		t.Errorf("a file page offers %s (never promote)", got)
 	}
 	if list := apitest.Must(t)(c.Get(t.Context(), "/browse?kind=media")); len(list.Entities) != 1 || list.Entities[0].Title != "2026-10-04 Lake.jpg" {
@@ -362,7 +362,7 @@ func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
 			c, h, _ := apitest.Fresh(t, "cli")
 			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "2026-10-04", "body": "[[Old synthetic target]]"}))
 			target := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Old+synthetic+target"))
-			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
+			apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone-pages"), nil))
 			var b bytes.Buffer
 			mw := multipart.NewWriter(&b)
 			for key, value := range map[string]string{"title": "Next synthetic.jpg", "day": "2026-10-04", "body": "[[File synthetic target]]"} {

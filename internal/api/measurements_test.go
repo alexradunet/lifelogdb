@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -81,19 +80,9 @@ func TestAMetricIsOnePage(t *testing.T) {
 			t.Errorf("no open fold of %s: a short series opens every year", year)
 		}
 	}
-	page := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
-	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(page, "self") + `"`, "Mentioned in",
-		`<div class="snippet">Weighed in: Weight is down.</div>`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the metric page does not show %s", want)
-		}
-	}
-
 	all := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
-	for _, name := range []string{"save-body", "rename", "link", "unlink", "tombstone"} {
-		if a := apitest.Action(t, all, name); !strings.Contains(body, `<form method="POST" action="`+a.Href+`"`) {
-			t.Errorf("the metric page has no form of %s: %+v", name, a)
-		}
+	if !strings.Contains(body, `href="`+apitest.Href(all, "page")+`"`) || names(all) != "record" {
+		t.Errorf("the readings do not link the metric's page, or offer more than record: %s", names(all))
 	}
 	if n := len(all.Properties.(map[string]any)["readings"].([]any)); n != 3 {
 		t.Errorf("the series reads %d readings with no from, want every one (3)", n)
@@ -126,89 +115,59 @@ func TestAMetricIsOnePage(t *testing.T) {
 	}
 }
 
-func TestTheBrowserOpensAMetricsPageAtItsMetric(t *testing.T) {
+// TestAMetricsPageIsAPage: the page of a metric (D27) is a page in a browser too: its text, the pages that mention
+// it, its actions and a link to its readings (docs/plans/131-the-pareto-pass.md, part 3). A save returns to it with
+// its toast. A deleted metric's page offers Restore.
+func TestAMetricsPageIsAPage(t *testing.T) {
 	c, h, _ := metricFixture(t)
 	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
 	self := apitest.Href(series, "page")
-
-	req := httptest.NewRequest("GET", self, nil)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/metrics/Weight" {
-		t.Fatalf("a browser at the metric's page: %d to %q, want 303 to /metrics/Weight", rec.Code, rec.Header().Get("Location"))
+	page := apitest.Must(t)(c.Get(t.Context(), self))
+	if page.Class[0] != "metric" || page.Properties.(map[string]any)["body"] != "Before breakfast." || apitest.Href(page, "series") != "/metrics/Weight" {
+		t.Errorf("the metric's page: %v %v, readings %q", page.Class, page.Properties, apitest.Href(page, "series"))
 	}
-	if p := apitest.Must(t)(c.Get(t.Context(), self)); p.Class[0] != "metric" || p.Properties.(map[string]any)["body"] != "Before breakfast." {
-		t.Errorf("JSON at the metric's page is not the page: %v %v", p.Class, p.Properties)
-	}
-
-	// A save with no page to return to ends on the metric, with its toast.
-	save := apitest.Action(t, series, "save-body")
-	version := ""
-	for _, f := range save.Fields {
-		if f.Name == "version" {
-			version = fmt.Sprint(f.Value)
+	day := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
+	body := browse(t, h, self)
+	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(day, "self") + `"`, `<a href="/metrics/Weight">Its readings</a>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the metric's page does not show %s", want)
 		}
 	}
-	rec = submit(h, save.Href, url.Values{"body": {"Before breakfast. See [[Scales]]."}, "version": {version}}, "")
+	for _, name := range []string{"save-body", "rename", "unlink", "file-pages", "tombstone-pages"} {
+		if a := apitest.Action(t, page, name); !strings.Contains(body, `action="`+a.Href+`"`) {
+			t.Errorf("the metric's page has no form of %s: %+v", name, a)
+		}
+	}
+
+	save := apitest.Action(t, page, "save-body")
+	rec := submit(h, save.Href, url.Values{"body": {"Before breakfast. See [[Scales]]."}, "version": {fieldOf(save, "version")}}, "")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
-	req = httptest.NewRequest("GET", rec.Header().Get("Location"), nil)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
 	to, err := url.Parse(rec.Header().Get("Location"))
-	if rec.Code != http.StatusSeeOther || err != nil || to.Path != "/metrics/Weight" {
-		t.Fatalf("the saved page sends the browser to %d %q, want the metric", rec.Code, rec.Header().Get("Location"))
+	if err != nil || to.Path != self {
+		t.Fatalf("the save sends the browser to %q, want the page", rec.Header().Get("Location"))
 	}
 	if body := browse(t, h, to.String()); !strings.Contains(body, "<h2>Result</h2>") || !strings.Contains(body, `Created <a href="/pages?title=Scales">Scales</a>.`) {
-		t.Error("the toast of the save is lost on the way to the metric")
+		t.Error("the toast of the save is lost")
 	}
 
-	// A deleted metric stays a page: the page view, with Revive.
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight")), "tombstone"), nil))
-	body := browse(t, h, self)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "tombstone-pages"), nil))
+	body = browse(t, h, self)
 	if !strings.Contains(body, "Deleted") || !strings.Contains(body, `action="`+self+`/revive"`) || strings.Contains(body, "<h2>Properties</h2>") {
 		t.Error("a deleted metric's page is not the page view with Revive")
 	}
 }
 
-func TestTheSeriesCarriesItsPage(t *testing.T) {
+func TestTheSeriesLinksItsPage(t *testing.T) {
 	c, _, _ := metricFixture(t)
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Body"}))
 	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/weight"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, series, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-
-	series = apitest.Must(t)(c.Get(t.Context(), "/metrics/weight"))
 	p := series.Properties.(map[string]any)
-	if series.Title != "Weight" || p["unit"] != "kg" || p["body"] != "Before breakfast." || fmt.Sprint("/pages/", p["id"]) != apitest.Href(series, "page") {
-		t.Errorf("the series lacks its page: title %q, %v", series.Title, p)
+	if series.Title != "Weight" || p["unit"] != "kg" || apitest.Href(series, "page") == "" || p["body"] != nil {
+		t.Errorf("the series: title %q, %v, page %q", series.Title, p, apitest.Href(series, "page"))
 	}
-	edge := func(list any, title string) bool {
-		edges, _ := list.([]any)
-		for _, e := range edges {
-			if e.(map[string]any)["title"] == title {
-				return true
-			}
-		}
-		return false
-	}
-	if !edge(p["links"], "Body") || !edge(p["backlinks"], "2026-10-13") {
-		t.Errorf("the series lacks its links or backlinks: %v %v", p["links"], p["backlinks"])
-	}
-	link := apitest.Action(t, series, "link")
-	if link.Title != "Add a link" || !hasOption(link, "kind", "part-of") {
-		t.Errorf("link is not Add a link with every kind: %+v", link)
-	}
-	for _, name := range []string{"save-body", "rename", "unlink", "tombstone"} {
-		if !hasAction(series, name) {
-			t.Errorf("the series does not offer its page's %s: %s", name, names(series))
-		}
-	}
-
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, series, "rename"), map[string]string{"title": "Body weight"}))
+	page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(series, "page")))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "rename"), map[string]string{"title": "Body weight"}))
 	for _, path := range []string{"/metrics/Body%20weight", "/metrics/Weight"} {
 		s := apitest.Must(t)(c.Get(t.Context(), path))
 		if s.Title != "Body weight" || len(s.Properties.(map[string]any)["readings"].([]any)) != 3 {
@@ -337,11 +296,13 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Query().Get("all_history") != "1" || u.Query().Has("from") || u.Query().Get("to") != "0001-01-01" {
+	if u.Query().Has("from") || u.Query().Get("to") != "0001-01-01" {
 		t.Fatalf("history navigation=%s", u)
 	}
 	assertRows(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(expanded, "self"))), plain[:3])
-	assertRows(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(expanded, "all-readings"))), plain[:3])
+	if apitest.Href(expanded, "all-readings") != "" {
+		t.Errorf("all history links all-readings again: %s", apitest.Href(expanded, "all-readings"))
+	}
 	if body := browse(t, h, link); !strings.Contains(body, "All history") {
 		t.Fatal("missing explicit history label")
 	}
@@ -353,10 +314,8 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 	}
 	// A default window near the minimum must not manufacture negative-year input.
 	assertRows(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/Steps?to=0000-01-01")), plain[:1])
-	for _, q := range []string{"all_history=2", "all_history=1&from=0000-01-01", "all_history=1&to=-001-01-01"} {
-		if _, err := c.Get(t.Context(), "/metrics/Steps?"+q); err == nil {
-			t.Fatalf("accepted invalid history query %s", q)
-		}
+	if _, err := c.Get(t.Context(), "/metrics/Steps?to=-001-01-01"); err == nil {
+		t.Fatal("accepted a to that is not a day")
 	}
 }
 
@@ -371,9 +330,10 @@ func TestAReadingsFactsAreOnACard(t *testing.T) {
 	}
 }
 
-// New metric, new category and a new reading from /metrics (docs/plans/113-new-metric-on-metrics.md).
+// New metric on /metrics (docs/plans/113-new-metric-on-metrics.md): one form of register-metric, a name, a unit and a
+// note (docs/plans/131-the-pareto-pass.md, part 3). file-pages files a metric in a category.
 
-func TestRegisterMetricTakesACategoryAndAHabit(t *testing.T) {
+func TestRegisterMetricTakesANameAUnitAndANote(t *testing.T) {
 	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	register := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "register-metric")
@@ -383,175 +343,66 @@ func TestRegisterMetricTakesACategoryAndAHabit(t *testing.T) {
 	var fields []string
 	for _, f := range register.Fields {
 		fields = append(fields, f.Name)
-		if f.Name == "category" && f.Required {
-			t.Errorf("%s is required, want optional", f.Name)
-		}
 	}
-	if !slices.Equal(fields, []string{"name", "unit", "note", "category"}) {
+	if !slices.Equal(fields, []string{"name", "unit", "note"}) {
 		t.Errorf("register-metric fields: %v", fields)
 	}
-
-	walk := apitest.Must(t)(c.Do(ctx, register, map[string]string{"name": "Walk", "category": "Sport"}))
-	if walk.Result != "New metric Walk, in Sport." {
+	walk := apitest.Must(t)(c.Do(ctx, register, map[string]string{"name": "Walk"}))
+	if walk.Result != "New metric Walk." {
 		t.Errorf("the answer's sentence: %v", walk.Result)
 	}
-	if got, want := groupsOf(t, c), "Sport:Walk Not filed:Mood"; got != want {
+	if again := apitest.Must(t)(c.Do(ctx, register, map[string]string{"name": "walk"})); again.Result != "Walk exists." {
+		t.Errorf("the answer's sentence of a metric that exists: %v", again.Result)
+	}
+	if got, want := groupsOf(t, c), "Not filed:Mood,Walk"; got != want {
 		t.Errorf("groups %q, want %q", got, want)
 	}
-	if got := props(apitest.Must(t)(c.Get(ctx, "/metrics/Walk")))["categories"]; !slices.Equal(anyStrings(got), []string{"Sport"}) {
-		t.Errorf("Walk's categories %v, want [Sport]", got)
-	}
-
-	// A refused metric writes nothing: neither the metric nor its category.
-	if _, err := c.Do(ctx, register, map[string]string{"name": "Run", "unit": "km", "category": "2031-05-01"}); err == nil {
-		t.Fatal("a metric filed in a day was written")
-	}
-	if got, want := groupsOf(t, c), "Sport:Walk Not filed:Mood"; got != want {
-		t.Errorf("after a refusal, groups %q, want %q", got, want)
-	}
-	if _, err := c.Get(ctx, "/pages?title=Run"); err == nil {
-		t.Error("a refused register-metric made the metric Run")
-	}
 }
 
-func anyStrings(x any) []string {
-	var out []string
-	l, _ := x.([]any)
-	for _, s := range l {
-		out = append(out, s.(string))
-	}
-	return out
-}
-
-// TestTheMetricsPageMakesAMetricACategoryAndAReading: New metric is three forms of register-metric, one a kind, each
-// with an id, so the category of each has a datalist of its own; the habit form sends no unit. The forms send what
-// a browser sends, and the metrics are made with their units and categories.
-func TestTheMetricsPageMakesAMetricACategoryAndAReading(t *testing.T) {
+// TestTheMetricsPageMakesAMetric: New metric is one boxed form of register-metric; ?new=register-metric opens it with
+// the focus in its name. A card has no + Add and the page no New category: the day's form and the metric's page
+// record, and Select files (docs/plans/131-the-pareto-pass.md, part 2).
+func TestTheMetricsPageMakesAMetric(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-
 	page := browse(t, h, "/metrics")
-	for _, want := range []string{`<details class="action new-metric" id="new-metric">`,
-		`<form id="new-number" method="POST" action="/metrics" class="kind-number">`, `<form id="new-score" method="POST" action="/metrics" class="kind-score">`,
-		`<form id="new-habit" method="POST" action="/metrics" class="kind-habit">` + "\n" + `<input type="hidden" name="unit" value=""><input type="hidden" name="back" value="/metrics">`,
-		`<a class="button" href="/metrics?new=file-pages#pick">New category</a>`, `<input type="radio" name="new-kind" value="number" checked>`} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/metrics lacks %s", want)
-		}
-	}
-	// A number asks for its unit and a score for its range, lo-hi (docs/plans/113-new-metric-on-metrics.md): the browser
-	// does not send the form without them, so "abc" in the score form does not make a number with the unit "abc". The
-	// score form calls its unit Range. html/template writes the + of the pattern as &#43;, which the browser reads as +.
-	for _, tc := range []struct{ form, unit string }{
-		{`id="new-number"`, "<label><span>Unit <small>required</small></span>\n" + `<input type="text" name="unit" value="" required placeholder="kg, EUR, bpm"></label>`},
-		{`id="new-score"`, "<label><span>Range <small>required</small></span>\n" + `<input type="text" name="unit" value="" required pattern="[0-9]&#43;-[0-9]&#43;" placeholder="1-5"></label>`},
-	} {
-		if form := regexp.MustCompile(`(?s)<form ` + regexp.QuoteMeta(tc.form) + `.*?</form>`).FindString(page); !strings.Contains(form, tc.unit) {
-			t.Errorf("the form %s lacks %s:\n%s", tc.form, tc.unit, form)
-		}
+	if !strings.Contains(page, `<form method="POST" action="/metrics"`) || strings.Contains(page, "new-kind") || strings.Contains(page, "New category") {
+		t.Errorf("/metrics does not draw one New metric form, or draws the kinds or New category")
 	}
 	if home := browse(t, h, "/days/"+fixedToday); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home, the page of today, draws the New metric form")
 	}
-	// The link fills the category of each form; the focus is in the first form only.
-	if p := browse(t, h, "/metrics?new=register-metric&category=Sport"); !strings.Contains(p, `id="new-metric" open>`) ||
-		strings.Count(p, `<input type="text" name="category" value="Sport" placeholder="Bloodwork, Sport, Financial">`) != 3 ||
-		strings.Count(p, "autofocus") != 1 || !strings.Contains(p, `<input type="text" name="name" value="" required placeholder="Weight, Savings" autofocus>`) {
-		t.Error("?new=register-metric&category=Sport does not open New metric with Sport filled in and the focus in its name")
+	if p := browse(t, h, "/metrics?new=register-metric"); !strings.Contains(p, `<details class="action" open>`) ||
+		!regexp.MustCompile(`<input type="text" name="name" value="" required placeholder="[^"]*" autofocus>`).MatchString(p) {
+		t.Error("?new=register-metric does not open New metric with the focus in its name")
 	}
-	if p := browse(t, h, "/metrics?new=file-pages"); !strings.Contains(p, `<input type="checkbox" class="pick-on" checked>`) {
-		t.Error("?new=file-pages does not turn Select on")
-	}
-
-	// The habit form and the number form, as a browser sends them.
-	for _, form := range []struct {
-		id    string
-		typed url.Values
-	}{
-		{`id="new-habit"`, url.Values{"name": {"Walk"}, "category": {"Sport"}}},
-		{`id="new-number"`, url.Values{"name": {"Weight"}, "unit": {"kg"}, "category": {"Body"}, "note": {"Before breakfast"}}},
-	} {
-		rec := submit(h, "/metrics", formSends(t, page, form.id, form.typed), "")
-		if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
-			t.Fatalf("New metric %s: %d %q %.300s", form.typed.Get("name"), rec.Code, rec.Header().Get("Location"), rec.Body.String())
-		}
-		if form.typed.Get("name") == "Walk" && !strings.Contains(browse(t, h, rec.Header().Get("Location")), "New metric Walk, in Sport.") {
-			t.Error("the toast does not say what New metric made")
-		}
+	rec := submit(h, "/metrics", formSends(t, page, `action="/metrics"`, url.Values{"name": {"Weight"}, "unit": {"kg"}, "note": {"Before breakfast"}}), "")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("New metric: %d %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 	made := map[string]string{}
 	for _, x := range props(apitest.Must(t)(c.Get(t.Context(), "/metrics")))["metrics"].([]any) {
 		m := x.(map[string]any)
-		made[m["name"].(string)] = fmt.Sprintf("unit %q, categories %v, note %v", m["unit"], m["categories"], m["note"])
+		made[m["name"].(string)] = fmt.Sprintf("unit %q, note %v", m["unit"], m["note"])
 	}
-	if want := `unit "", categories [Sport], note <nil>`; made["Walk"] != want {
-		t.Errorf("the habit form made Walk with %s, want %s", made["Walk"], want)
+	if want := `unit "kg", note Before breakfast`; made["Weight"] != want {
+		t.Errorf("the form made Weight with %s, want %s", made["Weight"], want)
 	}
-	if want := `unit "kg", categories [Body], note Before breakfast`; made["Weight"] != want {
-		t.Errorf("the number form made Weight with %s, want %s", made["Weight"], want)
-	}
-	page = browse(t, h, "/metrics")
-	for _, want := range []string{`href="/metrics?new=register-metric&amp;category=Body#new-metric">+ New metric here</a>`,
-		`aria-label="Add a reading of Weight"`, `aria-label="Add a reading of Walk"`} {
-		if !strings.Contains(page, want) {
-			t.Errorf("/metrics lacks %s", want)
-		}
-	}
-
-	// The card's +: one value, for today.
-	rec := submit(h, "/measurements", url.Values{"metric": {"Weight"}, "day": {fixedToday}, "value": {"80.5"}, "back": {"/metrics"}}, "")
-	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || (loc != "/metrics" && !feedbackLocation(loc, "/metrics")) {
-		t.Fatalf("the card's +: %d %q", rec.Code, rec.Header().Get("Location"))
-	}
-	var weight []any
-	for _, x := range props(apitest.Must(t)(c.Get(t.Context(), "/metrics")))["metrics"].([]any) {
-		if m := x.(map[string]any); m["name"] == "Weight" {
-			weight = m["recent"].([]any)
-		}
-	}
-	if len(weight) != 1 || weight[0].(map[string]any)["day"] != fixedToday || weight[0].(map[string]any)["value"] != json.Number("80.5") {
-		t.Errorf("Weight's readings %v, want 80.5 on %s", weight, fixedToday)
-	}
-
-	// A refused form opens the fold again on its own kind. Each form sends its id (form), so the page knows which one
-	// was sent: only that form holds what it sent, and only it is described by the alert.
-	submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-5"}}), "")
-	rec = submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Mood"}, "unit": {"1-10"}, "category": {"Mind"}}), "")
-	body := rec.Body.String()
-	score := regexp.MustCompile(`(?s)<form id="new-score".*?</form>`).FindString(body)
-	if rec.Code != http.StatusConflict || !strings.Contains(body, `id="new-metric" open>`) ||
-		!strings.Contains(body, `<input type="radio" name="new-kind" value="number"><span>A number</span></label><label><input type="radio" name="new-kind" value="score" checked>`) ||
-		!strings.Contains(score, `<form id="new-score" method="POST" action="/metrics" aria-describedby="refused" class="kind-score">`) ||
-		!strings.Contains(score, `name="name" value="Mood"`) || !strings.Contains(score, `name="unit" value="1-10"`) || !strings.Contains(score, `name="category" value="Mind"`) ||
-		strings.Count(body, "aria-describedby") != 1 || strings.Count(body, `name="name" value="Mood"`) != 1 || strings.Count(body, `name="unit" value="1-10"`) != 1 ||
-		strings.Count(body, `name="category" value="Mind"`) != 1 ||
-		!strings.Contains(body, `<form id="new-habit" method="POST" action="/metrics" class="kind-habit">`+"\n"+`<input type="hidden" name="unit" value="">`) {
-		t.Errorf("a refused New metric: %d %.600s\nthe score form: %s", rec.Code, body, score)
+	if page = browse(t, h, "/metrics"); strings.Contains(page, `aria-label="Add a reading of`) || strings.Contains(page, "+ New metric here") {
+		t.Error("/metrics draws + Add on a card or + New metric here")
 	}
 }
 
-// TestAScoreRangeOutOfOrderComesBackOnItsForm: a score's range is lo-hi with lo less than hi (metrics_range_order,
-// D6). The pattern of the score form cannot compare two numbers, so a browser sends 5-1. The server answers the
-// schema's 422 on /metrics: New metric is open on the score form, that form holds what it sent, the alert says the
-// sentence of the trigger, and nothing is written, not the metric and not its new category.
-func TestAScoreRangeOutOfOrderComesBackOnItsForm(t *testing.T) {
+// TestAScoreRangeOutOfOrderIsRefused: a score's range is lo-hi with lo less than hi (metrics_range_order, D6). A
+// browser can send 5-1: the server answers the schema's 422 with the sentence of the trigger, and nothing is written.
+func TestAScoreRangeOutOfOrderIsRefused(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	page := browse(t, h, "/metrics")
-	rec := submit(h, "/metrics", formSends(t, page, `id="new-score"`, url.Values{"name": {"Pain"}, "unit": {"5-1"}, "category": {"Body"}}), "")
-	body := rec.Body.String()
-	score := regexp.MustCompile(`(?s)<form id="new-score".*?</form>`).FindString(body)
-	alert := regexp.MustCompile(`(?s)<div class="alert[^"]*" role="alert" id="refused".*?</div>`).FindString(body)
+	rec := submit(h, "/metrics", url.Values{"name": {"Pain"}, "unit": {"5-1"}}, "/metrics")
 	const trigger = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(alert, trigger) || !strings.Contains(body, `id="new-metric" open>`) ||
-		!strings.Contains(body, `<input type="radio" name="new-kind" value="score" checked>`) ||
-		!strings.Contains(score, `<form id="new-score" method="POST" action="/metrics" aria-describedby="refused" class="kind-score">`) ||
-		!strings.Contains(score, `name="name" value="Pain"`) || !strings.Contains(score, `name="unit" value="5-1"`) ||
-		!strings.Contains(score, `name="category" value="Body"`) {
-		t.Errorf("a score with the range 5-1: %d\nthe alert: %s\nthe score form: %s", rec.Code, alert, score)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), trigger) || !strings.Contains(rec.Body.String(), `<a href="/metrics">Back</a>`) {
+		t.Errorf("a score with the range 5-1: %d %.600s", rec.Code, rec.Body.String())
 	}
-	for _, title := range []string{"Pain", "Body"} {
-		if e, err := c.Get(t.Context(), "/pages?title="+title); apitest.Status(err) != http.StatusNotFound {
-			t.Errorf("the page %s after the refusal: %v %v, want none", title, e, err)
-		}
+	if e, err := c.Get(t.Context(), "/pages?title=Pain"); apitest.Status(err) != http.StatusNotFound {
+		t.Errorf("the page Pain after the refusal: %v %v, want none", e, err)
 	}
 }
 
@@ -604,7 +455,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
 	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
 	iron := apitest.Must(t)(c.Get(ctx, "/pages?title=Iron"))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, iron, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, iron, "file-pages"), map[string]string{"category": "Body"}))
 
 	// The JSON carries each metric's recent readings, oldest first.
 	for _, x := range props(apitest.Must(t)(c.Get(ctx, "/metrics")))["metrics"].([]any) {
@@ -649,28 +500,26 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
-	// A refused form comes back to the page with Select on, the category it sent and Move checked.
-	rec = submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"category": {"Daily"}, "move": {"1"}}), "")
-	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) ||
-		!strings.Contains(body, `value="Daily"`) || !strings.Contains(body, `<input type="checkbox" name="move" value="1" checked>`) || !strings.Contains(body, "missing field ids") {
+	// A refused form answers with the error page, which leads back to the board.
+	rec = submit(h, "/pages/file", formSends(t, page, `id="pick"`, url.Values{"category": {"Daily"}, "move": {"1"}}), "/metrics")
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "missing field ids") || !strings.Contains(body, `<a href="/metrics">Back</a>`) {
 		t.Errorf("no box checked: %d %.600s", rec.Code, body)
 	}
 }
 
-// The Metrics board folds, and ?view=list draws the same metrics as rows (docs/plans/118-fold-and-find.md, rules 4
-// and 5).
-func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
+// The Metrics board folds (docs/plans/118-fold-and-find.md, rules 4 and 5); it has no list view
+// (docs/plans/131-the-pareto-pass.md, part 3).
+func TestTheMetricsBoardFolds(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	ids := cardsFixture(t, c)
 	file := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "file-pages")
 	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Ferritin"], "category": "Iron"}))
 	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Weight"] + "," + ids["Walk"], "category": "Body"}))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages?title=Iron")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/pages?title=Iron")), "file-pages"), map[string]string{"category": "Body"}))
 
 	cards := browse(t, h, "/metrics")
 	for _, want := range []string{
-		`<nav class="kinds view-switch" aria-label="View"><a href="/metrics" aria-current="true">Cards</a><a href="/metrics?view=list">List</a></nav>`,
 		// Body holds Weight and Walk, and Ferritin under Iron: its newest reading is Weight's, yesterday.
 		`<details class="group metric-group" id="c-`, ` open><summary><h2>Body <small>3</small></h2><span class="meta">newest yesterday · Tue 13 May</span></summary>`,
 		`<details class="metric-sub" open><summary><h3>Iron <small>1</small></h3><span class="meta">newest `,
@@ -681,44 +530,13 @@ func TestTheMetricsBoardFoldsAndHasAList(t *testing.T) {
 			t.Errorf("/metrics lacks %s", want)
 		}
 	}
-
-	list := browse(t, h, "/metrics?view=list")
-	for _, want := range []string{
-		`<a href="/metrics">Cards</a><a href="/metrics?view=list" aria-current="true">List</a>`,
-		`<ul class="plain metric-rows"><li class="metric-row pick">`,
-		`<input type="checkbox" name="ids" value="` + ids["Weight"] + `" form="pick" aria-label="Select Weight">`,
-		`<a class="name" href="/metrics/Weight">Weight</a>`,
-		`79.5 <span class="unit">kg</span></a><span class="meta">yesterday · Tue 13 May</span><span class="line"><svg class="trend"`,
-		`<li class="metric-row pick stale">`, `<span class="meta none">No reading yet · n</span>`,
-		`<input type="hidden" name="back" value="/metrics?view=list">`,
-	} {
-		if !strings.Contains(list, want) {
-			t.Errorf("/metrics?view=list lacks %s", want)
-		}
-	}
-	// Each + Add of a row and the pick bar return to the list.
-	if strings.Contains(list, `class="reading-tile metric-card`) || strings.Count(list, `<input type="hidden" name="back" value="/metrics?view=list">`) != 6 {
-		t.Error("the list draws a card, or a form of it does not return to the list")
+	if strings.Contains(cards, "view=list") || strings.Contains(cards, "metric-rows") {
+		t.Error("/metrics draws a list view")
 	}
 	// The tools of a group are its foot: after its cards, and in Iron after Ferritin (docs/plans/119-the-finish.md, rule 3).
-	for _, page := range []string{cards, list} {
-		iron := page[strings.Index(page, `<h3>Iron`):]
-		if ferritin, tools := strings.Index(iron, `>Ferritin</a>`), strings.Index(iron, `<div class="group-tools">`); ferritin < 0 || tools < ferritin {
-			t.Errorf("the tools of Iron come before its cards: Ferritin at %d, the tools at %d", ferritin, tools)
-		}
-	}
-	names := regexp.MustCompile(`<a class="name" href="/metrics/(\w+)"`)
-	if a, b := names.FindAllString(cards, -1), names.FindAllString(list, -1); len(a) != 5 || strings.Join(a, " ") != strings.Join(b, " ") {
-		t.Errorf("the cards %v and the rows %v are not the same metrics", a, b)
-	}
-
-	// + Add on a row returns to the list.
-	rec := submit(h, "/measurements", url.Values{"metric": {"Steps"}, "day": {fixedToday}, "value": {"9000"}, "back": {"/metrics?view=list"}}, "")
-	if loc, err := url.Parse(rec.Header().Get("Location")); rec.Code != http.StatusSeeOther || err != nil || loc.Path != "/metrics" || loc.Query().Get("view") != "list" {
-		t.Fatalf("+ Add on the list: %d %q", rec.Code, rec.Header().Get("Location"))
-	}
-	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, `9000 <span class="unit">n</span></a><span class="meta">today</span>`) {
-		t.Error("the list after + Add lacks the reading")
+	iron := cards[strings.Index(cards, `<h3>Iron`):]
+	if ferritin, tools := strings.Index(iron, `>Ferritin</a>`), strings.Index(iron, `<div class="group-tools">`); ferritin < 0 || tools < ferritin {
+		t.Errorf("the tools of Iron come before its cards: Ferritin at %d, the tools at %d", ferritin, tools)
 	}
 }
 

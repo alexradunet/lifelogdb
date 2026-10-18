@@ -32,9 +32,9 @@ func runSnapshotScript(t *testing.T, folder []string, produce []string, status i
 		}
 	}
 	stub := filepath.Join(t.TempDir(), "lifelog")
-	// The stub is called as `lifelog snapshot --to DIR`. It checks that command line.
+	// The stub is called as `lifelog snapshot --snapshots DIR`. It checks that command line.
 	var body strings.Builder
-	body.WriteString("#!/bin/sh\n[ \"$1\" = snapshot ] && [ \"$2\" = --to ] && [ \"$3\" = \"" + dir + "\" ] || exit 64\n")
+	body.WriteString("#!/bin/sh\n[ \"$1\" = snapshot ] && [ \"$2\" = --snapshots ] && [ \"$3\" = \"" + dir + "\" ] || exit 64\n")
 	for _, name := range produce {
 		fmt.Fprintf(&body, "echo new > \"%s/%s\"\n", dir, name)
 	}

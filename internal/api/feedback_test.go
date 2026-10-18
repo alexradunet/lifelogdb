@@ -31,7 +31,7 @@ func TestBrowserMutationFeedback(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	target := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Revived target"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone"), nil))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, target, "tombstone-pages"), nil))
 	rec := submit(h, "/pages", url.Values{"title": {"Feedback page"}, "body": {"[[Revived target]] [[bad/name]]"}}, "")
 	if rec.Code != 303 {
 		t.Fatalf("POST: %d %s", rec.Code, rec.Body.String())

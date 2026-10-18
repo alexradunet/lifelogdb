@@ -189,36 +189,6 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 	return v
 }
 
-// oldLists are the lists that Browse replaced (docs/plans/117-one-browse-view.md, rule 8), each with the filters of
-// Browse that give its rows. A GET of one answers 308 to Browse, so a bookmark or a client keeps working; the POST
-// routes of the same paths do not change.
-var oldLists = map[string]url.Values{
-	"/people":     {"kind": {"person"}},
-	"/places":     {"kind": {"place"}},
-	"/media":      {"kind": {"media"}},
-	"/files":      {"kind": {"document"}},
-	"/ghosts":     {"kind": {"page"}, "ghosts": {"1"}},
-	"/categories": {},
-}
-
-// toBrowse is the Browse address of a GET of an old list: its filters, and the limit, the offset and the asked form
-// (new) of the query. The kind of the media list (image, video, audio) is the field media of Browse.
-func toBrowse(path string, q url.Values) string {
-	v := url.Values{}
-	for k, vs := range oldLists[path] {
-		v[k] = slices.Clone(vs)
-	}
-	for _, k := range []string{"limit", "offset", "new"} {
-		if x, ok := q[k]; ok {
-			v[k] = x
-		}
-	}
-	if path == "/media" && q.Get("kind") != "" {
-		v.Set("media", q.Get("kind"))
-	}
-	return siren.BrowseHref(v)
-}
-
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
 // category tree. Inside a category the list's New form files the new page there.
 func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
@@ -467,8 +437,8 @@ func fileKind(mime string) string {
 	return kind
 }
 
-// browseActions are the actions of a list: the New of its kind (a new thing is filed in the category of the list,
-// rule 6), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. The deleted
+// browseActions are the actions of a list: the New of its kind (a new page is filed in the category of the list,
+// rule 6; anything else is filed by file-pages), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. The deleted
 // have no action here: each is restored from its page. Every list but All offers file-pages; pages (the ghosts too),
 // media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
@@ -478,7 +448,7 @@ func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Act
 	}
 	if name := siren.NewActionOf(b.kind); name != "" && !b.ghosts {
 		var values map[string]any
-		if in != nil {
+		if in != nil && name == "create-page" {
 			values = map[string]any{"category": in.Title}
 		}
 		out = append(out, action(name, nil, values))

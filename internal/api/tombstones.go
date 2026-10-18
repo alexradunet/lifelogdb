@@ -42,9 +42,9 @@ func idsOf(values []string) ([]int64, error) {
 	return ids, nil
 }
 
-// tombstoneMany is tombstone-pages: every id named is tombstoned in one write, or none is. The answer is the class
-// tombstoned: the ids, their count, and an item link to each. A browser form returns to its list (back), with the
-// count as its feedback.
+// tombstoneMany is tombstone-pages, the one delete: every id named is tombstoned in one write, or none is. The
+// answer is the class tombstoned: the ids, their count, and an item link to each. A browser form returns to its list
+// or its page (back), with the count as its feedback.
 func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
@@ -54,7 +54,7 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*siren.En
 	if err != nil {
 		return nil, err
 	}
-	if err := h.s.TombstonePages(r.Context(), src, ids); err != nil {
+	if err := h.s.Tombstone(r.Context(), src, ids...); err != nil {
 		return nil, err
 	}
 	e := &siren.Entity{Class: []string{"tombstoned"}, Title: "Deleted",

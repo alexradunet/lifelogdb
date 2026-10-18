@@ -1,10 +1,30 @@
 package core
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
+
+	"lifelog/internal/text"
 )
+
+// daysFrom are the days from from through through, as the stream gives the reads its days.
+func daysFrom(t *testing.T, from, through string) []string {
+	t.Helper()
+	first, ok1 := text.ParseDay(from)
+	last, ok2 := text.ParseDay(through)
+	if !ok1 || !ok2 {
+		t.Fatalf("%s to %s is not a window", from, through)
+	}
+	var out []string
+	for d := first; !d.After(last); d = d.AddDate(0, 0, 1) {
+		out = append(out, d.Format(time.DateOnly))
+	}
+	return out
+}
 
 // The calendar's reads (docs/plans/101-the-calendar-holds-every-dated-thing.md). Every expected value is worked out by
 // hand from the rows the test writes.
@@ -21,7 +41,7 @@ func TestAnniversariesComeBackEachYear(t *testing.T) {
 	s := fresh(t)
 	person := func(title, birth, death string) int64 {
 		t.Helper()
-		id, err := s.CreatePerson(ctx, "cli", title, title, birth, death, "")
+		id, err := s.CreatePerson(ctx, "cli", title, title, birth, death)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,17 +73,12 @@ func TestAnniversariesComeBackEachYear(t *testing.T) {
 		// a week across the new year
 		{"2031-12-29", "2032-01-04", "2031-12-31 birthday Year end 46 | 2032-01-02 birthday New year 47"},
 	} {
-		as, err := s.Anniversaries(ctx, tc.from, tc.through)
+		as, err := s.anniversariesOn(ctx, daysFrom(t, tc.from, tc.through))
 		if err != nil {
 			t.Fatalf("%s to %s: %v", tc.from, tc.through, err)
 		}
 		if got := anniversaryLines(as); got != tc.want {
 			t.Errorf("%s to %s:\n got %s\nwant %s", tc.from, tc.through, got, tc.want)
-		}
-	}
-	for _, bad := range [][2]string{{"2031-01-01", "2032-01-02"}, {"2031-05-02", "2031-05-01"}, {"2031-5-1", "2031-05-31"}} {
-		if _, err := s.Anniversaries(ctx, bad[0], bad[1]); status(err) != 422 {
-			t.Errorf("%v: %v, want 422", bad, err)
 		}
 	}
 }
@@ -97,7 +112,7 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Lake.jpg", SHA256: strings.Repeat("a", 64), MIME: "image/jpeg", Day: "2031-05-14"}); err != nil {
 		t.Fatal(err)
 	}
-	park, err := s.CreatePlace(ctx, "cli", "Lake Park", "")
+	park, err := s.CreatePlace(ctx, "cli", "Lake Park")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +120,11 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := s.DatedIn(ctx, "2031-05-01", "2031-05-31", 20)
+	set, err := json.Marshal(daysFrom(t, "2031-05-01", "2031-05-31"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.dated(ctx, `IN (SELECT value FROM json_each(:days))`, 20, sql.Named("days", string(set)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,8 +142,5 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("dated rows:\n got %s\nwant %s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-	if _, err := s.DatedIn(ctx, "2031-01-01", "2032-01-02", 20); status(err) != 422 {
-		t.Errorf("a window of 367 days: %v, want 422", err)
 	}
 }

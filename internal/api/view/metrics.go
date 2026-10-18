@@ -244,39 +244,31 @@ func (v *view) MetricSections() []metricSection {
 	return out
 }
 
-// readingTile is a metric read on the day: its last reading of the day (the one to correct), its unit in words,
-// how many readings of the day it stands for, and the line of its trend.
+// readingTile is a metric read on the day: its last reading of the day (the one to correct), and how many more
+// readings of the day it stands for.
 type readingTile struct {
-	Metric, Unit, Value string
-	ID                  string
-	More                int
-	Line                template.HTML
+	Metric, Value string
+	ID            string
+	More          int
 }
 
-// ReadingTiles are the tiles of the day's trends, one for each metric, in the order of the day's readings.
+// ReadingTiles are the tiles of the day's readings, one for each metric, in the order of its first reading.
 func (v *view) ReadingTiles() []readingTile {
 	props, _ := v.Props.(map[string]any)
-	day, _ := props["day"].(string)
 	readings, _ := props["readings"].([]any)
-	trends, _ := props["trends"].([]any)
 	var out []readingTile
-	for _, x := range trends {
-		t, _ := x.(map[string]any)
-		metric, _ := t["metric"].(string)
-		unit, _ := t["unit"].(string)
-		tile := readingTile{Metric: metric, Unit: unitWords(unit)}
-		for _, r := range readings {
-			m, _ := r.(map[string]any)
-			if m["metric"] == metric {
-				if tile.ID != "" {
-					tile.More++
-				}
-				tile.ID, tile.Value = Num(m["id"]), Num(m["value"])
-			}
+	at := map[string]int{}
+	for _, r := range readings {
+		m, _ := r.(map[string]any)
+		metric, _ := m["metric"].(string)
+		i, seen := at[metric]
+		if !seen {
+			i, at[metric] = len(out), len(out)
+			out = append(out, readingTile{Metric: metric})
+		} else {
+			out[i].More++
 		}
-		points, _ := t["readings"].([]any)
-		tile.Line = trendLine(v.clock(), metric, unit, day, points)
-		out = append(out, tile)
+		out[i].ID, out[i].Value = Num(m["id"]), Num(m["value"])
 	}
 	return out
 }

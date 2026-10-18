@@ -40,7 +40,7 @@ func TestPeoplePlacesAndPromotion(t *testing.T) {
 	if !found {
 		t.Errorf("day view %+v", d.Rows)
 	}
-	bob, err := s.CreatePerson(ctx, "cli", "Bob", "Bob Sample", "1990-02-30", "", "")
+	bob, err := s.CreatePerson(ctx, "cli", "Bob", "Bob Sample", "1990-02-30", "")
 	if status(err) != 422 || bob != 0 {
 		t.Errorf("an impossible birth day: %v", err)
 	}
@@ -148,15 +148,15 @@ func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 // with a 409, and it does not revive a tombstone. A refusal writes nothing.
 func TestPromoteOfATypedEntity(t *testing.T) {
 	s := fresh(t)
-	person, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", "", "")
+	person, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	place, err := s.CreatePlace(ctx, "cli", "Lake Example", "")
+	place, err := s.CreatePlace(ctx, "cli", "Lake Example")
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, err := s.CreatePlace(ctx, "cli", "Old Lake", "")
+	gone, err := s.CreatePlace(ctx, "cli", "Old Lake")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,7 +343,7 @@ func TestSearchByKind(t *testing.T) {
 	if _, _, err := s.CreatePage(ctx, "cli", "Shed", "A lantern.", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePerson(ctx, "cli", "Ana", "", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Ana", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	ana := must[int64](t)(s.PageID(ctx, "Ana"))
@@ -368,14 +368,6 @@ func TestSearchByKind(t *testing.T) {
 	want := map[string]string{"2026-10-01": "day", "Shed": "page", "Ana": "person", "Lantern hours": "page", "Lantern.jpg": "file"}
 	if fmt.Sprint(kinds) != fmt.Sprint(want) {
 		t.Errorf("the kinds of the hits: %v, want %v", kinds, want)
-	}
-	counts := must[map[string]int](t)(s.SearchCounts(ctx, "lantern", SearchOptions{Kind: "person"}))
-	if got := fmt.Sprint(counts); got != "map[all:5 day:1 file:1 page:2 person:1 place:0]" {
-		t.Errorf("the counts: %s", got)
-	}
-	shed := must[int64](t)(s.PageID(ctx, "Shed"))
-	if got := must[map[string]int](t)(s.SearchCounts(ctx, "lantern", SearchOptions{Omit: []int64{shed}})); got["page"] != 1 || got["all"] != 4 {
-		t.Errorf("the counts without Shed: %v", got)
 	}
 	for _, order := range SearchOrders() {
 		only := must[[]Hit](t)(s.SearchWith(ctx, "lantern", SearchOptions{Order: order, Kind: "page"}, 50, 0))

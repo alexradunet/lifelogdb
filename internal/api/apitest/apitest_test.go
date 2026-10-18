@@ -54,7 +54,7 @@ func TestMustAndActionFailTheTestAndDoNotPanic(t *testing.T) {
 	if got := fatalOf(t, func(tb testing.TB) { Must(tb)(e, errors.New("synthetic refusal")) }); got != "synthetic refusal" {
 		t.Errorf("Must with an error: the test failed with %q, want the error", got)
 	}
-	if got := fatalOf(t, func(tb testing.TB) { Action(tb, e, "tombstone") }); got == "" {
+	if got := fatalOf(t, func(tb testing.TB) { Action(tb, e, "tombstone-pages") }); got == "" {
 		t.Error("Action of a name that e does not have: the test did not fail")
 	}
 }

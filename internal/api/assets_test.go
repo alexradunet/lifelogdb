@@ -11,9 +11,6 @@ import (
 
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/core"
-	"lifelog/internal/db"
-	"lifelog/internal/db/dbtest"
 )
 
 // TestTheFontsAreServedByExactName: every face base.css names is served as a font that a browser keeps; the
@@ -147,57 +144,5 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	}
 	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
 		t.Errorf("the day page does not hold the shared text: %v", props(page)["body"])
-	}
-}
-
-// TestTheStylePageReadsNothing: the style page is a whole page, it is not in the catalog, and it reads nothing from
-// the database: with the store closed the shell's read fails and the page is still drawn. A public listener refuses
-// it without the token. What it shows is TestTheStylePageRunsTheRealTemplates.
-func TestTheStylePageReadsNothing(t *testing.T) {
-	d, err := db.Open(t.Context(), dbtest.File(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := api.New(&core.Store{DB: d})
-	if err := d.Close(); err != nil { // every query of the store now fails
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest("GET", "/styleguide", nil)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") || !strings.HasSuffix(strings.TrimSpace(body), "</html>") {
-		t.Fatalf("GET /styleguide with the store closed: %d %q %.300s", rec.Code, rec.Header().Get("Content-Type"), body)
-	}
-	for _, id := range []string{`id="refused"`, `role="alert"`} {
-		if strings.Contains(body, id) {
-			t.Errorf("the style page carries %s: a second live region for the refused alert", id)
-		}
-	}
-
-	c, live, _ := apitest.Fresh(t, "cli")
-	catalog, err := c.Catalog(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, a := range catalog {
-		if strings.Contains(a.Href, "styleguide") {
-			t.Errorf("the catalog names the style page: %s", a.Name)
-		}
-	}
-	if rec := request(live, "GET", "/styleguide", "", map[string]string{"Accept": "text/html"}); rec.Code != http.StatusOK {
-		t.Errorf("GET /styleguide on an open store: %d", rec.Code)
-	}
-	if rec := request(live, "POST", "/styleguide", "", nil); rec.Code != http.StatusMethodNotAllowed {
-		t.Errorf("POST /styleguide: %d, want 405", rec.Code)
-	}
-
-	pub, _ := publicHandler(t, api.PublicOptions{Token: testToken})
-	if rec := request(pub, "GET", "/styleguide", "", nil); rec.Code != http.StatusUnauthorized {
-		t.Errorf("a public listener serves the style page with no token: %d", rec.Code)
-	}
-	if rec := request(pub, "GET", "/styleguide", "", map[string]string{"Authorization": "Bearer " + testToken, "Accept": "text/html"}); rec.Code != http.StatusOK {
-		t.Errorf("a public listener refuses the style page with the token: %d", rec.Code)
 	}
 }

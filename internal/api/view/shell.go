@@ -20,8 +20,6 @@ type Shell struct {
 	MonthHref string
 	Written   int
 	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
-	// Titles are the titles the search box suggests (the root's recent_titles), in a datalist; none when the read failed.
-	Titles []string
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
@@ -36,7 +34,7 @@ var navItems = []struct {
 }{
 	{"Lifelog", "/", "", []string{"/"}, "home", ""},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day", "t"},
-	{"Calendar", "/days", "calendar", []string{"/months", "/weeks", "/years", "/days"}, "day", ""},
+	{"Calendar", "/days", "calendar", []string{"/months", "/years", "/days"}, "day", ""},
 	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day", ""},
 	{"Browse", "/browse", "browse", []string{"/browse"}, "day", ""},
 	{"Every action", "/actions", "", []string{"/actions"}, "owner", ""},
@@ -52,13 +50,13 @@ type navItem struct {
 // newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
 // list, and the link opens the list with its New form open. A page, a person, a place and a file are made on their
 // Browse list (docs/plans/117-one-browse-view.md, rule 7); a file on the media list. A metric is made on /metrics,
-// and a reading is added on its metric's card.
+// and a reading is added on the page of today, Home (docs/plans/131-the-pareto-pass.md, part 2).
 var newKinds = []struct{ Title, Href, Icon string }{
 	{"Page", siren.BrowseNewHref("page"), "new"},
 	{"Person", siren.BrowseNewHref("person"), "people"},
 	{"Place", siren.BrowseNewHref("place"), "places"},
 	{"Metric", "/metrics?new=register-metric", "metrics"},
-	{"Reading", "/metrics", "metrics"},
+	{"Reading", "/?new=record#record", "metrics"},
 	{"File", siren.BrowseNewHref("media"), "files"},
 }
 

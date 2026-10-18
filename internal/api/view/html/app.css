@@ -37,15 +37,13 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
 .rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2);
   & .brand{font:400 26px/28px var(--display); letter-spacing:.02em; color:var(--rail-accent);
     &[aria-current=page]{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px}}}
-.rail-search{display:flex; align-items:center; gap:var(--space-2); block-size:var(--control); padding:0 10px; color:var(--rail-ink);
-  background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in);
-  &:focus-within{outline:2px solid var(--focus); outline-offset:2px}
-  & input{flex:1; min-inline-size:0; block-size:auto; padding:0; border:0; outline:0; background:transparent; box-shadow:none; color:var(--rail-ink);
-    &::placeholder{color:var(--rail-ink)}
-    &:focus-visible{outline:0}}}
+/* The rail's search is a button that opens the search dialog: it looks like the box it opens. */
+.rail .rail-search{display:flex; align-items:center; justify-content:flex-start; gap:var(--space-2); inline-size:100%; block-size:var(--control);
+  padding:0 10px; font-weight:400; color:var(--rail-ink); background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in);
+  & kbd{margin-inline-start:auto}}
 /* New is a wood slab with gold words, not the loud button: that one is the page's main write. */
 .rail .rail-new.primary{inline-size:100%}
-.rail .rail-new.primary,.styleguide .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard);
+.rail .rail-new.primary{background:var(--rail); color:var(--rail-accent); border-color:var(--outline); box-shadow:var(--bevel-up),var(--drop-hard);
   &:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}}
 /* New opens a menu of the kinds (docs/plans/114-one-way-to-do-a-thing.md): a popover in the middle of the screen,
    a wood slab like the rail, two columns of links. */
@@ -101,7 +99,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     border-inline-end:0; border-block-end:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark)}
   .rail-head{flex:1 1 auto; align-items:center; justify-content:flex-start; gap:var(--space-3); padding:0;
     & .brand{font-size:22px; line-height:24px}}
-  .rail>search,.rail-search{display:none}
+  .rail .rail-search{display:none}
   .rail .rail-search-link{display:inline-flex; inline-size:var(--control); padding:0; margin-inline-start:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
   .rail .rail-new.primary{inline-size:auto}
   .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
@@ -212,8 +210,7 @@ ul.plain{list-style:none; margin:0; padding:0;
 .entry{display:grid; grid-template-columns:96px minmax(0,1fr) auto; gap:var(--space-3); align-items:baseline;
   padding:10px var(--space-1); border-block-end:1px solid var(--line-soft); color:var(--text);
   &:hover{background:var(--surface-deep); color:var(--text); text-decoration:none}
-  & .first{min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  &.unwritten{color:var(--text-muted)}}
+  & .first{min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}}
 @container column (max-width:487px){.entry{grid-template-columns:minmax(0,1fr) auto} .entry>.date{grid-column:1 / -1}}
 .margin .entry{grid-template-columns:minmax(0,1fr) auto;
   &>.date{grid-column:1 / -1}}
@@ -252,7 +249,7 @@ form.inline{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-
   &>button{flex:0 0 auto}}
 @container column (max-width:608px){form.inline>label{flex:1 1 100%}}
 /* Any other form: its fields one under the other, the button under them. */
-form:where(:not(.inline):not(.tiny):not(.rail-search)){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3);
+form:where(:not(.inline):not(.tiny)){display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-3);
   &>label{align-self:stretch}}
 
 /* A form that is one button: a tombstone's Revive. */
@@ -298,18 +295,9 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
       &::after{content:""; position:absolute; inset-block-start:4px; inset-inline-end:4px; inline-size:7px; block-size:7px; background:var(--accent-ink); pointer-events:none}}}
   & .n{font:500 13px/18px var(--mono); color:var(--muted)}
   & .first{font-size:12px; line-height:16px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical}
-  /* The items of a day (docs/plans/101-the-calendar-holds-every-dated-thing.md): a line each, a muted square before
-     it; a phone's cell keeps the squares only. */
-  & .items{display:flex; flex-direction:column; min-inline-size:0}
-  & .item{position:relative; padding-inline-start:10px; font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    &::before{content:""; position:absolute; inset-inline-start:0; inset-block-start:5px; inline-size:6px; block-size:6px; background:var(--muted)}
-    & small{font-size:12px; line-height:16px; color:var(--muted)}}
-  & .more{font-size:12px; line-height:16px; color:var(--muted)}
-  & .marks{display:none;
-    & i{display:block; inline-size:6px; block-size:6px; background:var(--muted)}}
   & tbody tr:hover{background:none}}
-@container column (max-width:567px){table.calendar td>a{padding:4px} table.calendar .first,table.calendar .meta,table.calendar .items,table.calendar .more{display:none}
-  table.calendar .marks{display:flex; flex-wrap:wrap; gap:3px} table.calendar th{padding:var(--space-1); text-align:center}}
+@container column (max-width:567px){table.calendar td>a{padding:4px} table.calendar .first,table.calendar .meta{display:none}
+  table.calendar th{padding:var(--space-1); text-align:center}}
 
 /* An alert: an error entity in words, what went wrong and what to do, on parchment with the tone's edge. */
 .alert{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 14px; border-color:var(--warn); box-shadow:var(--parch-bevel); font-size:14px; line-height:20px;
@@ -359,21 +347,12 @@ figure a{display:block}
   & figure.cover{margin:0}
   & figure.cover img{display:block; inline-size:100%; aspect-ratio:1; object-fit:cover; background:var(--surface-deep);
     border:2px solid var(--edge); box-shadow:var(--drop-hard)}}
-.margin ul.plain.cover-thumbs{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:var(--space-2); padding:0; background:none; border:0; box-shadow:none;
-  &>li{padding:0; border:0}
-  & form{margin:0}
-  & :is(button,a.more){display:grid; place-items:center; inline-size:100%; block-size:auto; aspect-ratio:1; padding:0; overflow:hidden;
-    background:var(--surface-deep); border:1px solid var(--edge); box-shadow:none; color:var(--text-muted); font-size:20px; text-decoration:none;
-    &:hover{border-color:var(--ink); filter:none}
-    &:active{transform:none; box-shadow:none}}
-  & img{display:block; inline-size:100%; block-size:100%; object-fit:cover}}
 @container column (max-width:867px){.sheet-margin:has(>.margin>.cover-box){
   &>.margin{display:contents}
   & .cover-box{order:-1; inline-size:min(100%,320px)}}}
 
-/* The access keys, in the footer; a phone has no keyboard. The search's hint is a kbd after its field. */
+/* The access keys, in the footer; a phone has no keyboard. */
 footer .keys{color:var(--text-muted)}
-.rail-search kbd{flex:none}
 
 /* An action with fields: a button that opens its form under it (with no script, a <details>). In the page header
    the open form floats over the page; anywhere else it opens in place. A row of them is .actions. */
@@ -620,20 +599,9 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:var(--space-1); background:var(--surface); border:2px solid var(--edge)}
   &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}}
 .metric-card:has(.pick-box input:checked){outline:2px solid var(--link); outline-offset:-2px}
-/* New metric (docs/plans/113-new-metric-on-metrics.md): the checked kind shows its form, with no script. A category's
-   heading carries "+ New metric here". A number card and a day's reading tile carry + Add, one value for one day. */
-.new-metric{& form{display:none}
-  &:has(input[name=new-kind][value=number]:checked) form.kind-number,
-  &:has(input[name=new-kind][value=score]:checked) form.kind-score,
-  &:has(input[name=new-kind][value=habit]:checked) form.kind-habit{display:flex}
-  & .desc{margin:0; font-size:13px; color:var(--text-muted)}}
 .metric-group>.panel-head{flex-wrap:wrap; & h2,& h3{margin:0} & :is(h2,h3) a{font-size:inherit; line-height:inherit}}
 .pick-list>.metric-group{margin-block-end:var(--space-6)}
-.reading-tile .add-reading{align-self:flex-start;
-  &>summary{min-inline-size:var(--control-small); &::before{content:none}}
-  &[open]{align-self:stretch; &>summary{margin-block-end:0}}
-  & form{margin-block-start:var(--space-2); & label{flex:1 1 6rem; min-inline-size:0} & input{inline-size:100%}}}
-/* The categories of a page or a metric (docs/plans/114-one-way-to-do-a-thing.md): badges, each with x, and + Add. */
+/* The categories of a page (docs/plans/114-one-way-to-do-a-thing.md): badges, each with x, and + Add. */
 .categories{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2); margin-block-start:var(--space-2);
   & .label{font-size:13px; line-height:19px; color:var(--text-muted)}
   & .badge.category{display:inline-flex; align-items:center; gap:var(--space-1);
@@ -644,21 +612,6 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   & details.add-category{&>summary::before{content:none}
     &[open]{flex:1 1 100%; &>summary{margin-block-end:var(--space-1)}}
     & form label{flex:1 1 12rem}}}
-
-/* The style page (GET /styleguide): every component in every state. Its own rules only lay the specimens out. */
-.styleguide{
-  & .guide{display:flex; flex-direction:column; gap:var(--space-3); padding-block:var(--space-4)}
-  & .specimen{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3)}
-  & .specimen-title{margin:0; font:400 clamp(32px, 24px + 2cqi, 40px)/1 var(--display); letter-spacing:.01em; color:var(--text-strong);
-    & .mood{margin-inline-start:var(--space-1)}}
-  & dialog.palette{position:static; margin:0 0 var(--space-3)}}
-
-/* Day by day, under the calendar (docs/plans/101-the-calendar-holds-every-dated-thing.md): a day a heading, each item
-   a tag and a link to its own page. */
-.agenda-day{padding-block:var(--space-2);
-  & h3 a{color:var(--text-strong)}
-  & ul.plain>li{padding:var(--space-2) var(--space-1)}}
-.agenda-note{color:var(--text-muted)}
 
 /* The motions of a dialog and a popover (docs/plans/108-the-browser-made-current.md), only where motion is wanted:
    the search dialog and its backdrop fade in from a little above, the phone's sheet rises; each leaves the same way. @starting-style is the state the entry starts from, and the discrete
@@ -684,22 +637,21 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
 }
 @keyframes rail-drop{to{box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark),var(--shadow-float)}}
 
-/* Browse (docs/plans/117-one-browse-view.md): the category tree beside the list in a wide column, on a panel, the
-   branch of the list marked. In a narrow column the tree is a closed disclosure above the chips. The chips wrap onto
-   more lines (.kinds does): a row that scrolls hid the current chip past the edge, and with no script nothing
-   scrolls it into view. The page holds both copies of the tree; the column's width shows one. */
-.browse{display:grid; grid-template-columns:minmax(180px,240px) minmax(0,1fr); gap:var(--space-6); align-items:start}
+/* Browse (docs/plans/117-one-browse-view.md): the category tree is one fold, the branch of the list marked. In a
+   wide column it is beside the list and always open: its summary is hidden and its content shown, whatever the fold
+   says (::details-content). In a narrow column it is a closed fold above the chips. The chips wrap onto more lines
+   (.kinds does): a row that scrolls hid the current chip past the edge, and with no script nothing scrolls it into
+   view. */
+.browse{display:grid; grid-template-columns:minmax(0,1fr); gap:var(--space-2) var(--space-6); align-items:start}
 .browse-main{display:flex; flex-direction:column; gap:var(--space-2); min-inline-size:0}
-.browse-side,.browse-fold{gap:0; padding:var(--space-2) var(--space-3);
-  & .tree a.entry[aria-current=page]{background:var(--accent-soft); color:var(--accent-ink); font-weight:700}}
-.browse-fold{display:none;
+.browse-tree{gap:0; padding:var(--space-2) var(--space-3);
+  & .tree a.entry[aria-current=page]{background:var(--accent-soft); color:var(--accent-ink); font-weight:700}
   &>summary{display:flex; align-items:baseline; gap:var(--space-3); padding:var(--space-2) var(--space-1); cursor:pointer; font-weight:700;
     & .meta{margin-inline-start:auto; font-weight:400; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}}}
 .kinds.chips{& a{white-space:nowrap} & small{color:var(--text-muted)}}
-@container column (max-width:867px){
-  .browse{grid-template-columns:minmax(0,1fr)}
-  .browse-side{display:none}
-  .browse-fold{display:block}}
+@container column (min-width:868px){
+  .browse{grid-template-columns:minmax(180px,240px) minmax(0,1fr)}
+  .browse-tree{&>summary{display:none} &::details-content{content-visibility:visible; block-size:auto}}}
 
 /* The category tree (docs/plans/115-categories-to-browse.md, docs/plans/118-fold-and-find.md): a row is the link; a
    branch's fold is a chevron at the start of its row, and the categories under it are indented in the fold. The rows
@@ -712,18 +664,8 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>details>ul.tree{padding-inline-start:var(--space-4)}}
 
 /* The stream (docs/plans/130-the-explore-pass.md): a day is a card of parchment, the date in mono, its words with
-   their lines; a slim card (no day page) is shorter. The days with nothing between two cards are a quiet line. Beside
-   the cards in a wide column the scrubber stays in view; in a narrow one it is a closed fold above them. */
-.stream{display:grid; grid-template-columns:minmax(0,1fr) minmax(160px,200px); gap:var(--space-6); align-items:start}
-.stream-main{display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0}
-.stream-side{position:sticky; inset-block-start:var(--space-4); gap:var(--space-2); padding:var(--space-2) var(--space-3);
-  & .kinds{gap:var(--space-1) var(--space-3); padding-inline:0}}
-.stream-fold{display:none; padding:var(--space-2) var(--space-3);
-  &>summary{cursor:pointer; font-weight:700; padding-block:var(--space-1)}}
-@container column (max-width:867px){
-  .stream{grid-template-columns:minmax(0,1fr)}
-  .stream-side{display:none}
-  .stream-fold{display:block}}
+   their lines; a slim card (no day page) is shorter. */
+.stream{display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0}
 .day-card{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); box-shadow:var(--parch-bevel);
   &.slim{padding-block:var(--space-2)}}
 .card-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:var(--space-1) var(--space-3);
@@ -742,60 +684,16 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
     background:var(--surface-deep); border:1px solid var(--edge); color:var(--text)}}
 .card-pages{margin:0; font-size:14px; line-height:20px; color:var(--text-muted)}
 .card-text>.meta{margin:0; font-size:13px; color:var(--text-muted)}
-.quiet-gap{margin:0; text-align:center; font:400 12px/16px var(--mono); color:var(--text-muted)}
-/* The strip at the top of the stream: the same date in earlier years, each a small cover, how long ago and a line. */
-.on-this-day .strip{display:flex; flex-wrap:wrap; gap:var(--space-2) var(--space-4);
-  &>li{border:0; padding:0; margin:0; flex:1 1 220px; min-inline-size:0}
-  & a{display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:2px var(--space-2); color:var(--text);
-    & .cover-picture{grid-row:span 2; inline-size:40px; block-size:40px; object-fit:cover; border:1px solid var(--edge)}
-    & .date{font:400 12px/16px var(--mono); color:var(--text-muted)}
-    & .first{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}}}
 .zoom{padding-inline:0}
 
 /* Filed here (docs/plans/115-categories-to-browse.md): New page here opens in place, under the heading, full width. */
 .filed>.panel-head{flex-wrap:wrap;
   &>details.action[open]{flex:1 1 100%}}
 
-/* The categories as folders: a slab each, as a button is, as many across as the column holds; a slab sinks when it
-   is pressed (docs/plans/119-the-finish.md, rule 5). */
-details.folders{padding-block:var(--space-3); border-block-end:1px solid var(--line-soft);
-  &>summary small,& + * small{color:var(--text-muted); font-weight:400}}
-ul.folder-tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--space-3) var(--space-2); padding-block-end:3px;
-  &>li{margin:0; padding:0; border:0; display:flex; align-items:stretch; gap:var(--space-1)}}
-.folder-link{display:flex; flex:1 1 auto; align-items:center; gap:var(--space-2); min-inline-size:0; padding:var(--space-2) var(--space-3);
-  background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--slab-bevel),var(--drop-hard); color:var(--text); text-decoration:none;
-  & svg.icon{color:var(--accent-ink)}
-  &:hover{filter:brightness(1.04); text-decoration:none; color:var(--text); border-color:var(--outline)}
-  &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
-  & .first{flex:1 1 auto; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
-  & .meta{font:400 12px/16px var(--mono); color:var(--text-muted)}}
-@media (prefers-reduced-motion:no-preference){.folder-link{transition:transform .08s,box-shadow .08s,filter .08s}}
-
-/* The letter groups: a bar of the letters, then a fold a letter with its count. Closed, they are an index: a grid of
-   slabs, the letter in the display face over its count, and the open one takes the full width
-   (docs/plans/119-the-finish.md, rule 4). */
-.kinds.letters{font-family:var(--mono)}
-details.letter{border-block-end:1px solid var(--line-soft);
-  &>summary{color:var(--text-strong); & .letter-name{font:700 15px/22px var(--mono)} & small{color:var(--text-muted); font-weight:400}}
-  &[open]>summary{margin-block-end:0}
-  &>ul{scroll-margin-block-start:var(--space-8)}}
-.letter-groups.closed{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:var(--space-3) var(--space-2); padding-block:var(--space-4);
-  &>details.letter[open]{grid-column:1 / -1; padding-block-end:var(--space-2)}
-  &>details.letter:not([open]){border:0;
-    &>summary{flex-direction:column; justify-content:center; gap:0; block-size:64px; margin:0; color:var(--ink);
-      background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--slab-bevel),var(--drop-hard);
-      &::before{content:none}
-      &:hover{filter:brightness(1.04); border-color:var(--outline)}
-      &:active{transform:translateY(3px); box-shadow:var(--slab-pressed)}
-      & .letter-name{font:400 30px/30px var(--display)}
-      & small{font:400 12px/16px var(--mono)}}}}
-
 /* The folds of the Metrics board (docs/plans/118-fold-and-find.md, rules 4 and 5). A group's fold has its title and
-   count on its line, a stitch, and the day of its newest reading at the end. The link to its page and + New metric
-   here are the foot of the open fold (docs/plans/119-the-finish.md, rule 3). Cards or List is a switch of two links
-   before the jump bar. */
+   count on its line, a stitch, and the day of its newest reading at the end. The link to its page is the foot of the
+   open fold (docs/plans/119-the-finish.md, rule 3). */
 .board-nav{display:flex; flex-wrap:wrap; align-items:baseline; gap:0 var(--space-6)}
-.kinds.view-switch{font-weight:700}
 details.metric-group,details.metric-sub{
   &>summary{color:var(--text-strong); gap:var(--space-1) var(--space-3);
     &>:is(h2,h3){display:flex; align-items:baseline; gap:var(--space-2); flex:1 1 auto; min-inline-size:0; margin:0;
@@ -810,50 +708,25 @@ details.metric-sub{margin-block:var(--space-4) var(--space-2); padding-inline-st
 @container column (max-width:487px){details.metric-group,details.metric-sub{&>summary>:is(h2,h3)::after{content:none}}}
 
 /* A card has a foot (docs/plans/119-the-finish.md, rule 1): a tile is a column, the free space is over its line, so
-   the line and + Add are at the foot of every card of a row. */
+   the line is at the foot of every card of a row. */
 .reading-tile{gap:var(--space-1);
-  &>svg.trend,&>.add-reading{margin-block-start:auto}
-  &>svg.trend~.add-reading{margin-block-start:var(--space-2)}
+  &>svg.trend{margin-block-start:auto}
   &>.reading.none{font:400 32px/32px var(--display); color:var(--muted); & .unit{font:400 13px/16px var(--mono)}}}
 
 /* A tidy board (docs/plans/120-a-tidy-board.md). Every metric card has the same four lines: its name, its value, its
-   line (a dashed rule with no reading) and its foot, the day in short words and a quiet + Add. So the cards of the
-   board are of one height, and the one loud button stays the page's own. Select is on the line of the switch and
-   the jump bar, and its band opens under them. */
+   line (a dashed rule with no reading) and its foot, the day in short words. So the cards of the board are of one
+   height, and the one loud button stays the page's own. Select is on the line of the jump bar, and its band opens
+   under them. */
 .metric-card{&>svg.trend,&>.line-none{flex:none; block-size:28px; margin-block-start:var(--space-1)}
   &>svg.trend{inline-size:auto; max-inline-size:100%; align-self:flex-start} /* at the start, under the value */
   &>.line-none{background:linear-gradient(to right,var(--line-soft) 50%,transparent 50%) 0 50%/8px 2px repeat-x}}
 .card-foot{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--space-1) var(--space-2); margin-block-start:auto; padding-block-start:var(--space-1);
-  &>.meta{flex:1 1 0; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px}
-  &>.add-reading{flex:none; margin:0; &[open]{flex:1 1 100%}}}
-:is(.reading-tile,li.metric-row) .add-reading>summary.button{background:none; border-color:transparent; box-shadow:none; color:var(--text-link); padding:0 var(--space-2);
-  &:hover{border-color:var(--rule); filter:none}
-  &:active{transform:none}}
-:is(.reading-tile,li.metric-row) .add-reading[open]>summary.button{border-color:var(--rule)}
+  &>.meta{flex:1 1 0; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px}}
 .pick-list.board{display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:var(--space-4);
   &>*{grid-column:1 / -1}
   &>.board-nav{grid-column:1; grid-row:1; align-self:center; margin-block-end:var(--space-4)}
   &>.pick-bar{grid-column:2; grid-row:1; align-self:start; margin:0}
   &:has(.pick-on:checked)>.pick-bar{grid-column:1 / -1; grid-row:2; margin-block-end:var(--space-4)}}
-
-/* The list: one row a metric on parchment, the name first, the value in the display face, its day, its line. In a
-   narrow column the day and the line go under the name. */
-ul.metric-rows{padding:var(--space-1) var(--space-3); box-shadow:var(--parch-bevel); background:var(--surface);
-  --text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link)}
-ul.metric-rows>li.metric-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-4); padding:var(--space-2) 0;
-  & .name{flex:1 1 10rem; min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700}
-  & a.reading{flex:0 0 8rem; font:400 22px/24px var(--display); font-variant-numeric:tabular-nums; color:var(--ink); text-decoration:none;
-    & .unit{font:400 12px/16px var(--mono); color:var(--muted)}}
-  & .meta{flex:0 0 13rem; font-size:13px; line-height:19px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  & .meta.none{flex:0 1 calc(21rem + 120px + 2 * var(--space-4))}
-  & .line{flex:0 0 120px; & svg.trend{margin:0}}
-  & .add-reading{flex:none; &>summary::before{content:none} &[open]{flex:1 1 100%; &>summary{margin-block-end:var(--space-2)}}}
-  &.stale{& a.reading,& .name{color:var(--muted)} & svg.trend{color:var(--muted)} & svg.trend circle{fill:var(--muted)}}}
-/* In a narrow column a row is two lines, the name and the value, then the day and + Add; the cards have the line. */
-@container column (max-width:607px){ul.metric-rows>li.metric-row{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:2px var(--space-3);
-  &>.pick-box{grid-area:1 / 1 / 3 / 2} & .name{grid-area:1 / 2} & a.reading{grid-area:1 / 3; text-align:end}
-  & .meta,& .meta.none{grid-area:2 / 2} & .line{display:none} & .add-reading{grid-area:2 / 3; justify-self:end}
-  & .add-reading[open]{grid-area:3 / 1 / 4 / -1; justify-self:stretch}}}
 
 /* The pick bar is quiet until Select (docs/plans/119-the-finish.md, rule 2): the button alone, on the material under
    it. With Select on, it is the parchment band, and it stays in view. */

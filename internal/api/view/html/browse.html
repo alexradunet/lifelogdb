@@ -1,10 +1,9 @@
 {{/* Browse (docs/plans/117-one-browse-view.md): one list with two filters. The kind is a chip, with its count in
      the scope of the list (inside a category All comes first: it is the default there); the media list also says
-     its count of each media kind; where the list looks (Everything, a category, Not filed) is a branch of the category tree.
-     In a wide column the tree is beside the list; in a narrow one it is a closed disclosure above the chips, and the
-     chips wrap onto more lines, so the current chip and every count are in view. Both copies of the tree are in the page, and the column's width shows one: there
-     is no script. Each kind keeps its row: a face for a person, a tile for media, a row for the rest. The pick bar
-     offers what the list offers. */}}
+     its count of each media kind; where the list looks (Everything, a category, Not filed) is a branch of the category
+     tree. The tree is one fold: in a wide column it is beside the list and always open, in a narrow one it is a closed
+     fold above the chips (app.css, ::details-content). A category is a row with its badge. Each kind keeps its row: a
+     face for a person, a tile for media, a row for the rest. The pick bar offers what the list offers. */}}
 {{define "browse"}}{{template "head" .}}{{$p := .Props}}{{$c := $p.counts}}
 {{$where := "Everything"}}{{if $p.deleted}}{{$where = "Deleted"}}{{else if $p.ghosts}}{{$where = "Ghost pages"}}{{else if $p.unfiled}}{{$where = "Not filed"}}{{else if $p.in}}{{$where = printf "In %s" (crumbs $p.in.path)}}{{end}}
 <header class="page-head"><div class="what"><h1>Browse</h1><p class="sub"><span>{{$where}}</span>{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if $p.deleted}}<span>Open one to restore it.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
@@ -13,29 +12,20 @@
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime" "more" "preview,dry_run")}}{{end}}
-{{template "random" (.Action "random-page")}}
+{{template "random" (dict "a" (.Action "random-page") "label" "A random one")}}
 </div></header>
 <div class="browse">
-<nav class="browse-side panel" aria-label="Categories">{{template "browse-tree" .}}</nav>
+<details class="browse-tree panel"><summary>Categories <span class="meta">{{$where}}</span></summary><nav aria-label="Categories">{{template "browse-tree" .}}</nav></details>
 <div class="browse-main">
-<details class="browse-fold panel"><summary>Categories <span class="meta">{{$where}}</span></summary>{{template "browse-tree" .}}</details>
 <nav class="kinds chips" aria-label="Kind">{{range .LinksOf "kind"}}{{$k := index .Class 0}}<a href="{{.Href}}"{{if eq $k $p.kind}} aria-current="page"{{end}}>{{.Title}} <small>{{num (index $c $k)}}</small></a>{{end}}</nav>
 {{if eq $p.kind "media"}}<nav class="kinds" aria-label="Media kind">{{range .LinksOf "kind"}}{{if eq (index .Class 0) "media"}}<a href="{{.Href}}"{{if not $p.media}} aria-current="page"{{end}}>All media</a>{{end}}{{end}}<a href="{{.Link "pictures"}}"{{if eq $p.media "image"}} aria-current="page"{{end}}>Pictures</a><a href="{{.Link "videos"}}"{{if eq $p.media "video"}} aria-current="page"{{end}}>Videos</a><a href="{{.Link "recordings"}}"{{if eq $p.media "audio"}} aria-current="page"{{end}}>Recordings</a></nav>{{end}}
 {{if and (eq $p.kind "page") (not $p.ghosts) (not $p.deleted) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a><a href="{{.Link "deleted"}}">Deleted {{num $c.deleted}}</a></p>{{end}}
 {{$file := .Action "file-pages"}}{{$del := .Action "tombstone-pages"}}{{$pick := or $file $del}}
-{{$list := .BrowseList}}
 {{if $p.deleted}}{{with $p.rows}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.type}}</span> deleted {{$.When .deleted_at}}</span></a></li>{{end}}</ul></div>
 {{else}}<p class="empty">Nothing is deleted.</p>{{end}}
-{{else if or $list.Folders $list.Rows $list.Letters}}<div class="sheet list{{if $pick}} pick-list{{end}}">
-{{with $list.Folders}}<details class="folders" open><summary>Categories <small>{{len .}}</small></summary>
-<ul class="plain folder-tiles">{{range .}}<li class="folder{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="folder-link" href="{{.href}}">{{icon "browse"}}<span class="first">{{.title}}</span><span class="meta">{{.count}}</span></a></li>
-{{end}}</ul></details>{{end}}
-{{if eq $p.kind "media"}}<ul class="plain tiles">{{range $list.Rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}</span></a></li>{{end}}</ul>
-{{else if $list.Letters}}{{if not $list.Closed}}<nav class="kinds letters" aria-label="Letters">{{range $list.Letters}}<a href="#{{.Anchor}}">{{.Letter}}</a>{{end}}</nav>{{end}}
-<div class="letter-groups{{if $list.Closed}} closed{{end}}">{{range $list.Letters}}<details class="letter"{{if not $list.Closed}} open{{end}}><summary><span class="letter-name">{{.Letter}}</span> <small>{{len .Rows}}</small></summary>
-<ul class="plain rows" id="{{.Anchor}}">{{range .Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul></details>
-{{end}}</div>
-{{else}}<ul class="plain rows">{{range $list.Rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul>{{end}}
+{{else if $p.rows}}<div class="sheet list{{if $pick}} pick-list{{end}}">
+{{if eq $p.kind "media"}}<ul class="plain tiles">{{range $p.rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}</span></a></li>{{end}}</ul>
+{{else}}<ul class="plain rows">{{range $p.rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick)}}{{end}}</ul>{{end}}
 {{if $pick}}{{template "pick-bar" (dict "file" $file "del" $del "back" $.Here "words" (or (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
 {{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. The Metrics board makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}
 {{template "pager" .}}

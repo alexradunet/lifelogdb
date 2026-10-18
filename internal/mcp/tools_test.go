@@ -16,7 +16,6 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	}{
 		{"catalog collision", []siren.Action{{Name: "same-name"}, {Name: "same_name"}}, `"same_name"`},
 		{"built-in get", []siren.Action{{Name: "get"}}, `"get"`},
-		{"built-in get day", []siren.Action{{Name: "get-day"}}, `"get_day"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tools(tc.actions)
@@ -33,26 +32,8 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	for _, x := range list {
 		names = append(names, x.name)
 	}
-	if got, want := strings.Join(names, " "), "find import_find open_day get_day get"; got != want {
+	if got, want := strings.Join(names, " "), "find import_find open_day get"; got != want {
 		t.Fatalf("tools = %s, want %s", got, want)
-	}
-}
-
-// TestGetDayIsOpenDay: get_day is the action open-day under the name of a read, so there is no get_day when open-day
-// is not a tool: it is absent, or it is the owner's.
-func TestGetDayIsOpenDay(t *testing.T) {
-	for _, actions := range [][]siren.Action{{{Name: "find"}}, {{Name: "find"}, {Name: "open-day", Owner: true}}} {
-		list, err := tools(actions)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var names []string
-		for _, x := range list {
-			names = append(names, x.name)
-		}
-		if got := strings.Join(names, " "); got != "find get" {
-			t.Errorf("tools(%v) = %s, want find get", actions, got)
-		}
 	}
 }
 

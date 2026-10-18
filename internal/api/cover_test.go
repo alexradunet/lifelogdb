@@ -48,7 +48,7 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 		t.Errorf("the people sheet draws a form to set a cover")
 	}
 	self := apitest.Href(ana, "self")
-	if body := browse(t, h, self); !strings.Contains(body, `<a class="button" href="`+self+`/cover">Set cover photo</a>`) || strings.Contains(body, `<figure class="cover">`) {
+	if body := browse(t, h, self); !strings.Contains(body, `<a href="`+self+`/cover">Set cover photo</a>`) || strings.Contains(body, `<figure class="cover">`) {
 		t.Errorf("the person's page does not lead to its picker, or draws a cover it has not")
 	}
 	picker := browse(t, h, self+"/cover")
@@ -75,7 +75,7 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 	}
 	body := browse(t, h, self)
 	if !strings.Contains(body, `<section class="cover-box" aria-label="Cover photo">`+"\n"+`<figure class="cover"><img src="`+cover+`" alt="`+title+`"></figure>`) ||
-		!strings.Contains(body, `<a class="more" href="`+self+`/cover"`) || strings.Contains(body, "/previews?title=") {
+		!strings.Contains(body, `<a href="`+self+`/cover">Change cover photo</a>`) || strings.Contains(body, "/previews?title=") {
 		t.Errorf("the cover is not drawn once, at the head of the margin, with the way to the picker")
 	}
 	rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
@@ -152,7 +152,7 @@ func TestThePickerRefuses(t *testing.T) {
 	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
 	f := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "original": jpg}))
 	gone := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Gone"}))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, gone, "tombstone"), nil))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, gone, "tombstone-pages"), nil))
 	if apitest.Href(f, "choose-cover") != "" {
 		t.Errorf("a file page links a picker")
 	}
@@ -205,10 +205,10 @@ func postPhoto(t *testing.T, h http.Handler, path, file, back string) *httptest.
 	return rec
 }
 
-// TestTheOtherPicturesOfAPage: the margin draws the other pictures the body embeds under the cover, each a form of
-// set-cover with its title; one press makes it the cover by trading places with the old cover's embed, and the
-// browser comes back to the page.
-func TestTheOtherPicturesOfAPage(t *testing.T) {
+// TestAPictureTheBodyEmbedsBecomesTheCover: the picker's form of a kept picture that the body embeds makes it the
+// cover by trading places with the old cover's embed, and the browser comes back to the page. The margin draws the
+// cover and one link to the picker, no other picture (docs/plans/131-the-pareto-pass.md, part 2).
+func TestAPictureTheBodyEmbedsBecomesTheCover(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
@@ -218,30 +218,29 @@ func TestTheOtherPicturesOfAPage(t *testing.T) {
 	}
 	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "![[A.jpg]]\n\nSwam. ![[B.jpg]]"}))
 	self := apitest.Href(trip, "self")
-	pics, _ := props(apitest.Must(t)(c.Get(ctx, self)))["pictures"].([]any)
-	if len(pics) != 1 || str(pics[0].(map[string]any)["title"]) != "B.jpg" {
-		t.Fatalf("pictures = %v, want B.jpg", pics)
+	if body := browse(t, h, self); strings.Count(body, "/preview\"") != 1 {
+		t.Errorf("the page draws %d pictures besides its body, want the cover alone", strings.Count(body, "/preview\""))
 	}
-	body := browse(t, h, self)
+	picker := browse(t, h, self+"/cover")
 	form := `<form method="post" action="` + self + `/cover"><input type="hidden" name="back" value="` + self + `"><input type="hidden" name="title" value="B.jpg">`
-	if !strings.Contains(body, form) {
-		t.Fatalf("the margin lacks the form of B.jpg")
+	if !strings.Contains(picker, form) {
+		t.Fatalf("the picker lacks the form of B.jpg")
 	}
 	rec := submit(h, self+"/cover", url.Values{"title": {"B.jpg"}, "back": {self}}, self)
 	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), self) {
-		t.Fatalf("the thumbnail: %d to %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatalf("the picker's B.jpg: %d to %q", rec.Code, rec.Header().Get("Location"))
 	}
 	p := props(apitest.Must(t)(c.Get(ctx, self)))
 	if got := str(p["body"]); got != "![[B.jpg]]\n\nSwam. ![[A.jpg]]" {
-		t.Errorf("the body after the thumbnail = %q", got)
+		t.Errorf("the body after B.jpg = %q", got)
 	}
 	if str(p["cover"].(map[string]any)["title"]) != "B.jpg" {
 		t.Errorf("the cover = %v, want B.jpg", p["cover"])
 	}
 }
 
-// TestTheCalendarShowsTheCovers: a day page with a cover gives the month and the week its picture, and the month
-// draws it behind the day; a day page without one, and a day with no page, have none.
+// TestTheCalendarShowsTheCovers: a day page with a cover gives the month its picture, and the month draws it behind
+// the day; a day page without one, and a day with no page, have none.
 func TestTheCalendarShowsTheCovers(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -261,10 +260,8 @@ func TestTheCalendarShowsTheCovers(t *testing.T) {
 		return out
 	}
 	want := map[string]string{"2031-05-01": "", "2031-05-02": apitest.Href(f, "preview")}
-	for _, path := range []string{"/months/2031-05", "/weeks/2031-W18"} {
-		if got := pictures(path); !reflect.DeepEqual(got, want) {
-			t.Errorf("%s: pictures = %v, want %v", path, got, want)
-		}
+	if got := pictures("/months/2031-05"); !reflect.DeepEqual(got, want) {
+		t.Errorf("/months/2031-05: pictures = %v, want %v", got, want)
 	}
 	body := browse(t, h, "/months/2031-05")
 	if !strings.Contains(body, `<td class="written pictured"><a href="/days/2031-05-02"><img class="cell-cover" src="`+apitest.Href(f, "preview")+`" alt="" loading="lazy">`) ||

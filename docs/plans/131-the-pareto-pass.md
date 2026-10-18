@@ -9,7 +9,7 @@
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM. The catalog loses three actions (`tombstone`, `random-day`,
   `get_day` of MCP) and some fields. The JSON loses the properties that only a view read. The browser loses the
   views and the parts that cost the most and give the least. Nothing changes in the schema or the contract.
-- **Status:** IN PROGRESS.
+- **Status:** IN REVIEW (owner).
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-18)
@@ -61,7 +61,7 @@ flowchart LR
 | what | before | after |
 |---|---|---|
 | file a thing in a category | `link` with `part-of`; `file-pages`; `category` on five create actions | `file-pages`, and `category` on `create-page` only; `unlink` with `part-of` takes a thing out (the × of a badge) |
-| put a reading on a day | the day's tiles, the day's form, the board's cards, the metric's page | the day's form and the metric's page |
+| put a reading on a day | the day's tiles, the day's form, the board's cards, the metric's page | the day's form (New's Reading opens it on the page of today) and the metric's readings |
 | set a cover | the thumbnails, the picker's two forms, a link in two places | one link on the day and the page to the picker |
 | go to a day | five views | the day and the stream |
 | search | the rail's form, the dialog, `/search` | the dialog (the rail opens it) and `/search` |
@@ -105,3 +105,23 @@ flowchart LR
 - `deploy/lifelog-snapshot` calls `lifelog snapshot --snapshots DIR`. Copy it to its install path in the same step as
   the binary, or the nightly snapshot fails.
 - A config written by `lifelog agentic-init` does not change (`mcp --agent NAME` stays).
+
+## The result (2026-10-18)
+
+Every part is done, on the branch `plan-131-pareto`. Where the work went another way than the text above, this is
+what was done and why:
+
+- **The receipts of a write stay.** A `?done=` text in the address would lose what a write did not do, and anyone
+  could put words in it. The server no longer moves a receipt (the root draws the day of today for a browser, and a
+  metric's page is a page), so `move` and its redirect are gone.
+- **`mcp --agent` stays**, and `mcp` refuses `--source`, which it used to override in silence. The MCP configs that
+  `lifelog agentic-init` wrote keep working.
+- **`link` does not offer `part-of`**, but the catalog's `link` still takes it when a client names it, as the schema
+  allows the link. Only the offer changed.
+- **A day's reading tile** is the metric and its last value of the day, with no unit and no line: both came from
+  `trends`. The metric's readings have both.
+- **New's Reading** opens the record form of the page of today (`/?new=record`), since a card has no + Add.
+- The lines of code, without the tests: `internal/api` lost about 600, `internal/api/view` about 330,
+  `internal/core` about 200, the templates about 340 and `app.css` 126 of its 878. Three actions or tools left the catalog (`tombstone`, `random-day`,
+  `get_day`), and five properties left the JSON (`trends`, `on_this_day`, `recent_titles`, the search's `counts`,
+  `pictures`).

@@ -119,19 +119,6 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	if b, _ := take("embedded"); b == true {
 		say("Shown on its day page.")
 	}
-	if f, ok := left["filed"].(map[string]any); ok { // add-file with a category
-		delete(left, "filed")
-		cat, _ := f["category"].(map[string]any)
-		title, _ := cat["title"].(string)
-		switch {
-		case f["created"] == true:
-			say("Put in the new category %s.", pageLinks([]string{title}))
-		case f["added"] == float64(0):
-			say("It was in the category %s already.", pageLinks([]string{title}))
-		default:
-			say("Put in the category %s.", pageLinks([]string{title}))
-		}
-	}
 
 	// capture sent again (D28).
 	if b, _ := take("already"); b == true {

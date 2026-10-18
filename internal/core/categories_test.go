@@ -12,7 +12,7 @@ import (
 
 func TestMetricNoteLinks(t *testing.T) {
 	s := fresh(t)
-	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Diet Plan", "owner note", ""); err != nil {
@@ -323,7 +323,7 @@ func TestFilePages(t *testing.T) {
 func TestFilePagesRefusals(t *testing.T) {
 	s := fresh(t)
 	ferritin := metricID(t, s, "Ferritin", "ug/L")
-	_, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "", "")
+	_, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,23 +430,18 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 	}
 }
 
-// A new person, place or file is filed where it is made (docs/plans/117-one-browse-view.md, rule 6): the thing and
-// its part-of link in one write, a missing category made, and a day as the category refused with nothing written.
+// A new page is filed where it is made (docs/plans/115-categories-to-browse.md): the page and its part-of link in one
+// write, a missing category made, and a day as the category refused with nothing written. A person, a place, a file
+// and a metric are filed by file-pages (docs/plans/131-the-pareto-pass.md, part 2).
 
-// makers are the three writes that take a category, each making a thing titled title.
+// makers are the writes that take a category, each making a thing titled title.
 var makers = []struct {
 	kind string
 	make func(s *Store, title, category string) (int64, error)
 }{
-	{"person", func(s *Store, title, category string) (int64, error) {
-		return s.CreatePerson(ctx, "cli", title, "", "", "", category)
-	}},
-	{"place", func(s *Store, title, category string) (int64, error) {
-		return s.CreatePlace(ctx, "cli", title, category)
-	}},
-	{"file", func(s *Store, title, category string) (int64, error) {
-		k, err := s.AddFile(ctx, "cli", FileIn{Title: title, SHA256: sha('b'), MIME: "application/pdf", Day: "2031-05-01", Category: category})
-		return k.ID, err
+	{"page", func(s *Store, title, category string) (int64, error) {
+		id, _, err := s.CreatePage(ctx, "cli", title, "", category)
+		return id, err
 	}},
 }
 
@@ -560,106 +555,4 @@ func pageCount(t *testing.T, s *Store) int {
 		t.Fatal(err)
 	}
 	return n
-}
-
-// The same original again finds its page; with a category, that page is filed there. A tombstoned page is not filed.
-func TestAddFileFilesTheFileThatExists(t *testing.T) {
-	s := fresh(t)
-	n := pageCount(t, s)
-	in := FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf", Day: "2031-05-01"}
-	first, err := s.AddFile(ctx, "cli", in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Filed != nil {
-		t.Errorf("no category sent, but filed: %+v", first.Filed)
-	}
-
-	in.Title, in.Category = "Another title.pdf", "Papers"
-	again, err := s.AddFile(ctx, "cli", in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !again.Existing || again.ID != first.ID {
-		t.Fatalf("the same original again = %+v, want the page %d", again, first.ID)
-	}
-	if f := again.Filed; f == nil || !f.Created || f.Added != 1 || f.Category.Title != "Papers" {
-		t.Errorf("filed = %+v, want Papers made and 1 link added", again.Filed)
-	}
-	if got := partOf(t, s, first.ID); !slices.Equal(got, []string{"Papers"}) {
-		t.Errorf("Scan.pdf is part-of %v, want [Papers]", got)
-	}
-	if got := pageCount(t, s); got != n+2 { // the file and Papers: a file with no picture is shown on no day page
-		t.Errorf("%d entities, want %d: the same original made a second page", got, n+2)
-	}
-
-	// Sent a third time: it is in Papers already, and nothing more is written.
-	third, err := s.AddFile(ctx, "cli", in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if f := third.Filed; f == nil || f.Created || f.Added != 0 {
-		t.Errorf("filed again = %+v, want no category made and no link added", third.Filed)
-	}
-
-	// A tombstoned file is not filed: nothing is written for it, not even the category.
-	if err := s.Tombstone(ctx, "cli", first.ID); err != nil {
-		t.Fatal(err)
-	}
-	in.Category = "Old papers"
-	gone, err := s.AddFile(ctx, "cli", in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !gone.Deleted || gone.Filed != nil {
-		t.Errorf("a tombstoned original = %+v, want deleted and not filed", gone)
-	}
-	if id, err := s.PageID(ctx, "Old papers"); err != nil || id != 0 {
-		t.Errorf("Old papers = %d, %v: the category of a tombstoned file was made", id, err)
-	}
-}
-
-// A dry run says it would file the file, and writes nothing: no page, no category, no link.
-func TestTryAddFileWithACategoryWritesNothing(t *testing.T) {
-	s := fresh(t)
-	before, err := countRows(ctx, s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	n := pageCount(t, s)
-	k, err := s.TryAddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('d'), MIME: "application/pdf", Day: "2031-05-01", Category: "Papers"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k.ID != 0 || k.Filed == nil || !k.Filed.Created || k.Filed.Added != 1 || k.Filed.Category.Title != "Papers" || k.Filed.Category.ID != 0 {
-		t.Errorf("dry run = %+v, filed %+v: want no id, and Papers that it would make and file in", k, k.Filed)
-	}
-	after, err := countRows(ctx, s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(before, after) || pageCount(t, s) != n {
-		t.Errorf("rows before %+v, after %+v: the dry run wrote", before, after)
-	}
-
-	// The dry run of the same original: it would file the page that exists.
-	kept, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('d'), MIME: "application/pdf", Day: "2031-05-01"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	k, err = s.TryAddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('d'), MIME: "application/pdf", Day: "2031-05-01", Category: "Papers"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !k.Existing || k.ID != kept.ID || k.Filed == nil || k.Filed.Added != 1 {
-		t.Errorf("dry run of the same original = %+v, filed %+v: want its page, filed", k, k.Filed)
-	}
-	if got := partOf(t, s, kept.ID); len(got) != 0 {
-		t.Errorf("the dry run filed the page in %v", got)
-	}
-
-	// A dry run with a day as the category is refused, as the write is.
-	if _, err := s.TryAddFile(ctx, "cli", FileIn{Title: "Other.pdf", SHA256: sha('e'), MIME: "application/pdf", Category: "2031-05-02"}); err == nil {
-		t.Error("a dry run with a day as the category was accepted")
-	}
 }

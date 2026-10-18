@@ -1,22 +1,9 @@
 package view
 
-import (
-	"strconv"
-	"strings"
-	"unicode"
-	"unicode/utf8"
+import "strings"
 
-	"lifelog/internal/api/siren"
-)
-
-// The folds of Browse (docs/plans/118-fold-and-find.md): the category tree folds each branch, a list in title order
-// starts with its categories as folders, and a long list is in groups by its first letter. All of it is drawn from
-// the props of GET /browse, so the resource and the catalog do not change.
-
-const (
-	letterGroupsFrom = 31  // a list in title order with this many rows is in letter groups
-	lettersClosedAt  = 101 // with this many rows, the groups start closed: the letters are an index
-)
+// The folds of Browse (docs/plans/118-fold-and-find.md): the category tree folds each branch. It is drawn from the
+// props of GET /browse, so the resource and the catalog do not change.
 
 // treeNode is a branch of the category tree: the category, its link, its count, and the categories under it. Open
 // says that the current branch is this one or is under it.
@@ -73,112 +60,6 @@ func (v *view) BrowseTree() []*treeNode {
 		open(n)
 	}
 	return top
-}
-
-// browseList is the list of Browse as the page draws it: the categories as folders, then the rows, alone or in
-// letter groups.
-type browseList struct {
-	Folders []map[string]any // id, title, href and count of each folder
-	Rows    []any            // the rows, when they are not grouped
-	Letters []letterGroup    // the rows, in groups by letter
-	Closed  bool             // the groups start closed
-}
-
-// letterGroup is the rows whose titles start with one letter. Anchor is the id of its first row's list, which the
-// letter bar links.
-type letterGroup struct {
-	Letter, Anchor string
-	Rows           []any
-}
-
-// BrowseList splits the rows of Browse (docs/plans/118-fold-and-find.md, rules 2 and 3). On Pages in Everything the
-// folders are the top categories of the tree, and no category is a row; inside a category, on All and on Pages,
-// they are the categories among the rows. A list in title order with letterGroupsFrom rows is grouped by letter.
-func (v *view) BrowseList() browseList {
-	props, _ := v.Props.(map[string]any)
-	rows, _ := props["rows"].([]any)
-	kind, _ := props["kind"].(string)
-	ghosts, _ := props["ghosts"].(bool)
-	unfiled, _ := props["unfiled"].(bool)
-	in, _ := props["in"].(map[string]any)
-	cats, _ := props["categories"].([]any)
-	links := v.Embedded("category")
-
-	tree := map[string]map[string]any{} // a category of the tree by id: its title, href, count and depth
-	for i, x := range cats {
-		c, _ := x.(map[string]any)
-		path, _ := c["path"].(string)
-		f := map[string]any{"id": c["id"], "title": c["title"], "count": Num(c["count"]), "top": !strings.Contains(path, "/")}
-		if i < len(links) {
-			f["href"] = links[i].Href
-		}
-		tree[Num(c["id"])] = f
-	}
-
-	var l browseList
-	switch {
-	case kind == "page" && !ghosts && !unfiled && in == nil:
-		for _, x := range cats {
-			c, _ := x.(map[string]any)
-			if f := tree[Num(c["id"])]; f["top"] == true {
-				l.Folders = append(l.Folders, f)
-			}
-		}
-		for _, x := range rows {
-			if r, _ := x.(map[string]any); r["category"] != true {
-				l.Rows = append(l.Rows, x)
-			}
-		}
-	case in != nil && (kind == "all" || kind == "page"):
-		for _, x := range rows {
-			r, _ := x.(map[string]any)
-			if r["category"] != true {
-				l.Rows = append(l.Rows, x)
-				continue
-			}
-			f := tree[Num(r["id"])]
-			if f == nil { // a category the tree does not draw: nothing live is filed in it
-				f = map[string]any{"id": r["id"], "title": r["title"], "count": "0", "href": siren.BrowseHref(map[string][]string{"in": {r["title"].(string)}})}
-			}
-			l.Folders = append(l.Folders, f)
-		}
-	default:
-		l.Rows = rows
-	}
-
-	byTitle := !ghosts && !inDayOrder(kind)
-	if !byTitle || len(l.Rows) < letterGroupsFrom {
-		return l
-	}
-	at := map[string]int{}
-	for _, x := range l.Rows {
-		r, _ := x.(map[string]any)
-		title, _ := r["title"].(string)
-		k := letterOf(title)
-		i, ok := at[k]
-		if !ok {
-			i = len(l.Letters)
-			at[k] = i
-			l.Letters = append(l.Letters, letterGroup{Letter: k, Anchor: "letter-" + strconv.Itoa(i+1)})
-		}
-		l.Letters[i].Rows = append(l.Letters[i].Rows, x)
-	}
-	l.Closed = len(l.Rows) >= lettersClosedAt
-	l.Rows = nil
-	return l
-}
-
-// inDayOrder says that the rows of a kind come newest day first, not in title order: the files (core.Media and
-// core.OtherFiles). A list in day order has no letters.
-func inDayOrder(kind string) bool { return kind == "media" || kind == "document" }
-
-// letterOf is the group of a title: its first letter in upper case, or "#" when it does not start with a letter.
-func letterOf(title string) string {
-	r, _ := utf8.DecodeRuneInString(title)
-	if !unicode.IsLetter(r) {
-		return "#"
-	}
-	return string(unicode.ToUpper(r))
 }
 
 // Mentions says in words how often the log mentions a person or a place. mentions and lastDay are the values of a

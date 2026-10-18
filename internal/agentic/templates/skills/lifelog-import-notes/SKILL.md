@@ -15,9 +15,9 @@ A daily note is a `.md` file whose name is a day: `YYYY-MM-DD`, `YYYY-MM-DD-Week
 like a date but is none of these: ask the owner.
 
 1. Read the file.
-2. `get_day` the day. If the day page already holds the note's text, say "imported before" and stop for this note.
+2. `open_day` the day. If the day page already holds the note's text, say "imported before" and stop for this note.
 3. `capture` with `day` = the day and `text` = the note's whole text, exactly.
-4. `get_day` again, and compare the page's text with the file. If they differ, say where. Fix it with `save_body`
+4. `open_day` again, and compare the page's text with the file. If they differ, say where. Fix it with `save_body`
    only when the owner says so.
 5. The answer of `capture` lists `created` (empty pages that the note's `[[links]]` made) and `skipped` (links that
    are not valid titles). Tell the owner both.

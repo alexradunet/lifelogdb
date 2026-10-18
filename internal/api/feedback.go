@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -92,31 +91,4 @@ func (s *feedbackStore) prune(now time.Time) {
 			delete(s.entries, key)
 		}
 	}
-}
-
-// move gives the receipt for path to destination, the page a browser is sent to instead (the page of a metric opens
-// its metric, docs/plans/100-one-page-a-metric.md), and reports whether there was one to give.
-func (s *feedbackStore) move(token, path, destination string) bool {
-	u, err := url.Parse(destination)
-	if err != nil {
-		return false
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, ok := s.entries[token]
-	if !ok || r.path != path || !s.now().Before(r.expires) {
-		return false
-	}
-	r.path = u.Path
-	s.entries[token] = r
-	return true
-}
-
-// redirectKeepingFeedback is the redirect of a browser's GET to the page to, the page that stands for this one. A
-// receipt of feedback that this request carries moves to that page, so that the toast of a write is read there.
-func (h *server) redirectKeepingFeedback(r *http.Request, to string) redirect {
-	if t := r.URL.Query().Get("feedback"); t != "" && h.feedback.move(t, r.URL.Path, to) {
-		to += "?" + url.Values{"feedback": {t}}.Encode()
-	}
-	return redirect{to}
 }

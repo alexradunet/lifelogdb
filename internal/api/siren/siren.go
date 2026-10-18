@@ -153,15 +153,6 @@ func MonthOf(s string) (time.Time, bool) {
 	return t, err == nil && t.Format("2006-01") == s
 }
 
-// WeekHref is the address of the week of a Monday.
-func WeekHref(monday time.Time) string { return "/weeks/" + WeekKey(monday) }
-
-// WeekKey is the ISO 8601 week of a Monday, YYYY-Www.
-func WeekKey(monday time.Time) string {
-	y, w := monday.ISOWeek()
-	return fmt.Sprintf("%04d-W%02d", y, w)
-}
-
 // YearHref is the address of a year.
 func YearHref(year int) string { return fmt.Sprintf("/years/%04d", year) }
 

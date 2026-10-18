@@ -1,7 +1,7 @@
 #!/bin/sh
 # lifelog-snapshot: the nightly snapshot of life.db (docs/decisions/D25-snapshots.md).
 #
-# It runs `lifelog snapshot --to DIR` and tests the EXIT STATUS of that command. It never tests whether a file
+# It runs `lifelog snapshot --snapshots DIR` and tests the EXIT STATUS of that command. It never tests whether a file
 # exists: lifelog names a snapshot that fails its restore check life-DATE.failed.db and exits 1, and a file that
 # exists can be a failed or a cut one. Only after a good snapshot does it prune: it keeps the newest good ones.
 #
@@ -25,9 +25,9 @@ esac
 
 status=0
 if [ -n "${LIFELOG_DB:-}" ]; then
-	"$bin" --db "$LIFELOG_DB" snapshot --to "$dir" || status=$?
+	"$bin" --db "$LIFELOG_DB" snapshot --snapshots "$dir" || status=$?
 else
-	"$bin" snapshot --to "$dir" || status=$?
+	"$bin" snapshot --snapshots "$dir" || status=$?
 fi
 if [ "$status" -ne 0 ]; then
 	echo "lifelog-snapshot: 'lifelog snapshot' exited $status; nothing is pruned" >&2

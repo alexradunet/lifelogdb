@@ -110,7 +110,7 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	list := browse(t, h, "/browse?kind=media")
 	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file" class="inline">`,
 		`<input type="hidden" name="back" value="/browse?kind=media">`, `<span class="desc">Check the rows, then type a category or delete them. A new name makes a new category.</span>`,
-		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete pages</button></form></div></div>`,
+		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete</button></form></div></div>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the media list lacks %s", want)
@@ -123,10 +123,10 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	if bar, last := strings.Index(list, `class="pick-bar"`), strings.LastIndex(list, `name="ids"`); bar < last || !strings.Contains(list[bar:], "</form>") {
 		t.Error("the bar is not after the rows")
 	}
-	// With no box checked, Delete is refused: the list opens Select again, and the alert describes the form.
-	rec := submit(h, "/pages/tombstone", formSends(t, list, `id="pick"`, nil), "")
-	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, "missing field ids") || !strings.Contains(body, "<h1>Browse</h1>") ||
-		!strings.Contains(body, `<input type="checkbox" class="pick-on" checked>`) || !strings.Contains(body, `<form id="pick" method="POST" action="/pages/file" aria-describedby="refused" class="inline">`) {
+	// With no box checked, Delete is refused: the error page says so and leads back to the list.
+	rec := submit(h, "/pages/tombstone", formSends(t, list, `id="pick"`, nil), "/browse?kind=media")
+	if body := rec.Body.String(); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, "missing field ids") ||
+		!strings.Contains(body, `<a href="/browse?kind=media">Back</a>`) {
 		t.Errorf("no box checked: %d %.300s", rec.Code, body)
 	}
 	rec = submit(h, "/pages/tombstone", formSends(t, list, `id="pick"`, url.Values{"ids": files}), "")

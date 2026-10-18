@@ -3,7 +3,6 @@ package view
 import (
 	"cmp"
 	"fmt"
-	"net/url"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -25,41 +24,29 @@ func (v *view) Action(name string) *shownAction {
 // JSON with it, and the marks of the browser, which the wire does not carry.
 type shownAction struct {
 	siren.Action
-	refused bool       // the action a refusal came from: formOf fills, opens and describes the form that was sent
-	sent    url.Values // what the refused form sent
-	noFocus bool       // the page shows a refusal: no field takes the focus from the alert
-	asked   bool       // the page's link asked for this form (?new=<name>): open, filled from the query
+	asked bool // the page's link asked for this form (?new=<name>): open, filled from the query
 }
 
-// shown is the action as this page draws it. On a page that shows a refusal, every action takes no focus, so the
-// alert keeps it. The refused action is also marked, with what the form sent (see formOf).
-//
-// With no refusal, the page's link can ask for one form (?new=<name>, docs/plans/114-one-way-to-do-a-thing.md): it
-// is open, and each field that the query names, but a path field or a file, holds the query's value.
+// shown is the action as this page draws it. The page's link can ask for one form (?new=<name>,
+// docs/plans/114-one-way-to-do-a-thing.md): it is open, and each field that the query names, but a path field or a
+// file, holds the query's value.
 func (v *view) shown(a siren.Action) *shownAction {
 	c := &shownAction{Action: a}
-	if v.Refused == nil {
-		if a.Name == "" || v.Asked("new") != a.Name {
-			return c
-		}
-		c.asked = true
-		c.Fields = slices.Clone(a.Fields)
-		for i, f := range c.Fields {
-			if _, named := v.query[f.Name]; named && f.In != "path" && f.Type != "file" && f.Name != "new" {
-				c.Fields[i].Value = v.query.Get(f.Name)
-			}
-		}
+	if a.Name == "" || v.Asked("new") != a.Name {
 		return c
 	}
-	c.noFocus = true
-	if a.Href == v.Refused.Href {
-		c.refused, c.sent = true, v.Sent
+	c.asked = true
+	c.Fields = slices.Clone(a.Fields)
+	for i, f := range c.Fields {
+		if _, named := v.query[f.Name]; named && f.In != "path" && f.Type != "file" && f.Name != "new" {
+			c.Fields[i].Value = v.query.Get(f.Name)
+		}
 	}
 	return c
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "id" names it (the form sends its id as form), "hide" lists fields kept with their
+// button, "class" styles the form, "id" names it (the controls outside it name it), "hide" lists fields kept with their
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
 // "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the
@@ -74,7 +61,6 @@ type formView struct {
 	ID            string // the form's id, which the controls outside it name (form="pick")
 	Focus         string
 	Back          string
-	Refused       bool          // the form a refusal came from: open, filled, described by the alert, with no focus
 	Asked         bool          // the form the page's link asked for (?new=<name>): open
 	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
 	Primary       bool          // the button is the primary one: a form with fields to fill
@@ -89,13 +75,9 @@ type formView struct {
 
 // Or is the form f with a second button, after its own, that sends the same form to the action of g (formaction),
 // with no check of the fields that f requires: the Delete of a list, beside its Put in a category. g's action takes
-// the method of f's and no field that f does not send. When g is the form a refusal came from, so is f. With no g, f
-// is as it was.
+// the method of f's and no field that f does not send. With no g, f is as it was.
 func (f *formView) Or(g *formView) *formView {
 	f.Also = g
-	if g != nil && g.Refused {
-		f.Refused = true
-	}
 	return f
 }
 
@@ -246,16 +228,8 @@ func formOf(x any, opts ...string) (*formView, error) {
 	} else if f.Button == "" {
 		f.Button = a.Name
 	}
-	// The form a refusal came from is open, described by the alert, and each of its fields holds what it sent: a sent
-	// value that is not a field of the action is dropped, and a file is never sent back. A page that draws one action
-	// in several forms gives each one an id, which the form sends as form (no field of any action): of those forms,
-	// only the one with the id that was sent is the form a refusal came from.
-	f.Refused = c.refused && (f.ID == "" || c.sent.Get("form") == "" || c.sent.Get("form") == f.ID)
 	for _, fd := range a.Fields {
-		if _, sent := c.sent[fd.Name]; f.Refused && sent && fd.Type != "file" {
-			fd.Value = c.sent.Get(fd.Name)
-		}
-		if v, ok := o.fixed[fd.Name]; ok { // after the sent value: a fixed field keeps its value (the habit's empty unit)
+		if v, ok := o.fixed[fd.Name]; ok { // a fixed field keeps its value (the habit's empty unit)
 			fd.Value, fd.Type = v, "hidden"
 		}
 		if o.required[fd.Name] {
@@ -279,9 +253,6 @@ func formOf(x any, opts ...string) (*formView, error) {
 	f.Asked = c.asked
 	if c.asked && !o.hasAutofocus && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name
-	}
-	if c.noFocus { // a page that shows a refusal puts the focus on the alert, and on no field
-		f.Focus = ""
 	}
 	return f, nil
 }

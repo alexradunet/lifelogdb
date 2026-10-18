@@ -2,7 +2,6 @@ package view
 
 import (
 	"fmt"
-	"html/template"
 	"reflect"
 	"testing"
 	"time"
@@ -131,31 +130,23 @@ func TestAMetricsReadingsFoldByYear(t *testing.T) {
 	}
 }
 
-// TestTheTilesOfADay: a tile a metric of the day's trends, in their order. A tile shows the last reading of the day
-// of its metric (the one to correct) and counts the others (More); a metric with no reading on the day has an empty
-// tile. Its line is the trend, against the today of the view's clock: here 20 October, 4 days after the day.
+// TestTheTilesOfADay: a tile a metric of the day's readings, in the order of its first reading. A tile shows the last
+// reading of the day of its metric (the one to correct) and counts the others (More).
 func TestTheTilesOfADay(t *testing.T) {
 	r := func(id float64, metric string, value float64) any {
 		return map[string]any{"id": id, "metric": metric, "value": value}
 	}
-	v := &view{Shell: &Shell{Today: "2026-10-20", Zone: time.UTC}, Props: map[string]any{"day": "2026-10-16",
-		"readings": []any{r(5, "weight", 70), r(6, "mood", 3), r(7, "weight", 71), r(8, "weight", 1000000)},
-		"trends": []any{
-			map[string]any{"metric": "mood", "unit": "1-5", "readings": []any{}},
-			map[string]any{"metric": "weight", "unit": "kg", "readings": []any{map[string]any{"day": "2026-10-16", "value": 1000000.0}}},
-			map[string]any{"metric": "steps", "unit": "", "readings": []any{}},
-		}}}
-	line := `<svg class="trend" viewBox="0 0 120 28" role="img" aria-label="weight: one reading in 14 days, 1000000 kg 4 days ago · Fri 16 Oct"><polyline points="116.0,14.0 "/><circle cx="116.0" cy="14.0" r="2.5"/></svg>`
+	v := &view{Props: map[string]any{"day": "2026-10-16",
+		"readings": []any{r(5, "weight", 70), r(6, "mood", 3), r(7, "weight", 71), r(8, "weight", 1000000)}}}
 	want := []readingTile{
-		{Metric: "mood", Unit: "of 5", Value: "3", ID: "6"},
-		{Metric: "weight", Unit: "kg", Value: "1000000", ID: "8", More: 2, Line: template.HTML(line)},
-		{Metric: "steps"},
+		{Metric: "weight", Value: "1000000", ID: "8", More: 2},
+		{Metric: "mood", Value: "3", ID: "6"},
 	}
 	if got := v.ReadingTiles(); !reflect.DeepEqual(got, want) {
 		t.Errorf("the tiles:\n %+v\nwant\n %+v", got, want)
 	}
 	if got := (&view{Props: map[string]any{"day": "2026-10-16"}}).ReadingTiles(); got != nil {
-		t.Errorf("a day with no trend has tiles: %+v", got)
+		t.Errorf("a day with no reading has tiles: %+v", got)
 	}
 }
 

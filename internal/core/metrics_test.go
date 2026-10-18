@@ -3,7 +3,6 @@ package core
 import (
 	"database/sql"
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -433,42 +432,6 @@ func TestRecentReadings(t *testing.T) {
 	}
 }
 
-// TestCreateMetric: the metric and its category are one write (docs/plans/113-new-metric-on-metrics.md).
-func TestCreateMetric(t *testing.T) {
-	s := fresh(t)
-	added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Walk", Category: "Sport"})
-	if err != nil || !added {
-		t.Fatalf("CreateMetric = %v, %v; want a new metric", added, err)
-	}
-	walk := pageByTitle(t, s, "Walk")
-	if walk.Type != "metric" {
-		t.Errorf("Walk is a %s, want a metric", walk.Type)
-	}
-	if got := partOf(t, s, walk.ID); !slices.Equal(got, []string{"Sport"}) {
-		t.Errorf("Walk is part-of %v, want [Sport]", got)
-	}
-
-	// A metric that exists is filed in one more category, and nothing else changes.
-	added, err = s.CreateMetric(ctx, "cli", NewMetric{Name: "walk", Category: "Daily"})
-	if err != nil || added {
-		t.Fatalf("CreateMetric of an existing metric = %v, %v; want no new metric", added, err)
-	}
-	if got := partOf(t, s, walk.ID); !slices.Equal(got, []string{"Daily", "Sport"}) {
-		t.Errorf("Walk is part-of %v, want [Daily Sport]", got)
-	}
-
-	// A plain metric with no category: no link.
-	weight := func() int64 {
-		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
-			t.Fatal(err)
-		}
-		return pageByTitle(t, s, "Weight").ID
-	}()
-	if got := partOf(t, s, weight); len(got) != 0 {
-		t.Errorf("Weight is part-of %v, want none", got)
-	}
-}
-
 func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	s := fresh(t)
 	gone, _, err := s.CreatePage(ctx, "cli", "Old Group", "", "")
@@ -481,10 +444,10 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-02", "a day", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePlace(ctx, "cli", "Lake Example", ""); err != nil {
+	if _, err := s.CreatePlace(ctx, "cli", "Lake Example"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", "", ""); err != nil {
+	if _, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Scan.pdf", SHA256: sha('c'), MIME: "application/pdf"}); err != nil {
@@ -501,8 +464,6 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 		want int
 		says string // a part of the message; "" for any
 	}{
-		{"a deleted category", NewMetric{Name: "Run", Unit: "km", Category: "Old Group"}, 409, ""},
-		{"a day as the category", NewMetric{Name: "Run", Unit: "km", Category: "2031-05-01"}, 422, ""},
 		// a day page is never a metric: the schema refuses the promotion
 		{"a day page's title", NewMetric{Name: "2031-05-02", Unit: "km"}, 422, "entities_day_page_plain"},
 		// a person, a place or a file is never a metric: the schema refuses the promotion (entities_promote_from_page)
@@ -510,11 +471,10 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 		{"a person's title", NewMetric{Name: "Ana Example", Unit: "km"}, 422, promoteOnly},
 		{"a file's title", NewMetric{Name: "Scan.pdf", Unit: "km"}, 422, promoteOnly},
 		// a unit of the shape lo-hi with lo not less than hi is not a range: the schema refuses it (metrics_range_order),
-		// for a new metric, for a plain page that becomes the metric, and with the category that the same write makes
+		// for a new metric and for a plain page that becomes the metric
 		{"a range with its bounds out of order", NewMetric{Name: "Pain", Unit: "5-1"}, 422, outOfOrder},
 		{"a range with equal bounds", NewMetric{Name: "Pain", Unit: "3-3"}, 422, outOfOrder},
 		{"a plain page with a range out of order", NewMetric{Name: "Grade", Unit: "10-1"}, 422, outOfOrder},
-		{"a range out of order in a new category", NewMetric{Name: "Pain", Unit: "5-1", Category: "Body"}, 422, outOfOrder},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)

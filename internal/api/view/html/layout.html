@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#efe2bd"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#140c06">
-<title>{{if .Refused}}Not saved · {{end}}{{.Title}} · Lifelog</title>
+<title>{{.Title}} · Lifelog</title>
 <style data-sheet="base">{{basecss}}</style>
 <style data-sheet="app">{{appcss}}</style>
 </head><body>
@@ -12,8 +12,7 @@
 <div class="column">
 <main id="main">
 {{template "feedback" .}}
-{{with .Refused}}<div class="alert{{if .Danger}} danger{{end}}" role="alert" id="refused" tabindex="-1" autofocus><p>{{with .Words}}<strong>{{.}}</strong> {{end}}{{.Message}}</p></div>
-{{end}}{{end}}
+{{end}}
 
 {{/* rail is the sidebar (docs/plans/092-the-app-shell.md): the brand and today, the search, New, the sections of
      every day (Today, Calendar, Metrics and Browse, docs/plans/117-one-browse-view.md), this month, and the owner's
@@ -27,7 +26,7 @@
 {{define "rail"}}{{$nav := .Nav}}<aside class="rail">
 <div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">{{icon "search"}}</button></div>
-<search><form class="rail-search" method="GET" action="/search">{{icon "search"}}<input type="search" name="q" placeholder="Search" aria-label="Search" accesskey="k"{{if .Shell.Titles}} list="search-q"{{end}}><kbd title="The access key k, with the browser's modifier, is the search">k</kbd></form></search>
+<button type="button" class="rail-search button" commandfor="palette" command="show-modal" accesskey="k">{{icon "search"}}Search<kbd title="The access key k, with the browser's modifier, is the search">k</kbd></button>
 <button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">{{icon "new"}}New</button>
 <div class="new-menu" id="new-menu" popover><div class="new-menu-head"><span class="label">New</span><button type="button" class="button small" popovertarget="new-menu" popovertargetaction="hide">Close</button></div>
 <nav aria-label="New"><ul>{{range .NewKinds}}<li><a href="{{.Href}}">{{icon .Icon}}{{.Title}}</a></li>{{end}}</ul></nav></div>
@@ -51,18 +50,16 @@
 {{define "feedback"}}{{if .Result}}<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2>{{range .ResultLines}}<p>{{.}}</p>{{end}}<form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>{{end}}{{end}}
 
 {{/* foot closes the page: the footer with the access keys and the search dialog
-     (docs/plans/108-the-browser-made-current.md): a modal the top bar's Search opens by its command, with the search
-     form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it.
-     The titles of the last 90 days are one datalist (search-q), which the rail's search and the dialog's name: the
-     browser suggests them as the owner types (docs/plans/130-the-explore-pass.md, part 7). */}}
+     (docs/plans/108-the-browser-made-current.md): a modal the rail's Search opens by its command, with the search
+     form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it. */}}
 {{define "foot"}}</main>
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>{{end}}</footer>
 </div>
 {{if .Shell}}<dialog class="palette" id="palette" closedby="any" aria-label="Search">
-<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"{{if .Shell.Titles}} list="search-q"{{end}}></form>
+<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
 <p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
 </dialog>
-{{with .Shell.Titles}}<datalist id="search-q">{{range .}}<option value="{{.}}">{{end}}</datalist>{{end}}{{end}}
+{{end}}
 </div>
 </body></html>{{end}}
 
@@ -87,34 +84,20 @@
      picture draws it first, as a row of a list does. */}}
 {{define "dayentry"}}{{$v := .v}}{{$cover := .cover}}{{with .e}}<a class="entry{{if and $cover .picture}} covered{{end}}" href="/days/{{.day}}"><span class="date">{{$v.Date .day}}</span>{{if $cover}}{{template "cover-picture" .}}{{end}}<span class="first">{{.first_line}}</span><span class="meta">{{template "moodwords" .mood}}</span></a>{{end}}{{end}}
 
-{{/* onthisday is the margin's group of the day pages of earlier years on this date, when there are any. It takes v
-     (the view) and days. */}}
-{{define "onthisday"}}{{$v := .v}}{{with .days}}<section class="group" aria-label="On this day">
-<div class="panel-head"><h2>On this day</h2></div>
-<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $v "e" . "cover" true)}}</li>{{end}}</ul>
-</section>{{end}}{{end}}
-
 
 {{/* step is the previous or next day, week, month or year: a button whose text a phone shortens to the arrow (the
      label keeps the whole name). It takes href, rel (prev or next), label and text. */}}
 {{define "step"}}<a class="button step" accesskey="{{if eq .rel "prev"}}[{{else}}]{{end}}" href="{{.href}}" rel="{{.rel}}" aria-label="{{.label}}">{{if eq .rel "prev"}}<span aria-hidden="true">‹</span><span class="step-day">{{.text}}</span>{{else}}<span class="step-day">{{.text}}</span><span aria-hidden="true">›</span>{{end}}</a>{{end}}
 
-{{/* add-reading is the + Add of a metric's card or tile (docs/plans/114-one-way-to-do-a-thing.md): a closed fold
-     with one value, for one day, that returns to back. It takes action (record; nothing is drawn without it), metric,
-     unit (in words), day, today (the label says Today on that day) and back. The full form, with another day and the
-     folded fields, is the metric's page. */}}
-{{define "add-reading"}}{{with .action}}<details class="add-reading"><summary class="button small" aria-label="Add a reading of {{$.metric}}">+ Add</summary>
-<form class="inline" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$.back}}"><input type="hidden" name="metric" value="{{$.metric}}"><input type="hidden" name="day" value="{{$.day}}">
-<label><span>{{if eq $.day $.today}}Today{{else}}{{shortDay $.day}}{{end}}{{with $.unit}}, {{.}}{{end}}</span><input type="number" name="value" step="any" inputmode="decimal" required></label><button class="primary small">Save</button></form></details>{{end}}{{end}}
-
 {{/* reading-link is a reading as a link to its own page: its value, and its unit when it has one. It takes id,
      value and unit. */}}
 {{define "reading-link"}}<a class="reading" href="/measurements/{{num .id}}">{{num .value}}{{with .unit}} <span class="unit">{{.}}</span>{{end}}</a>{{end}}
 
-{{/* body-editor is the fold that edits the body of a page with save-body (the day, a page, a metric): it is closed,
-     and it opens when the save was refused. It takes action (save-body; nothing is drawn without it), back (the page
+{{/* body-editor is the fold that edits the body of a page with save-body (the day, a page): it is closed, and a
+     refused save answers with the error page, which keeps the words sent. It takes action (save-body; nothing is drawn
+     without it), back (the page
      the browser returns to) and summary (the words of the fold). */}}
-{{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details{{if .Refused}} open{{end}}><summary>{{$.summary}}</summary>
+{{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details{{if .Asked}} open{{end}}><summary>{{$.summary}}</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}{{end}}
 
@@ -137,7 +120,7 @@
 {{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
 {{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
 {{if not $cats}}<span class="meta">none</span>{{end}}
-{{with $file}}<details class="add-category"{{if or .Refused .Asked}} open{{end}}><summary class="button small">+ Add</summary>
+{{with $file}}<details class="add-category"{{if .Asked}} open{{end}}><summary class="button small">+ Add</summary>
 {{template "form" .}}</details>{{end}}</div>{{end}}{{end}}
 
 {{/* pick-bar is the one way to act on several things of a list (docs/plans/114-one-way-to-do-a-thing.md): Select
@@ -145,12 +128,11 @@
      action the list offers (id "pick"), and each box joins it by its form attribute, so a card may hold a form of its
      own; the boxes send its ids. The other action is a second button of the form (Or), which sends the checked ids to
      its own address and needs no category. The bar comes after the boxes, so a CSS counter counts them on the
-     buttons, and it is drawn first by order, at the top of the list. Select is on when the page asks for the form or
-     shows its refusal. It takes back, words (what to check), and the actions: file (file-pages) and del (a delete of
+     buttons, and it is drawn first by order, at the top of the list. Select is on when the page asks for the form. It takes back, words (what to check), and the actions: file (file-pages) and del (a delete of
      several). */}}
 {{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids" "back" .back "placeholder" "category=Bloodwork, Sport, Financial"}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
 <div class="pick-bar">
-<label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if or $f.Refused $f.Asked}} checked{{end}}>Select</label>
+<label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $f.Asked}} checked{{end}}>Select</label>
 <div class="pick-tools"><span class="desc">{{.words}}</span>
 {{template "form" $f}}</div></div>{{end}}
 
@@ -164,11 +146,10 @@
 {{/* form draws one action of the entity (see formOf); nothing when the action is not offered. A label wraps its
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger.
      The optional fields a view folds are under "More fields": still in the form, so they are sent with no script
-     (docs/plans/095-the-leaf-and-its-margin.md). A form with an id sends it as form, so a refused one is known among
-     the forms of its action (formOf). A second action of the form (formView.Or) is a button after its own, which
+     (docs/plans/095-the-leaf-and-its-margin.md). A second action of the form (formView.Or) is a button after its own, which
      sends the form to that action's address. */}}
-{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{if .Refused}} aria-describedby="refused"{{end}}{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
-{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}{{with .ID}}<input type="hidden" name="form" value="{{.}}">{{end}}
+{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
 {{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
@@ -191,7 +172,7 @@
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a
      closed <details>. An owner-only action carries the owner mark. */}}
-{{define "boxed"}}{{with .}}<details class="action"{{if or .Refused .Asked}} open{{end}}><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
+{{define "boxed"}}{{with .}}<details class="action"{{if .Asked}} open{{end}}><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
      An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}

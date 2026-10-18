@@ -73,7 +73,6 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"newKey":        newKey,
 	"group":         group,
 	"weeks":         weeks,
-	"calItem":       calItem,
 	"dayOfMonth":    dayOfMonth,
 	"dict":          dict,
 	"monthBand":     monthBand,
@@ -84,9 +83,6 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"icon":          icon,
 	"shortDay":      shortDay,
 	"addDays":       addDays,
-	"week":          isoWeek,
-	"weekPage":      weekPage,
-	"sinceLast":     sinceLastWeek,
 	"nameWords":     nameWords,
 	"monthName": func(month string) string { // "2026-10" to "October"
 		if t, ok := siren.MonthOf(month); ok {
@@ -99,9 +95,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"segmented": segmented,
 	"checkbox":  checkbox,
 	"alert":     alertOf,
-	"upTo":      upTo,
 	"beyond":    beyond,
-	"yearsAgo":  yearsAgo,
 	"kindIcon":  kindIcon,
 }).ParseFS(Files, "html/*.html"))
 
@@ -143,7 +137,7 @@ var viewOf = map[string]string{
 	"days": "stream", "search": "search", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
-	"month": "month", "week": "week", "year": "year", "styleguide": "styleguide",
+	"month": "month", "year": "year",
 	"preview": "preview", "cover-choice": "cover-choice",
 }
 
@@ -158,18 +152,8 @@ type view struct {
 	Here      string
 	Submitted string
 	Back      string
-	Shell     *Shell       // the sidebar's read; nil when the page is drawn without it
-	Refused   *refusedView // a form of this page failed: the alert, and the form as it was sent
-	Sent      url.Values
+	Shell     *Shell     // the sidebar's read; nil when the page is drawn without it
 	query     url.Values // the page's own query: ?new=<action> and the fields it fills
-}
-
-// refusedView is the error of a refused form, as the page it came from draws it: the alert at the top of the page.
-type refusedView struct {
-	Message string
-	Words   string // the alert's first words (alertOf)
-	Danger  bool
-	Href    string // the refused action's address
 }
 
 // Asked is a parameter of the page's own query (docs/plans/114-one-way-to-do-a-thing.md): ?new=<action> opens that
@@ -204,31 +188,23 @@ type Facts struct {
 	Back      string   // the page that a refused form came from, when it is a page of this server
 }
 
-// pageView is the view of a page: the entity, the facts of the page and the refusal of a form that the page shows,
-// nil for none. It reads nothing, so the same arguments give the same view. Properties that JSON cannot carry (a
+// pageView is the view of a page: the entity and the facts of the page. It reads nothing, so the same arguments give
+// the same view. Properties that JSON cannot carry (a
 // NaN, an infinity) are an error, so a page is never drawn with its properties left out.
-func pageView(e *siren.Entity, f Facts, rf *Refusal) (*view, error) {
+func pageView(e *siren.Entity, f Facts) (*view, error) {
 	shape, err := jsonShape(e.Properties)
 	if err != nil {
 		return nil, err
 	}
 	v := &view{Entity: e, Props: shape, Path: f.URL.Path, Here: hereOf(f.URL), Submitted: f.Submitted, Back: f.Back,
 		Shell: f.Shell, query: f.URL.Query()}
-	if rf != nil {
-		props, _ := rf.Entity.Properties.(map[string]any)
-		code, _ := props["code"].(string)
-		message, _ := props["message"].(string)
-		words := alertOf(code)
-		v.Refused = &refusedView{Message: message, Words: words.Words, Danger: words.Danger, Href: rf.Href}
-		v.Sent = rf.Sent
-	}
 	return v, nil
 }
 
 // Draw is the page of e as HTML: the view of e (pageView), drawn by the template of its class (htmlOf). It is the one
-// call that draws a page: f are the facts of the page, and rf is the refused form that the page shows, nil for none.
-func Draw(e *siren.Entity, f Facts, rf *Refusal) ([]byte, error) {
-	v, err := pageView(e, f, rf)
+// call that draws a page: f are the facts of the page.
+func Draw(e *siren.Entity, f Facts) ([]byte, error) {
+	v, err := pageView(e, f)
 	if err != nil {
 		return nil, err
 	}
@@ -451,31 +427,4 @@ func group(list any, key string) []bucket {
 		out[i].Items = append(out[i].Items, it)
 	}
 	return out
-}
-
-// styleParts are the parts of the style page that the methods of a real page's view give: the tiles of a day, the
-// sections of /metrics and the folds of a series. Each comes from its part of the synthetic properties of
-// styleEntity, on the clock of this view.
-type styleParts struct {
-	Tiles    []readingTile
-	Sections []metricSection
-	Series   metricReadings
-}
-
-// StyleParts are the parts of the style page that the methods of a real page's view give.
-func (v *view) StyleParts() styleParts {
-	props, _ := v.Props.(map[string]any)
-	part := func(key string) *view {
-		p, _ := props[key].(map[string]any)
-		return &view{Entity: v.Entity, Shell: v.Shell, Props: p}
-	}
-	return styleParts{Tiles: part("day").ReadingTiles(), Sections: part("metrics").MetricSections(), Series: part("series").MetricReadings()}
-}
-
-// Refusal is a refused browser form (docs/plans/097-the-almanac-reflects.md): the page that the form came from shows
-// the error and the form as the owner filled it (pageView).
-type Refusal struct {
-	Entity *siren.Entity // the error entity
-	Href   string        // the refused action's address
-	Sent   url.Values    // what the form sent
 }

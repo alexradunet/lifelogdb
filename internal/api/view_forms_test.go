@@ -131,7 +131,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 
 func TestBrowserStableNameResolution(t *testing.T) {
 	_, h, s := apitest.Fresh(t, "cli")
-	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "", "")
+	id, err := s.CreatePerson(context.Background(), "cli", "Old person", "Synthetic Person", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 		{"Person", "/browse?kind=person&new=create-person", "create-person", "/people"},
 		{"Place", "/browse?kind=place&new=create-place", "create-place", "/places"},
 		{"Metric", "/metrics?new=register-metric", "", ""},
-		{"Reading", "/metrics", "", ""},
+		{"Reading", "/?new=record#record", "record", "/measurements"},
 		{"File", "/browse?kind=media&new=add-file", "add-file", "/files"},
 	} {
 		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<svg[^>]*>.*?</svg>)?` + kind.title + `</a>`)
@@ -240,7 +240,8 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 			t.Errorf("the New menu has no %s at %s", kind.title, kind.href)
 			continue
 		}
-		page := browse(t, h, kind.href)
+		href, _, _ := strings.Cut(kind.href, "#") // a browser sends no fragment
+		page := browse(t, h, href)
 		switch {
 		case kind.action != "":
 			open := regexp.MustCompile(`<details class="action" open><summary class="button">[^<]*(<span class="owner">owner</span>)?</summary><div class="action-form">(<p class="desc">[^<]*</p>)?<form method="POST" action="` + kind.post + `"`)
@@ -248,7 +249,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 				t.Errorf("%s does not open the form of %s", kind.href, kind.action)
 			}
 		case kind.title == "Metric":
-			if !strings.Contains(page, `id="new-metric" open>`) {
+			if !strings.Contains(page, `<details class="action" open><summary class="button">New metric <span class="owner">owner</span></summary>`) {
 				t.Errorf("%s does not open New metric", kind.href)
 			}
 		}
@@ -308,37 +309,6 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 		if titles[name] != want {
 			t.Errorf("%s is titled %q, want %q", name, titles[name], want)
 		}
-	}
-}
-
-// TestADaysReadingTileAddsAReadingForThatDay: + Add on a day's tile records one value for that day, not today, and
-// returns to the day; on today it says Today.
-func TestADaysReadingTileAddsAReadingForThatDay(t *testing.T) {
-	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	ctx := t.Context()
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
-	record := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics/Weight")), "record")
-	for _, day := range []string{"2031-05-12", fixedToday} {
-		apitest.Must(t)(c.Do(ctx, record, map[string]string{"metric": "Weight", "day": day, "value": "80"}))
-	}
-
-	past := browse(t, h, "/days/2031-05-12")
-	for _, want := range []string{`<summary class="button small" aria-label="Add a reading of Weight">+ Add</summary>`,
-		`<input type="hidden" name="metric" value="Weight"><input type="hidden" name="day" value="2031-05-12">`, `<span>Mon 12 May, kg</span>`} {
-		if !strings.Contains(past, want) {
-			t.Errorf("the day's tile lacks %s", want)
-		}
-	}
-	if today := browse(t, h, "/days/"+fixedToday); !strings.Contains(today, `<span>Today, kg</span>`) {
-		t.Error("today's tile does not say Today")
-	}
-
-	rec := submit(h, "/measurements", url.Values{"metric": {"Weight"}, "day": {"2031-05-12"}, "value": {"79.5"}, "back": {"/days/2031-05-12"}}, "")
-	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || (loc != "/days/2031-05-12" && !feedbackLocation(loc, "/days/2031-05-12")) {
-		t.Fatalf("+ Add on a day: %d %q", rec.Code, loc)
-	}
-	if after := browse(t, h, "/days/2031-05-12"); !strings.Contains(after, "and 1 more this day") || !strings.Contains(after, ">79.5 <span class=\"unit\">kg</span>") {
-		t.Error("the day does not show the added reading on its tile")
 	}
 }
 
@@ -425,7 +395,7 @@ func TestEveryListSelectsTheSameWay(t *testing.T) {
 		}
 		put := strings.Contains(body, `<form id="pick" method="POST" action="`+list.put+`" class="inline">`) &&
 			strings.Contains(body, `<button class="primary">Put in a category</button>`)
-		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete pages</button></form>`)
+		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete</button></form>`)
 		if put != (list.put != "") || del != (list.del != "") {
 			t.Errorf("%s: Put in a category %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
 		}

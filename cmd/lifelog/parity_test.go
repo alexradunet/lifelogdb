@@ -34,7 +34,7 @@ import (
 // an agent. The MCP server runs as an agent only, and an action of the owner is not one of its tools. Where a surface
 // has a shortcut of an action, the row runs the shortcut there: the shortcut wraps the action, so its answer is the
 // action's. Each surface keeps the tests of what is its own: the schema, the hints, the arguments and the cancellation
-// of MCP; the flags, the output and snapshot --to of the CLI; the transport of the client. The clock of every row is
+// of MCP; the flags, the output and snapshot --snapshots of the CLI; the transport of the client. The clock of every row is
 // fixed at parityToday, so no row depends on the date of the run.
 func TestParityOfTheSurfaces(t *testing.T) {
 	for _, row := range parityRows() {
@@ -145,9 +145,8 @@ func openMCPRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
 }
 
 // mcpCall serves the tools of the MCP server over an in-memory transport of the SDK, with the client as the source. A
-// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. The action open-day
-// runs as the tool get_day, the shortcut of the server that wraps it. An error result of a tool is an error; its text
-// is the error entity of the API when the API answered.
+// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. An error result of a
+// tool is an error; its text is the error entity of the API when the API answered.
 func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 	srv, err := mcp.New(t.Context(), c, version)
 	if err != nil {
@@ -196,9 +195,6 @@ func mcpCall(t *testing.T, c *client.Client) surfaceCall {
 	return func(action string, args map[string]string) (*siren.Entity, error) {
 		t.Helper()
 		name := strings.ReplaceAll(action, "-", "_")
-		if action == "open-day" {
-			name = "get_day"
-		}
 		number, ok := numbers[name]
 		if !ok {
 			return nil, errNoTool
@@ -391,7 +387,7 @@ func parityRows() []parityRow {
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 		parityRow{"set-cover by a kept title", rowSetCover},
 		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
-		parityRow{"random-day", rowRandomDay},
+		parityRow{"random-page kind=day", rowRandomDay},
 		parityRow{"random-page kind=person", rowRandomPage},
 		parityRow{"search kind=person", rowSearchKind},
 	)
@@ -472,11 +468,13 @@ func rowFind(x *parityRun) {
 	x.refused("find", map[string]string{"title": "Nobody"}, http.StatusNotFound, "not_found")
 }
 
-// random-day is the day view of a live day page picked at random, up to today (docs/plans/130-the-explore-pass.md): with
-// one live day page up to today, a tombstoned one and one after today, it is the live one. With none, a 404.
+// random-page with the kind day is the day view of a live day page picked at random, up to today
+// (docs/plans/130-the-explore-pass.md): with one live day page up to today, a tombstoned one and one after today, it is
+// the live one. With none, a 404.
 func rowRandomDay(x *parityRun) {
 	ctx := x.t.Context()
-	x.refused("random-day", nil, http.StatusNotFound, "not_found")
+	day := map[string]string{"kind": "day"}
+	x.refused("random-page", day, http.StatusNotFound, "not_found")
 	for _, day := range []string{"2021-05-05", "2022-06-06", "2098-01-01"} {
 		if _, _, err := x.store.Capture(ctx, "cli", day, "A day.", nil); err != nil {
 			x.t.Fatal(err)
@@ -490,8 +488,8 @@ func rowRandomDay(x *parityRun) {
 		x.t.Fatal(err)
 	}
 	for range 5 {
-		if e := x.ok("random-day", nil); e.Title != "2021-05-05" || e.Class[0] != "day" {
-			x.t.Errorf("random-day: %v %q, want the day 2021-05-05", e.Class, e.Title)
+		if e := x.ok("random-page", day); e.Title != "2021-05-05" || e.Class[0] != "day" {
+			x.t.Errorf("random-page kind=day: %v %q, want the day 2021-05-05", e.Class, e.Title)
 		}
 	}
 }
@@ -500,10 +498,10 @@ func rowRandomDay(x *parityRun) {
 // kind that is not one a 422.
 func rowRandomPage(x *parityRun) {
 	ctx := x.t.Context()
-	if _, err := x.store.CreatePerson(ctx, "cli", "Ana", "", "", "", ""); err != nil {
+	if _, err := x.store.CreatePerson(ctx, "cli", "Ana", "", "", ""); err != nil {
 		x.t.Fatal(err)
 	}
-	bob, err := x.store.CreatePerson(ctx, "cli", "Bob", "", "", "", "")
+	bob, err := x.store.CreatePerson(ctx, "cli", "Bob", "", "", "")
 	if err == nil {
 		err = x.store.Tombstone(ctx, "cli", bob)
 	}
@@ -516,7 +514,7 @@ func rowRandomPage(x *parityRun) {
 		}
 	}
 	x.refused("random-page", map[string]string{"kind": "place"}, http.StatusNotFound, "not_found")
-	x.refused("random-page", map[string]string{"kind": "day"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("random-page", map[string]string{"kind": "year"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // open-day is the day view of a day; it is a read, so it makes no day page.
@@ -589,7 +587,7 @@ func rowBrowse(x *parityRun) {
 	ctx := x.t.Context()
 	var people []int64
 	for _, title := range []string{"Ana", "Bo", "Cy"} {
-		p, err := x.store.CreatePerson(ctx, "cli", title, "", "", "", "")
+		p, err := x.store.CreatePerson(ctx, "cli", title, "", "", "")
 		if err != nil {
 			x.t.Fatal(err)
 		}
@@ -657,14 +655,14 @@ func rowSearchNewest(x *parityRun) {
 	}
 }
 
-// search with a kind lists only the hits of that kind, and counts every kind (docs/plans/130-the-explore-pass.md); a
-// kind that is not one is a 422.
+// search with a kind lists only the hits of that kind (docs/plans/130-the-explore-pass.md); a kind that is not one is
+// a 422.
 func rowSearchKind(x *parityRun) {
 	ctx := x.t.Context()
 	if _, _, err := x.store.Capture(ctx, "cli", "2021-05-05", "A lantern.", nil); err != nil {
 		x.t.Fatal(err)
 	}
-	if _, err := x.store.CreatePerson(ctx, "cli", "Keeper of the lantern", "", "", "", ""); err != nil {
+	if _, err := x.store.CreatePerson(ctx, "cli", "Keeper of the lantern", "", "", ""); err != nil {
 		x.t.Fatal(err)
 	}
 	e := x.ok("search", map[string]string{"q": "lantern", "kind": "person"})
@@ -674,28 +672,34 @@ func rowSearchKind(x *parityRun) {
 		h := h.(map[string]any)
 		hits = append(hits, fmt.Sprint(h["kind"], " ", h["title"]))
 	}
-	if counts := p["counts"].(map[string]any); strings.Join(hits, ",") != "person Keeper of the lantern" || p["kind"] != "person" ||
-		counts["all"] != json.Number("2") || counts["day"] != json.Number("1") || counts["person"] != json.Number("1") {
-		x.t.Errorf("search kind=person: %v, kind %v, counts %v", hits, p["kind"], p["counts"])
+	if strings.Join(hits, ",") != "person Keeper of the lantern" || p["kind"] != "person" {
+		x.t.Errorf("search kind=person: %v, kind %v", hits, p["kind"])
 	}
 	x.refused("search", map[string]string{"q": "lantern", "kind": "metric"}, http.StatusUnprocessableEntity, "invalid")
 }
 
-// create-place with a category makes the place and its part-of link in one write, and the category when it is new.
+// create-place makes the place, and file-pages files it in a category, made when it is new
+// (docs/plans/131-the-pareto-pass.md, part 2).
 func rowCreatePlace(x *parityRun) {
-	e := x.ok("create-place", map[string]string{"title": "Lakeside", "category": "Trips"})
+	e := x.ok("create-place", map[string]string{"title": "Lakeside"})
+	if e.Title != "Lakeside" || len(partOf(e)) != 0 {
+		x.t.Errorf("create-place Lakeside: %q part-of %v", e.Title, partOf(e))
+	}
+	x.ok("file-pages", map[string]string{"ids": strings.TrimPrefix(apitest.Href(e, "self"), "/pages/"), "category": "Trips"})
+	if got := x.browse("in=Trips&kind=place"); got != "Lakeside" {
+		x.t.Errorf("the places in Trips: %s, want Lakeside", got)
+	}
+}
+
+// partOf are the titles that an entity links part-of.
+func partOf(e *siren.Entity) []string {
 	var parts []string
 	for _, l := range e.Entities {
 		if slices.Equal(l.Rel, []string{"part-of"}) {
 			parts = append(parts, l.Title)
 		}
 	}
-	if e.Title != "Lakeside" || strings.Join(parts, ",") != "Trips" {
-		x.t.Errorf("create-place Lakeside in Trips: %q part-of %v", e.Title, parts)
-	}
-	if got := x.browse("in=Trips&kind=place"); got != "Lakeside" {
-		x.t.Errorf("the places in Trips: %s, want Lakeside", got)
-	}
+	return parts
 }
 
 // file-pages files several pages in a category in one write, and makes the category when it is new.
@@ -758,9 +762,9 @@ func rowRename(x *parityRun, kind string) {
 	case "page":
 		p, _, err = x.store.CreatePage(ctx, "cli", old, "original prose", "")
 	case "person":
-		p, err = x.store.CreatePerson(ctx, "cli", old, "Synthetic Person", "", "2031-01-01", "")
+		p, err = x.store.CreatePerson(ctx, "cli", old, "Synthetic Person", "", "2031-01-01")
 	case "place":
-		p, err = x.store.CreatePlace(ctx, "cli", old, "")
+		p, err = x.store.CreatePlace(ctx, "cli", old)
 	case "metric":
 		if _, err = x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: old, Unit: "kg", Note: "original metric"}); err == nil {
 			p, err = x.store.PageID(ctx, old)
@@ -1003,7 +1007,7 @@ func rowResyncLinks(x *parityRun) {
 // 422 with the sentence of the trigger, on every surface. So is register-metric with the title of a place, which only
 // an owner may call. Nothing is written: the place keeps its type, its version and its body, and no person is made.
 func rowPromoteAPlace(x *parityRun) {
-	p, err := x.store.CreatePlace(x.t.Context(), "cli", "Lakeside", "")
+	p, err := x.store.CreatePlace(x.t.Context(), "cli", "Lakeside")
 	if err != nil {
 		x.t.Fatal(err)
 	}
@@ -1027,16 +1031,15 @@ func rowPromoteAPlace(x *parityRun) {
 
 // A scale's range is lo-hi with lo less than hi: register-metric with the unit 5-1 is refused by the schema
 // (metrics_range_order) as a 422 with the sentence of the trigger, for an owner on http, remote and cli. Nothing is
-// written: not the metric and not the category that the same write makes. register-metric is the owner's action, and
+// written. register-metric is the owner's action, and
 // the row register-metric holds its refusal to an agent.
 func rowRangeOutOfOrder(x *parityRun) {
 	if x.owner {
 		const trigger = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
-		args := map[string]string{"name": "Pain", "unit": "5-1", "category": "Body"}
+		args := map[string]string{"name": "Pain", "unit": "5-1"}
 		if msg := x.refused("register-metric", args, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
 			x.t.Errorf("register-metric with the unit 5-1: %q, want the sentence of the trigger", msg)
 		}
 	}
 	x.absent("Pain")
-	x.absent("Body")
 }

@@ -80,7 +80,7 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Route probe"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "A day for random-day."}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "A day picked at random."}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
 	page, reading := strings.TrimPrefix(apitest.Href(p, "self"), "/pages/"), strings.TrimPrefix(apitest.Href(m, "self"), "/measurements/")
@@ -271,7 +271,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Fatal(err)
 	}
 	dayPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page")))
-	if got := names(dayPage); got != "save-body,set-cover,link,unlink,tombstone" {
+	if got := names(dayPage); got != "save-body,set-cover,link,unlink,tombstone-pages" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
 	if !hasOption(apitest.Action(t, dayPage, "link"), "kind", "at") {
@@ -281,17 +281,17 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Error("a day page offers a part-of link (D26: a day page is never filed)")
 	}
 	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
-	if got := names(ana); got != "save-body,promote,rename,set-cover,link,unlink,file-pages,tombstone" {
+	// A plain page may start part-of only, which file-pages writes, so it offers no link (D16: at is from a day
+	// page only); unlink takes it out of a category.
+	if got := names(ana); got != "save-body,promote,rename,set-cover,unlink,file-pages,tombstone-pages" {
 		t.Errorf("a plain page offers %s", got)
 	}
-	if hasOption(apitest.Action(t, ana, "link"), "kind", "at") {
-		t.Error("a plain page offers an at link (D16: from a day page only)")
-	}
 	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
-	if got := names(ana); strings.Contains(got, "promote") || hasOption(apitest.Action(t, ana, "link"), "kind", "at") {
-		t.Errorf("a person offers %s with kinds %v", got, apitest.Action(t, ana, "link").Fields)
+	if got := names(ana); hasAction(ana, "promote") || hasAction(ana, "link") {
+		t.Errorf("a person offers %s", got)
 	}
-	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "tombstone"), nil))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "tombstone-pages"), nil))
+	gone := apitest.Must(t)(c.Get(t.Context(), apitest.Href(ana, "self")))
 	if got := names(gone); got != "revive" {
 		t.Errorf("a tombstoned page offers %s", got)
 	}
@@ -568,19 +568,20 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	for _, p := range []string{"Biomarkers", "Thyroid", "Body"} {
 		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": p}))
 	}
-	thyroid := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Thyroid"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, thyroid, "link"), map[string]string{"to": "Biomarkers", "kind": "part-of"}))
+	// file is the file-pages of a page: it files the page in the category titled category.
+	file := func(page, category string) {
+		t.Helper()
+		p := apitest.Must(t)(c.Get(t.Context(), page))
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, p, "file-pages"), map[string]string{"category": category}))
+	}
+	file("/pages?title=Thyroid", "Biomarkers")
 	tsh := apitest.Must(t)(c.Get(t.Context(), "/metrics/tsh"))
-	if apitest.Href(tsh, "page") == "" || !hasAction(tsh, "file-pages") || apitest.Action(t, tsh, "link").Title != "Add a link" {
-		t.Fatalf("a series links its metric's page and offers to file it: %v", names(tsh))
+	if apitest.Href(tsh, "page") == "" || names(tsh) != "record" {
+		t.Fatalf("a series links its metric's page and offers only record: %v", names(tsh))
 	}
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, tsh, "link"), map[string]string{"to": "Thyroid", "kind": "part-of"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight")), "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	walk := apitest.Must(t)(c.Get(t.Context(), "/metrics/Walk"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, walk, "link"), map[string]string{"to": "Body", "kind": "part-of"}))
-	if _, err := c.Do(t.Context(), apitest.Action(t, walk, "link"), map[string]string{"to": "Nowhere", "kind": "part-of"}); err == nil {
-		t.Error("a metric is filed in a category page that does not exist")
-	}
+	file(apitest.Href(tsh, "page"), "Thyroid")
+	file("/pages?title=Weight", "Body")
+	file("/pages?title=Walk", "Body")
 
 	var got []string
 	for _, g := range apitest.Must(t)(c.Get(t.Context(), "/metrics")).Properties.(map[string]any)["groups"].([]any) {
@@ -601,13 +602,16 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 			t.Errorf("/metrics lacks %q", s)
 		}
 	}
-	// The metric's page opens this one in a browser (TestTheBrowserOpensAMetricsPageAtItsMetric), so it holds the note.
-	s := browse(t, h, "/metrics/TSH")
+	// The metric's page holds its note and its categories, each a badge with its x; its readings link the page.
+	s := browse(t, h, apitest.Href(tsh, "page"))
 	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/\d+/unlink"`).MatchString(s) {
-		t.Error("a series does not show its category as a badge with its x")
+		t.Error("a metric's page does not show its category as a badge with its x")
 	}
-	if !strings.Contains(s, "thyroid-stimulating hormone") {
-		t.Error("a metric's one page does not hold its note")
+	if !strings.Contains(s, "thyroid-stimulating hormone") || !strings.Contains(s, `href="/metrics/TSH"`) {
+		t.Error("a metric's page does not hold its note, or does not link its readings")
+	}
+	if !strings.Contains(browse(t, h, "/metrics/TSH"), `href="`+apitest.Href(tsh, "page")+`"`) {
+		t.Error("the readings of a metric do not link its page")
 	}
 }
 
@@ -628,7 +632,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 			if tc.state != "unknown" {
 				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": tc.stored, "unit": tc.unit}))
 				if tc.state == "deleted" {
-					apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone"), nil))
+					apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/pages?title="+url.QueryEscape(tc.stored))), "tombstone-pages"), nil))
 				}
 			}
 			stored := apitest.Must(t)(c.Get(t.Context(), "/metrics/"+url.PathEscape(tc.stored)))
@@ -674,18 +678,19 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := apitest.Must(t)(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,promote,rename,set-cover,link,unlink,file-pages,tombstone" {
+	if current.Title != "Correct" || names(current) != "save-body,promote,rename,set-cover,unlink,file-pages,tombstone-pages" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "link"), map[string]string{"to": "Other", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "file-pages"), map[string]string{"category": "Other"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "part-of"}))
 	alias := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Typo"))
 	if apitest.Href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)
 	}
-	if _, err := c.Do(t.Context(), apitest.Action(t, alias, "link"), map[string]string{"to": "Other", "kind": "redirect"}); apitest.Status(err) != 422 {
+	link := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "link") // a plain page offers no link of its own
+	if _, err := c.Do(t.Context(), link, map[string]string{"id": strings.TrimPrefix(oldHref, "/pages/"), "to": "Other", "kind": "redirect"}); apitest.Status(err) != 422 {
 		t.Fatalf("removed kind: %v", err)
 	}
 }

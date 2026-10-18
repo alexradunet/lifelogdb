@@ -18,12 +18,12 @@ import (
 // in the table; every other command takes the interrupt through its context, snapshot too, as it runs through the
 // client since plan 082.
 func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
-	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--to", "x"}} {
+	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--snapshots", "x"}} {
 		if _, err := parse(argv, noVars); err == nil || !strings.Contains(err.Error(), "does not take") {
 			t.Errorf("%v: %v, want a refusal of the flag", argv, err)
 		}
 	}
-	for _, argv := range [][]string{{"file", "x", "--dry-run"}, {"serve", "--public"}, {"capture", "hello", "--day", "2026-01-01"}, {"snapshot", "--to", "x"}} {
+	for _, argv := range [][]string{{"file", "x", "--dry-run"}, {"serve", "--public"}, {"capture", "hello", "--day", "2026-01-01"}, {"snapshot", "--snapshots", "x"}} {
 		if _, err := parse(argv, noVars); err != nil {
 			t.Errorf("%v: %v, want the flag taken", argv, err)
 		}
@@ -165,5 +165,25 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err == nil {
 		t.Errorf("a refused init made %s", other)
+	}
+}
+
+// TestMCPNamesItsWriterOneWay: the MCP server writes as agent:NAME, which --agent names; a --source on its line is
+// refused, never overridden in silence (docs/plans/131-the-pareto-pass.md, part 2).
+func TestMCPNamesItsWriterOneWay(t *testing.T) {
+	cmd := commandNamed("mcp")
+	o, err := parse([]string{"mcp", "--agent", "codex"}, noVars)
+	if err == nil {
+		o, err = cmd.prepare(o)
+	}
+	if err != nil || o.source != "agent:codex" {
+		t.Errorf("mcp --agent codex: source %q, %v; want agent:codex", o.source, err)
+	}
+	o, err = parse([]string{"mcp", "--source", "cli"}, noVars)
+	if err == nil {
+		_, err = cmd.prepare(o)
+	}
+	if err == nil || !strings.Contains(err.Error(), "--agent") {
+		t.Errorf("mcp --source cli: %v, want a refusal that names --agent", err)
 	}
 }

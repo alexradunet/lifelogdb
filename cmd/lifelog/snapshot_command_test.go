@@ -11,14 +11,14 @@ import (
 	"lifelog/internal/db/dbtest"
 )
 
-// lifelog snapshot is the catalog's action in-process, --to choosing the folder. The store's clock is fixed, so the
+// lifelog snapshot is the catalog's action in-process, --snapshots choosing the folder. The store's clock is fixed, so the
 // name of the snapshot does not depend on the day the test runs.
 func TestSnapshotCommandRunsTheAction(t *testing.T) {
 	live := dbtest.File(t)
 	dir := t.TempDir()
 	e, stdout, _ := testEnv(t)
 	e.clock = func() time.Time { return time.Date(2031, 5, 14, 12, 0, 0, 0, time.Local) }
-	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", dir}); err != nil {
+	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--snapshots", dir}); err != nil {
 		t.Fatalf("snapshot: %v\n%s", err, stdout)
 	}
 	want := filepath.Join(dir, "life-2031-05-14.db")
@@ -29,9 +29,9 @@ func TestSnapshotCommandRunsTheAction(t *testing.T) {
 		t.Fatalf("the report lacks the restore check:\n%s", stdout)
 	}
 	// Over --url the server's folder is the one.
-	err := runArgs(t.Context(), e, []string{"snapshot", "--url", "http://127.0.0.1:1", "--to", dir})
-	if err == nil || !strings.Contains(err.Error(), "drop --to") {
-		t.Fatalf("--url with --to: %v", err)
+	err := runArgs(t.Context(), e, []string{"snapshot", "--url", "http://127.0.0.1:1", "--snapshots", dir})
+	if err == nil || !strings.Contains(err.Error(), "drop --snapshots") {
+		t.Fatalf("--url with --snapshots: %v", err)
 	}
 	// serve refuses a snapshot folder that is not one, before it opens anything.
 	err = runArgs(t.Context(), e, []string{"serve", "--addr", "127.0.0.1:0", "--db", filepath.Join(t.TempDir(), "absent.db"), "--snapshots", filepath.Join(t.TempDir(), "missing")})
@@ -44,7 +44,7 @@ func TestSnapshotCommandRunsTheAction(t *testing.T) {
 	}
 }
 
-// TestSnapshotCommandRefusesAGitWorkTree: snapshot --to a folder inside a git work tree is refused before anything
+// TestSnapshotCommandRefusesAGitWorkTree: snapshot --snapshots of a folder inside a git work tree is refused before anything
 // opens. --db names a file that is not there, so a command that opened it would fail with another error, and nothing
 // is written in the folder or at the path of --db.
 func TestSnapshotCommandRefusesAGitWorkTree(t *testing.T) {
@@ -57,8 +57,8 @@ func TestSnapshotCommandRefusesAGitWorkTree(t *testing.T) {
 		}
 	}
 	e, _, _ := testEnv(t)
-	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--to", backups}); err == nil || !strings.Contains(err.Error(), "git work tree") {
-		t.Errorf("snapshot --to inside a git work tree: %v, want the refusal", err)
+	if err := runArgs(t.Context(), e, []string{"snapshot", "--db", live, "--snapshots", backups}); err == nil || !strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("snapshot --snapshots inside a git work tree: %v, want the refusal", err)
 	}
 	if entries, err := os.ReadDir(backups); err != nil || len(entries) != 0 {
 		t.Errorf("the refused snapshot left %v (%v)", entries, err)

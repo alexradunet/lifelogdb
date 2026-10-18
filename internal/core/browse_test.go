@@ -34,12 +34,12 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		ids[title] = id
 	}
 	for _, title := range []string{"Ana", "Bo"} {
-		id, err := s.CreatePerson(ctx, "cli", title, "", "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", title, "", "", "")
 		check(err)
 		ids[title] = id
 	}
 	for _, title := range []string{"Lakeside", "Harbor"} {
-		id, err := s.CreatePlace(ctx, "cli", title, "")
+		id, err := s.CreatePlace(ctx, "cli", title)
 		check(err)
 		ids[title] = id
 	}
@@ -293,7 +293,7 @@ func TestBrowseCountsTheGhostPages(t *testing.T) {
 // category. It is in Not filed, and the chip counts it.
 func TestNotFiledCountsOnlyALiveCategory(t *testing.T) {
 	s, ids := browseFixture(t)
-	cy, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "", "")
+	cy, err := s.CreatePerson(ctx, "cli", "Cy", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 		pages = append(pages, id)
 	}
 	for _, title := range []string{"bo", "Ana", "Cy"} {
-		if _, err := s.CreatePerson(ctx, "cli", title, "", "", "", ""); err != nil {
+		if _, err := s.CreatePerson(ctx, "cli", title, "", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -435,21 +435,14 @@ func TestReadersPage(t *testing.T) {
 	s := fresh(t)
 	ctx := context.Background()
 	for i := 1; i <= 5; i++ {
-		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i), ""); err != nil {
+		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i)); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := s.Capture(ctx, "cli", fmt.Sprintf("2031-04-%02d", i), fmt.Sprintf("pageword [[Missing %d]]", i), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	titles := func(es []Edge) string {
-		var out []string
-		for _, e := range es {
-			out = append(out, e.Title)
-		}
-		return strings.Join(out, ",")
-	}
-	// Hand-counted: five places by title, five days newest first, five ghosts oldest first, five hits.
+	// Hand-counted: five places by title, five ghosts oldest first, five hits.
 	for _, tc := range []struct {
 		name          string
 		limit, offset int
@@ -465,9 +458,6 @@ func TestReadersPage(t *testing.T) {
 		if err != nil || strings.Join(list, ",") != tc.want {
 			t.Errorf("%s: %q %v", tc.name, list, err)
 		}
-	}
-	if got, err := s.RecentDays(ctx, 2, 1); err != nil || titles(got) != "2031-04-04,2031-04-03" {
-		t.Errorf("days: %q %v", titles(got), err)
 	}
 	// The linked targets are not ghosts (a ghost has no link). Five empty pages of their own, inserted by direct SQL
 	// with an old created_at (bulk setup: ghost_pages wants them older than 30 days, and created_at never changes),
@@ -511,7 +501,7 @@ func TestReadersPage(t *testing.T) {
 func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 	s := fresh(t)
 	for _, name := range []string{"Sam", "Ana", "Zed"} {
-		if _, err := s.CreatePerson(ctx, "cli", name, "", "", "", ""); err != nil {
+		if _, err := s.CreatePerson(ctx, "cli", name, "", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -580,7 +570,7 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		"Zed": "",
 	}
 	for _, name := range []string{"Ana", "Sam", "Zed"} {
-		id, err := s.CreatePerson(ctx, "cli", name, "", "", "", "")
+		id, err := s.CreatePerson(ctx, "cli", name, "", "", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -624,8 +614,8 @@ func TestARandomPickIsLiveAndOfItsKind(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil {
 		t.Fatal(err)
 	}
-	ana := must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "", "", ""))
-	bob := must[int64](t)(s.CreatePerson(ctx, "cli", "Bob", "", "", "", ""))
+	ana := must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "", ""))
+	bob := must[int64](t)(s.CreatePerson(ctx, "cli", "Bob", "", "", ""))
 	if err := s.Tombstone(ctx, "cli", bob); err != nil {
 		t.Fatal(err)
 	}

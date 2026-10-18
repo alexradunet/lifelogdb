@@ -24,30 +24,27 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	documented := readReference(t, filepath.Join("..", "..", "API.md"))
 	// The shape behind each section: a Go value whose JSON names, walked, are the paths the table must list.
 	shapes := map[string]any{
-		"root": map[string]any{"today": "", "recent": []recentDay{}, "on_this_day": []recentDay{}, "recent_titles": []string{}},
-		"days": map[string]any{"today": "", "before": "", "limit": 0, "offset": 0, "cards": []dayCard{}, "on_this_day": []recentDay{},
-			"years": []yearJump{}, "months": []monthJump{}},
+		"root": map[string]any{"today": "", "recent": []recentDay{}},
+		"days": map[string]any{"today": "", "limit": 0, "offset": 0, "cards": []dayCard{}},
 		"browse": map[string]any{"kind": "", "in": browseIn{}, "unfiled": false, "ghosts": false, "deleted": false, "media": "", "counts": browseCounts{},
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
-		"search":                    map[string]any{"q": "", "order": "", "kind": "", "counts": map[string]int{}, "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
+		"search":                    map[string]any{"q": "", "order": "", "kind": "", "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
 		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}},
-		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "metrics": []weekMetric{}},
 		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
 		"page, person, place, file": core.Page{},
 		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},
-		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "categories": []string{}, "all_history": false,
-			"id": int64(0), "unit": "", "body": "", "links": []core.Edge{}, "backlinks": []core.Edge{}},
-		"metrics":    map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
-		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
-		"rebuilt":    map[string]any{"documents": 0},
-		"resynced":   core.Resync{Created: []string{}, Revived: []string{}, Skipped: []string{}},
-		"tombstoned": map[string]any{"ids": []int64{}, "count": 0},
-		"filed":      map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
-		"integrity":  core.IntegrityResult{},
-		"result":     map[string]any{"title": "", "sha256": "", "mime": "", "picture": false},
-		"login":      map[string]any{"failed": false, "logged_in": false},
+		"series":                    map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "unit": ""},
+		"metrics":                   map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
+		"snapshot":                  map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
+		"rebuilt":                   map[string]any{"documents": 0},
+		"resynced":                  core.Resync{Created: []string{}, Revived: []string{}, Skipped: []string{}},
+		"tombstoned":                map[string]any{"ids": []int64{}, "count": 0},
+		"filed":                     map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
+		"integrity":                 core.IntegrityResult{},
+		"result":                    map[string]any{"title": "", "sha256": "", "mime": "", "picture": false},
+		"login":                     map[string]any{"failed": false, "logged_in": false},
 		"result of capture, create-page, save-body": core.Sync{},
 		"result of add-file":                        core.Kept{},
 	}
@@ -88,7 +85,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"},
 		{"integrity", "/integrity"}, {"cover-choice", ids["page"] + "/cover"},
-		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"},
+		{"month", "/months/2031-05"}, {"year", "/years/2031"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]
@@ -243,12 +240,12 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 	s := &core.Store{DB: d}
 	ctx := t.Context()
 	ids := map[string]string{}
-	personID, err := s.CreatePerson(ctx, "cli", "Sam", "Sam Synthetic", "2001-01-01", "", "")
+	personID, err := s.CreatePerson(ctx, "cli", "Sam", "Sam Synthetic", "2001-01-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids["person"] = fmt.Sprintf("/pages/%d", personID)
-	placeID, err := s.CreatePlace(ctx, "cli", "Lakeside", "")
+	placeID, err := s.CreatePlace(ctx, "cli", "Lakeside")
 	if err != nil {
 		t.Fatal(err)
 	}
