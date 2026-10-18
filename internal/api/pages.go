@@ -220,9 +220,13 @@ func searchHref(q, order, kind string) string {
 	return "/search?" + v.Encode()
 }
 
-func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
-	q, kind := r.URL.Query().Get("q"), r.URL.Query().Get("kind")
-	order, err := core.SearchOrderOf(r.URL.Query().Get("order"))
+func (h *server) search(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	q, kind := v.Get("q"), v.Get("kind")
+	order, err := core.SearchOrderOf(v.Get("order"))
 	if err != nil {
 		return nil, err
 	}

@@ -154,7 +154,7 @@
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
-{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
+{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
      options as a row of radio buttons (the options of the field mood also carry their words), other options as a

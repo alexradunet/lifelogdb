@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"lifelog/internal/core"
@@ -46,7 +47,7 @@ func TestFileCommand(t *testing.T) {
 
 // TestCoverCommand is `lifelog cover PAGE-ID PHOTO` and `lifelog cover PAGE-ID --title T` on a throwaway database:
 // a new photo is kept as a file with no day and becomes the page's cover; a kept picture named by its title becomes
-// it next. A file page takes no cover, and a call with neither a photo nor a title is refused before it sends.
+// it next. A file page takes no cover, and a call with neither a photo nor a title is refused by the API.
 func TestCoverCommand(t *testing.T) {
 	dir, live := t.TempDir(), dbtest.File(t)
 	pic, other := filepath.Join(dir, "trip.jpg"), filepath.Join(dir, "other.jpg")
@@ -95,6 +96,12 @@ func TestCoverCommand(t *testing.T) {
 	}
 	if err := run("cover", strconv.FormatInt(trip, 10)); err == nil {
 		t.Error("cover with neither a photo nor a title was taken")
+	}
+	// --preview reaches the request even with no PHOTO: the client then reads the named file, and a missing file is an
+	// error. A flag that is dropped in silence would give no error.
+	missing := filepath.Join(dir, "missing-preview.jpg")
+	if err := run("cover", strconv.FormatInt(trip, 10), "--title", "Other.jpg", "--preview", missing); err == nil || !strings.Contains(err.Error(), "missing-preview.jpg") {
+		t.Errorf("cover --title with --preview of a missing file: %v, want an error that names the file", err)
 	}
 }
 
