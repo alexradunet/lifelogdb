@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"lifelog/internal/api/siren"
@@ -19,7 +18,6 @@ type tool struct {
 	description string
 	schema      map[string]any
 	action      *siren.Action // the action that the tool runs; nil for get
-	follow      bool          // the built-in get: it follows a link and runs no action
 }
 
 // instructions are what a model reads first about life.db and its tools, on the MCP server.
@@ -44,14 +42,10 @@ func tools(actions []siren.Action) ([]tool, error) {
 			return nil, fmt.Errorf("tool name %q from action %q collides with %s", name, a.Name, prev)
 		}
 		seen[name] = fmt.Sprintf("action %q", a.Name)
-		schema, err := inputSchema(a.Fields)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", a.Name, err)
-		}
-		list = append(list, tool{name: name, description: a.Description, schema: schema, action: a})
+		list = append(list, tool{name: name, description: a.Description, schema: inputSchema(a.Fields), action: a})
 	}
 	return append(list,
-		tool{name: "get", follow: true, description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
+		tool{name: "get", description: "Follow a link: fetch the resource at an href from an earlier result (e.g. /pages/12).",
 			schema: map[string]any{"type": "object", "required": []string{"href"},
 				"properties": map[string]any{"href": map[string]any{"type": "string"}}}},
 	), nil
@@ -65,9 +59,6 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 	if t.action != nil {
 		return c.Do(ctx, *t.action, args)
 	}
-	if !t.follow {
-		return nil, fmt.Errorf("no tool %q", t.name)
-	}
 	if !strings.HasPrefix(args["href"], "/") {
 		return nil, errors.New("href must be a path such as /pages/12")
 	}
@@ -75,11 +66,11 @@ func run(ctx context.Context, c *client.Client, t tool, args map[string]string) 
 }
 
 // inputSchema is a JSON Schema for an action's fields: numbers as numbers, everything else a string. A date takes a
-// local day or the word today (API.md, "The entity"), so its schema has a pattern for the two, not the format date,
-// which takes no word, and its description adds the hint to the title, inside the title's own brackets when it ends
+// local day or the word today (API.md, "The entity"), so its schema has no format date, which takes no word, and no
+// pattern, which would repeat the schema's day CHECK. Its description adds the hint to the title, inside the title's own brackets when it ends
 // with them. The title stays without the hint: it is also the label of the browser's date picker, in which a person
 // cannot type the word.
-func inputSchema(fields []siren.Field) (map[string]any, error) {
+func inputSchema(fields []siren.Field) map[string]any {
 	props := map[string]any{}
 	req := []string{}
 	for _, f := range fields {
@@ -91,7 +82,6 @@ func inputSchema(fields []siren.Field) (map[string]any, error) {
 		case "number":
 			p["type"] = "number"
 		case "date":
-			p["pattern"] = `^([0-9]{4}-[0-9]{2}-[0-9]{2}|today)$`
 			if strings.HasSuffix(desc, ")") {
 				desc = strings.TrimSuffix(desc, ")") + "; YYYY-MM-DD or today)"
 			} else {
@@ -104,19 +94,8 @@ func inputSchema(fields []siren.Field) (map[string]any, error) {
 		if len(f.Options) > 0 {
 			options := make([]any, 0, len(f.Options))
 			for _, option := range f.Options {
-				if f.Type == "number" {
-					var value any
-					decoder := json.NewDecoder(strings.NewReader(option))
-					decoder.UseNumber()
-					err := decoder.Decode(&value)
-					n, numeric := value.(json.Number)
-					if err != nil || !numeric || !json.Valid([]byte(option)) {
-						return nil, fmt.Errorf("invalid numeric option %q for %s", option, f.Name)
-					}
-					if _, err := strconv.ParseFloat(string(n), 64); err != nil {
-						return nil, fmt.Errorf("invalid numeric option %q for %s", option, f.Name)
-					}
-					options = append(options, n)
+				if f.Type == "number" { // the catalog's numbers parse: TestEveryNumericOptionIsANumber
+					options = append(options, json.Number(option))
 				} else {
 					options = append(options, option)
 				}
@@ -128,7 +107,7 @@ func inputSchema(fields []siren.Field) (map[string]any, error) {
 			req = append(req, f.Name)
 		}
 	}
-	return map[string]any{"type": "object", "properties": props, "required": req}, nil
+	return map[string]any{"type": "object", "properties": props, "required": req}
 }
 
 // arguments flattens a model's JSON arguments to the form values the API takes: a number as its JSON text, which the

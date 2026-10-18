@@ -37,14 +37,6 @@ func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
 	}
 }
 
-func TestToolsRefuseAnInvalidNumericOption(t *testing.T) {
-	for _, option := range []string{"oops", "null", "\"1\""} {
-		if _, err := inputSchema([]siren.Field{{Name: "done", Type: "number", Options: []string{option}}}); err == nil {
-			t.Fatalf("accepted %q", option)
-		}
-	}
-}
-
 func TestArgumentsFlattenToFormValues(t *testing.T) {
 	got, err := arguments([]byte(`{"day":"2031-05-14","mood":3,"value":72.50,"note":null}`))
 	if err != nil {

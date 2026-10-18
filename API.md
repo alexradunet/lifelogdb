@@ -78,7 +78,7 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 ### root
 
 `GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered with the
-[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
+[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse` (`/browse`), `people`
 (`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
 `year` (this year). Actions: `capture` (for today), `search`,

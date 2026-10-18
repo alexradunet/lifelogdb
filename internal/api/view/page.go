@@ -247,25 +247,16 @@ func (v *view) Link(rel string) string {
 }
 
 // LinksOf are the entity's links with that rel, in order.
-func (v *view) LinksOf(rel string) []siren.Link {
-	var out []siren.Link
-	for _, l := range v.Links {
-		if slices.Contains(l.Rel, rel) {
-			out = append(out, l)
-		}
-	}
-	return out
-}
+func (v *view) LinksOf(rel string) []siren.Link { return withRel(v.Links, rel) }
 
 // Embedded are the entity's embedded links with that rel.
-func (v *view) Embedded(rel string) []siren.Link {
+func (v *view) Embedded(rel string) []siren.Link { return withRel(v.Entities, rel) }
+
+func withRel(links []siren.Link, rel string) []siren.Link {
 	var out []siren.Link
-	for _, l := range v.Entities {
-		for _, r := range l.Rel {
-			if r == rel {
-				out = append(out, l)
-				break
-			}
+	for _, l := range links {
+		if slices.Contains(l.Rel, rel) {
+			out = append(out, l)
 		}
 	}
 	return out

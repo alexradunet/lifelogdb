@@ -571,7 +571,8 @@ func TestAReadingLinkWritesItsNumberAsNumDoes(t *testing.T) {
 // day=today on 2026-10-13. The next ones come on the next day: one says today again, and one names another day.
 func TestAReadingSentAgainLinksTheDayOfTheStoredReading(t *testing.T) {
 	now := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
-	c := client.InProcess(api.New(&core.Store{DB: dbtest.New(t), Clock: func() time.Time { return now }, Zone: time.UTC}), "cli")
+	h := api.New(&core.Store{DB: dbtest.New(t), Clock: func() time.Time { return now }, Zone: time.UTC})
+	c := client.InProcess(h, "cli")
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
@@ -588,5 +589,17 @@ func TestAReadingSentAgainLinksTheDayOfTheStoredReading(t *testing.T) {
 		if again.Title != "Already recorded" || apitest.Href(again, "day") != "/days/2026-10-13" {
 			t.Errorf("sent again with day=%s: %q links the day %q, want Already recorded with /days/2026-10-13", day, again.Title, apitest.Href(again, "day"))
 		}
+	}
+	// A browser's form sent again gets the redirect to the day with the toast, as a capture does.
+	form := url.Values{"metric": {"Weight"}, "day": {"2026-10-14"}, "value": {"72"}, "import_key": {"scale/browser"}}
+	if first := submit(h, "/measurements", form, ""); first.Code != http.StatusSeeOther {
+		t.Fatalf("the first form: %d, want 303", first.Code)
+	}
+	again := submit(h, "/measurements", form, "")
+	if again.Code != http.StatusSeeOther || withoutReceiptOrNot(again.Header().Get("Location")) != "/days/2026-10-14" {
+		t.Fatalf("the form sent again: %d %q, want 303 to /days/2026-10-14", again.Code, again.Header().Get("Location"))
+	}
+	if body := browse(t, h, again.Header().Get("Location")); !strings.Contains(body, "Already added. Nothing changed.") {
+		t.Errorf("the second send does not say Already added:\n%.400s", body)
 	}
 }

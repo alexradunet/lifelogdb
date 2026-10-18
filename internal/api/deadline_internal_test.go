@@ -54,6 +54,9 @@ func TestAnUploadHasALongContextAndAStallDeadline(t *testing.T) {
 	srv := httptest.NewServer(withDeadlines(limits{request: time.Minute, upload: time.Hour, stall: 200 * time.Millisecond}, next))
 	t.Cleanup(srv.Close)
 
+	// The pauses are real time, because the stall deadline is real time: a signal cannot stand for a clock that runs
+	// out. The margins are 3x each way: a pause of 60 ms is a third of the 200 ms stall time, and a stop of 600 ms is
+	// three times it. A slow machine can add delay to the first only if one read waits 140 ms more than planned.
 	send := func(contentType string, chunks int, pause time.Duration) {
 		t.Helper()
 		pr, pw := io.Pipe()

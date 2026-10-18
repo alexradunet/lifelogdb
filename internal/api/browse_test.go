@@ -722,7 +722,7 @@ func TestHomeLinksTheListsOfBrowse(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for rel, want := range map[string]string{
-		"browse": "/browse", "categories": "/browse", "people": "/browse?kind=person", "places": "/browse?kind=place",
+		"browse": "/browse", "people": "/browse?kind=person", "places": "/browse?kind=place",
 		"media": "/browse?kind=media", "files": "/browse?kind=document", "ghosts": "/browse?ghosts=1&kind=page", "metrics": "/metrics",
 	} {
 		if got := apitest.Href(root, rel); got != want {

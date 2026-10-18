@@ -30,13 +30,19 @@ func requestLimit(msg string) error {
 	return &core.Error{Status: http.StatusRequestEntityTooLarge, Msg: msg}
 }
 
+// isMultipart says whether the body of a request is a multipart form: an upload, with limits of its own.
+func isMultipart(r *http.Request) bool {
+	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return ct == "multipart/form-data"
+}
+
 // limitBody gives the body of a request that is not a multipart form the limit maxRequestBody. The limit has the
 // ResponseWriter of the server, so the server closes the connection after it answers a body that is larger, and
 // reads no other request from it. A multipart form has the limits of parseFileForm and no limit as a whole, because
 // an original has none.
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); ct != "multipart/form-data" && r.Body != nil {
+		if !isMultipart(r) && r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
 		}
 		next.ServeHTTP(w, r)
@@ -144,10 +150,8 @@ func number(v url.Values, name string) (*float64, error) {
 }
 
 // flag is a 0/1 field: false when it is empty.
-func flag(v url.Values, name string) (bool, error) { return flagValue(name, v.Get(name)) }
-
-func flagValue(name, s string) (bool, error) {
-	switch s {
+func flag(v url.Values, name string) (bool, error) {
+	switch v.Get(name) {
 	case "", "0":
 		return false, nil
 	case "1":

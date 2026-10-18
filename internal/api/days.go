@@ -26,8 +26,13 @@ type recentDay struct {
 	Picture string    `json:"picture,omitempty"`
 }
 
-// withMoods adds to each day entry the day's moods, and the address of its picture.
-func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]recentDay, error) {
+// recentDaysUpTo are the newest day pages up to today, the newest first, with their moods and the address of their
+// pictures.
+func (h *server) recentDaysUpTo(ctx context.Context, today string) ([]recentDay, error) {
+	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
+	if err != nil {
+		return nil, err
+	}
 	out := []recentDay{}
 	if len(entries) == 0 {
 		return out, nil
@@ -44,15 +49,6 @@ func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]rece
 		out = append(out, recentDay{DayEntry: d, Mood: moods[d.Day], Picture: pictureHref(d.Picture)})
 	}
 	return out, nil
-}
-
-// recentDaysUpTo are the newest day pages up to today, the newest first, with their moods.
-func (h *server) recentDaysUpTo(ctx context.Context, today string) ([]recentDay, error) {
-	entries, err := h.s.DayEntries(ctx, "0000-01-01", today, true, recentDays)
-	if err != nil {
-		return nil, err
-	}
-	return h.withMoods(ctx, entries)
 }
 
 // The root is the entry point of the API: the newest day pages, and every action that starts something. A browser's
@@ -80,7 +76,7 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
-			link("browse", siren.BrowseHref(nil), "Browse"), link("categories", siren.BrowseHref(nil), "Categories"), link("people", siren.BrowseKindHref("person"), "People"),
+			link("browse", siren.BrowseHref(nil), "Browse"), link("people", siren.BrowseKindHref("person"), "People"),
 			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", siren.GhostsHref(), "Ghost pages"), link("actions", "/actions", "All actions"),
 			link("calendar", siren.MonthHref(now), "Calendar"),

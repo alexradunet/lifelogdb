@@ -5,10 +5,10 @@ import "slices"
 // The groups of a search (docs/plans/130-the-explore-pass.md, part 6): with no kind, the hits of the page by kind, in
 // the order of the chips that the entity links (rel kind, class the kind; All first).
 
-// hitGroup is the hits of one kind on the page: the words of its chip, its kind, the address of its chip and its hits.
+// hitGroup is the hits of one kind on the page: the words of its chip, the address of its chip and its hits.
 type hitGroup struct {
-	Title, Kind, Href string
-	Hits              []any
+	Title, Href string
+	Hits        []any
 }
 
 // HitGroups are the hits of the page by kind, in the order of the kind links; a kind with no hit on the page has no
@@ -23,7 +23,7 @@ func (v *view) HitGroups() []hitGroup {
 		}
 		k := l.Class[0]
 		if i := slices.IndexFunc(byKind, func(b bucket) bool { return b.Key == k }); i >= 0 {
-			out = append(out, hitGroup{Title: l.Title, Kind: k, Href: l.Href, Hits: byKind[i].Items})
+			out = append(out, hitGroup{Title: l.Title, Href: l.Href, Hits: byKind[i].Items})
 		}
 	}
 	return out

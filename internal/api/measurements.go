@@ -13,7 +13,6 @@ import (
 	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
 	"lifelog/internal/core"
-	"lifelog/internal/text"
 )
 
 // recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
@@ -140,9 +139,6 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if to == "" {
 		to = today
 	}
-	if !text.IsDay(to) {
-		return nil, core.Invalid("to must be an exact day")
-	}
 	from := q.Get("from") // no lower bound: every admitted day through to
 	m, err := h.metricOf(ctx, name)
 	if err != nil {
@@ -265,7 +261,8 @@ func (h *server) record(r *http.Request, act spec, src string) (*siren.Entity, e
 		}
 		return &siren.Entity{Class: []string{"result"}, Title: "Already recorded",
 			Properties: map[string]any{"message": "a reading with this import_key was recorded before; nothing changed"},
-			Links:      []siren.Link{link("day", siren.DayHref(day), day), link("index", "/", "Home")}}, nil
+			Result:     map[string]any{"already": true},
+			Links:      []siren.Link{link("self", siren.DayHref(day), day), link("day", siren.DayHref(day), day), link("index", "/", "Home")}}, nil
 	}
 	return h.measurementEntity(r.Context(), id)
 }

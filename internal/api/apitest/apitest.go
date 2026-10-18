@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"testing"
 	"time"
 
@@ -77,10 +76,8 @@ func Action(t testing.TB, e *siren.Entity, name string) siren.Action {
 
 // Href returns the href of the link of e with the rel, or "" when e has no such link.
 func Href(e *siren.Entity, rel string) string {
-	for _, l := range e.Links {
-		if slices.Contains(l.Rel, rel) {
-			return l.Href
-		}
+	if l := e.LinkByRel(rel); l != nil {
+		return l.Href
 	}
 	return ""
 }
