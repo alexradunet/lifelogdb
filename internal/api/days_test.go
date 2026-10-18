@@ -315,8 +315,7 @@ func TestTheDayAndHomeCarryOnThisDay(t *testing.T) {
 		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": text}))
 	}
 	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
-	file := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"),
-		map[string]string{"title": "Lake.jpg", "day": older}, map[string]string{"original": jpg}))
+	file := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"), map[string]string{"title": "Lake.jpg", "day": older, "original": jpg}))
 	preview := apitest.Href(file, "preview")
 	for _, route := range []string{"/", "/days/" + fixedToday, "/days"} {
 		var got []string

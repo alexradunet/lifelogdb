@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 )
 
 // keepFile is `lifelog file PATH`: the add-file action with the original streamed from disk (hashed by the API,
@@ -19,9 +18,9 @@ func keepFile(ctx context.Context, e env, args []string) error {
 	if err != nil {
 		return err
 	}
-	vals := map[string]string{"title": o.file.title}
-	if o.file.title == "" {
-		vals["title"] = filepath.Base(args[0])
+	vals := map[string]string{"original": args[0]}
+	if o.file.title != "" {
+		vals["title"] = o.file.title
 	}
 	if o.file.text != "" {
 		b, err := os.ReadFile(o.file.text)
@@ -30,7 +29,7 @@ func keepFile(ctx context.Context, e env, args []string) error {
 		}
 		vals["body"] = string(b)
 	}
-	for k, v := range map[string]string{"mime": o.file.mime, "day": o.day, "category": o.file.category} {
+	for k, v := range map[string]string{"mime": o.file.mime, "day": o.day, "category": o.file.category, "preview": o.file.preview} {
 		if v != "" {
 			vals[k] = v
 		}
@@ -38,11 +37,7 @@ func keepFile(ctx context.Context, e env, args []string) error {
 	if o.file.dryRun {
 		vals["dry_run"] = "1"
 	}
-	files := map[string]string{"original": args[0]}
-	if o.file.preview != "" {
-		files["preview"] = o.file.preview
-	}
-	return show(e)(c.DoFiles(ctx, add, vals, files))
+	return show(e)(c.Do(ctx, add, vals))
 }
 
 // setCover is `lifelog cover PAGE-ID [PHOTO]`: the set-cover action, with a new photo streamed from disk (hashed by
@@ -61,12 +56,11 @@ func setCover(ctx context.Context, e env, args []string) error {
 	if o.file.title != "" {
 		vals["title"] = o.file.title
 	}
-	if len(args) == 1 {
-		return show(e)(c.Do(ctx, set, vals))
+	if len(args) == 2 {
+		vals["original"] = args[1]
+		if o.file.preview != "" {
+			vals["preview"] = o.file.preview
+		}
 	}
-	files := map[string]string{"original": args[1]}
-	if o.file.preview != "" {
-		files["preview"] = o.file.preview
-	}
-	return show(e)(c.DoFiles(ctx, set, vals, files))
+	return show(e)(c.Do(ctx, set, vals))
 }

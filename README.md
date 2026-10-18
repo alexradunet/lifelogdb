@@ -47,7 +47,6 @@ Code, Codex, OpenCode or Pi in the folder.
 
 ```
 lifelog snapshot                                   # the owner, before an import session
-lifelog readings "Ferritin results" Ferritin       # readings of a registered metric from the table of a page
 ```
 
 ## Decisions
@@ -62,7 +61,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   is reported as an error.
 - **Hypermedia (HATEOAS).** Every response is a Siren entity: properties, links, and the actions legal on that
   resource, with their fields prefilled (a page's `save-body` carries its body and `version`). `GET /actions` is
-  the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change.
+  the catalog; the CLI's `do` and the MCP tools are generated from it, so a new action needs no client change. A
+  browser cannot fill a path from a form, so `/actions` draws an action with path fields as a form of those fields,
+  and `GET /actions?new=<action>&id=12` answers with that action's href filled in and its form open: every action is
+  reachable in a browser ([plan 131](docs/plans/131-the-pareto-pass.md)). A file field takes the path of a local file
+  in the client (the CLI's `do`, the MCP tools), which streams it; a browser sends the file it picked.
   An error is an entity too: `status`, a `code` a client branches on (`stale_version`, `exists`, `not_found`, `snapshot_refused`, `restore_check_failed`,
   `invalid`, `cross_origin`, `token_required`, or the status's general name) and the message. A fault of the server (500
   `internal`) says only "internal error": the server's log has the cause. The lists `/days`,
@@ -116,7 +119,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a day's cover behind its square cell, under a veil of the parchment that keeps the words readable. The schema has no link for it, by the owner's choice (2026-10-15, again
   2026-10-17): an embed is how any page shows a picture, so every surface can set it. `set-cover` sets it: a new
   photo (the browser, and `lifelog cover PAGE-ID PHOTO`) or a kept picture by its title (`lifelog cover PAGE-ID
-  --title T`, and an agent, whose MCP tools carry no file).
+  --title T`, and an agent by either, a new photo by its path).
   `GET /pages/{id}/cover` is the picker: the kept pictures as tiles, each a form of its title, and the form of a new
   photo. The new photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
@@ -250,7 +253,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   lock while it runs, so an agent must not start it. `rebuild-search` (`POST /search/rebuild`) is the repair of the
   full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
   rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save
-  ([integrity checks](docs/contract/integrity-checks.md)). An agent that imports with the owner asks for them in the conversation.
+  ([integrity checks](docs/contract/integrity-checks.md)). `GET /integrity` offers `snapshot` and the two repairs, so
+  the owner reads what needs them and runs them on one page. An agent that imports with the owner asks for them in the conversation.
 - **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
   The owner's decision (2026-10-15): `ask`, the Conversations pages, the chat sidebar and the voice note are
   removed, with the model and transcriber endpoints they needed. The owner talks to `life.db` through a coding
@@ -311,7 +315,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   beside the list; on a phone it is a closed fold above the chips. Each kind keeps its row and its order: a person
   has a face, the mentions and the last day; media are tiles, newest day first, with the picture a file keeps or the
   icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
-  files, as rows. The ghost pages are a filter of Pages. The pick bar puts the checked rows in a category, and
+  files, as rows. The ghost pages are a filter of Pages, and so are the deleted (`deleted=1`), the newest
+  deletion first, each row opening its page, where Restore is. The pick bar puts the checked rows in a category, and
   deletes pages, media and documents. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
   Search, and it meets the things through its mentions (the owner's word, 2026-10-15); a day page is never filed
   ([D26](docs/decisions/D26-metric-categories.md)), so a day page's `link` does not offer `part-of`. The sidebar has Today, Calendar,
@@ -355,7 +360,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   re-encoded as a JPEG at quality 80 (lower only when it would pass 1 MB) with no metadata (no GPS). The contract
   allows 1600 px ([D9](docs/decisions/D09-binary-files.md)), which `preview.Check` holds; 1280 px at quality 80 is
   this writer's choice, about half the bytes ([plan 128](docs/plans/128-smaller-pictures.md)). A picture kept
-  before stays as it was: a JPEG encoded again loses more, and its original may be gone. An agent sends `sha256`, `mime` and the text. `![[Title]]` renders the
+  before stays as it was: a JPEG encoded again loses more, and its original may be gone. An agent sends the path of a local file, which the MCP server reads and sends, or `sha256`, `mime` and the text. A
+  file with no `title` takes its original's file name. `![[Title]]` renders the
   picture; `GET /pages/{id}/preview` and `GET /previews?title=` serve it. A photo's day comes from its EXIF
   (`internal/photo`: a JPEG's APP1, a HEIC's Exif item, read from the original's first megabyte); its position is
   never read ([D21](docs/decisions/D21-location-history.md), [plan 116](docs/plans/116-strip-to-the-core.md)).

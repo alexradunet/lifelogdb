@@ -567,10 +567,34 @@ func requireOwner(source string) error {
 	return nil
 }
 
-func (h *server) actions(*http.Request) (*siren.Entity, error) {
+// actions is the catalog: every action with its templated href. The action that new names is filled in instead,
+// when the query names a value for each of its path fields (GET /actions?new=rename&id=12): its href is then an
+// address that a form can post to. A browser cannot fill a path from a form, so this is how /actions offers every
+// action to a browser (docs/plans/131-the-pareto-pass.md).
+func (h *server) actions(r *http.Request) (*siren.Entity, error) {
+	q := r.URL.Query()
 	e := &siren.Entity{Class: []string{"actions"}, Title: "Actions", Links: []siren.Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
 	for _, s := range catalog {
+		if params, ok := pathValues(s, q); ok && s.Name == q.Get("new") {
+			e.Actions = append(e.Actions, action(s.Name, params, nil))
+			continue
+		}
 		e.Actions = append(e.Actions, templated(s))
 	}
 	return e, nil
+}
+
+// pathValues are the values that q names for the path fields of s, and whether it names a value for each one.
+func pathValues(s spec, q url.Values) (map[string]string, bool) {
+	params := map[string]string{}
+	for _, f := range s.Fields {
+		if f.In != "path" {
+			continue
+		}
+		if q.Get(f.Name) == "" {
+			return nil, false
+		}
+		params[f.Name] = q.Get(f.Name)
+	}
+	return params, true
 }

@@ -32,7 +32,7 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
 	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip"}))
 	scanPath, _ := jpegFile(t, "scan.jpg", 20, 20)
-	scan := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.jpg"}, map[string]string{"original": scanPath}))
+	scan := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.jpg", "original": scanPath}))
 	for _, e := range []*siren.Entity{ana, lake, trip} {
 		coverAction(t, e, apitest.Href(e, "self")+"/cover")
 		if apitest.Href(e, "choose-cover") != apitest.Href(e, "self")+"/cover" {
@@ -126,7 +126,7 @@ func TestTheCoverOfADay(t *testing.T) {
 		t.Errorf("a day with no day page offers a cover")
 	}
 	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
-	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": fixedToday}, map[string]string{"original": jpg}))
+	f := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": fixedToday, "original": jpg}))
 	day := apitest.Must(t)(c.Get(ctx, "/days/"+fixedToday))
 	if got := props(day)["cover"]; got == nil || str(got.(map[string]any)["title"]) != "Lake.jpg" {
 		t.Errorf("the day's cover = %v, want Lake.jpg", got)
@@ -150,7 +150,7 @@ func TestThePickerRefuses(t *testing.T) {
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
-	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": jpg}))
+	f := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "original": jpg}))
 	gone := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Gone"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, gone, "tombstone"), nil))
 	if apitest.Href(f, "choose-cover") != "" {
@@ -214,7 +214,7 @@ func TestTheOtherPicturesOfAPage(t *testing.T) {
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	for i, title := range []string{"A.jpg", "B.jpg"} {
 		jpg, _ := jpegFile(t, strings.ToLower(title), 40, 30+i) // another size: another original
-		apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": title}, map[string]string{"original": jpg}))
+		apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": title, "original": jpg}))
 	}
 	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "![[A.jpg]]\n\nSwam. ![[B.jpg]]"}))
 	self := apitest.Href(trip, "self")
@@ -247,7 +247,7 @@ func TestTheCalendarShowsTheCovers(t *testing.T) {
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	jpg, _ := jpegFile(t, "lake.jpg", 40, 30)
-	f := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": "2031-05-02"}, map[string]string{"original": jpg}))
+	f := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "day": "2031-05-02", "original": jpg}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/days/2031-05-01")), "capture"), map[string]string{"text": "No photo."}))
 	pictures := func(path string) map[string]string {
 		t.Helper()

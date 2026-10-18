@@ -19,16 +19,16 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	add := apitest.Action(t, root, "add-file")
 	jpg := func(name string, w, h int) string { p, _ := jpegFile(t, name, w, h); return p }
-	photo := apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Lake.jpg", "day": "2031-05-10"}, map[string]string{"original": jpg("lake.jpg", 40, 30)}))
+	photo := apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Lake.jpg", "day": "2031-05-10", "original": jpg("lake.jpg", 40, 30)}))
 	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Walk.mp4", "sha256": strings.Repeat("ab", 32), "mime": "video/mp4", "day": "2031-05-12"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "Walked. [[Walk.mp4]]"}))
 	for i, title := range []string{"Memo 1.m4a", "Memo 2.m4a"} {
 		apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": title, "sha256": strings.Repeat(string(rune('c'+i))+"d", 32), "mime": "audio/mp4", "day": "2031-05-0" + string(rune('1'+i))}))
 	}
 	// A photo with no EXIF and no day has no day of its own: the day page that shows it gives it one, or it has none.
-	apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Dawn.jpg"}, map[string]string{"original": jpg("dawn.jpg", 32, 24)}))
+	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Dawn.jpg", "original": jpg("dawn.jpg", 32, 24)}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "capture"), map[string]string{"text": "![[Dawn.jpg]]"}))
-	apitest.Must(t)(c.DoFiles(ctx, add, map[string]string{"title": "Blank.jpg"}, map[string]string{"original": jpg("blank.jpg", 24, 16)}))
+	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Blank.jpg", "original": jpg("blank.jpg", 24, 16)}))
 	apitest.Must(t)(c.Do(ctx, add, map[string]string{"title": "Scan.pdf", "sha256": strings.Repeat("ef", 32), "mime": "application/pdf"}))
 
 	e := apitest.Must(t)(c.Get(ctx, "/browse?kind=media"))
@@ -174,7 +174,7 @@ func TestMediaIsEmptyUntilAFileOfItsKindsIsKept(t *testing.T) {
 	// And the other way round: a photo alone leaves the documents empty.
 	c, h, _ = apitest.Fresh(t, "cli")
 	path, _ := jpegFile(t, "lake.jpg", 40, 30)
-	apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "add-file"), map[string]string{"title": "Lake.jpg", "original": path}))
 	if e := apitest.Must(t)(c.Get(ctx, "/browse?kind=document")); len(e.Entities) != 0 {
 		t.Errorf("the documents: %+v", e.Entities)
 	}

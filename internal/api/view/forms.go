@@ -76,6 +76,7 @@ type formView struct {
 	Back          string
 	Refused       bool          // the form a refusal came from: open, filled, described by the alert, with no focus
 	Asked         bool          // the form the page's link asked for (?new=<name>): open
+	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
 	Primary       bool          // the button is the primary one: a form with fields to fill
 	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
 	Shown         []siren.Field // the fields most writes need
@@ -230,6 +231,10 @@ func formOf(x any, opts ...string) (*formView, error) {
 		return nil, nil
 	}
 	a := &c.Action
+	opens := false
+	if o := opener(*a); o != nil {
+		a, opens = o, true
+	}
 	o, err := parseFormOptions(opts)
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
@@ -270,6 +275,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 		}
 	}
 	f.Primary = len(f.Shown)+len(f.More) > 0
+	f.Opens = opens
 	f.Asked = c.asked
 	if c.asked && !o.hasAutofocus && len(f.Shown) > 0 { // a form the reader asked for starts in its first field
 		f.Focus = f.Shown[0].Name
@@ -278,6 +284,26 @@ func formOf(x any, opts ...string) (*formView, error) {
 		f.Focus = ""
 	}
 	return f, nil
+}
+
+// opener is the form of a templated action that has path fields (GET /actions): a browser cannot fill a path, so
+// the form is a GET of /actions that names the action in new and sends its path fields. /actions then answers with
+// the action's href filled in, and its form open. Nil when a has no path field.
+func opener(a siren.Action) *siren.Action {
+	var path []siren.Field
+	for _, f := range a.Fields {
+		if f.In == "path" {
+			f.In = ""
+			path = append(path, f)
+		}
+	}
+	if path == nil {
+		return nil
+	}
+	o := a
+	o.Method, o.Href, o.Type, o.Danger = "GET", "/actions", "", false
+	o.Fields = append([]siren.Field{{Name: "new", Type: "hidden", Value: a.Name}}, path...)
+	return &o
 }
 
 // segmented reports a field the browser draws as a Segmented choice of the design system, a row of radio buttons:

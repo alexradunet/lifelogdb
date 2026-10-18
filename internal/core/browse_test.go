@@ -232,10 +232,10 @@ func TestBrowseCountsEachKindInEachScope(t *testing.T) {
 		sc   Scope
 		want map[string]int
 	}{
-		{"everything", Scope{}, map[string]int{"page": 7, "person": 2, "place": 2, "media": 2, "document": 2, "metric": 3, "all": 18, "ghosts": 0}},
-		{"in Family", Scope{In: ids["Family"]}, map[string]int{"page": 2, "person": 1, "place": 0, "media": 1, "document": 1, "metric": 0, "all": 5, "ghosts": 0}},
-		{"in Work", Scope{In: ids["Work"]}, map[string]int{"page": 1, "person": 0, "place": 1, "media": 0, "document": 0, "metric": 1, "all": 3, "ghosts": 0}},
-		{"not filed", Scope{Unfiled: true}, map[string]int{"page": 1, "person": 1, "place": 1, "media": 1, "document": 1, "metric": 2, "all": 7, "ghosts": 0}},
+		{"everything", Scope{}, map[string]int{"page": 7, "person": 2, "place": 2, "media": 2, "document": 2, "metric": 3, "all": 18, "ghosts": 0, "deleted": 1}},
+		{"in Family", Scope{In: ids["Family"]}, map[string]int{"page": 2, "person": 1, "place": 0, "media": 1, "document": 1, "metric": 0, "all": 5, "ghosts": 0, "deleted": 1}},
+		{"in Work", Scope{In: ids["Work"]}, map[string]int{"page": 1, "person": 0, "place": 1, "media": 0, "document": 0, "metric": 1, "all": 3, "ghosts": 0, "deleted": 1}},
+		{"not filed", Scope{Unfiled: true}, map[string]int{"page": 1, "person": 1, "place": 1, "media": 1, "document": 1, "metric": 2, "all": 7, "ghosts": 0, "deleted": 1}},
 	} {
 		got, err := s.BrowseCounts(ctx, tc.sc)
 		if err != nil || !maps.Equal(got, tc.want) {

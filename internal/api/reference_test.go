@@ -27,7 +27,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"root": map[string]any{"today": "", "recent": []recentDay{}, "on_this_day": []recentDay{}, "recent_titles": []string{}},
 		"days": map[string]any{"today": "", "before": "", "limit": 0, "offset": 0, "cards": []dayCard{}, "on_this_day": []recentDay{},
 			"years": []yearJump{}, "months": []monthJump{}},
-		"browse": map[string]any{"kind": "", "in": browseIn{}, "unfiled": false, "ghosts": false, "media": "", "counts": browseCounts{},
+		"browse": map[string]any{"kind": "", "in": browseIn{}, "unfiled": false, "ghosts": false, "deleted": false, "media": "", "counts": browseCounts{},
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
 		"search":                    map[string]any{"q": "", "order": "", "kind": "", "counts": map[string]int{}, "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
@@ -86,7 +86,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"day", "/days/2031-05-01"}, {"page, person, place, file", ids["page"]}, {"page, person, place, file", ids["person"]},
 		{"page, person, place, file", ids["place"]}, {"page, person, place, file", ids["file"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
-		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"},
+		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"},
 		{"integrity", "/integrity"}, {"cover-choice", ids["page"] + "/cover"},
 		{"month", "/months/2031-05"}, {"week", "/weeks/2031-W18"}, {"year", "/years/2031"},
 	}

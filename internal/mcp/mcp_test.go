@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,6 +18,7 @@ import (
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
+	"lifelog/internal/photo/phototest"
 )
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
@@ -428,5 +431,20 @@ func TestMCPExactResponseNumbers(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// TestAnAgentKeepsAPhotoByItsPath: the tool add_file sends a local file that the agent names by its path, so its
+// picture is kept (docs/plans/131-the-pareto-pass.md, part 1).
+func TestAnAgentKeepsAPhotoByItsPath(t *testing.T) {
+	c := mcpTestClient(t)
+	session, ctx := numericSession(t, c)
+	path := filepath.Join(t.TempDir(), "IMG_0007.jpg")
+	if err := os.WriteFile(path, phototest.JPEG(40, 30), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	page := callTool(t, ctx, session, "add_file", map[string]any{"original": path})
+	if page.Title != "IMG_0007.jpg" || page.LinkByRel("preview") == nil {
+		t.Fatalf("add_file kept %q with the links %v, want IMG_0007.jpg with its picture", page.Title, page.Links)
 	}
 }

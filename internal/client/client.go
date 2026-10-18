@@ -100,10 +100,11 @@ func (c *Client) Get(ctx context.Context, href string) (*siren.Entity, error) {
 	return c.send(req)
 }
 
-// fill is an action's href with its path fields filled, and its other field values (file fields are DoFiles').
-func fill(a siren.Action, values map[string]string) (string, url.Values, error) {
+// fill is an action's href with its path fields filled, its other field values as a form, and its file fields (field
+// name → path of a local file).
+func fill(a siren.Action, values map[string]string) (string, url.Values, map[string]string, error) {
 	href := a.Href
-	form := url.Values{}
+	form, files := url.Values{}, map[string]string{}
 	for _, f := range a.Fields {
 		v, ok := values[f.Name]
 		if !ok && f.Value != nil {
@@ -111,12 +112,12 @@ func fill(a siren.Action, values map[string]string) (string, url.Values, error) 
 		}
 		switch {
 		case f.Type == "file":
-			if ok {
-				return "", nil, fmt.Errorf("%s: %s is a file, sent with DoFiles", a.Name, f.Name)
+			if ok && v != "" {
+				files[f.Name] = v
 			}
 		case f.In == "path":
 			if !ok {
-				return "", nil, fmt.Errorf("%s needs %s", a.Name, f.Name)
+				return "", nil, nil, fmt.Errorf("%s needs %s", a.Name, f.Name)
 			}
 			href = strings.ReplaceAll(href, "{"+f.Name+"}", url.PathEscape(v))
 		case ok:
@@ -125,27 +126,43 @@ func fill(a siren.Action, values map[string]string) (string, url.Values, error) 
 	}
 	for k := range values {
 		if !hasField(a, k) {
-			return "", nil, fmt.Errorf("%s has no field %q", a.Name, k)
+			return "", nil, nil, fmt.Errorf("%s has no field %q", a.Name, k)
 		}
 	}
-	return href, form, nil
+	return href, form, files, nil
 }
 
-// DoFiles submits an action as multipart/form-data: values as fields, and files (field name → path on disk)
-// streamed from disk, never held whole in memory.
-func (c *Client) DoFiles(ctx context.Context, a siren.Action, values, files map[string]string) (*siren.Entity, error) {
+// Do submits an action with field values. Fields of a templated href ({id}) are filled from values. The value of a
+// file field is the path of a local file: the action is then sent as multipart/form-data, the file streamed from
+// disk, never held whole in memory.
+func (c *Client) Do(ctx context.Context, a siren.Action, values map[string]string) (*siren.Entity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	href, form, err := fill(a, values)
+	href, form, files, err := fill(a, values)
 	if err != nil {
 		return nil, err
 	}
-	for name := range files {
-		if !hasField(a, name) {
-			return nil, fmt.Errorf("%s has no field %q", a.Name, name)
+	if len(files) > 0 {
+		return c.multipart(ctx, a.Method, href, form, files)
+	}
+	var req *http.Request
+	if a.Method == "GET" {
+		req, err = http.NewRequestWithContext(ctx, "GET", c.base+href+"?"+form.Encode(), nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, a.Method, c.base+href, strings.NewReader(form.Encode()))
+		if req != nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 	}
+	if err != nil {
+		return nil, err
+	}
+	return c.send(req)
+}
+
+// multipart sends form and files (field name → path on disk) as multipart/form-data, each file streamed from disk.
+func (c *Client) multipart(ctx context.Context, method, href string, form url.Values, files map[string]string) (*siren.Entity, error) {
 	pr, pw := io.Pipe()
 	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { pr.CloseWithError(ctx.Err()); pw.CloseWithError(ctx.Err()) })
@@ -184,7 +201,7 @@ func (c *Client) DoFiles(ctx context.Context, a siren.Action, values, files map[
 			return mw.Close()
 		}())
 	}()
-	req, err := http.NewRequestWithContext(ctx, a.Method, c.base+href, pr)
+	req, err := http.NewRequestWithContext(ctx, method, c.base+href, pr)
 	if err != nil {
 		return nil, err
 	}
@@ -194,30 +211,6 @@ func (c *Client) DoFiles(ctx context.Context, a siren.Action, values, files map[
 		return nil, ctx.Err()
 	}
 	return e, err
-}
-
-// Do submits an action with field values. Fields of a templated href ({id}) are filled from values.
-func (c *Client) Do(ctx context.Context, a siren.Action, values map[string]string) (*siren.Entity, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	href, form, err := fill(a, values)
-	if err != nil {
-		return nil, err
-	}
-	var req *http.Request
-	if a.Method == "GET" {
-		req, err = http.NewRequestWithContext(ctx, "GET", c.base+href+"?"+form.Encode(), nil)
-	} else {
-		req, err = http.NewRequestWithContext(ctx, a.Method, c.base+href, strings.NewReader(form.Encode()))
-		if req != nil {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	return c.send(req)
 }
 
 func hasField(a siren.Action, name string) bool {

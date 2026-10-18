@@ -68,7 +68,7 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	jpg, _ := jpegFile(t, "ana.jpg", 40, 30)
-	photo := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Ana face.jpg"}, map[string]string{"original": jpg}))
+	photo := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Ana face.jpg", "original": jpg}))
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "![[Ana face.jpg]]\n\nMet at school."}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Sam"}))

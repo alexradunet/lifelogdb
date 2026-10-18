@@ -18,7 +18,7 @@ and this page disagree, so a property here is a property on the wire.
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
-  for `add-file` and `set-picture`, `multipart/form-data`.
+  for `add-file` and `set-cover`, `multipart/form-data`.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
   on this server.
@@ -122,7 +122,9 @@ the page of today, and a receipt of feedback goes with it. Links: `today`, `days
 
 ### actions
 
-`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs.
+`GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With `new=<action>` and a value
+for each path field of that action (`/actions?new=rename&id=12`), that one action has its `href` filled in, as a
+resource offers it; a browser, which cannot fill a path from a form, opens an action so.
 
 ### days
 
@@ -193,25 +195,28 @@ with the category tree beside them. The query, all optional:
 - `unfiled`: `0` or `1`: only what is in no category. A deleted category is not one: what is filed only there is in
   no category.
 - `ghosts`: `0` or `1`: only the rows of the `ghost_pages` view, a day page left out.
+- `deleted`: `0` or `1`: only the tombstones, of any type, a day page among them: each row opens its page, which
+  offers `revive`.
 - `media`: `image`, `video` or `audio`: one media kind.
 - `limit` and `offset`: as every list; 200 and 0 by default.
 
 A combination with no meaning is refused (422): `all` without `in`; `in` with `unfiled`; `ghosts` with a kind other
-than `page`, or with `in` or `unfiled`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
+than `page`, or with `in` or `unfiled`; `deleted` with a kind, `in`, `unfiled` or `ghosts`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
 that cannot be a category (a person, a place, a file, a metric or a day) is a 422, and of a deleted page a 409.
 A page is a plain page: a day page is in no list. Media and documents are the files, split by the first part of their
 type. Orders: pages, people, places and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
-first, then by title; ghosts oldest first.
+first, then by title; ghosts oldest first; the deleted the newest deletion first.
 
 A category is a page that something is `part-of` (D26). Each row is an embedded `item` link (class: the row's
 `type`), and each category of the tree an embedded `category` link to Browse in that category (it keeps a `kind` the
 query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, a `kind` link for each chip (class:
-its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, with `kind=media` also `pictures`,
+its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, `deleted`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 with `category` filled inside a category: each of them makes the thing and files it there in one write, and a
 refusal of either step writes nothing; `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
-too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts.
+too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts. The deleted
+offer no action.
 
 | property | type | meaning |
 |---|---|---|
@@ -222,6 +227,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `in.path` | string | its path in the tree, or its title when nothing is filed in it |
 | `unfiled` | boolean | the list is of what is in no category |
 | `ghosts` | boolean | the list is of the ghost pages |
+| `deleted` | boolean | the list is of the tombstones |
 | `media` | string | the media kind read, or `""` |
 | `counts` | object | the live things of each kind in the scope of the list (everything, the category, or no category) |
 | `counts.page` | integer | the plain pages |
@@ -232,6 +238,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `counts.metric` | integer | the metrics |
 | `counts.all` | integer | inside a category only: the sum of the kinds |
 | `counts.ghosts` | integer | the rows of `ghost_pages`, in any scope |
+| `counts.deleted` | integer | the tombstones, in any scope |
 | `media_counts` | object | `kind=media` only: the live files of each media kind in the scope of the list, whatever `media` this page reads |
 | `media_counts.image` | integer | the pictures |
 | `media_counts.video` | integer | the videos |
@@ -245,7 +252,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `rows[].id` | integer | the page's id |
 | `rows[].title` | string | its title |
 | `rows[].type` | string | its `entity_type` |
-| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric` |
+| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric`; in the list of the deleted, its `entity_type` |
 | `rows[].category` | boolean | a page that is a category; absent otherwise |
 | `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
 | `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
@@ -254,6 +261,7 @@ too), `media` and `document`; `random-page` with `kind` filled with the kind of 
 | `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
 | `rows[].day` | string | a file (not in `all`): its day (the day given, a photo's EXIF day, else the day it was kept), else the day of the newest live day page that shows it; absent when it has neither |
 | `rows[].unit` | string | a metric: its unit; absent for a count or a habit |
+| `rows[].deleted_at` | instant | the list of the deleted only: when it was deleted |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
@@ -634,7 +642,7 @@ page title, made when missing): one write makes the metric and files it. A refus
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `snapshot`, `rebuild-search` and `resync-links`.
 
 | property | type | meaning |
 |---|---|---|

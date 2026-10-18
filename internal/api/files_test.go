@@ -39,7 +39,7 @@ func props(e *siren.Entity) map[string]any { p, _ := e.Properties.(map[string]an
 func TestAPictureThatCannotBeSentIsLogged(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	path, _ := jpegFile(t, "IMG_0001.JPG", 64, 48)
-	e, err := c.DoFiles(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"), map[string]string{"title": "Lake.jpg"}, map[string]string{"original": path})
+	e, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file"), map[string]string{"title": "Lake.jpg", "original": path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	add := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file")
 	path, sum := jpegFile(t, "IMG_0001.JPG", 2400, 1800)
-	e, err := c.DoFiles(t.Context(), add, map[string]string{"title": "2026-10-04 Lake.jpg", "body": "The lake with [[Sam]]."}, map[string]string{"original": path})
+	e, err := c.Do(t.Context(), add, map[string]string{"title": "2026-10-04 Lake.jpg", "body": "The lake with [[Sam]].", "original": path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestAddFileKeepsAPhotoAndItsPicture(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("a title with no picture: %d", rec.Code)
 	}
-	again, err := c.DoFiles(t.Context(), add, map[string]string{"title": "Another name.jpg"}, map[string]string{"original": path})
+	again, err := c.Do(t.Context(), add, map[string]string{"title": "Another name.jpg", "original": path})
 	if res, _ := again.Result.(map[string]any); err != nil || res["existing"] != true || apitest.Href(again, "self") != apitest.Href(e, "self") {
 		t.Errorf("the same original again: %v %+v", err, again.Result)
 	}
@@ -115,16 +115,16 @@ func TestAddFileFromAnAgentAndWithAPicture(t *testing.T) {
 	// a format lifelog cannot read keeps no picture until one is sent with the same original
 	heic := filepath.Join(t.TempDir(), "IMG_0002.HEIC")
 	os.WriteFile(heic, []byte("not really a HEIC, but its bytes are hashed"), 0o644)
-	e = apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "IMG_0002.HEIC"}, map[string]string{"original": heic}))
+	e = apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "IMG_0002.HEIC", "original": heic}))
 	if file, _ := props(e)["file"].(map[string]any); file["mime"] != "image/heic" || file["preview"] != false {
 		t.Fatalf("a HEIC: %+v", props(e))
 	}
 	frame, _ := jpegFile(t, "frame.jpg", 300, 200)
-	e = apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "IMG_0002.HEIC"}, map[string]string{"original": heic, "preview": frame}))
+	e = apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "IMG_0002.HEIC", "original": heic, "preview": frame}))
 	if res, _ := e.Result.(map[string]any); res["preview_added"] != true || apitest.Href(e, "preview") == "" {
 		t.Errorf("a picture sent later: %+v", e.Result)
 	}
-	if _, err := c.DoFiles(t.Context(), add, map[string]string{"title": "x", "sha256": strings.Repeat("0", 64)}, map[string]string{"original": heic}); err == nil {
+	if _, err := c.Do(t.Context(), add, map[string]string{"title": "x", "sha256": strings.Repeat("0", 64), "original": heic}); err == nil {
 		t.Error("a sha256 that is not the original's was accepted")
 	}
 }
@@ -137,7 +137,7 @@ func TestAddFileKeepsMalformedHEIFWithUnknownMetadata(t *testing.T) {
 	if err := os.WriteFile(heic, overflow, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	e := apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "bad.HEIC", "body": "kept despite bad metadata"}, map[string]string{"original": heic}))
+	e := apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "bad.HEIC", "body": "kept despite bad metadata", "original": heic}))
 	file, _ := props(e)["file"].(map[string]any)
 	res, _ := e.Result.(map[string]any)
 	if file["mime"] != "image/heic" || file["preview"] != false || props(e)["body"] != "kept despite bad metadata" {
@@ -152,7 +152,7 @@ func TestFileViews(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	path, _ := jpegFile(t, "lake.jpg", 40, 30)
-	f := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn"}, map[string]string{"original": path}))
+	f := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "Lake.jpg", "body": "dawn", "original": path}))
 	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Swam. ![[Lake.jpg|the lake]]"}))
 	for path, want := range map[string][]string{
 		"/browse?kind=document": {`enctype="multipart/form-data"`, `type="file" name="original"`, `type="hidden" name="sha256"`},
@@ -187,7 +187,7 @@ func TestAPhotosDay(t *testing.T) {
 	}
 	add := apitest.Action(t, root, "add-file")
 	jpg := write("IMG_1.jpg", phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: "2019-06-03 07:41:12"}, true))
-	e := apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-03 IMG_1.jpg"}, map[string]string{"original": jpg}))
+	e := apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "2019-06-03 IMG_1.jpg", "original": jpg}))
 	res, _ := e.Result.(map[string]any)
 	if res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" || res["place"] != nil || res["unmatched"] != nil {
 		t.Fatalf("a photo with a day: %+v", res)
@@ -198,7 +198,7 @@ func TestAPhotosDay(t *testing.T) {
 	}
 	// a HEIC: no picture, no embed, its day still read
 	heic := write("IMG_2.HEIC", phototest.HEIF(photo.Meta{Taken: "2019-06-04 10:00:00"}, phototest.Layout{Version: 1}))
-	e = apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "2019-06-04 IMG_2.HEIC"}, map[string]string{"original": heic}))
+	e = apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "2019-06-04 IMG_2.HEIC", "original": heic}))
 	res, _ = e.Result.(map[string]any)
 	if res["day"] != "2019-06-04" || res["embedded"] == true {
 		t.Fatalf("a HEIC: %+v", res)
@@ -213,7 +213,7 @@ func TestPromotedFileDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, _ := jpegFile(t, "lake.jpg", 40, 30)
-	e := apitest.Must(t)(c.DoFiles(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "lake.jpg", "day": "2026-10-04"}, map[string]string{"original": path}))
+	e := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "lake.jpg", "day": "2026-10-04", "original": path}))
 	res, _ := e.Result.(map[string]any)
 	if res["promoted"] != true || props(e)["entity_type"] != "file" || props(e)["title"] != "Lake.jpg" || props(e)["day"] != "2026-10-04" {
 		t.Fatalf("promoted file: result %+v props %+v", res, props(e))
@@ -236,7 +236,7 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	add := apitest.Action(t, root, "add-file")
 	path, _ := jpegFile(t, "x.jpg", 40, 30)
-	e := apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "x.jpg", "dry_run": "1"}, map[string]string{"original": path}))
+	e := apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "x.jpg", "dry_run": "1", "original": path}))
 	if res, _ := e.Result.(map[string]any); !strings.Contains(strings.Join(e.Class, ","), "dry-run") || res == nil || res["id"] != nil {
 		t.Errorf("a dry run: %+v %+v", e.Class, e.Result)
 	}
@@ -248,7 +248,7 @@ func TestAddFileDryRunWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, _ = jpegFile(t, "dry.jpg", 40, 30)
-	e = apitest.Must(t)(c.DoFiles(t.Context(), add, map[string]string{"title": "dry.jpg", "day": "2026-10-04", "dry_run": "1"}, map[string]string{"original": path}))
+	e = apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "dry.jpg", "day": "2026-10-04", "dry_run": "1", "original": path}))
 	if res, _ := e.Result.(map[string]any); res["promoted"] != true || res["id"] != nil {
 		t.Errorf("a dry-run promotion report: %+v", e.Result)
 	}
@@ -309,7 +309,7 @@ func TestAutomaticEmbedAPIRefusal(t *testing.T) {
 	add := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file")
 	path, _ := jpegFile(t, "Lake [1].jpg", 40, 30)
 	for _, dry := range []string{"1", "0"} {
-		_, err := c.DoFiles(t.Context(), add, map[string]string{"title": "Lake [1].jpg", "day": "2026-10-04", "dry_run": dry}, map[string]string{"original": path})
+		_, err := c.Do(t.Context(), add, map[string]string{"title": "Lake [1].jpg", "day": "2026-10-04", "dry_run": dry, "original": path})
 		if apitest.Status(err) != 422 {
 			t.Fatalf("dry=%s: %v", dry, err)
 		}
@@ -412,5 +412,21 @@ func TestPhotoDaySyncJSONAndBrowserReceipt(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestAFileIsTitledByItsNameWhenNoTitleIsSent: add-file with an original and no title takes the original's file name,
+// on every surface that sends the original (docs/plans/131-the-pareto-pass.md, part 1). A sha256 has no name: with no
+// title it is refused, and nothing is kept.
+func TestAFileIsTitledByItsNameWhenNoTitleIsSent(t *testing.T) {
+	c, _, _ := apitest.Fresh(t, "cli")
+	add := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "add-file")
+	path, _ := jpegFile(t, "IMG_0042.jpg", 32, 24)
+	if got := apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"original": path})).Title; got != "IMG_0042.jpg" {
+		t.Errorf("the file is titled %q, want its name IMG_0042.jpg", got)
+	}
+	_, err := c.Do(t.Context(), add, map[string]string{"sha256": strings.Repeat("a", 64), "mime": "image/jpeg"})
+	if apitest.Status(err) != http.StatusUnprocessableEntity {
+		t.Errorf("a sha256 with no title: %v, want 422", err)
 	}
 }

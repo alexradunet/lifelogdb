@@ -6,8 +6,8 @@
      is no script. Each kind keeps its row: a face for a person, a tile for media, a row for the rest. The pick bar
      offers what the list offers. */}}
 {{define "browse"}}{{template "head" .}}{{$p := .Props}}{{$c := $p.counts}}
-{{$where := "Everything"}}{{if $p.ghosts}}{{$where = "Ghost pages"}}{{else if $p.unfiled}}{{$where = "Not filed"}}{{else if $p.in}}{{$where = printf "In %s" (crumbs $p.in.path)}}{{end}}
-<header class="page-head"><div class="what"><h1>Browse</h1><p class="sub"><span>{{$where}}</span>{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
+{{$where := "Everything"}}{{if $p.deleted}}{{$where = "Deleted"}}{{else if $p.ghosts}}{{$where = "Ghost pages"}}{{else if $p.unfiled}}{{$where = "Not filed"}}{{else if $p.in}}{{$where = printf "In %s" (crumbs $p.in.path)}}{{end}}
+<header class="page-head"><div class="what"><h1>Browse</h1><p class="sub"><span>{{$where}}</span>{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if $p.deleted}}<span>Open one to restore it.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
 <div class="tools">
 {{with .Action "create-page"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
@@ -21,10 +21,12 @@
 <details class="browse-fold panel"><summary>Categories <span class="meta">{{$where}}</span></summary>{{template "browse-tree" .}}</details>
 <nav class="kinds chips" aria-label="Kind">{{range .LinksOf "kind"}}{{$k := index .Class 0}}<a href="{{.Href}}"{{if eq $k $p.kind}} aria-current="page"{{end}}>{{.Title}} <small>{{num (index $c $k)}}</small></a>{{end}}</nav>
 {{if eq $p.kind "media"}}<nav class="kinds" aria-label="Media kind">{{range .LinksOf "kind"}}{{if eq (index .Class 0) "media"}}<a href="{{.Href}}"{{if not $p.media}} aria-current="page"{{end}}>All media</a>{{end}}{{end}}<a href="{{.Link "pictures"}}"{{if eq $p.media "image"}} aria-current="page"{{end}}>Pictures</a><a href="{{.Link "videos"}}"{{if eq $p.media "video"}} aria-current="page"{{end}}>Videos</a><a href="{{.Link "recordings"}}"{{if eq $p.media "audio"}} aria-current="page"{{end}}>Recordings</a></nav>{{end}}
-{{if and (eq $p.kind "page") (not $p.ghosts) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a></p>{{end}}
+{{if and (eq $p.kind "page") (not $p.ghosts) (not $p.deleted) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a><a href="{{.Link "deleted"}}">Deleted {{num $c.deleted}}</a></p>{{end}}
 {{$file := .Action "file-pages"}}{{$del := .Action "tombstone-pages"}}{{$pick := or $file $del}}
 {{$list := .BrowseList}}
-{{if or $list.Folders $list.Rows $list.Letters}}<div class="sheet list{{if $pick}} pick-list{{end}}">
+{{if $p.deleted}}{{with $p.rows}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.type}}</span> deleted {{$.When .deleted_at}}</span></a></li>{{end}}</ul></div>
+{{else}}<p class="empty">Nothing is deleted.</p>{{end}}
+{{else if or $list.Folders $list.Rows $list.Letters}}<div class="sheet list{{if $pick}} pick-list{{end}}">
 {{with $list.Folders}}<details class="folders" open><summary>Categories <small>{{len .}}</small></summary>
 <ul class="plain folder-tiles">{{range .}}<li class="folder{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" .}}{{end}}<a class="folder-link" href="{{.href}}">{{icon "browse"}}<span class="first">{{.title}}</span><span class="meta">{{.count}}</span></a></li>
 {{end}}</ul></details>{{end}}

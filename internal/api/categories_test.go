@@ -262,7 +262,7 @@ func TestANewThingIsFiledWhereItIsMadeOverHTTP(t *testing.T) {
 	if err := os.WriteFile(path, []byte("a synthetic memo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	memo := apitest.Must(t)(c.DoFiles(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "memo.txt", "category": "Papers"}, map[string]string{"original": path}))
+	memo := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "memo.txt", "category": "Papers", "original": path}))
 	if got := partOfLinks(memo); strings.Join(got, ",") != "Papers" {
 		t.Errorf("memo.txt (multipart) is part-of %v, want Papers", got)
 	}

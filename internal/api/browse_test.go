@@ -258,7 +258,7 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		t.Helper()
 		m := props(apitest.Must(t)(c.Get(ctx, path)))["counts"].(map[string]any)
 		var out []string
-		for _, k := range []string{"page", "person", "place", "media", "document", "metric", "all", "ghosts"} {
+		for _, k := range []string{"page", "person", "place", "media", "document", "metric", "all", "ghosts", "deleted"} {
 			if v, ok := m[k]; ok {
 				out = append(out, fmt.Sprintf("%s=%v", k, v))
 			}
@@ -269,11 +269,11 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	for _, tc := range []struct{ path, want string }{
-		{"/browse", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0"},
-		{"/browse?kind=media", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0"},
-		{"/browse?in=Family", "page=2 person=1 place=0 media=1 document=1 metric=0 all=5 ghosts=0"},
-		{"/browse?in=Cousins&kind=page", "page=1 person=0 place=0 media=0 document=0 metric=1 all=2 ghosts=0"},
-		{"/browse?unfiled=1&kind=person", "page=1 person=1 place=1 media=1 document=0 metric=1 ghosts=0"},
+		{"/browse", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0 deleted=0"},
+		{"/browse?kind=media", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0 deleted=0"},
+		{"/browse?in=Family", "page=2 person=1 place=0 media=1 document=1 metric=0 all=5 ghosts=0 deleted=0"},
+		{"/browse?in=Cousins&kind=page", "page=1 person=0 place=0 media=0 document=0 metric=1 all=2 ghosts=0 deleted=0"},
+		{"/browse?unfiled=1&kind=person", "page=1 person=1 place=1 media=1 document=0 metric=1 ghosts=0 deleted=0"},
 	} {
 		if got := counts(tc.path); got != tc.want {
 			t.Errorf("%s: %s, want %s", tc.path, got, tc.want)
@@ -799,5 +799,38 @@ func TestHomeLinksTheListsOfBrowse(t *testing.T) {
 		if rec.Code != http.StatusOK && !(l.Href == "/days/today" || strings.HasSuffix(l.Href, "/current")) {
 			t.Errorf("Home's %s (%s): %d", l.Rel[0], l.Href, rec.Code)
 		}
+	}
+}
+
+// TestBrowseListsTheDeletedSoTheyCanBeRestored: a tombstone is in Browse's list of the deleted, with its type, and
+// its row opens its page, which offers revive (docs/plans/131-the-pareto-pass.md, part 1). The list of pages counts
+// and links it; a live page is not in it.
+func TestBrowseListsTheDeletedSoTheyCanBeRestored(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	gone := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Gone"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Kept"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, gone, "tombstone"), nil))
+
+	pages := apitest.Must(t)(c.Get(ctx, "/browse"))
+	if n := pages.Properties.(map[string]any)["counts"].(map[string]any)["deleted"]; fmt.Sprint(n) != "1" {
+		t.Errorf("counts.deleted = %v, want 1", n)
+	}
+	deleted := apitest.Must(t)(c.Get(ctx, apitest.Href(pages, "deleted")))
+	if got := browseRows(t, deleted, "type"); got != "Gone:type=page" {
+		t.Errorf("the deleted list: %q, want Gone:type=page", got)
+	}
+	if len(deleted.Actions) != 0 {
+		t.Errorf("the deleted list offers %v, want no action", deleted.Actions)
+	}
+	page := apitest.Must(t)(c.Get(ctx, deleted.Entities[0].Href))
+	apitest.Action(t, page, "revive")
+	body := browse(t, h, "/browse?deleted=1")
+	if !strings.Contains(body, `href="`+deleted.Entities[0].Href+`"`) {
+		t.Errorf("the page of the deleted list does not link Gone:\n%s", body)
+	}
+	if _, err := c.Get(ctx, "/browse?deleted=1&kind=page"); apitest.Status(err) != 422 {
+		t.Errorf("deleted with a kind: %v, want 422", err)
 	}
 }

@@ -224,7 +224,9 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 				}
 				if file != "" {
 					sends["multipart"] = func() (*siren.Entity, error) {
-						return c.DoFiles(t.Context(), a, values(), map[string]string{file: original})
+						vals := values()
+						vals[file] = original
+						return c.Do(t.Context(), a, vals)
 					}
 				}
 				sent := "left out"

@@ -90,12 +90,11 @@ func inputSchema(fields []siren.Field) (map[string]any, error) {
 	props := map[string]any{}
 	req := []string{}
 	for _, f := range fields {
-		if f.Type == "file" { // a file is sent by the CLI or a browser; an agent sends its sha256 and mime
-			continue
-		}
 		p := map[string]any{"type": "string"}
 		desc := f.Title
 		switch f.Type {
+		case "file": // the MCP server reads the file and sends it, as the CLI does (client.Do)
+			desc = "The absolute path of a local file: " + desc
 		case "number":
 			p["type"] = "number"
 		case "date":
