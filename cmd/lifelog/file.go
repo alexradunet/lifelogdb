@@ -11,7 +11,7 @@ import (
 func keepFile(ctx context.Context, e env, args []string) error {
 	o, c := e.o, e.c
 	if len(args) != 1 {
-		return errors.New("file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day YYYY-MM-DD] [--dry-run]")
+		return errors.New(e.cmd.synopsis())
 	}
 	add, err := actionNamed(ctx, c, "add-file")
 	if err != nil {
@@ -43,7 +43,7 @@ func keepFile(ctx context.Context, e env, args []string) error {
 // the API, never stored) or, with no PHOTO, the kept picture that --title names.
 func setCover(ctx context.Context, e env, args []string) error {
 	o, c := e.o, e.c
-	usage := errors.New("cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]: a new PHOTO, or --title of a kept picture")
+	usage := errors.New(e.cmd.synopsis() + ": a new PHOTO, or --title of a kept picture")
 	if len(args) < 1 || len(args) > 2 || len(args) == 1 && o.file.title == "" {
 		return usage
 	}

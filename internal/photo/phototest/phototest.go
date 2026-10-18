@@ -34,7 +34,7 @@ func TIFF(m photo.Meta, little bool) []byte {
 	}
 	u16 := func(v uint16) []byte { return bo.AppendUint16(nil, v) }
 	u32 := func(v uint32) []byte { return bo.AppendUint32(nil, v) }
-	var ifd0, exif, gps []entry
+	var ifd0, exif []entry
 	if m.Orientation > 0 {
 		ifd0 = append(ifd0, entry{0x0112, 3, 1, u16(uint16(m.Orientation))})
 	}
@@ -47,24 +47,13 @@ func TIFF(m photo.Meta, little bool) []byte {
 	if exif != nil {
 		ifd0 = append(ifd0, entry{0x8769, 4, 1, nil})
 	}
-	if gps != nil {
-		ifd0 = append(ifd0, entry{0x8825, 4, 1, nil})
-	}
 	offExif := 8 + size(ifd0)
-	offGPS := offExif
+	cursor := offExif
 	if exif != nil {
-		offGPS += size(exif)
-	}
-	cursor := offGPS
-	if gps != nil {
-		cursor += size(gps)
+		cursor += size(exif)
 	}
 	for i := n0; i < len(ifd0); i++ {
-		if ifd0[i].tag == 0x8769 {
-			ifd0[i].data = u32(uint32(offExif))
-		} else {
-			ifd0[i].data = u32(uint32(offGPS))
-		}
+		ifd0[i].data = u32(uint32(offExif)) // the only pointer is the one to the Exif IFD
 	}
 	var dataArea []byte
 	write := func(es []entry) []byte {
@@ -85,9 +74,6 @@ func TIFF(m photo.Meta, little bool) []byte {
 	out := append(append(head, u32(8)...), write(ifd0)...)
 	if exif != nil {
 		out = append(out, write(exif)...)
-	}
-	if gps != nil {
-		out = append(out, write(gps)...)
 	}
 	return append(out, dataArea...)
 }
@@ -127,6 +113,78 @@ func box(typ string, body ...[]byte) []byte {
 	return b
 }
 
+// Extent is one run of an item's bytes, as the iloc box says it.
+type Extent struct{ Off, N uint64 }
+
+// Location is one item of a HEIF file: its iinf entry (ID and Type) and its iloc entry. ExtentCount, when not zero,
+// is the count that the iloc box says, whatever Extents holds.
+type Location struct {
+	ID          uint32
+	Type        string
+	Method      uint16
+	DataRef     uint16
+	Base        uint64
+	ExtentCount int
+	Extents     []Extent
+}
+
+// HEIFItems is the ftyp and meta boxes of a HEIF file with the items at the places that entries say. The iloc box has
+// the version, and fields of offSize, lenSize, baseSize and idxSize bytes. idat, when not nil, is the meta box's idat.
+// The bytes of an item that lie in mdat are for the caller to append.
+func HEIFItems(version byte, offSize, lenSize, baseSize, idxSize int, idat []byte, entries ...Location) []byte {
+	iloc := []byte{version, 0, 0, 0, byte(offSize<<4 | lenSize), byte(baseSize<<4 | idxSize)}
+	if version == 2 {
+		iloc = binary.BigEndian.AppendUint32(iloc, uint32(len(entries)))
+	} else {
+		iloc = binary.BigEndian.AppendUint16(iloc, uint16(len(entries)))
+	}
+	for _, e := range entries {
+		if version == 2 {
+			iloc = binary.BigEndian.AppendUint32(iloc, e.ID)
+		} else {
+			iloc = binary.BigEndian.AppendUint16(iloc, uint16(e.ID))
+		}
+		if version == 1 || version == 2 {
+			iloc = binary.BigEndian.AppendUint16(iloc, e.Method)
+		}
+		iloc = binary.BigEndian.AppendUint16(iloc, e.DataRef)
+		iloc = appendUint(iloc, baseSize, e.Base)
+		count := len(e.Extents)
+		if e.ExtentCount != 0 {
+			count = e.ExtentCount
+		}
+		iloc = binary.BigEndian.AppendUint16(iloc, uint16(count))
+		for _, x := range e.Extents {
+			iloc = appendUint(iloc, idxSize, 0)
+			iloc = appendUint(iloc, offSize, x.Off)
+			iloc = appendUint(iloc, lenSize, x.N)
+		}
+	}
+	hdlr := box("hdlr", []byte{0, 0, 0, 0, 0, 0, 0, 0}, []byte("pict"), make([]byte, 13))
+	iinf := binary.BigEndian.AppendUint16([]byte{0, 0, 0, 0}, uint16(len(entries)))
+	for _, e := range entries {
+		iinf = append(iinf, infe(e.ID, e.Type)...)
+	}
+	parts := [][]byte{{0, 0, 0, 0}, hdlr, box("iinf", iinf), box("iloc", iloc)}
+	if idat != nil {
+		parts = append(parts, box("idat", idat))
+	}
+	return append(box("ftyp", []byte("heic\x00\x00\x00\x00mif1heic")), box("meta", parts...)...)
+}
+
+func infe(id uint32, typ string) []byte {
+	var b []byte
+	if id > math.MaxUint16 {
+		b = []byte{3, 0, 0, 0}
+		b = binary.BigEndian.AppendUint32(b, id)
+	} else {
+		b = []byte{2, 0, 0, 0}
+		b = binary.BigEndian.AppendUint16(b, uint16(id))
+	}
+	b = binary.BigEndian.AppendUint16(b, 0)
+	return box("infe", append(append(b, typ...), 0))
+}
+
 // Layout says how HEIF writes its Exif item.
 type Layout struct {
 	Little bool // the EXIF in little-endian byte order
@@ -150,73 +208,36 @@ func HEIF(m photo.Meta, l Layout) []byte {
 		pictureID = 0x10001
 	}
 	inIdat := l.InIdat && l.Version != 0
-	sizes, size := byte(0x44), 4 // offsets and lengths of 4 bytes
+	size := 4 // offsets and lengths of 4 bytes
 	if l.Overflow {
-		sizes, size = 0x88, 8 // of 8 bytes, to hold the offset 2^64−2
+		size = 8 // of 8 bytes, to hold the offset 2^64−2
 	}
-	infe := func(id uint32, typ string) []byte {
-		var b []byte
-		if id > math.MaxUint16 {
-			b = []byte{3, 0, 0, 0}
-			b = binary.BigEndian.AppendUint32(b, id)
-		} else {
-			b = []byte{2, 0, 0, 0}
-			b = binary.BigEndian.AppendUint16(b, uint16(id))
-		}
-		b = binary.BigEndian.AppendUint16(b, 0)
-		return box("infe", append(append(b, typ...), 0))
+	var idat []byte
+	method := uint16(0)
+	if inIdat {
+		idat, method = item, 1
 	}
 	build := func(picOff, exifOff uint64) []byte {
-		iloc := []byte{l.Version, 0, 0, 0, sizes, 0x00} // no base offset, no index
-		if l.Version == 2 {
-			iloc = binary.BigEndian.AppendUint32(iloc, 2)
-		} else {
-			iloc = binary.BigEndian.AppendUint16(iloc, 2)
-		}
-		for _, it := range []struct {
-			id     uint32
-			method uint16
-			off, n uint64
-		}{{pictureID, 0, picOff, uint64(len(picture))}, {exifID, map[bool]uint16{false: 0, true: 1}[inIdat], exifOff, uint64(len(item))}} {
-			if l.Version == 2 {
-				iloc = binary.BigEndian.AppendUint32(iloc, it.id)
-			} else {
-				iloc = binary.BigEndian.AppendUint16(iloc, uint16(it.id))
-			}
-			if l.Version == 1 || l.Version == 2 {
-				iloc = binary.BigEndian.AppendUint16(iloc, it.method)
-			}
-			iloc = binary.BigEndian.AppendUint16(iloc, 0) // data_reference_index
-			iloc = binary.BigEndian.AppendUint16(iloc, 1) // one extent
-			iloc = appendUint(iloc, size, it.off)
-			iloc = appendUint(iloc, size, it.n)
-		}
-		hdlr := box("hdlr", []byte{0, 0, 0, 0, 0, 0, 0, 0}, []byte("pict"), make([]byte, 13))
-		iinf := box("iinf", []byte{0, 0, 0, 0, 0, 2}, infe(pictureID, "hvc1"), infe(exifID, "Exif"))
-		parts := [][]byte{{0, 0, 0, 0}, hdlr, iinf, box("iloc", iloc)}
+		head := HEIFItems(l.Version, size, size, 0, 0, idat,
+			Location{ID: pictureID, Type: "hvc1", Extents: []Extent{{picOff, uint64(len(picture))}}},
+			Location{ID: exifID, Type: "Exif", Method: method, Extents: []Extent{{exifOff, uint64(len(item))}}})
 		if inIdat {
-			parts = append(parts, box("idat", item))
+			return append(head, box("mdat", picture)...)
 		}
-		ftyp := box("ftyp", []byte("heic\x00\x00\x00\x00mif1heic"))
-		mdat := box("mdat", picture)
-		if !inIdat {
-			mdat = box("mdat", picture, item)
-		}
-		return append(append(ftyp, box("meta", parts...)...), mdat...)
+		return append(head, box("mdat", picture, item)...)
 	}
-	draft := build(0, 0)
-	mdatPayload := uint64(len(draft) - len(picture)) // the payload of mdat, the last box, after its 8-byte header
+	picOff := uint64(len(build(0, 0)) - len(picture)) // the payload of mdat, the last box, after its 8-byte header
 	if !inIdat {
-		mdatPayload -= uint64(len(item))
+		picOff -= uint64(len(item))
 	}
-	exifOff := mdatPayload + uint64(len(picture))
+	exifOff := picOff + uint64(len(picture))
 	if inIdat {
 		exifOff = 0
 	}
 	if l.Overflow {
 		exifOff = math.MaxUint64 - 1
 	}
-	return build(mdatPayload, exifOff)
+	return build(picOff, exifOff)
 }
 
 func appendUint(b []byte, size int, v uint64) []byte {
