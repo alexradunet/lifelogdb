@@ -182,7 +182,8 @@ unchecked `Close` of the writer in `db.go`.
 `site/index.html` was last changed on 2026-10-14, before D21 and D23. It describes tasks and reminders, a `done`
 command, `snapshot --to`, a habit check-in, a place with a point, "15 strict, typed tables" (there are 10, one FTS
 table and 3 views) and a week view. Rewrite those sections from the README of today; the Get started block is the
-README's own lines. README.md says "synthetic personas" where there is one mixed workload.
+README's own lines. (The review also said README.md's "synthetic personas" names one mixed workload; that was wrong:
+tests/README.md lists four personas, and the row stays.)
 
 ## Considered and left alone
 
