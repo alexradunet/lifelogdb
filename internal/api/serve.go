@@ -363,6 +363,8 @@ func codeOf(status int) string {
 		return siren.CodeConflict
 	case http.StatusRequestEntityTooLarge:
 		return siren.CodeTooLarge
+	case http.StatusUnsupportedMediaType:
+		return siren.CodeUnsupportedMedia
 	case http.StatusUnprocessableEntity:
 		return siren.CodeInvalid
 	case http.StatusServiceUnavailable:

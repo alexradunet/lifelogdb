@@ -174,6 +174,9 @@ func TestAMultipartPostWithoutFileFieldsIsRefused(t *testing.T) {
 	if rec.Code != http.StatusUnsupportedMediaType {
 		t.Errorf("multipart POST to capture: %d, want 415: %.200s", rec.Code, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), "Not done.") {
+		t.Errorf("the 415 page has no first words for its code: %.300s", rec.Body.String())
+	}
 	if n := scalar(t, s, "SELECT CAST(count(*) AS TEXT) FROM entities WHERE body LIKE '%Lost words%'"); n != "0" {
 		t.Errorf("the refused request wrote %s pages", n)
 	}

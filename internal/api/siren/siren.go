@@ -36,6 +36,7 @@ const (
 	CodeNotFound           = "not_found"
 	CodeConflict           = "conflict"
 	CodeTooLarge           = "too_large"
+	CodeUnsupportedMedia   = "unsupported_media" // a multipart body sent to an action that takes no file
 	CodeInvalid            = "invalid"
 	CodeTimeout            = "timeout"
 	CodeInternal           = "internal"

@@ -383,7 +383,7 @@ func alertOf(code any) alertView {
 	switch code {
 	case siren.CodeForbidden, siren.CodeCrossOrigin, siren.CodeTokenRequired, siren.CodeUnauthorized:
 		return alertView{"Refused.", true}
-	case siren.CodeTooLarge, siren.CodeTimeout, siren.CodeInternal:
+	case siren.CodeTooLarge, siren.CodeUnsupportedMedia, siren.CodeTimeout, siren.CodeInternal:
 		return alertView{"Not done.", true}
 	case siren.CodeStaleVersion:
 		return alertView{"Not saved. The page changed since you opened it.", false}
