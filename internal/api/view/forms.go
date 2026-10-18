@@ -68,9 +68,20 @@ type formView struct {
 	Shown         []siren.Field // the fields most writes need
 	More          []siren.Field // optional fields, folded; still in the form, so a browser sends them with no script
 	Hidden        []siren.Field
-	prompts       map[string]string // field name to placeholder words
-	keys          map[string]string // field name to its access key
-	patterns      map[string]string // field name to the pattern of its value
+	prompts       map[string]string            // field name to placeholder words
+	keys          map[string]string            // field name to its access key
+	patterns      map[string]string            // field name to the pattern of its value
+	labels        map[string]map[string]string // field name to the words of each of its options (Labels)
+}
+
+// Labels gives the options of a field words to show beside their value: a category is offered as its path. The
+// value that the form sends stays the option.
+func (f *formView) Labels(field string, words map[string]string) *formView {
+	if f.labels == nil {
+		f.labels = map[string]map[string]string{}
+	}
+	f.labels[field] = words
+	return f
 }
 
 // Or is the form f with a second button, after its own, that sends the same form to the action of g (formaction),
@@ -106,11 +117,12 @@ func (f *formView) Multipart() bool {
 type fieldView struct {
 	siren.Field
 	Focus       bool
-	Placeholder string // a quiet prompt in an empty box; it is an attribute, never sent
-	Key         string // the field's access key, which the browser's own modifier reaches
-	List        string // the id of the datalist of a field of page titles with options (Pages): see Fields
-	Pattern     string // the browser sends the form only when the value matches it
-	Sole        bool   // the only field the form draws: it needs no mark "required"
+	Placeholder string            // a quiet prompt in an empty box; it is an attribute, never sent
+	Key         string            // the field's access key, which the browser's own modifier reaches
+	List        string            // the id of the datalist of a field of page titles with options (Pages): see Fields
+	Pattern     string            // the browser sends the form only when the value matches it
+	Sole        bool              // the only field the form draws: it needs no mark "required"
+	Labels      map[string]string // the words shown beside each option of the datalist (formView.Labels)
 }
 
 // Fields are the fields the form shows (folded false) or folds under "More fields" (folded true). A field of page
@@ -124,7 +136,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 	out := make([]fieldView, len(list))
 	sole := len(f.Shown)+len(f.More) == 1
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name], sole}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name], sole, f.labels[fd.Name]}
 		if fd.Pages && len(fd.Options) > 0 {
 			out[i].List = cmp.Or(f.ID, f.Name) + "-" + fd.Name
 		}

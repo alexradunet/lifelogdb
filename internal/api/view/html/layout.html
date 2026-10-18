@@ -112,13 +112,13 @@
 <dd>{{range .Items}}<a href="/pages/{{num .id}}">{{$v.Date .title}}</a>{{with .note}} <small>({{.}})</small>{{end}}{{end}}</dd>{{end}}</dl>{{end}}
 
 {{/* categories are the categories of a page or a metric as badges (docs/plans/114-one-way-to-do-a-thing.md): each
-     with x, which removes that part-of link (unlink), and + Add, which puts the page in a category: the form of
+     with x, which removes that part-of link (file-pages with from), and + Add, which puts the page in a category: the form of
      file-pages, whose ids and move the page fills in (this page's id, 0), and whose category offers the titles of the
      categories (a new name makes a new category). It takes v (the view) and back. */}}
-{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "back" $back "placeholder" "category=Bloodwork, Sport, Financial"}}{{$unlink := $v.Action "unlink"}}
+{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "outside" "from" "required" "category" "back" $back "placeholder" "category=Bloodwork, Sport, Financial"}}
 {{$cats := $v.Categories}}
 {{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
-{{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $unlink}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="to" value="{{$t}}"><input type="hidden" name="kind" value="part-of"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
+{{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $file}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="ids" value="{{(.Field "ids").Value}}"><input type="hidden" name="from" value="{{$t}}"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
 {{if not $cats}}<span class="meta">none</span>{{end}}
 {{with $file}}<details class="add-category"{{if .Asked}} open{{end}}><summary class="button small">+ Add</summary>
 {{template "form" .}}</details>{{end}}</div>{{end}}{{end}}
@@ -128,17 +128,19 @@
      action the list offers (id "pick"), and each box joins it by its form attribute, so a card may hold a form of its
      own; the boxes send its ids. The other action is a second button of the form (Or), which sends the checked ids to
      its own address and needs no category. The bar comes after the boxes, so a CSS counter counts them on the
-     buttons, and it is drawn first by order, at the top of the list. Select is on when the page asks for the form. It takes back, words (what to check), and the actions: file (file-pages) and del (a delete of
-     several). */}}
-{{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids" "back" .back "placeholder" "category=Bloodwork, Sport, Financial"}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
+     buttons, and it is drawn first by order, at the top of the list. Select is on when the page asks for the form. It takes back, words (what to check), button (the words of the primary button), from (the category the
+     list is in, or ""; it adds a button that removes the checked rows from it), paths (the title of each
+     category with its path, for the choices of the category field), and the actions: file (file-pages) and del (a
+     delete of several). */}}
+{{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids,from" "required" "category" "button" .button "back" .back "placeholder" "category=Bloodwork, Sport, Financial"}}{{if .paths}}{{$f = $f.Labels "category" .paths}}{{end}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
 <div class="pick-bar">
 <label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $f.Asked}} checked{{end}}>Select</label>
-<div class="pick-tools"><span class="desc">{{.words}}</span>
-{{template "form" $f}}</div></div>{{end}}
+<div class="pick-tools"><span class="desc">{{.words}}</span><span class="picked" aria-live="polite"></span>
+{{template "form" $f}}{{with .from}}<button form="pick" name="from" value="{{.}}" formnovalidate>Remove from {{.}}</button>{{end}}</div></div>{{end}}
 
-{{/* pick-box is the box of a row, a tile or a card that joins the form of the pick bar (form="pick"). It takes id
-     and title. */}}
-{{define "pick-box"}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" form="pick" aria-label="Select {{.title}}"></label>{{end}}
+{{/* pick-box is the box of a row, a tile or a card that joins the form of the pick bar (form="pick"). It takes v (the view,
+     which says what the page asks to have checked), id and title. */}}
+{{define "pick-box"}}<label class="pick-box"><input type="checkbox" name="ids" value="{{num .id}}" form="pick"{{if .v.Picked .id}} checked{{end}} aria-label="Select {{.title}}"></label>{{end}}
 
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}
@@ -167,7 +169,7 @@
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{range $.Options}}<option value="{{.}}">{{end}}</datalist>{{end}}{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

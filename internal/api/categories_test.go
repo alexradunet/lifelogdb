@@ -305,7 +305,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	for _, f := range file.Fields {
 		fields = append(fields, f.Name)
 	}
-	if !slices.Equal(fields, []string{"ids", "category", "move"}) || !file.Fields[0].Required || !file.Fields[1].Required || file.Fields[2].Required {
+	if !slices.Equal(fields, []string{"ids", "category", "from", "move"}) || !file.Fields[0].Required || file.Fields[1].Required || file.Fields[2].Required {
 		t.Errorf("file-pages fields: %+v", file.Fields)
 	}
 
@@ -338,6 +338,15 @@ func TestFileMetricsAtOnce(t *testing.T) {
 		t.Errorf("after the move, groups %q, want %q", got, want)
 	}
 
+	// From takes Steps out of Body: only that link is removed, and the pages stay.
+	out := apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Steps"], "from": "Body"}))
+	if props(out)["removed"] != json.Number("1") || out.Result != "Removed 1 from Body." {
+		t.Errorf("the removal: %v %v", props(out), out.Result)
+	}
+	if got, want := groupsOf(t, c), "Bloodwork:Ferritin Body:Weight Not filed:Mood,Steps,Walk"; got != want {
+		t.Errorf("after the removal, groups %q, want %q", got, want)
+	}
+
 	// Refusals write nothing: an id no page has, no category, no id, a move that is not 0 or 1.
 	for _, bad := range []struct {
 		form map[string]string
@@ -345,6 +354,8 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	}{
 		{map[string]string{"ids": ids["Mood"] + " 424242", "category": "Mood board"}, 404},
 		{map[string]string{"ids": ids["Mood"]}, 422},
+		{map[string]string{"ids": ids["Mood"], "category": "X", "from": "Y"}, 422},
+		{map[string]string{"ids": ids["Mood"], "from": "Nowhere"}, 404},
 		{map[string]string{"category": "Mood board"}, 422},
 		{map[string]string{"ids": ids["Mood"], "category": "Mood board", "move": "yes"}, 422},
 	} {
@@ -355,7 +366,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	if _, err := c.Get(ctx, "/pages?title=Mood+board"); apitest.Status(err) != 404 {
 		t.Errorf("a refused filing made its category page: %v", err)
 	}
-	if got := groupsOf(t, c); !strings.HasSuffix(got, "Not filed:Mood,Walk") {
+	if got := groupsOf(t, c); !strings.HasSuffix(got, "Not filed:Mood,Steps,Walk") {
 		t.Errorf("a refused filing filed Mood: %q", got)
 	}
 }

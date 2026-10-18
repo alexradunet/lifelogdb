@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **132**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **133**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [132](132-browse-the-notion-way.md) | Browse the Notion way: crumbs and a heading, a tree with +, Move on every row, and file-pages takes a thing out | P2 | M | owner word 2026-10-18; `2a03d2c` | IN REVIEW (owner) |
 | [131](131-the-pareto-pass.md) | The Pareto pass: every action on every surface, one way to do a thing, and the browser's extras cut | P2 | L | owner word 2026-10-18; `c172ccd` | IN REVIEW (owner) |
 | [130](130-the-explore-pass.md) | The explore pass: Calendar opens on a stream of day cards, with zoom levels, a random day and page, and search by kind | P2 | L | owner word 2026-10-17; `5e5a0d8` | IN REVIEW (owner) |
 | [129](129-the-ux-pass.md) | The UX pass: plain words, quiet pages, the sentence of a mention, one Today, a capture that is safe to send again | P2 | L | owner word 2026-10-17; `14083e8` | DONE |
@@ -36,8 +37,8 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 | [106](106-one-continuous-conversation.md) | One continuous conversation: a page per day, compacted into the daily note | P1 | M | plans 102, 103; owner decision 2026-10-14 | DONE |
 | [105](105-the-owners-shape-in-the-synthetic-fixture.md) | The owner's shape in the synthetic fixture: a calibrated workload for tests | P1 | L | owner request 2026-10-14; `bd16083` | TODO |
 | [104](104-the-chat-in-basm.md) | The chat in Basm: the conversation drawn as the Chat of the owner's design system | P2 | S | plan 103; owner decision 2026-10-14 | DONE |
-| [103](103-the-conversation-on-the-screen.md) | The conversation on the screen: a chat page, and a sidebar that follows the owner | P1 | M | issue 0072; owner decision 2026-10-14 | IN PROGRESS |
-| [102](102-a-conversation-with-lifelog.md) | A conversation with lifelog: the action `ask`, an agent inside the writer | P1 | M | RFC 0012; issue 0071; owner decisions 2026-10-14 | IN PROGRESS |
+| [103](103-the-conversation-on-the-screen.md) | The conversation on the screen: a chat page, and a sidebar that follows the owner | P1 | M | issue 0072; owner decision 2026-10-14 | IN REVIEW (owner) |
+| [102](102-a-conversation-with-lifelog.md) | A conversation with lifelog: the action `ask`, an agent inside the writer | P1 | M | RFC 0012; issue 0071; owner decisions 2026-10-14 | IN REVIEW (owner) |
 | [101](101-the-calendar-holds-every-dated-thing.md) | The calendar holds every dated thing | P1 | M | issue 0070; owner decision 2026-10-13 | DONE |
 | [100](100-one-page-a-metric.md) | One page a metric: Record, every reading, and its own page | P1 | M | issue 0069; owner decision 2026-10-13 | DONE |
 | [099](099-rules-into-the-schema.md) | Rules into the schema: a Go copy deleted, a writer-held rule made a trigger | P1 | M | issue 0068 | DONE |

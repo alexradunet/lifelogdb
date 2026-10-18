@@ -73,29 +73,46 @@ func categoryPaths(cats map[int64]*Category, filed map[int64][]int64) map[int64]
 
 // Categories are the category pages, by path.
 func (s *Store) Categories(ctx context.Context) ([]Category, error) {
-	cats, _, err := s.categories(ctx)
+	out, _, err := s.CategoriesFiled(ctx)
+	return out, err
+}
+
+// CategoriesFiled is Categories and also the ids of the categories that each page is part-of, by page id, in the
+// order of their title keys. Every id in it is a category in the slice. The badges of a row of Browse come from the
+// same one read as the list.
+func (s *Store) CategoriesFiled(ctx context.Context) ([]Category, map[int64][]int64, error) {
+	cats, filed, err := s.categories(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := []Category{}
 	for _, c := range cats {
 		out = append(out, *c)
 	}
 	sort.Slice(out, func(i, j int) bool { return text.TitleKey(out[i].Path) < text.TitleKey(out[j].Path) })
-	return out, nil
+	return out, filed, nil
 }
 
-// Filed is what FilePages did: the category page, whether it was made, the links added and the other part-of links
-// removed.
+// Filed is what FilePages did: the category page, whether it was made, the links added, the other part-of links
+// removed and the part-of links to from removed.
 type Filed struct {
 	Category Category `json:"category"`
 	Created  bool     `json:"created"`
 	Added    int      `json:"added"`
 	Moved    int      `json:"moved"`
+	Removed  int      `json:"removed"` // the part-of links to from removed
 }
 
 // filePages is Store.FilePages in t.
-func (t *Tx) filePages(ids []int64, category string, move bool) (Filed, error) {
+func (t *Tx) filePages(ids []int64, category, from string, move bool) (Filed, error) {
+	switch {
+	case category == "" && from == "":
+		return Filed{}, Invalid("one of category or from is required")
+	case category != "" && from != "":
+		return Filed{}, Invalid("category and from cannot be sent together: category puts the pages in, from takes them out")
+	case from != "":
+		return t.unfilePages(ids, from)
+	}
 	if err := checkTitle("category", category); err != nil {
 		return Filed{}, err
 	}
@@ -141,11 +158,43 @@ func (t *Tx) filePages(ids []int64, category string, move bool) (Filed, error) {
 	return f, nil
 }
 
+// unfilePages removes the part-of link from each page to the category page titled from. Nothing else changes.
+func (t *Tx) unfilePages(ids []int64, from string) (Filed, error) {
+	if err := checkTitle("from", from); err != nil {
+		return Filed{}, err
+	}
+	have, err := t.lookup(from)
+	if err != nil {
+		return Filed{}, err
+	}
+	if have == nil {
+		return Filed{}, NotFound("no page titled %q", from)
+	}
+	p, err := t.livePage(have.ID)
+	if err != nil {
+		return Filed{}, err
+	}
+	f := Filed{Category: Category{ID: p.ID, Title: p.Title}}
+	for _, id := range ids {
+		if _, err := t.livePage(id); err != nil {
+			return Filed{}, err
+		}
+		res, err := t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = 'part-of'`, id, p.ID)
+		if err != nil {
+			return Filed{}, err
+		}
+		n, _ := res.RowsAffected()
+		f.Removed += int(n)
+	}
+	return f, nil
+}
+
 // FilePages files every page named in the category page titled category, in one write (D26): a part-of link from
 // each. A missing category is made as an empty page with no day. With move, every other
-// part-of link of those pages is removed first. A page or a category that is not live is refused as livePage says;
+// part-of link of those pages is removed first. With from, the part-of link from each page to the page titled from
+// is removed instead; category and move are not read, a from that names no page is 404 and a deleted page 409. A page or a category that is not live is refused as livePage says;
 // that writes nothing. What the links registry refuses (a day page as a category, or filed in one) is
 // links_endpoint_types.
-func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category string, move bool) (Filed, error) {
-	return alone(s, ctx, source, func(t *Tx) (Filed, error) { return t.filePages(ids, category, move) })
+func (s *Store) FilePages(ctx context.Context, source string, ids []int64, category, from string, move bool) (Filed, error) {
+	return alone(s, ctx, source, func(t *Tx) (Filed, error) { return t.filePages(ids, category, from, move) })
 }

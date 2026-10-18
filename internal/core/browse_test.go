@@ -66,7 +66,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		for _, title := range titles {
 			list = append(list, ids[title])
 		}
-		f, err := s.FilePages(ctx, "cli", list, category, false)
+		f, err := s.FilePages(ctx, "cli", list, category, "", false)
 		check(err)
 		ids[category] = f.Category.ID
 	}
@@ -301,11 +301,11 @@ func TestNotFiledCountsOnlyALiveCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gone, err := s.FilePages(ctx, "cli", []int64{cy, eps, ids["Bo"]}, "Gone", false)
+	gone, err := s.FilePages(ctx, "cli", []int64{cy, eps, ids["Bo"]}, "Gone", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.FilePages(ctx, "cli", []int64{ids["Bo"]}, "Work", false); err != nil { // Bo stays in a live one
+	if _, err := s.FilePages(ctx, "cli", []int64{ids["Bo"]}, "Work", "", false); err != nil { // Bo stays in a live one
 		t.Fatal(err)
 	}
 	if err := s.Tombstone(ctx, "cli", gone.Category.ID); err != nil {
@@ -355,7 +355,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.FilePages(ctx, "cli", pages, "Shelf", false); err != nil {
+	if _, err := s.FilePages(ctx, "cli", pages, "Shelf", "", false); err != nil {
 		t.Fatal(err)
 	}
 	shelf, err := s.PageID(ctx, "Shelf")

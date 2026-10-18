@@ -171,7 +171,7 @@ its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there t
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 and inside a category `create-page` with `category` filled: it makes the page and files it there in one write, and a
-refusal of either step writes nothing (the other kinds are filed by `file-pages`); `file-pages` on every list but `all`; `tombstone-pages` on `page` (the ghosts
+refusal of either step writes nothing (the other kinds are filed by `file-pages`); `file-pages` on every list, with its field `move` filled with `1` inside a category (the pick bar moves by default) and empty elsewhere; `tombstone-pages` on `page` (the ghosts
 too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts. The deleted
 offer no action.
 
@@ -211,6 +211,9 @@ offer no action.
 | `rows[].type` | string | its `entity_type` |
 | `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric`; in the list of the deleted, its `entity_type` |
 | `rows[].category` | boolean | a page that is a category; absent otherwise |
+| `rows[].categories[]` | list | the live categories the row is filed in, by title key; absent when none, and in the lists of the ghost pages and the deleted |
+| `rows[].categories[].id` | integer | the category's page id |
+| `rows[].categories[].title` | string | its title |
 | `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
 | `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
 | `rows[].picture` | string | the address of its cover's picture, or of a file's own; absent when none |
@@ -351,8 +354,8 @@ picture of the page's cover, when it has one), `choose-cover` (the [pictures it 
 is not a file). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote`, `rename`, `link` (with the kinds this type may start, but `part-of`: `file-pages`
-files a page) and `unlink` (with the kinds this type may start), [`file-pages`](#filed) (a page that may
+cannot empty a page), `promote`, `rename`, `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
+files a page and, with `from`, takes it out; a plain page, whose only kind would be `part-of`, offers neither), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-cover` (a live page that is not a file), `tombstone-pages` with `ids` this page, or
@@ -621,6 +624,10 @@ returns to (`back`), or home. `self` is `/`.
 `POST /pages/file` (`file-pages`): the field `ids` names the pages as `tombstone-pages` does; `category` is the title
 of the category page, made as an empty page when no page has it; `move` 1 removes every other `part-of` link of those
 pages first. Each page gets a `part-of` link to the category, in one write ([D26](docs/decisions/D26-metric-categories.md)).
+`from` is the title of a category to take the pages out of: the `part-of` link from each page to the page with that
+title is removed, and nothing else changes. `move` is not read with `from`. A page that was not in `from` is not an
+error. Exactly one of `category` and `from` is required: both, or neither, is 422. With `from`, a title that names no
+page is 404 and a deleted page is 409.
 An id no page has is 404 and a deleted page or category is 409: either writes nothing. A day page or a person as the
 category is 422 (`links_endpoint_types`). The answer embeds an `item` link to each page and a `category` link;
 `result` says what was done in words, which a browser form shows on the list it returns to.
@@ -637,6 +644,7 @@ category is 422 (`links_endpoint_types`). The answer embeds an `item` link to ea
 | `count` | integer | how many |
 | `added` | integer | the part-of links added (a page filed there already adds none) |
 | `moved` | integer | the other part-of links removed by `move` |
+| `removed` | integer | the part-of links removed by `from` |
 
 ### login
 

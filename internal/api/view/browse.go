@@ -1,6 +1,12 @@
 package view
 
-import "strings"
+import (
+	"net/url"
+	"slices"
+	"strings"
+
+	"lifelog/internal/api/siren"
+)
 
 // The folds of Browse (docs/plans/118-fold-and-find.md): the category tree folds each branch. It is drawn from the
 // props of GET /browse, so the resource and the catalog do not change.
@@ -9,6 +15,7 @@ import "strings"
 // says that the current branch is this one or is under it.
 type treeNode struct {
 	Title, Href, Count string
+	NewHref            string // the new-page form of Browse, open, for pages filed in this category
 	Current, Open      bool
 	Kids               []*treeNode
 }
@@ -32,6 +39,7 @@ func (v *view) BrowseTree() []*treeNode {
 		n := &treeNode{Title: title, Count: Num(c["count"]), Current: current != "" && Num(c["id"]) == current}
 		if i < len(links) {
 			n.Href = links[i].Href
+			n.NewHref = newPageHref(n.Href)
 		}
 		byPath[path] = n
 		parent := ""
@@ -99,4 +107,116 @@ func (v *view) MediaCount(n any, one, many string) string {
 		return "no " + many
 	}
 	return Count(n, one, many)
+}
+
+// newPageHref is the address of the Browse list of a category with the form of create-page open, so a page made
+// there is filed in the category.
+func newPageHref(href string) string {
+	u, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	q := u.Query()
+	q.Set("kind", "page")
+	q.Set("new", siren.NewActionOf("page"))
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// NewCategoryHref is the address of the form that makes a category: a category is a page.
+func (v *view) NewCategoryHref() string { return siren.BrowseNewHref("page") }
+
+// crumb is a step of the way to the list: a link, or the place the list is at now (Href empty).
+type crumb struct{ Title, Href string }
+
+// Crumbs is the way to the list as steps: each category on the path of the category the list is in, then the
+// list itself. The lists Not filed, Ghost pages and Deleted are one step. Everything has none.
+func (v *view) Crumbs() []crumb {
+	props, _ := v.Props.(map[string]any)
+	if in, _ := props["in"].(map[string]any); in != nil {
+		path, _ := in["path"].(string)
+		cats, _ := props["categories"].([]any)
+		links := v.Embedded("category")
+		var out []crumb
+		for _, title := range strings.Split(path, "/") {
+			c := crumb{Title: title}
+			for i, x := range cats {
+				if m, _ := x.(map[string]any); m["title"] == title && i < len(links) {
+					c.Href = links[i].Href
+					break
+				}
+			}
+			out = append(out, c)
+		}
+		out[len(out)-1].Href = ""
+		return out
+	}
+	for _, key := range [...][2]string{{"deleted", "Deleted"}, {"ghosts", "Ghost pages"}, {"unfiled", "Not filed"}} {
+		if on, _ := props[key[0]].(bool); on {
+			return []crumb{{Title: key[1]}}
+		}
+	}
+	return nil
+}
+
+// OtherCategories are the categories of a row of the list without the one the list is in: the badges of the row.
+func (v *view) OtherCategories(cats any) []any {
+	props, _ := v.Props.(map[string]any)
+	in, _ := props["in"].(map[string]any)
+	var out []any
+	rows, _ := cats.([]any)
+	for _, x := range rows {
+		if m, _ := x.(map[string]any); in == nil || Num(m["id"]) != Num(in["id"]) {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+// Picked reports a row that the page asks to have checked (?ids=5, as the Move link of a row does).
+func (v *view) Picked(id any) bool {
+	return slices.Contains(strings.FieldsFunc(v.query.Get("ids"), func(r rune) bool { return r == ' ' || r == ',' }), Num(id))
+}
+
+// MoveHref is the address of this list with the file form open and the row checked: the Move link of a row.
+func (v *view) MoveHref(id any) string {
+	return v.hereWith(url.Values{"new": {"file-pages"}, "ids": {Num(id)}})
+}
+
+// ListHere is this list without the form open and the checks: where a write returns to.
+func (v *view) ListHere() string { return v.hereWith(nil, "new", "ids") }
+
+// hereWith is the address of this page with the query values set and then these names removed.
+func (v *view) hereWith(set url.Values, drop ...string) string {
+	u, err := url.Parse(v.Here)
+	if err != nil {
+		return v.Here
+	}
+	q := u.Query()
+	for k, vs := range set {
+		q[k] = vs
+	}
+	for _, k := range drop {
+		q.Del(k)
+	}
+	if len(q) == 0 {
+		return u.EscapedPath()
+	}
+	return u.EscapedPath() + "?" + q.Encode()
+}
+
+// CategoryPaths gives each category's title its path in words ("Family › Cousins"), for the choices of a field of
+// categories; a title without a parent says the same as its option, so it is left out.
+func (v *view) CategoryPaths() map[string]string {
+	props, _ := v.Props.(map[string]any)
+	cats, _ := props["categories"].([]any)
+	out := map[string]string{}
+	for _, x := range cats {
+		c, _ := x.(map[string]any)
+		title, _ := c["title"].(string)
+		if path, _ := c["path"].(string); strings.Contains(path, "/") {
+			out[title] = strings.ReplaceAll(path, "/", " › ")
+		}
+	}
+	return out
 }

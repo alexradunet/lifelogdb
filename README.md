@@ -278,7 +278,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   cards of a row are of one height: the name, the value (a dash and the unit with no reading), the line (a dashed
   rule with none), and a foot with the day in short words; the whole day and the count of readings are the day's
   title ([plan 120](docs/plans/120-a-tidy-board.md)). `file-pages` (`POST /pages/file`) files several pages in a category page in one write, made when it is
-  missing; `move` 1 takes them out of their other categories. The page's pick bar checks the cards to file. The CLI's
+  missing; `move` 1 takes them out of their other categories, and `from` takes them out of one category. The page's pick bar checks the cards to file. The CLI's
   `do` and the MCP tools carry it as any action; it is not the owner's alone, as `link` is not.
 - **The stream, the zoom, a random thing and search by kind** ([plan 130](docs/plans/130-the-explore-pass.md)). The
   Calendar opens on the stream, `GET /days`: the days of the record as cards, the newest first, 30 a page, then Older
@@ -292,25 +292,36 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   random, and with `kind=day` to a day: a quiet button on the stream and on Browse. `search` takes `kind` (day, page,
   person, place, file): the page draws Pages by title first, then the chips of the kinds, then the hits in groups by
   kind, each with its cover or the icon of its kind.
-- **Browse** ([plan 117](docs/plans/117-one-browse-view.md)). A category is a page, and anything is filed in it by
+- **Browse** ([plan 117](docs/plans/117-one-browse-view.md), [plan 132](docs/plans/132-browse-the-notion-way.md)). A category is a page, and anything is filed in it by
   `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may be in several, and a category
   shows everything filed in it, whatever its type. `GET /browse` (the catalog action `browse`) is one list with two
   filters: the kind of its rows (Pages, People, Places, Media, Documents, Metrics, each chip with its count; All
   inside a category, where it is the first chip and the default) and where it looks (Everything, what is filed
   directly in a category, or Not filed, which follows the kind). The category tree, by path with a count each, is one
-  fold: beside the list and always open in a wide column, a closed fold above the chips on a phone. Each kind keeps its row and its order: a person
+  fold: beside the list and always open in a wide column, a closed fold above the chips on a phone, its summary
+  naming the location. The head of the list is the location: a line of crumbs (Browse › Family › Cousins, each a link
+  to that category's list, the last one plain; Everything draws none) and an `h1` that says Everything, the
+  category's title, Not filed, Ghost pages or Deleted. A category adds the link Open its page. Each category row of
+  the tree has a quiet + (New page in that category, a link to the Pages list with New page open), shown on hover or
+  focus and always on a touch screen, and the foot of the tree has New category (a category is a page). Each row
+  shows the categories it is filed in as small muted badges (inside a category, the other categories), and has a
+  quiet Move link, shown on hover or focus and always on touch, that opens the list with Select on and that row
+  checked: a link to the one pick bar, not a second form. Each kind keeps its row and its order: a person
   has a face, the mentions and the last day; media are tiles, newest day first, with the picture a file keeps or the
   icon of its kind, one media kind by `media=`, and the count of each media kind in words; documents are the other
   files, as rows. The ghost pages are a filter of Pages, and so are the deleted (`deleted=1`), the newest
-  deletion first, each row opening its page, where Restore is. The pick bar puts the checked rows in a category, and
-  deletes pages, media and documents. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
+  deletion first, each row opening its page, where Restore is. The pick bar says N selected; its category box lists every category by path
+  (Family › Cousins) and takes a new name; its Move box is checked inside a category. Its main button is Move to
+  inside a category and Add to elsewhere. Inside a category a further button, Remove from here, takes the checked
+  rows out of it. The bar also deletes pages, media and documents. After a write the browser returns to the quiet
+  list, with no bar open. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
   Search, and it meets the things through its mentions (the owner's word, 2026-10-15); a day page is never filed
   ([D26](docs/decisions/D26-metric-categories.md)), so a day page's `link` does not offer `part-of`. The sidebar has Today, Calendar,
   Metrics and Browse; a phone's bottom bar is the same four with More. A category page has one section, Filed here: the
   sub-categories first, then the rest by title, a type badge on what is not a page, and Open in Browse; its
-  margin's Backlinks does not list `part-of`. One way files a thing ([plan 131](docs/plans/131-the-pareto-pass.md)):
-  `file-pages`, and `unlink` with `part-of` takes it out (the x of a category badge); `link` does not offer
-  `part-of`. `create-page` takes an optional `category`: the page is made and filed there in one write, a missing
+  margin's Backlinks does not list `part-of`. One way files a thing ([plan 131](docs/plans/131-the-pareto-pass.md),
+  [plan 132](docs/plans/132-browse-the-notion-way.md)): `file-pages` files a thing and, with `from`, takes it out
+  (the x of a category badge, Remove from here in the pick bar); `link` and `unlink` do not offer `part-of`. `create-page` takes an optional `category`: the page is made and filed there in one write, a missing
   category made as `file-pages` makes it, and a day as the category refuses the whole write (`entities_day_page`
   when the day has no page, `links_endpoint_types` when it has one). Browse in a category fills it in its New page,
   and a category page offers New page here.
@@ -396,8 +407,8 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
 | `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
 | `link` | `POST /pages/{id}/links` | `do link` | `link` | a day page, More: Add a typed link |
-| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a page: the x of a category badge, or More: Remove a typed link |
-| `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add by its categories; the pick bar of a list |
+| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a day page, More: Remove a typed link |
+| `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add and the x of a category badge; a Browse list: Move on a row, and the pick bar (Move to, Add to, Remove from here); the Metrics board: the pick bar |
 | `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
 | `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |
 | `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | a reading: Retract |

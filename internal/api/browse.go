@@ -42,26 +42,33 @@ var browseKindTable = map[string]browseKind{
 	"media":    {chip: "Media", fileable: true, tombstonable: true, read: (*server).fileRows},
 	"document": {chip: "Documents", fileable: true, tombstonable: true, read: (*server).fileRows},
 	"metric":   {chip: "Metrics", fileable: true, read: (*server).metricRows},
-	"all":      {chip: "All", read: (*server).filedRows},
+	"all":      {chip: "All", fileable: true, read: (*server).filedRows},
 }
 
 // browseKinds are the values of the field kind; "all" is a chip only inside a category, where it is the first.
 var browseKinds = append(core.BrowseKinds(), "all")
 
+// browseCategory is a category that a row is filed in, for its badge.
+type browseCategory struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
 // browseRow is a row of Browse: the thing, its type and its Browse kind, and only what that kind shows.
 type browseRow struct {
-	ID       int64  `json:"id"`
-	Title    string `json:"title"`
-	Type     string `json:"type"`               // entities.entity_type
-	Kind     string `json:"kind"`               // page, person, place, media, document or metric
-	Category bool   `json:"category,omitempty"` // a page that is a category
-	Mentions *int   `json:"mentions,omitempty"` // a person, a place, a file: the live pages that link to it
-	LastDay  string `json:"last_day,omitempty"` // a person, a place: the newest day page among them
-	Picture  string `json:"picture,omitempty"`  // the address of its cover, or of a file's own picture
-	MIME     string `json:"mime,omitempty"`     // a file: the type of the original
-	FileKind string `json:"file_kind,omitempty"`
-	Day      string `json:"day,omitempty"`  // a file: its day, as the media list says it
-	Unit     string `json:"unit,omitempty"` // a metric: its unit
+	ID         int64            `json:"id"`
+	Title      string           `json:"title"`
+	Type       string           `json:"type"`               // entities.entity_type
+	Kind       string           `json:"kind"`               // page, person, place, media, document or metric
+	Category   bool             `json:"category,omitempty"` // a page that is a category
+	Mentions   *int             `json:"mentions,omitempty"` // a person, a place, a file: the live pages that link to it
+	LastDay    string           `json:"last_day,omitempty"` // a person, a place: the newest day page among them
+	Picture    string           `json:"picture,omitempty"`  // the address of its cover, or of a file's own picture
+	MIME       string           `json:"mime,omitempty"`     // a file: the type of the original
+	FileKind   string           `json:"file_kind,omitempty"`
+	Day        string           `json:"day,omitempty"`        // a file: its day, as the media list says it
+	Unit       string           `json:"unit,omitempty"`       // a metric: its unit
+	Categories []browseCategory `json:"categories,omitempty"` // the categories it is filed in, by title key
 	// DeletedAt is the instant a tombstone was deleted: the list of the deleted only.
 	DeletedAt string `json:"deleted_at,omitempty"`
 }
@@ -201,7 +208,7 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 		return nil, err
 	}
 	ctx := r.Context()
-	cs, err := h.s.Categories(ctx)
+	cs, filed, err := h.s.CategoriesFiled(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +258,17 @@ func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error
 	rows, pg, err := h.browseRows(ctx, browseRead{e: e, b: b, sc: sc, limit: limit, offset: offset})
 	if err != nil {
 		return nil, err
+	}
+	if !b.deleted && !b.ghosts {
+		byID := make(map[int64]string, len(cs))
+		for _, c := range cs {
+			byID[c.ID] = c.Title
+		}
+		for i := range rows {
+			for _, id := range filed[rows[i].ID] {
+				rows[i].Categories = append(rows[i].Categories, browseCategory{ID: id, Title: byID[id]})
+			}
+		}
 	}
 	for _, row := range rows {
 		e.Entities = append(e.Entities, siren.Link{Rel: []string{"item"}, Href: siren.PageHref(row.ID), Title: row.Title, Class: []string{row.Type}})
@@ -439,7 +457,8 @@ func fileKind(mime string) string {
 
 // browseActions are the actions of a list: the New of its kind (a new page is filed in the category of the list,
 // rule 6; anything else is filed by file-pages), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. The deleted
-// have no action here: each is restored from its page. Every list but All offers file-pages; pages (the ghosts too),
+// have no action here: each is restored from its page. Every list offers file-pages (All too: it is the default view
+// of a category, where a thing is moved, docs/plans/132-browse-the-notion-way.md); pages (the ghosts too),
 // media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
 	var out []siren.Action
@@ -455,7 +474,12 @@ func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Act
 	}
 	k := browseKindTable[b.kind]
 	if k.fileable {
-		out = append(out, withOptions(action("file-pages", nil, nil), "category", categories))
+		// inside a category the bar moves by default (the owner's word, 2026-10-18)
+		var values map[string]any
+		if in != nil {
+			values = map[string]any{"move": "1"}
+		}
+		out = append(out, withOptions(action("file-pages", nil, values), "category", categories))
 	}
 	if k.tombstonable {
 		out = append(out, action("tombstone-pages", nil, nil))

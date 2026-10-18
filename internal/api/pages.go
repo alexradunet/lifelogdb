@@ -140,12 +140,9 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if p.Type != "file" {
 		out = append(out, action("set-cover", ids, nil))
 	}
-	// file-pages files a page in a category, so link does not offer part-of; unlink takes a page out of one.
+	// file-pages files a page and, with from, takes it out; link and unlink offer the other kinds.
 	if linkable := slices.DeleteFunc(slices.Clone(kinds), func(k string) bool { return k == "part-of" }); len(linkable) > 0 {
-		out = append(out, withOptions(action("link", ids, nil), "kind", linkable))
-	}
-	if len(kinds) > 0 {
-		out = append(out, withOptions(action("unlink", ids, nil), "kind", kinds))
+		out = append(out, withOptions(action("link", ids, nil), "kind", linkable), withOptions(action("unlink", ids, nil), "kind", linkable))
 	}
 	if slices.Contains(kinds, "part-of") { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
 		var titles []string

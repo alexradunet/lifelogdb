@@ -195,7 +195,7 @@ func (t *Tx) fileNew(id int64, category string) error {
 	if category == "" {
 		return nil
 	}
-	_, err := t.filePages([]int64{id}, category, false)
+	_, err := t.filePages([]int64{id}, category, "", false)
 	return err
 }
 

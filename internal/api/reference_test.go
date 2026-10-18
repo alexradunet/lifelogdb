@@ -41,7 +41,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"rebuilt":                   map[string]any{"documents": 0},
 		"resynced":                  core.Resync{Created: []string{}, Revived: []string{}, Skipped: []string{}},
 		"tombstoned":                map[string]any{"ids": []int64{}, "count": 0},
-		"filed":                     map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0},
+		"filed":                     map[string]any{"category": core.Category{}, "created": false, "ids": []int64{}, "count": 0, "added": 0, "moved": 0, "removed": 0},
 		"integrity":                 core.IntegrityResult{},
 		"result":                    map[string]any{"title": "", "sha256": "", "mime": "", "picture": false},
 		"login":                     map[string]any{"failed": false, "logged_in": false},

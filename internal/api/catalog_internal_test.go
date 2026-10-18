@@ -1,12 +1,16 @@
 package api
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestTheCatalogMarksTheFieldOfAPageTitle: the catalog says which field takes a page's title (Pages), so a client
-// can offer the names of the pages: one field of each action that names a page.
+// can offer the names of the pages: one field of each action that names a page (file-pages names two: the category
+// to put the pages in, and the one to take them out of).
 func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
-	for _, tc := range []struct{ action, field string }{
-		{"create-page", "category"}, {"link", "to"}, {"unlink", "to"}, {"find", "title"}, {"file-pages", "category"},
+	for _, tc := range []struct{ action, fields string }{
+		{"create-page", "category"}, {"link", "to"}, {"unlink", "to"}, {"find", "title"}, {"file-pages", "category,from"},
 	} {
 		var marked []string
 		for _, fd := range action(tc.action, nil, nil).Fields {
@@ -14,8 +18,8 @@ func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 				marked = append(marked, fd.Name)
 			}
 		}
-		if len(marked) != 1 || marked[0] != tc.field {
-			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.field)
+		if strings.Join(marked, ",") != tc.fields {
+			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.fields)
 		}
 	}
 }

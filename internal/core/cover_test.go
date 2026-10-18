@@ -352,7 +352,7 @@ func TestTheListsShowTheCover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.FilePages(ctx, "cli", []int64{k.ID, scan.ID}, "Trips", false); err != nil {
+	if _, err := s.FilePages(ctx, "cli", []int64{k.ID, scan.ID}, "Trips", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Away", "![[Lake.jpg]]", "Trips"); err != nil {

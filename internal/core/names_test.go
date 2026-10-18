@@ -109,7 +109,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	}{
 		{"save-body", func(id int64) error { _, err := s.SaveBody(ctx, "cli", id, "words", "1"); return err }},
 		{"rename", func(id int64) error { _, err := s.Rename(ctx, "cli", id, "New Title"); return err }},
-		{"file-pages", func(id int64) error { _, err := s.FilePages(ctx, "cli", []int64{id}, "Group", false); return err }},
+		{"file-pages", func(id int64) error { _, err := s.FilePages(ctx, "cli", []int64{id}, "Group", "", false); return err }},
 		{"set-cover", func(id int64) error {
 			_, err := s.SetCover(ctx, "cli", id, "2026-10-16", FileIn{SHA256: sha('b'), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
 			return err
@@ -125,7 +125,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		}
 	}
 	// a tombstoned page as the category of a filing
-	if _, err := s.FilePages(ctx, "cli", []int64{live}, "Old Group", false); status(err) != 409 || err.Error() != want {
+	if _, err := s.FilePages(ctx, "cli", []int64{live}, "Old Group", "", false); status(err) != 409 || err.Error() != want {
 		t.Errorf("file-pages in a tombstoned category: %v (status %d), want 409 %q", err, status(err), want)
 	}
 }

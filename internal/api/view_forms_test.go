@@ -313,7 +313,7 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 }
 
 // TestAPagesCategoriesAreBadges: a page shows its categories as badges; + Add puts it in one (a new name makes it),
-// and x takes it out of that one only. + Add is the form of file-pages: it sends this page's id and move 0, and its
+// and x takes it out of that one only (file-pages with from). + Add is the form of file-pages: it sends this page's id and move 0, and its
 // category offers the titles of the categories in a datalist. A day page has none.
 func TestAPagesCategoriesAreBadges(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
@@ -345,12 +345,12 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	}
 	after := browse(t, h, self)
 	for _, cat := range []string{"Projects", "Outdoors"} {
-		if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">` + cat + `</a><form class="tiny" method="POST" action="` + self + `/unlink"`).MatchString(after) {
+		if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">` + cat + `</a><form class="tiny" method="POST" action="/pages/file"><input type="hidden" name="back" value="[^"]*"><input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="from" value="` + cat + `">`).MatchString(after) {
 			t.Errorf("the page has no badge for %s", cat)
 		}
 	}
 
-	rec := submit(h, self+"/unlink", url.Values{"to": {"Outdoors"}, "kind": {"part-of"}, "back": {self}}, "")
+	rec := submit(h, "/pages/file", url.Values{"ids": {id}, "from": {"Outdoors"}, "back": {self}}, "")
 	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || (loc != self && !feedbackLocation(loc, self)) {
 		t.Fatalf("x: %d %q", rec.Code, loc)
 	}
@@ -394,10 +394,10 @@ func TestEveryListSelectsTheSameWay(t *testing.T) {
 			t.Errorf("%s: the bar is not after its boxes", list.path)
 		}
 		put := strings.Contains(body, `<form id="pick" method="POST" action="`+list.put+`" class="inline">`) &&
-			strings.Contains(body, `<button class="primary">Put in a category</button>`)
+			strings.Contains(body, `<button class="primary">Add to</button>`)
 		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete</button></form>`)
 		if put != (list.put != "") || del != (list.del != "") {
-			t.Errorf("%s: Put in a category %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
+			t.Errorf("%s: Add to %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
 		}
 	}
 }

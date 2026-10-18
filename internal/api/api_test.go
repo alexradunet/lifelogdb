@@ -282,8 +282,8 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	}
 	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
 	// A plain page may start part-of only, which file-pages writes, so it offers no link (D16: at is from a day
-	// page only); unlink takes it out of a category.
-	if got := names(ana); got != "save-body,promote,rename,set-cover,unlink,file-pages,tombstone-pages" {
+	// page only); with from it takes it out of one.
+	if got := names(ana); got != "save-body,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
@@ -604,7 +604,7 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	}
 	// The metric's page holds its note and its categories, each a badge with its x; its readings link the page.
 	s := browse(t, h, apitest.Href(tsh, "page"))
-	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/\d+/unlink"`).MatchString(s) {
+	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/file"><input type="hidden" name="back" value="[^"]*"><input type="hidden" name="ids" value="\d+"><input type="hidden" name="from" value="Thyroid"`).MatchString(s) {
 		t.Error("a metric's page does not show its category as a badge with its x")
 	}
 	if !strings.Contains(s, "thyroid-stimulating hormone") || !strings.Contains(s, `href="/metrics/TSH"`) {
@@ -678,13 +678,13 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := apitest.Must(t)(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,promote,rename,set-cover,unlink,file-pages,tombstone-pages" {
+	if current.Title != "Correct" || names(current) != "save-body,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "save-body"), map[string]string{"body": "#REDIRECT [[Other]]", "version": version}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, current, "file-pages"), map[string]string{"category": "Other"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), oldHref)), "unlink"), map[string]string{"to": "Other", "kind": "part-of"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), oldHref)), "file-pages"), map[string]string{"from": "Other"}))
 	alias := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Typo"))
 	if apitest.Href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)

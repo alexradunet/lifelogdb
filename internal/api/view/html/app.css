@@ -565,8 +565,8 @@ li.tile>.pick-box{position:absolute; inset-block-start:var(--space-1); inset-inl
 .pick-list{display:flex; flex-direction:column; align-items:stretch; counter-reset:picked;
   & .pick-box{display:none}
   &:has(.pick-on:checked) .pick-box{display:flex}
-  &:not(:has(input[name=ids]:checked)) .pick-bar :is(button.primary,button.danger){opacity:.55}
-  &:has(input[name=ids]:checked) .pick-bar :is(button.primary,button.danger)::after{content:" (" counter(picked) ")"}}
+  &:not(:has(input[name=ids]:checked)) .pick-bar :is(button.primary,button.danger,button[name=from]){opacity:.55}
+  &:not(:has(input[name=ids]:checked)) .pick-bar .picked{display:none}}
 li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){counter-increment:picked}
 .pick-bar{order:-1; position:sticky; inset-block-start:0; z-index:3; display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-3);
   margin-block-end:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--surface); box-shadow:var(--parch-bevel);
@@ -577,11 +577,17 @@ li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){
     &:has(input:focus-visible){outline:2px solid var(--focus); outline-offset:2px}}
   & .pick-tools{display:none; flex:1 1 100%; flex-direction:row; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2) var(--space-3);
     & .desc{flex:1 1 100%; color:var(--text-muted); font-size:13px}
+    & .picked::after{content:counter(picked) " selected"; font-size:13px; color:var(--text-muted)}
     &>form{flex:1 1 100%}}
   &:has(.pick-on:checked) .pick-tools{display:flex}}
 @media (max-width:899px){.pick-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
-  &>a.entry{flex:1 1 auto; min-inline-size:0}}
+  &>a.entry{flex:1 1 auto; min-inline-size:0}
+  &>a.row-move{flex:none; align-self:center; padding:0 var(--space-2); font-size:13px; color:var(--text-link); opacity:0}
+  &:is(:hover,:focus-within)>a.row-move{opacity:1}}
+li.tile>a.row-move{position:absolute; inset-block-start:var(--space-1); inset-inline-end:var(--space-1); z-index:1; padding:0 var(--space-1); background:var(--surface); border:2px solid var(--edge); opacity:0}
+li.tile:is(:hover,:focus-within)>a.row-move{opacity:1}
+.rows .meta .badge.category{margin-inline-start:var(--space-2); font-size:11px; padding-block:1px; opacity:.8}
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
   & input:disabled{opacity:.35; cursor:default}}
 
@@ -658,6 +664,17 @@ li.pick{display:flex; align-items:stretch; gap:var(--space-1);
    are shorter than a list's. */
 .tree .entry,.filed .entry{grid-template-columns:minmax(0,1fr) auto}
 .tree .entry{padding-block:6px; padding-inline-start:26px}
+.tree li{position:relative}
+.tree a.tree-new{position:absolute; inset-block-start:0; inset-inline-end:0; display:grid; place-items:center; inline-size:26px; block-size:34px; color:var(--text-muted); text-decoration:none; opacity:0;
+  &:hover{color:var(--text-link); background:var(--surface-deep)}}
+.tree li:is(:hover,:focus-within)>a.tree-new{opacity:1}
+.tree li:is(:hover,:focus-within)>a.entry>.meta{visibility:hidden}
+.tree-foot a{display:block; padding:6px 26px; font-size:13px; color:var(--text-muted)}
+/* The head of Browse: the way to the list, as links, above its title. */
+.crumbs{display:flex; flex-wrap:wrap; gap:var(--space-1) var(--space-2); font-size:13px; line-height:19px;
+  & a{color:var(--text-muted)}
+  & :is(a,span)+:is(a,span)::before{content:"›"; margin-inline-end:var(--space-2); color:var(--text-muted)}}
+@media (hover:none){.tree a.tree-new,li.pick>a.row-move,li.tile>a.row-move{opacity:1}}
 .tree li.branch{position:relative;
   &>details>summary{position:absolute; inset-block-start:0; inset-inline-start:0; inline-size:26px; block-size:34px; min-block-size:0; margin:0; justify-content:center; gap:0}
   &>details[open]>summary{margin:0}

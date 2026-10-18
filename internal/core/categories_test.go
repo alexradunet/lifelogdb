@@ -269,7 +269,7 @@ func TestFilePages(t *testing.T) {
 	s := fresh(t)
 	ferritin, ldl, weight := metricID(t, s, "Ferritin", "ug/L"), metricID(t, s, "LDL", "mg/dL"), metricID(t, s, "Weight", "kg")
 
-	f, err := s.FilePages(ctx, "cli", []int64{ferritin, ldl}, "Bloodwork", false)
+	f, err := s.FilePages(ctx, "cli", []int64{ferritin, ldl}, "Bloodwork", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestFilePages(t *testing.T) {
 		t.Errorf("the made category = type %q day %q body %q, want a plain empty page with no day", cat.Type, cat.Day, cat.Body)
 	}
 
-	again, err := s.FilePages(ctx, "cli", []int64{ferritin, ldl}, "bloodwork", false)
+	again, err := s.FilePages(ctx, "cli", []int64{ferritin, ldl}, "bloodwork", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,17 +292,17 @@ func TestFilePages(t *testing.T) {
 		t.Errorf("second filing = %+v, want nothing new in the same page", again)
 	}
 
-	if _, err := s.FilePages(ctx, "cli", []int64{ferritin}, "Iron", false); err != nil {
+	if _, err := s.FilePages(ctx, "cli", []int64{ferritin}, "Iron", "", false); err != nil {
 		t.Fatal(err)
 	}
 	if got := partOf(t, s, ferritin); !slices.Equal(got, []string{"Bloodwork", "Iron"}) {
 		t.Fatalf("after add, Ferritin is part-of %v", got)
 	}
 
-	if _, err := s.FilePages(ctx, "cli", []int64{weight}, "Sport", false); err != nil {
+	if _, err := s.FilePages(ctx, "cli", []int64{weight}, "Sport", "", false); err != nil {
 		t.Fatal(err)
 	}
-	moved, err := s.FilePages(ctx, "cli", []int64{ferritin, weight}, "Iron", true)
+	moved, err := s.FilePages(ctx, "cli", []int64{ferritin, weight}, "Iron", "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,6 +317,24 @@ func TestFilePages(t *testing.T) {
 	}
 	if got := partOf(t, s, ldl); !slices.Equal(got, []string{"Bloodwork"}) {
 		t.Errorf("a move of other pages changed LDL: part-of %v", got)
+	}
+
+	// from takes the pages out of one category: Ferritin leaves Iron; LDL was not in it, so nothing of it changes.
+	removed, err := s.FilePages(ctx, "cli", []int64{ferritin, ldl}, "", "Iron", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed.Removed != 1 || removed.Added != 0 || removed.Created || removed.Category.Title != "Iron" {
+		t.Errorf("remove = %+v, want 1 link removed from Iron, nothing added", removed)
+	}
+	if got := partOf(t, s, ferritin); len(got) != 0 {
+		t.Errorf("after remove, Ferritin is part-of %v, want none", got)
+	}
+	if got := partOf(t, s, ldl); !slices.Equal(got, []string{"Bloodwork"}) {
+		t.Errorf("a remove from another category changed LDL: part-of %v", got)
+	}
+	if again, err := s.FilePages(ctx, "cli", []int64{ferritin}, "", "iron", false); err != nil || again.Removed != 0 {
+		t.Errorf("a second remove = %+v (%v), want nothing removed and no error", again, err)
 	}
 }
 
@@ -335,20 +353,25 @@ func TestFilePagesRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
-		name     string
-		ids      []int64
-		category string
-		want     int
+		name           string
+		ids            []int64
+		category, from string
+		want           int
 	}{
-		{"a missing page", []int64{ferritin, 9999}, "Bloodwork", 404},
-		{"a deleted category", []int64{ferritin}, "Old Group", 409},
-		{"a deleted page", []int64{gone}, "Bloodwork", 409},
-		{"a person as the category", []int64{ferritin}, "Bob Sample", 422},
-		{"a day as the category", []int64{ferritin}, "2026-10-01", 422},
-		{"a title the contract refuses", []int64{ferritin}, "Health/Diet", 422},
+		{"a missing page", []int64{ferritin, 9999}, "Bloodwork", "", 404},
+		{"a deleted category", []int64{ferritin}, "Old Group", "", 409},
+		{"a deleted page", []int64{gone}, "Bloodwork", "", 409},
+		{"a person as the category", []int64{ferritin}, "Bob Sample", "", 422},
+		{"a day as the category", []int64{ferritin}, "2026-10-01", "", 422},
+		{"a title the contract refuses", []int64{ferritin}, "Health/Diet", "", 422},
+		{"no category and no from", []int64{ferritin}, "", "", 422},
+		{"category and from together", []int64{ferritin}, "Bloodwork", "Iron", 422},
+		{"from a page that does not exist", []int64{ferritin}, "", "Nowhere", 404},
+		{"from a deleted page", []int64{ferritin}, "", "Old Group", 409},
+		{"a missing page, from", []int64{ferritin, 9999}, "", "Bob Sample", 404},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := s.FilePages(ctx, "cli", c.ids, c.category, false)
+			_, err := s.FilePages(ctx, "cli", c.ids, c.category, c.from, false)
 			if status(err) != c.want {
 				t.Fatalf("status %d (%v), want %d", status(err), err, c.want)
 			}
@@ -392,12 +415,12 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 	const sentence = "a day page is never filed in a category (D26)"
 
 	for _, ids := range [][]int64{{day}, {plain, day}, {day, plain}} {
-		_, err := s.FilePages(ctx, "cli", ids, "Garden", false)
+		_, err := s.FilePages(ctx, "cli", ids, "Garden", "", false)
 		if status(err) != 422 || !strings.Contains(err.Error(), sentence) {
 			t.Errorf("file-pages %v: %d %v, want a 422 that says %q", ids, status(err), err, sentence)
 		}
 	}
-	if _, err := s.FilePages(ctx, "cli", []int64{plain, day}, "Garden", true); status(err) != 422 {
+	if _, err := s.FilePages(ctx, "cli", []int64{plain, day}, "Garden", "", true); status(err) != 422 {
 		t.Errorf("file-pages with move: %d %v, want a 422", status(err), err)
 	}
 	after, err := countRows(ctx, s)
@@ -418,7 +441,7 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 	}
 
 	// The category exists: the part-of link from the day page is refused, the one from the plain page is not.
-	if _, err := s.FilePages(ctx, "cli", []int64{plain}, "Garden", false); err != nil {
+	if _, err := s.FilePages(ctx, "cli", []int64{plain}, "Garden", "", false); err != nil {
 		t.Fatal(err)
 	}
 	garden := pageByTitle(t, s, "Garden").ID
@@ -452,7 +475,7 @@ func TestANewThingIsFiledWhereItIsMade(t *testing.T) {
 			if _, _, err := s.CreatePage(ctx, "cli", "Family", "", ""); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.FilePages(ctx, "cli", []int64{pageByTitle(t, s, "Family").ID}, "Everyone", false); err != nil {
+			if _, err := s.FilePages(ctx, "cli", []int64{pageByTitle(t, s, "Family").ID}, "Everyone", "", false); err != nil {
 				t.Fatal(err) // Family is now a category under Everyone
 			}
 

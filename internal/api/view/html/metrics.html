@@ -9,14 +9,14 @@
 <div class="pick-list board">
 {{if gt (len $sections) 1}}<div class="board-nav"><nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
 {{range $sections}}<details class="group metric-group" id="{{.Anchor}}" open><summary><h2>{{.Title}} <small>{{.Count}}</small></h2>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
-{{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file)}}{{end}}
+{{with .Cards}}{{template "metric-cards" (dict "v" $ "cards" . "file" $file)}}{{end}}
 {{if .Page}}<div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a></div>{{end}}
 {{range .Subs}}<details class="metric-sub" open><summary><h3>{{.Title}} <small>{{len .Cards}}</small></h3>{{with .Latest}}<span class="meta">newest {{.}}</span>{{end}}</summary>
-{{with .Cards}}{{template "metric-cards" (dict "cards" . "file" $file)}}{{end}}
+{{with .Cards}}{{template "metric-cards" (dict "v" $ "cards" . "file" $file)}}{{end}}
 <div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a></div></details>
 {{end}}</details>
 {{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
-{{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
+{{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "button" "Add to" "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
 {{template "foot" .}}{{end}}
 
 {{/* The readings of a metric (/metrics/{name}): the head with its latest reading, then Add a reading, the chart and
@@ -61,7 +61,7 @@
      reading has a dash and its unit where the value goes, and an empty line. With the file-pages action, each card has a box that the file bar's form
      reads (form="pick"), and a form never holds a form. The boxes show while the file bar is open. */}}
 {{define "metric-cards"}}{{$file := .file}}<div class="readings metric-cards">{{range .cards}}<div class="reading-tile metric-card{{if .Stale}} stale{{end}}">
-{{if $file}}{{template "pick-box" (dict "id" .ID "title" .Name)}}{{end}}
+{{if $file}}{{template "pick-box" (dict "v" $.v "id" .ID "title" .Name)}}{{end}}
 <a class="name" href="{{.Href}}"{{with .Note}} title="{{.}}"{{end}}>{{.Name}}</a>
 {{if .Measurement}}{{template "reading-link" (dict "id" .Measurement "value" .Value "unit" .Unit)}}
 {{.Line}}{{else}}<span class="reading none"><span aria-hidden="true">–</span>{{with .Unit}} <span class="unit">{{.}}</span>{{end}}</span><span class="line-none" aria-hidden="true"></span>{{end}}

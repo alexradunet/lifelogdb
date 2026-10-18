@@ -133,7 +133,7 @@ func TestAMetricsPageIsAPage(t *testing.T) {
 			t.Errorf("the metric's page does not show %s", want)
 		}
 	}
-	for _, name := range []string{"save-body", "rename", "unlink", "file-pages", "tombstone-pages"} {
+	for _, name := range []string{"save-body", "rename", "file-pages", "tombstone-pages"} {
 		if a := apitest.Action(t, page, name); !strings.Contains(body, `action="`+a.Href+`"`) {
 			t.Errorf("the metric's page has no form of %s: %+v", name, a)
 		}

@@ -67,7 +67,7 @@ func TestBrowseQueryOf(t *testing.T) {
 
 // TestBrowseActions: the actions of each list of Browse. The New of the kind of the list (none for a metric, all and
 // the ghosts) takes the category of the list; file-pages, on every list but All, offers the categories; pages, the
-// ghosts, media and documents offer tombstone-pages; every list but the ghosts offers random-page.
+// ghosts, media and documents offer tombstone-pages; inside a category file-pages has move 1; every list but the ghosts offers random-page.
 func TestBrowseActions(t *testing.T) {
 	family := &browseIn{ID: 7, Title: "Family", Path: "Family"}
 	categories := []string{"Cousins", "Family"}
@@ -85,10 +85,10 @@ func TestBrowseActions(t *testing.T) {
 		{"documents", browseQuery{kind: "document"}, nil, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
 		{"metrics", browseQuery{kind: "metric"}, nil, "file-pages[Cousins Family] random-page"},
 		{"the ghosts", browseQuery{kind: "page", ghosts: true}, nil, "file-pages[Cousins Family] tombstone-pages"},
-		{"all in Family", browseQuery{kind: "all", in: "Family"}, family, "random-page"},
-		{"pages in Family", browseQuery{kind: "page", in: "Family"}, family, "create-page=Family file-pages[Cousins Family] tombstone-pages random-page"},
-		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person file-pages[Cousins Family] random-page"},
-		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
+		{"all in Family", browseQuery{kind: "all", in: "Family"}, family, "file-pages[Cousins Family]:move=1 random-page"},
+		{"pages in Family", browseQuery{kind: "page", in: "Family"}, family, "create-page=Family file-pages[Cousins Family]:move=1 tombstone-pages random-page"},
+		{"people in Family", browseQuery{kind: "person", in: "Family"}, family, "create-person file-pages[Cousins Family]:move=1 random-page"},
+		{"media in Family", browseQuery{kind: "media", in: "Family"}, family, "add-file file-pages[Cousins Family]:move=1 tombstone-pages random-page"},
 	} {
 		var got []string
 		for _, a := range browseActions(tc.b, tc.in, categories) {
@@ -98,6 +98,9 @@ func TestBrowseActions(t *testing.T) {
 			}
 			if f := a.Field("category"); f != nil && f.Options != nil {
 				s += fmt.Sprint(f.Options)
+			}
+			if f := a.Field("move"); f != nil && f.Value != nil {
+				s += ":move=" + fmt.Sprint(f.Value)
 			}
 			got = append(got, s)
 		}

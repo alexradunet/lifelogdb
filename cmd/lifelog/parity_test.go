@@ -372,6 +372,7 @@ func parityRows() []parityRow {
 		{"search order=newest", rowSearchNewest},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
+		{"file-pages with from", rowUnfilePages},
 		{"file-pages with a day page", rowFileADayPage},
 	}
 	for _, kind := range []string{"page", "person", "place", "metric", "file"} {
@@ -593,7 +594,7 @@ func rowBrowse(x *parityRun) {
 		}
 		people = append(people, p)
 	}
-	if _, err := x.store.FilePages(ctx, "cli", []int64{people[2], people[0]}, "Family", false); err != nil {
+	if _, err := x.store.FilePages(ctx, "cli", []int64{people[2], people[0]}, "Family", "", false); err != nil {
 		x.t.Fatal(err)
 	}
 	for _, title := range []string{"Pia", "Bea", "Cal"} {
@@ -722,6 +723,33 @@ func rowFilePages(x *parityRun) {
 	for _, p := range ids {
 		if got := x.categories(p); got != "Bloodwork" {
 			x.t.Errorf("page %d is in %q, want Bloodwork", p, got)
+		}
+	}
+}
+
+// file-pages with from takes the pages out of the category: the part-of links to it are removed and nothing else.
+func rowUnfilePages(x *parityRun) {
+	var ids []int64
+	for _, m := range []string{"Ferritin", "LDL"} {
+		if _, err := x.store.CreateMetric(x.t.Context(), "cli", core.NewMetric{Name: m, Unit: "mg/dL"}); err != nil {
+			x.t.Fatal(err)
+		}
+		p, err := x.store.PageID(x.t.Context(), m)
+		if err != nil || p == 0 {
+			x.t.Fatalf("%s: %d %v", m, p, err)
+		}
+		ids = append(ids, p)
+	}
+	if _, err := x.store.FilePages(x.t.Context(), "cli", ids, "Bloodwork", "", false); err != nil {
+		x.t.Fatal(err)
+	}
+	e := x.ok("file-pages", map[string]string{"ids": id(ids[0]) + "," + id(ids[1]), "from": "Bloodwork"})
+	if p := props(x.t, e); p["removed"] != json.Number("2") || e.Result != "Removed 2 from Bloodwork." {
+		x.t.Errorf("file-pages from: %v %q, want 2 removed", p, e.Result)
+	}
+	for _, p := range ids {
+		if got := x.categories(p); got != "" {
+			x.t.Errorf("page %d is in %q, want no category", p, got)
 		}
 	}
 }
