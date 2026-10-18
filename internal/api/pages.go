@@ -64,15 +64,9 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 }
 
 func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error) {
-	_, e, err := h.loadPage(ctx, id)
-	return e, err
-}
-
-// loadPage is the page with that id, and the entity that serves it: the page is the properties of the entity.
-func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Entity, error) {
 	p, err := h.s.PageByID(ctx, id)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	e := &siren.Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
 		Links: []siren.Link{link("self", siren.PageHref(id), p.Title), link("index", "/", "Home")}}
@@ -81,7 +75,7 @@ func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Ent
 		e.Links = append(e.Links, link("day", siren.DayHref(p.Day), "Day view"))
 	}
 	if p.File != nil && p.File.Preview {
-		e.Links = append(e.Links, link("preview", siren.PageHref(id)+"/preview", "Picture"))
+		e.Links = append(e.Links, link("preview", pictureHref(id), "Picture"))
 	}
 	if p.Type == "metric" { // the page of a metric links its readings, and its readings link the page
 		e.Links = append(e.Links, link("series", siren.MetricHref(p.Title), "Readings"))
@@ -95,7 +89,7 @@ func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Ent
 	var cats []core.Category
 	if !p.IsDayPage {
 		if cats, err = h.s.Categories(ctx); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	isCategory := func(id int64) bool {
@@ -112,10 +106,10 @@ func (h *server) loadPage(ctx context.Context, id int64) (*core.Page, *siren.Ent
 	if p.DeletedAt != "" {
 		e.Class = append(e.Class, "deleted")
 	} else if kinds, err = h.linkKinds(ctx, p.Type, p.IsDayPage); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	e.Actions = pageActions(p, kinds, cats)
-	return p, e, nil
+	return e, nil
 }
 
 // pageActions are the actions a page offers, by its type, its state and its links. kinds are the link kinds it may
@@ -161,10 +155,10 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 func coverLinks(p *core.Page) []siren.Link {
 	var out []siren.Link
 	if p.Cover != nil {
-		out = append(out, link("cover", siren.PageHref(p.Cover.ID)+"/preview", p.Cover.Title))
+		out = append(out, link("cover", pictureHref(p.Cover.ID), p.Cover.Title))
 	}
 	if p.Type != "file" && p.DeletedAt == "" {
-		out = append(out, link("choose-cover", siren.PageHref(p.ID)+"/cover", "Set cover photo"))
+		out = append(out, link("choose-cover", siren.CoverHref(p.ID), "Set cover photo"))
 	}
 	return out
 }
@@ -220,9 +214,13 @@ func searchHref(q, order, kind string) string {
 	return "/search?" + v.Encode()
 }
 
-func (h *server) search(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
-	q, kind := r.URL.Query().Get("q"), r.URL.Query().Get("kind")
-	order, err := core.SearchOrderOf(r.URL.Query().Get("order"))
+func (h *server) search(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	q, kind := v.Get("q"), v.Get("kind")
+	order, err := core.SearchOrderOf(v.Get("order"))
 	if err != nil {
 		return nil, err
 	}

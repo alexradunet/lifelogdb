@@ -164,8 +164,8 @@ func exifItem(iinf []byte) (uint32, bool) {
 	return id, found
 }
 
-// maxHEIFItemData bounds iloc reconstruction to the metadata head the API keeps. A photo's position is only a
-// transient input to D21 place matching, so metadata outside the supplied head stays unknown rather than being fetched.
+// maxHEIFItemData bounds iloc reconstruction to the metadata head the API keeps. Metadata outside the supplied head
+// stays unknown rather than being fetched. A photo's position is never read (D21).
 const maxHEIFItemData = 1 << 20
 
 // itemData is an item's bytes, by its iloc entry; nil when they are not all in file (the head given) or idat.

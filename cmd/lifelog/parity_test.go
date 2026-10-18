@@ -370,6 +370,8 @@ func parityRows() []parityRow {
 		{"the word today in a day field", rowTodayInADayField},
 		{"browse", rowBrowse},
 		{"search order=newest", rowSearchNewest},
+		{"browse deleted=1", rowBrowseDeleted},
+		{"search limit=1", rowSearchLimit},
 		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
 		{"file-pages with from", rowUnfilePages},
@@ -1070,4 +1072,45 @@ func rowRangeOutOfOrder(x *parityRun) {
 		}
 	}
 	x.absent("Pain")
+}
+
+// browse deleted=1 lists the tombstones, and search takes limit and offset: the catalog lists these fields, so the
+// CLI's do and the MCP tools can send them (plan 133, part 1).
+func rowBrowseDeleted(x *parityRun) {
+	ctx := x.t.Context()
+	id, _, err := x.store.CreatePage(ctx, "cli", "Gone", "", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	if _, _, err := x.store.CreatePage(ctx, "cli", "Kept", "", ""); err != nil {
+		x.t.Fatal(err)
+	}
+	if err := x.store.Tombstone(ctx, "cli", id); err != nil {
+		x.t.Fatal(err)
+	}
+	e := x.ok("browse", map[string]string{"deleted": "1"})
+	if titles := rowField(x.t, e, "title"); titles != "Gone" {
+		x.t.Errorf("browse deleted=1: %s, want Gone", titles)
+	}
+}
+
+func rowSearchLimit(x *parityRun) {
+	ctx := x.t.Context()
+	for _, title := range []string{"Shed", "Barn"} {
+		if _, _, err := x.store.CreatePage(ctx, "cli", title, "A lantern.", ""); err != nil {
+			x.t.Fatal(err)
+		}
+	}
+	hits := func(args map[string]string) int {
+		x.t.Helper()
+		args["q"] = "lantern"
+		h, _ := props(x.t, x.ok("search", args))["hits"].([]any)
+		return len(h)
+	}
+	if all, one := hits(map[string]string{}), hits(map[string]string{"limit": "1"}); one != 1 || all < 2 {
+		x.t.Errorf("search: %d hits, with limit=1 %d; want at least 2, then 1", all, one)
+	}
+	if e := x.ok("search", map[string]string{}); e.Class[0] != "search" { // an empty q is the search page
+		x.t.Errorf("search with no q: %v", e.Class)
+	}
 }

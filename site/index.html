@@ -49,7 +49,7 @@
       <figure class="leaf parchment" style="margin:0" aria-label="A day page, as the browser shows it. The content is an example.">
         <div class="leaf-band"><span>SEPTEMBER 2026</span><b>today</b></div>
         <div class="leaf-body">
-          <div class="leaf-day"><span>12</span><span>Saturday · week 37</span></div>
+          <div class="leaf-day"><span>12</span><span>Saturday</span></div>
           <p>Ran 5k with <span class="wl">Sam</span> along the <span class="wl">Lakeside</span>. Cold air, good pace.
             <span class="tag">#running</span></p>
           <p>Read two chapters of <span class="wl">The Overstory</span> in the evening.</p>
@@ -66,9 +66,9 @@
             <div>
               <h3>Habits</h3>
               <ul>
-                <li><span>Evening walk</span><span class="v done">done</span></li>
-                <li><span>Reading</span><span class="v done">done</span></li>
-                <li><span>Stretch</span><span class="v">—</span></li>
+                <li><span>Evening walk</span><span class="v done">1</span></li>
+                <li><span>Reading</span><span class="v done">1</span></li>
+                <li><span>Stretch</span><span class="v">0</span></li>
               </ul>
             </div>
           </div>
@@ -90,19 +90,20 @@
         <p>One page for each day. Write in Markdown. A <code>[[name]]</code> links a person, a place or a page, and a
           <code>#tag</code> groups the pages.</p></article>
       <article class="card parchment"><h3>People and places</h3>
-        <p>Each person and each place has a page. Their names, birthdays and the days they appear in are kept as
-          records, not only as text.</p></article>
+        <p>Each person and each place has a page. A person’s name and birthday are kept as records, not only
+          as text. A day links the places where you were.</p></article>
       <article class="card parchment"><h3>Health readings</h3>
         <p>Mood, weight, sleep, a blood test. Readings are never edited: a correction is a new reading that replaces
           the old one, so the history stays true.</p></article>
       <article class="card parchment"><h3>Habits, without streaks</h3>
-        <p>Check in each day: done or not done. A habit shows as “5 of 7 days”. There are no chains and no badges.</p></article>
+        <p>A habit is a reading of 1 (done) or 0 (not done) for a day, recorded like any other reading. There are no
+          chains and no badges.</p></article>
       <article class="card parchment"><h3>The files you keep</h3>
         <p>A voice memo’s transcript, a PDF’s text, a photo’s small picture. The original stays where it is, so the
           database stays small enough to copy.</p></article>
-      <article class="card parchment"><h3>Tasks and reminders</h3>
-        <p>Write down what you plan to do and when it is due. Mark it done or skipped. The intent is kept beside
-          what happened, and never mixed with it.</p></article>
+      <article class="card parchment"><h3>Plans, as words</h3>
+        <p>A plan is words in a page. There are no tasks, no due dates and no reminders. What you plan to do stays
+          in the text, beside what happened.</p></article>
     </div>
   </div>
 </section>
@@ -126,10 +127,10 @@
 
     <div class="grid">
       <article class="card parchment"><h3>The browser</h3>
-        <p>Today at a glance: what is due, your habits, your newest pages. A calendar of each month, week and year.
-          It works with no script, and on a phone.</p></article>
+        <p>Today’s page, with your newest pages beside it. A Calendar of your days, with a month and a year.
+          Search, Browse and Metrics. It works with no script, and on a phone.</p></article>
       <article class="card parchment"><h3>The command line</h3>
-        <p>Capture a line, read a day, check in a habit, keep a file or take a snapshot, from any terminal.</p>
+        <p>Capture a line, read a day, record a reading, keep a file or take a snapshot, from any terminal.</p>
         <span class="mono">lifelog capture "Ran 5k with [[Sam]] #running" --mood 4</span></article>
       <article class="card parchment"><h3>An AI agent, with your word</h3>
         <p>An MCP server lets a coding agent help you import old notes. The agent proposes each person, place and
@@ -173,7 +174,7 @@
       <code>life.db</code> with any SQLite tool, or build a different application around the same schema.</p>
     <div class="grid">
       <article class="card parchment"><h3>The schema</h3>
-        <p>One canonical DDL: 15 strict, typed tables, a full-text index and 3 views. Every CHECK has a name.
+        <p>One canonical DDL: 10 strict, typed tables, a full-text index and 3 views. Every CHECK has a name.
           No JSON columns.</p>
         <a class="mono" href="https://github.com/alexradunet/lifelogdb/blob/master/docs/schema/schema.sql">docs/schema/schema.sql</a></article>
       <article class="card parchment"><h3>The decisions</h3>
@@ -211,8 +212,8 @@
         <tbody>
           <tr><td>Sync between copies</td><td>Your other devices are clients of one writer. A merge would remove the
             checked keys that keep the data correct.</td></tr>
-          <tr><td>A location track</td><td>A place has a point, and a photo’s place links its day. No minute-by-minute
-            position is kept.</td></tr>
+          <tr><td>A location track</td><td>A place has no point, and no photo’s position is read. You write the places of a
+            day yourself. No minute-by-minute position is kept.</td></tr>
           <tr><td>A photo archive</td><td>Lifelog keeps the few photos that stand for a day. Your library stays in your
             photo tool.</td></tr>
           <tr><td>A finance ledger</td><td>Notes about money stay text until a real need for numbers comes.</td></tr>
@@ -235,28 +236,25 @@
 <pre><span class="c"># build</span>
 git clone https://github.com/alexradunet/lifelogdb
 cd lifelogdb
-go generate ./... &amp;&amp; go build -o lifelog ./cmd/lifelog
+go build -o lifelog ./cmd/lifelog
 
 <span class="c"># make life.db beside the program</span>
-./lifelog init
+lifelog init
 
 <span class="c"># write, then read</span>
-./lifelog capture <span class="p">"Ran 5k with [[Sam]] #running"</span> --mood 4
-./lifelog day --human</pre>
+lifelog capture <span class="p">"Ran 5k with [[Sam]] #running"</span> --mood 4
+lifelog day --human</pre>
 <pre><span class="c"># open it in a browser: http://127.0.0.1:7777</span>
-./lifelog serve
-
-<span class="c"># check in a habit</span>
-./lifelog done evening_walk
+lifelog serve
 
 <span class="c"># keep a voice memo as its text</span>
-./lifelog file memo.m4a --text memo.txt
+lifelog file memo.m4a --text memo.txt
 
 <span class="c"># a dated copy, checked before it is trusted</span>
-./lifelog snapshot --to ~/snapshots --human
+lifelog snapshot --snapshots ~/snapshots --human
 
 <span class="c"># let a coding agent help you import</span>
-./lifelog agentic-init</pre>
+lifelog agentic-init</pre>
     </div>
   </div>
 </section>

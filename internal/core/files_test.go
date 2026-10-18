@@ -245,9 +245,8 @@ func TestAddFileRefuses(t *testing.T) {
 	if _, err := s.CreatePerson(ctx, "cli", "Bob Sample", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	var ex *ExistsError
-	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Bob Sample", SHA256: sha('a'), MIME: "image/jpeg"}); !errors.As(err, &ex) {
-		t.Errorf("a person's title: %v", err)
+	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Bob Sample", SHA256: sha('a'), MIME: "image/jpeg"}); status(err) != 422 || !strings.Contains(err.Error(), "only a plain page is promoted") {
+		t.Errorf("a person's title: %v, want the 422 of entities_promote_from_page", err)
 	}
 	if _, _, err := s.Capture(ctx, "cli", "2026-10-04", "x", nil); err != nil {
 		t.Fatal(err)

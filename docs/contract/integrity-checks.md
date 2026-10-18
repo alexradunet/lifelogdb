@@ -99,7 +99,8 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   link repair above, as actions of the owner, so that nobody runs the statement by hand. The check holds that connection for as long as it runs, and it reads the whole
   index: every other write of the same writer waits, and a writer in another process meets the lock. A writer
   therefore puts one deadline on the whole run, so that a check that never ends cannot block the writes for ever. A
-  run that passes the deadline ends with an error, not with a result.
+  run that passes the deadline ends with an error, not with a result. An error of the FTS5 check that is not a
+  corruption result (the deadline, a cancelled run, a busy file) is an error too, never a finding about the index.
 - **What structural integrity does not see: a changed value.** A flipped byte inside a body passed
   `integrity_check` — SQLite keeps no page checksums. This indexed-token change is detected by the FTS5 content comparison; structural success alone does not establish intact prose. The cheap guard is below the file: keep
   `life.db` on a filesystem that checksums data (btrfs and ZFS do by default; never `chattr +C` the

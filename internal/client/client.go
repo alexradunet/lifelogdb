@@ -125,7 +125,7 @@ func fill(a siren.Action, values map[string]string) (string, url.Values, map[str
 		}
 	}
 	for k := range values {
-		if !hasField(a, k) {
+		if a.Field(k) == nil {
 			return "", nil, nil, fmt.Errorf("%s has no field %q", a.Name, k)
 		}
 	}
@@ -211,15 +211,6 @@ func (c *Client) multipart(ctx context.Context, method, href string, form url.Va
 		return nil, ctx.Err()
 	}
 	return e, err
-}
-
-func hasField(a siren.Action, name string) bool {
-	for _, f := range a.Fields {
-		if f.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // Catalog is GET /actions: every action, with templated hrefs.

@@ -99,8 +99,11 @@ func (c *integrityConn) QueryContext(ctx context.Context, query string, _ []driv
 func (c *integrityConn) ExecContext(ctx context.Context, _ string, _ []driver.NamedValue) (driver.Result, error) {
 	c.c.noteDeadline(ctx)
 	c.c.execs++
-	if c.c.fault == "fts" {
+	switch c.c.fault {
+	case "fts":
 		return nil, errIntegrityFault
+	case "fts-deadline":
+		return nil, context.DeadlineExceeded
 	}
 	return driver.RowsAffected(0), nil
 }
@@ -220,20 +223,73 @@ func TestIntegrityReadFailures(t *testing.T) {
 	}
 }
 func TestIntegrityResultSemantics(t *testing.T) {
-	for _, fault := range []string{"", "fts"} {
-		t.Run("clean-read-streams/"+fault, func(t *testing.T) {
+	c := &integrityConnector{}
+	r, err := faultIntegrityStore(t, c).Integrity(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.OK || !r.FullTextIndexOK || r.FullTextError != "" || len(r.IntegrityCheck) != 1 || r.IntegrityCheck[0] != "ok" || r.ForeignKeys != 0 || len(r.OrphanEntities) != 0 {
+		t.Errorf("unexpected result: %+v", r)
+	}
+	if c.closed != len(integrityCheckNames) || c.execs != 1 {
+		t.Errorf("closed=%d execs=%d", c.closed, c.execs)
+	}
+}
+
+// An error of the full-text step that is not a corruption result (a busy file, a deadline, a cancelled context) is
+// returned as an error. It is not a finding: it says nothing about the index.
+func TestIntegrityFullTextStepFailureIsAnErrorNotAFinding(t *testing.T) {
+	for _, fault := range []string{"fts", "fts-deadline"} {
+		t.Run(fault, func(t *testing.T) {
 			c := &integrityConnector{fault: fault}
 			r, err := faultIntegrityStore(t, c).Integrity(context.Background())
-			if err != nil {
-				t.Fatal(err)
+			if err == nil || r != nil {
+				t.Fatalf("result=%+v error=%v; want no result and an error", r, err)
 			}
-			if r.OK != (fault == "") || r.FullTextIndexOK != (fault == "") || (r.FullTextError != "") != (fault == "fts") || len(r.IntegrityCheck) != 1 || r.IntegrityCheck[0] != "ok" || r.ForeignKeys != 0 || len(r.OrphanEntities) != 0 {
-				t.Errorf("unexpected result: %+v", r)
-			}
-			if c.closed != len(integrityCheckNames) || c.execs != 1 {
-				t.Errorf("closed=%d execs=%d", c.closed, c.execs)
+			if want := map[string]error{"fts": errIntegrityFault, "fts-deadline": context.DeadlineExceeded}[fault]; !errors.Is(err, want) {
+				t.Errorf("error %v does not wrap %v", err, want)
 			}
 		})
+	}
+}
+
+// A damaged full-text index is a finding, not an error: the index and its content drift apart (the triggers that keep
+// them equal are dropped on this throwaway file), and the check reports that.
+func TestIntegrityReportsADamagedFullTextIndex(t *testing.T) {
+	s := fresh(t)
+	id, _, err := s.CreatePage(ctx, "cli", "Indexed", "first words", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.DB.R.Query(`SELECT name FROM sqlite_schema WHERE type='trigger' AND name LIKE '%fts%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, n)
+	}
+	if err := rows.Close(); err != nil || len(names) == 0 {
+		t.Fatalf("triggers %v: %v", names, err)
+	}
+	for _, n := range names {
+		if _, err := s.DB.W.Exec(`DROP TRIGGER ` + n); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.DB.W.Exec(`UPDATE entities SET body='other words entirely' WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Integrity(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.OK || r.FullTextIndexOK || r.FullTextError == "" {
+		t.Errorf("a damaged index: %+v", r)
 	}
 }
 
@@ -249,8 +305,8 @@ func TestIntegrityRunsUnderItsDeadline(t *testing.T) {
 		t.Fatalf("%d statements noted; want %d", len(c.deadlines), len(integrityCheckNames)+1)
 	}
 	for i, d := range c.deadlines {
-		if d.IsZero() || d.After(end.Add(IntegrityDeadline)) || !d.After(start.Add(IntegrityDeadline-time.Minute)) {
-			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, IntegrityDeadline, start, end)
+		if d.IsZero() || d.After(end.Add(integrityDeadline)) || !d.After(start.Add(integrityDeadline-time.Minute)) {
+			t.Errorf("statement %d: deadline %v; want about %v after the call (%v to %v)", i, d, integrityDeadline, start, end)
 		}
 	}
 }

@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"regexp"
 	"slices"
 	"strconv"
@@ -39,16 +38,12 @@ func embeddedPictures(ctx context.Context, q queryer, bodies []string) ([][]Cove
 	if len(keys) == 0 {
 		return out, nil
 	}
-	arg, err := json.Marshal(keys)
-	if err != nil {
-		return nil, err
-	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT n.name_key, f.id, pn.title FROM entity_names n
 		  JOIN entities e ON e.id = n.entity_id AND e.deleted_at IS NULL
 		  JOIN entity_names pn ON pn.entity_id = e.id AND pn.name_key = e.preferred_name_key
 		  JOIN files f ON f.id = e.id AND f.preview IS NOT NULL
-		 WHERE n.name_key IN (SELECT value FROM json_each(?))`, string(arg))
+		 WHERE n.name_key IN (SELECT value FROM json_each(?))`, jsonArray(keys))
 	byKey := map[string]Cover{}
 	var key string
 	var c Cover
@@ -141,11 +136,11 @@ func (t *Tx) setCover(id int64, day string, f FileIn) (Kept, error) {
 	if err != nil {
 		return Kept{}, err
 	}
-	var title string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT n.title FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, k.ID).Scan(&title); err != nil {
+	kept, err := t.findPage(false, `e.id = ?`, k.ID)
+	if err != nil {
 		return Kept{}, err
 	}
-	sync, err := t.showFirst(id, k.ID, title)
+	sync, err := t.showFirst(id, k.ID, kept.Title)
 	if err != nil {
 		return Kept{}, err
 	}

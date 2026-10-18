@@ -64,7 +64,7 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `invalid` (422), `timeout`, `internal` |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person; a fault of the server (500 `internal`) says only `internal error`, and the server's log has the cause |
 
 ## Pages of a list
@@ -78,7 +78,7 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 ### root
 
 `GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered with the
-[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse`, `categories` (`/browse`), `people`
+[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse` (`/browse`), `people`
 (`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
 `year` (this year). Actions: `capture` (for today), `search`,
@@ -227,7 +227,7 @@ offer no action.
 
 ### search
 
-`GET /search?q=&order=&kind=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+`GET /search?q=&order=&kind=&limit=&offset=` (FTS5 syntax over titles and bodies; an empty `q` is the search page). Hits are also embedded as `item` links. Action: `search`.
 `order` is optional: `best` (the default) lists the best match first; `newest` lists the newest day first. The day of a
 page is its title when it is a day page, and else the local day of its `created_at` (in the zone of the writer). Pages of
 one day keep the order of the best match. Any other `order` is a 422 (`invalid`) that names the two. Links: `self`,
@@ -520,7 +520,7 @@ with a `result` sentence; `file-pages` files a metric in a category.
 ### integrity
 
 `GET /integrity`: the four integrity checks of the contract, and this writer's own. It is an owner-only action
-(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds (`core.IntegrityDeadline`), below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
+(`integrity-check`). The full-text check holds the write lock while it runs, so other writes wait. The whole run has a deadline of 90 seconds, below the deadline of two minutes of every request; a run that passes it is answered 504 `timeout`. Actions: the owner's `rebuild-search` and `resync-links`.
 
 | property | type | meaning |
 |---|---|---|

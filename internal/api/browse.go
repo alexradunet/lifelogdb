@@ -19,7 +19,6 @@ import (
 // The kinds that core lists are the rows; "all" is the row of the list of a category.
 type browseKind struct {
 	chip         string // the words of the chip
-	fileable     bool   // the pick bar offers file-pages
 	tombstonable bool   // the pick bar offers tombstone-pages; the other kinds are deleted from their own page
 	read         func(h *server, ctx context.Context, rd browseRead) ([]browseRow, pageProps, error)
 }
@@ -36,13 +35,13 @@ type browseRead struct {
 // browseKindTable has a row for each of the browseKinds. The action that makes a thing of a kind on its list is
 // siren.NewActionOf, because the rail of the browser reads it too.
 var browseKindTable = map[string]browseKind{
-	"page":     {chip: "Pages", fileable: true, tombstonable: true, read: (*server).pageRows},
-	"person":   {chip: "People", fileable: true, read: (*server).namedRows},
-	"place":    {chip: "Places", fileable: true, read: (*server).namedRows},
-	"media":    {chip: "Media", fileable: true, tombstonable: true, read: (*server).fileRows},
-	"document": {chip: "Documents", fileable: true, tombstonable: true, read: (*server).fileRows},
-	"metric":   {chip: "Metrics", fileable: true, read: (*server).metricRows},
-	"all":      {chip: "All", fileable: true, read: (*server).filedRows},
+	"page":     {chip: "Pages", tombstonable: true, read: (*server).pageRows},
+	"person":   {chip: "People", read: (*server).namedRows},
+	"place":    {chip: "Places", read: (*server).namedRows},
+	"media":    {chip: "Media", tombstonable: true, read: (*server).fileRows},
+	"document": {chip: "Documents", tombstonable: true, read: (*server).fileRows},
+	"metric":   {chip: "Metrics", read: (*server).metricRows},
+	"all":      {chip: "All", read: (*server).filedRows},
 }
 
 // browseKinds are the values of the field kind; "all" is a chip only inside a category, where it is the first.
@@ -198,8 +197,12 @@ func (b browseQuery) values(kind string, drop ...string) url.Values {
 
 // browse is GET /browse and the action browse: the rows of one kind in one scope, the count of each chip, and the
 // category tree. Inside a category the list's New form files the new page there.
-func (h *server) browse(r *http.Request, _ spec, _ string) (*siren.Entity, error) {
-	b, err := browseQueryOf(r.URL.Query())
+func (h *server) browse(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	q, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	b, err := browseQueryOf(q)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +416,7 @@ func (h *server) fileRows(ctx context.Context, rd browseRead) ([]browseRow, page
 		row := browseRow{ID: f.ID, Title: f.Title, Type: "file", Kind: kind, Mentions: &f.Mentions, MIME: f.MIME,
 			FileKind: fileKind(f.MIME), Day: f.Day}
 		if f.Picture {
-			row.Picture = siren.PageHref(f.ID) + "/preview"
+			row.Picture = pictureHref(f.ID)
 		}
 		rows = append(rows, row)
 	}
@@ -472,16 +475,13 @@ func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Act
 		}
 		out = append(out, action(name, nil, values))
 	}
-	k := browseKindTable[b.kind]
-	if k.fileable {
-		// inside a category the bar moves by default (the owner's word, 2026-10-18)
-		var values map[string]any
-		if in != nil {
-			values = map[string]any{"move": "1"}
-		}
-		out = append(out, withOptions(action("file-pages", nil, values), "category", categories))
+	// inside a category the bar moves by default (the owner's word, 2026-10-18)
+	var values map[string]any
+	if in != nil {
+		values = map[string]any{"move": "1"}
 	}
-	if k.tombstonable {
+	out = append(out, withOptions(action("file-pages", nil, values), "category", categories))
+	if browseKindTable[b.kind].tombstonable {
 		out = append(out, action("tombstone-pages", nil, nil))
 	}
 	// A random thing of the kind of the list (docs/plans/130-the-explore-pass.md, part 5); the ghosts have nothing to

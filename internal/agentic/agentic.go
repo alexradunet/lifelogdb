@@ -7,6 +7,7 @@ package agentic
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -15,8 +16,6 @@ import (
 	"sort"
 	"strings"
 	"text/template"
-
-	"lifelog/internal/api/siren"
 )
 
 //go:embed templates
@@ -85,15 +84,6 @@ func Files(p Paths) (map[string][]byte, error) {
 		}
 	}
 	server := func(agent string) []string { return []string{"mcp", "--agent", agent, "--db", p.DB} }
-	var err2 error
-	// jsonFile is v as the JSON of the API, with an indent of two spaces.
-	jsonFile := func(v any) []byte {
-		var b bytes.Buffer
-		if err := siren.WriteJSON(&b, v, "  "); err != nil {
-			err2 = err
-		}
-		return b.Bytes()
-	}
 	type stdio struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
@@ -110,7 +100,18 @@ func Files(p Paths) (map[string][]byte, error) {
 		args = append(args, tomlString(a))
 	}
 	out[".codex/config.toml"] = []byte("[mcp_servers.lifelog]\ncommand = " + tomlString(p.Exe) + "\nargs = [" + strings.Join(args, ", ") + "]\n")
-	return out, err2
+	return out, nil
+}
+
+// jsonFile is v as indented JSON with no HTML escaping. v holds only strings, booleans and lists and maps of them,
+// so the encoder cannot fail.
+func jsonFile(v any) []byte {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(v)
+	return b.Bytes()
 }
 
 // tomlString is s as a TOML basic string: a backslash, a quote and every control character escaped.

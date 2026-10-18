@@ -36,6 +36,7 @@ const (
 	CodeNotFound           = "not_found"
 	CodeConflict           = "conflict"
 	CodeTooLarge           = "too_large"
+	CodeUnsupportedMedia   = "unsupported_media" // a multipart body sent to an action that takes no file
 	CodeInvalid            = "invalid"
 	CodeTimeout            = "timeout"
 	CodeInternal           = "internal"
@@ -134,6 +135,9 @@ func WriteJSON(w io.Writer, v any, indent string) error {
 
 // PageHref is the address of a page.
 func PageHref(id int64) string { return "/pages/" + strconv.FormatInt(id, 10) }
+
+// CoverHref is the address of the choice of a page's cover.
+func CoverHref(id int64) string { return PageHref(id) + "/cover" }
 
 // DayHref is the address of a day.
 func DayHref(day string) string { return "/days/" + day }

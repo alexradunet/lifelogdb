@@ -36,7 +36,7 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	}
 	last := first.AddDate(0, 1, -1)
 	from, through, today := first.Format(time.DateOnly), last.Format(time.DateOnly), h.s.Today()
-	cal, err := h.calendarOf(ctx, from, through)
+	days, err := h.calendarOf(ctx, from, through)
 	if err != nil {
 		return nil, err
 	}
@@ -49,10 +49,10 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 		neighbour{next, siren.MonthHref(next), next.Format(layoutMonth)})...)
 	e.Links = append(e.Links, zoomLinks(anchorIn(today, first, last))...)
 	e.Links = append(e.Links, link("index", "/", "Home"))
-	for _, d := range cal.days {
+	for _, d := range days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
-	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": cal.days}
+	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": days}
 	return e, nil
 }
 
@@ -91,14 +91,9 @@ func (h *server) openDay(r *http.Request, act spec, _ string) (*siren.Entity, er
 	return nil, redirect{siren.DayHref(day)}
 }
 
-// calendar is what a window of days holds: its days as a calendar shows them.
-type calendar struct {
-	days []monthDay
-}
-
 // calendarOf reads the days from from through through: whether each has a day page, its first line, its mood and its
 // readings other than the Mood's (the mood says those). A month reads it; a window is at most 31 days.
-func (h *server) calendarOf(ctx context.Context, from, through string) (*calendar, error) {
+func (h *server) calendarOf(ctx context.Context, from, through string) ([]monthDay, error) {
 	entries, err := h.s.DayEntries(ctx, from, through, false, 31)
 	if err != nil {
 		return nil, err
@@ -123,7 +118,7 @@ func (h *server) calendarOf(ctx context.Context, from, through string) (*calenda
 		days = append(days, monthDay{Day: day, Page: w.Page, FirstLine: firstLines[day], Mood: moods[day],
 			Readings: readings[day] - len(moods[day]), Picture: pictures[day]})
 	}
-	return &calendar{days: days}, nil
+	return days, nil
 }
 
 // writtenDay is a day and whether it has a day page: the day is written.

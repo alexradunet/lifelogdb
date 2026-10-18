@@ -17,16 +17,6 @@ import (
 	"modernc.org/sqlite"
 )
 
-func TestSchemaCopyIsCurrent(t *testing.T) {
-	b, err := os.ReadFile("../../docs/schema/schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(b) != schema {
-		t.Fatal("internal/db/schema.sql differs from docs/schema/schema.sql: run `go generate ./...`")
-	}
-}
-
 // Fresh returns an initialised throwaway database.
 func Fresh(t *testing.T) *DB {
 	t.Helper()
@@ -221,7 +211,9 @@ func TestInitConcurrentReservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("winner database was not preserved as a valid life.db: %v", err)
 	}
-	d.Close()
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestInitReservationBlocksCompetingLazyOpen(t *testing.T) {
@@ -280,22 +272,6 @@ func TestInitApplyFailurePreservesReplacement(t *testing.T) {
 	}
 	if !bytes.Equal(got, replacement) {
 		t.Fatalf("replacement changed to %q", got)
-	}
-}
-
-func TestReservedCleanupWithoutIdentityPreservesPath(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "life.db")
-	want := []byte("unknown identity sentinel\n")
-	writeFile(t, p, want)
-	if err := removeReservedDatabasePath(p, nil); err != nil {
-		t.Fatal(err)
-	}
-	got, err := os.ReadFile(p)
-	if err != nil {
-		t.Fatalf("path with unknown identity was removed: %v", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("path with unknown identity changed to %q", got)
 	}
 }
 
@@ -617,7 +593,9 @@ func TestPragmasAndReaders(t *testing.T) {
 	d := Fresh(t)
 	for _, p := range pragmas {
 		var v int64
-		d.W.QueryRow("PRAGMA " + p.name).Scan(&v)
+		if err := d.W.QueryRow("PRAGMA " + p.name).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
 		if v != p.want {
 			t.Errorf("PRAGMA %s = %d, want %d", p.name, v, p.want)
 		}
@@ -630,7 +608,9 @@ func TestPragmasAndReaders(t *testing.T) {
 		t.Errorf("the read-only pool has trusted_schema = %d (%v), want 0", ts, err)
 	}
 	var path string
-	d.W.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
+	if err := d.W.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path); err != nil {
+		t.Fatal(err)
+	}
 	trusting, _ := sql.Open("lifelog", "file:"+filepath.ToSlash(path)+"?mode=ro&_pragma=trusted_schema(1)")
 	defer trusting.Close()
 	if err := trusting.Ping(); err == nil || !strings.Contains(err.Error(), "trusted_schema") {
@@ -688,7 +668,9 @@ func TestPragmasAndReaders(t *testing.T) {
 func TestWriteTakesTheLockUpFront(t *testing.T) {
 	d := Fresh(t)
 	var path string
-	d.W.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
+	if err := d.W.QueryRow("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path); err != nil {
+		t.Fatal(err)
+	}
 	other, err := sql.Open("sqlite", // the plain driver: this second writer is the test's, not ours
 		"file:"+filepath.ToSlash(path)+"?_pragma=busy_timeout(0)")
 	if err != nil {
@@ -699,8 +681,10 @@ func TestWriteTakesTheLockUpFront(t *testing.T) {
 		// nothing written yet, but BEGIN IMMEDIATE already holds the write lock
 		_, err := other.Exec("BEGIN IMMEDIATE")
 		if err == nil {
-			other.Exec("ROLLBACK")
 			t.Error("a second writer got the lock inside an open Write")
+			if _, err := other.Exec("ROLLBACK"); err != nil {
+				t.Error(err)
+			}
 		}
 		return nil
 	})

@@ -48,7 +48,7 @@ func TestRenderIsTheSavedPage(t *testing.T) {
 	if !strings.Contains(saved, `<div class="prose">`+preview+`</div>`) {
 		t.Errorf("the preview is not the saved page:\npreview %s\npage %.2000s", preview, saved)
 	}
-	if !strings.Contains(saved, `<button type="submit" class="quiet" formaction="/render" formmethod="POST" formtarget="_blank">Preview</button><button class="primary">Save</button>`) {
+	if !strings.Contains(saved, `<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button><button class="primary">Save</button>`) {
 		t.Error("the page's editor offers no Preview before Save")
 	}
 	if text := post(url.Values{"text": {"A *capture*"}}, map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"}); !strings.Contains(text.Body.String(), "<em>capture</em>") {

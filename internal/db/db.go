@@ -2,13 +2,10 @@
 // back and refused if wrong, the SQLite version floor, BEGIN IMMEDIATE for every write, and read-only readers.
 package db
 
-//go:generate go run ../../tools/copyschema ../../docs/schema/schema.sql schema.sql
-
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -21,10 +18,9 @@ import (
 	"time"
 
 	"modernc.org/sqlite"
-)
 
-//go:embed schema.sql
-var schema string
+	"lifelog"
+)
 
 // minVersion is the writer's floor (connections.md: the WAL race fixed in 3.51.3).
 const minVersion = 3051003
@@ -186,8 +182,7 @@ func open(ctx context.Context, path string, keep bool) (*DB, error) {
 	w.SetMaxOpenConns(1) // one writer; BEGIN IMMEDIATE serialises against other processes
 	r, err := sql.Open("lifelog", dsn(path, true))
 	if err != nil {
-		w.Close()
-		return nil, err
+		return nil, errors.Join(err, w.Close())
 	}
 	var id int64
 	// Validate compatibility before activating the writer. Refusal must not run
@@ -214,7 +209,7 @@ func open(ctx context.Context, path string, keep bool) (*DB, error) {
 // Init creates a new life.db from the canonical DDL. It refuses an existing file.
 func Init(ctx context.Context, path string) error {
 	return initWith(path, func(w *sql.DB) error {
-		_, err := w.ExecContext(ctx, schema)
+		_, err := w.ExecContext(ctx, lifelog.Schema)
 		return err
 	})
 }
@@ -262,9 +257,6 @@ func reserveDatabasePath(path string) (*os.File, error) {
 // the two while the file is open, so os.SameFile cannot take another file for it (see reserveDatabasePath). It also
 // removes the WAL of the file and its index, path-wal and path-shm, when SQLite wrote the file.
 func removeReservedDatabasePath(path string, reserved *os.File) error {
-	if reserved == nil {
-		return nil
-	}
 	held, err := reserved.Stat()
 	if err != nil {
 		return errors.Join(fmt.Errorf("checking reserved database %s for cleanup: %w", path, err), reserved.Close())
@@ -532,3 +524,16 @@ func gitWorkTree(dir string) (string, error) {
 // the FTS5 check is an INSERT, refused on a read-only connection — but Close runs no PRAGMA optimize, which can
 // write to the file, so the checks leave the snapshot as it was.
 func OpenSnapshot(ctx context.Context, path string) (*DB, error) { return open(ctx, path, true) }
+
+// readerIdleConns is the number of idle read connections that the pool keeps. It is the default of database/sql:
+// nothing in this package sets another.
+const readerIdleConns = 2
+
+// RenewReaders closes the idle read connections, so the next read opens a new one. A connection keeps state of a
+// virtual table between its statements. After the FTS5 'rebuild' of another connection, a reader that read the old
+// index still reports corruption of the new one in PRAGMA integrity_check. A reader in use stays in the pool when it
+// is released: a caller that must not meet one runs RenewReaders when no read is open.
+func (d *DB) RenewReaders() {
+	d.R.SetMaxIdleConns(0)
+	d.R.SetMaxIdleConns(readerIdleConns)
+}

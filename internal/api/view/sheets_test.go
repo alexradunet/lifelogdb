@@ -293,7 +293,7 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 			pairs = append(pairs, pair{fg, bg, 3, false})
 		}
 	}
-	text("ink", "surface", "surface-deep", "accent-soft", "mark", "warn-soft", "danger-soft")
+	text("ink", "surface", "surface-deep", "accent-soft", "mark", "danger-soft")
 	text("muted", "surface", "surface-deep")
 	text("page-ink", "ground")
 	text("page-strong", "ground")
@@ -306,7 +306,7 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 	text("link-page", "ground")
 	text("on-accent", "accent", "primary", "primary-hover")
 	text("warn", "surface")
-	text("warn-ink", "warn-soft")
+	text("warn-ink", "surface")
 	text("done", "surface")
 	text("danger", "surface")
 	text("danger-ink", "danger-soft")

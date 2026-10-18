@@ -25,7 +25,7 @@ type Resync struct {
 // does. The drift is read first, outside the write transaction, and the rewrite reads each body again, so a page that
 // changed meanwhile is synced with its new body. source is the writer of the rows made.
 func (s *Store) ResyncLinks(ctx context.Context, source string) (*Resync, error) {
-	ctx, cancel := context.WithTimeout(ctx, IntegrityDeadline)
+	ctx, cancel := context.WithTimeout(ctx, integrityDeadline)
 	defer cancel()
 	tx, err := s.DB.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -70,12 +70,6 @@ func (s *Store) ResyncLinks(ctx context.Context, source string) (*Resync, error)
 	return r, nil
 }
 
-// linkReader is what a read transaction and a write transaction both do.
-type linkReader interface {
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
 // linkDriftBatch is the number of bodies read at once: a body can be long, and the pages of a lifetime are many.
 const linkDriftBatch = 500
 
@@ -85,7 +79,7 @@ const linkDriftBatch = 500
 // page has is a difference, since a save would make the page. A page that a save skips as a target stays in the list
 // until its body changes. Go holds this check because the extraction of wikilinks is the writer's algorithm
 // (docs/contract/titles-and-wikilinks.md); SQL cannot extract them.
-func driftedLinkPages(ctx context.Context, q linkReader) ([]int64, error) {
+func driftedLinkPages(ctx context.Context, q *sql.Tx) ([]int64, error) {
 	drifted := []int64{}
 	var after int64
 	for {
@@ -116,7 +110,7 @@ func driftedLinkPages(ctx context.Context, q linkReader) ([]int64, error) {
 }
 
 // linksDiffer says whether the wikilink rows of the page differ from the links of its body (driftedLinkPages).
-func linksDiffer(ctx context.Context, q linkReader, id int64, body, own string) (bool, error) {
+func linksDiffer(ctx context.Context, q *sql.Tx, id int64, body, own string) (bool, error) {
 	keys, _, _ := text.Targets(body, own)
 	want := map[int64]bool{}
 	for _, key := range keys {
@@ -132,10 +126,8 @@ func linksDiffer(ctx context.Context, q linkReader, id int64, body, own string) 
 			want[target] = true
 		}
 	}
-	have := map[int64]bool{}
-	var to int64
-	rows, err := q.QueryContext(ctx, `SELECT to_id FROM links WHERE from_id = ? AND kind = 'wikilink'`, id)
-	if err := each(rows, err, []any{&to}, func() { have[to] = true }); err != nil {
+	have, err := wikilinkIDs(ctx, q, id)
+	if err != nil {
 		return false, err
 	}
 	return !maps.Equal(want, have), nil

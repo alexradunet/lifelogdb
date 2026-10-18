@@ -119,6 +119,7 @@ func TestErrorEntity(t *testing.T) {
 		{"a 401", &core.Error{Status: 401, Msg: "who"}, "401 unauthorized who " + home, false},
 		{"a 403", &core.Error{Status: 403, Msg: "the owner's"}, "403 forbidden the owner's " + home, false},
 		{"a 413", &core.Error{Status: 413, Msg: "big"}, "413 too_large big " + home, false},
+		{"a 415", &core.Error{Status: 415, Msg: "multipart"}, "415 unsupported_media multipart " + home, false},
 		{"a status with no general code", &core.Error{Status: 418, Msg: "odd"}, "418 internal odd " + home, false},
 		{"a wrapped refusal", fmt.Errorf("save: %w", core.Invalid("no")), "422 invalid save: no " + home, false},
 		{"a timeout", fmt.Errorf("read: %w", context.DeadlineExceeded), "504 timeout read: context deadline exceeded " + home, false},

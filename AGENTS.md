@@ -73,13 +73,13 @@ not external services or private files.
 | tier | when / budget | run |
 |---|---|---|
 | focused feedback | while editing; aim for seconds | `go test ./internal/<package> -run '<TestName>'`; `go test -short ./...` for a broader quick check |
-| baseline | after **every** change, before completion; aim for about two minutes | `go generate ./... && go vet ./... && go test ./...` |
+| baseline | after **every** change, before completion; aim for about two minutes | `go vet ./... && go test ./...` |
 | additional analysis | Go or dependency changes; also before releases | `staticcheck ./...` and `govulncheck ./...` |
 | order dependence | changes to shared state, test helpers or concurrency | `go test -count=1 -shuffle=on ./...`; replay the reported seed with `-shuffle=<seed>` |
 | races | extended checks on Linux; particularly concurrency changes | `CGO_ENABLED=1 go test -race -count=1 ./...` |
 | diagrams | diagram changes | `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` |
 
-- Run `gofmt` on changed Go files. `go generate` refreshes the embedded schema; never edit that copy directly.
+- Run `gofmt` on changed Go files. `schema.go` at the root embeds `docs/schema/schema.sql`: there is no copy, and a change to the DDL is live in the binary at the next build.
   The baseline includes mutants: `-short` is feedback, not a substitute for completion checks. These budgets are
   design targets, not timeouts or permission to drop tests. Investigate slow suites instead of hiding coverage gaps.
 - Staticcheck and govulncheck are separate development tools, not application dependencies. Use reviewed, pinned

@@ -277,8 +277,8 @@ func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, 
 // InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
 // owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
 func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {
-	if !text.IsDay(day) {
-		return nil, Invalid("day is YYYY-MM-DD")
+	if err := checkDay("day", day); err != nil {
+		return nil, err
 	}
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
@@ -291,8 +291,13 @@ func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) 
 // Series is cookbook/metric-series.md: the current readings of one metric in (from, to]. An empty from is no lower
 // bound: every reading through to.
 func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {
-	if from != "" && !text.IsDay(from) || !text.IsDay(to) {
-		return nil, Invalid("from is empty or a YYYY-MM-DD day, and to is a YYYY-MM-DD day")
+	if from != "" {
+		if err := checkDay("from", from); err != nil {
+			return nil, err
+		}
+	}
+	if err := checkDay("to", to); err != nil {
+		return nil, err
 	}
 	predicate := `WHERE m.id=(SELECT entity_id FROM entity_names WHERE name_key=?) AND me.day<=?`
 	args := []any{text.TitleKey(metric), to}

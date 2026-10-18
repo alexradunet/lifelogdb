@@ -26,10 +26,6 @@ jobs:
           cache-dependency-path: go.sum
       - name: Report environment
         run: go version; go env GOOS GOARCH
-      - name: Generate embedded schema
-        run: go generate ./...
-      - name: Verify generated schema
-        run: git diff --exit-code -- internal/db/schema.sql
       - name: Vet
         run: go vet ./...
       - name: Full baseline including mutants

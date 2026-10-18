@@ -28,6 +28,27 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("%v: %v, want the flag taken", argv, err)
 		}
 	}
+	for _, tc := range []struct {
+		argv []string
+		want string
+	}{
+		{[]string{"init", "--url", "http://x"}, "init does not take --url"},
+		{[]string{"init", "--source", "x"}, "init does not take --source"},
+		{[]string{"agentic-init", "--url", "http://x"}, "agentic-init does not take --url"},
+		{[]string{"agentic-init", "--source", "x"}, "agentic-init does not take --source"},
+		{[]string{"serve", "--human"}, "serve does not take --human"},
+		{[]string{"mcp", "--human"}, "mcp does not take --human"},
+		{[]string{"day", "--db", "a.db", "--url", "http://x"}, "--db and --url name two databases: give one"},
+	} {
+		if _, err := parse(tc.argv, noVars); err == nil || err.Error() != tc.want {
+			t.Errorf("%v: %v, want %q", tc.argv, err, tc.want)
+		}
+	}
+	for _, argv := range [][]string{{"init", "--db", "a.db"}, {"agentic-init", "--db", "a.db"}, {"day", "--url", "http://x", "--human"}} {
+		if _, err := parse(argv, noVars); err != nil {
+			t.Errorf("%v: %v, want the flags taken", argv, err)
+		}
+	}
 	usage := usageText()
 	for _, c := range commands {
 		if c.usage != "" && !strings.Contains(usage, "lifelog "+c.name) {
@@ -39,25 +60,10 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("%v takes the interrupt through its context; want the OS's interrupt", args)
 		}
 	}
-	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "snapshot"} {
+	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "cover", "snapshot"} {
 		if !commandConsumesContext(opts{args: []string{cmd}}) {
 			t.Errorf("%s must take the interrupt through its context", cmd)
 		}
-	}
-}
-
-// TestTheUsageOfFileSaysTheDayAsTheCatalogDoes: the usage of file says the file's own day as add-file of the catalog
-// and the skill lifelog-keep-photos say it: the day the owner gives (--day), else a photo's EXIF date. "Filed" is the
-// word of D26 for a page in a category, never for a day.
-func TestTheUsageOfFileSaysTheDayAsTheCatalogDoes(t *testing.T) {
-	var usage string
-	for _, c := range commands {
-		if c.name == "file" {
-			usage = c.usage
-		}
-	}
-	if !strings.Contains(usage, "EXIF") || strings.Contains(usage, "filed under") {
-		t.Errorf("the usage of file does not say the day as the catalog does:\n%s", usage)
 	}
 }
 
@@ -185,5 +191,29 @@ func TestMCPNamesItsWriterOneWay(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "--agent") {
 		t.Errorf("mcp --source cli: %v, want a refusal that names --agent", err)
+	}
+}
+
+// TestAUsageErrorNamesTheCommandAndARepeatedFieldIsRefused: the error of use is the first line of the usage of the
+// command, from the table; `do` refuses a field given twice instead of keeping the last one.
+func TestAUsageErrorNamesTheCommandAndARepeatedFieldIsRefused(t *testing.T) {
+	for _, tc := range []struct {
+		argv []string
+		want string
+	}{
+		{[]string{"rename", "1"}, "rename PAGE-ID NEW-TITLE"},
+		{[]string{"get"}, "get PATH"},
+		{[]string{"file"}, "file PATH [--title T]"},
+		{[]string{"do", "capture", "text=a", "text=b"}, "text is given twice"},
+	} {
+		e, _, _ := testEnv(t)
+		file := filepath.Join(t.TempDir(), "x.db")
+		if err := runArgs(t.Context(), e, []string{"init", file}); err != nil {
+			t.Fatal(err)
+		}
+		err := runArgs(t.Context(), e, append(tc.argv, "--db", file))
+		if err == nil || !strings.HasPrefix(err.Error(), tc.want) {
+			t.Errorf("%v: %v, want %q", tc.argv, err, tc.want)
+		}
 	}
 }

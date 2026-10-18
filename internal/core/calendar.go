@@ -3,9 +3,6 @@ package core
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"sort"
-	"strconv"
 
 	"lifelog/internal/text"
 )
@@ -14,10 +11,10 @@ import (
 // days. The stream reads them for its cards. Each read is of rows the schema holds; the anniversaries are the
 // application's reading of a person's days.
 
-// Dated is a row the calendar shows on its day: a page that is not a day page and has the day (kind page, or file
+// datedRow is a row the calendar shows on its day: a page that is not a day page and has the day (kind page, or file
 // for a file), or a live place the live day page links with at (place). ID is the page's or the place's. Pages is
 // the count of the day's pages and files, on a page or a file.
-type Dated struct {
+type datedRow struct {
 	Day   string
 	Kind  string
 	ID    int64
@@ -28,7 +25,7 @@ type Dated struct {
 // dated are the dated rows of the days that days selects, by day: the places and the pages in the order of their
 // titles, at most pagesPerDay pages and files a day. days is the rest of a condition on a day column, after the
 // column ("IN (SELECT value FROM json_each(:days))"), with its named arguments.
-func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ...any) ([]Dated, error) {
+func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ...any) ([]datedRow, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT day, kind, id, title, n FROM (
 		  SELECT p.day AS day, CASE p.entity_type WHEN 'file' THEN 'file' ELSE 'page' END AS kind, p.id AS id,
@@ -46,23 +43,20 @@ func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ..
 		   WHERE d.is_journal AND d.day `+days+` AND d.deleted_at IS NULL
 		) WHERE r <= :cap
 		ORDER BY day, rank, sortkey, id`, append(args, sql.Named("cap", pagesPerDay))...)
-	return list(rows, err, func(d *Dated) []any { return []any{&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages} })
+	return list(rows, err, func(d *datedRow) []any { return []any{&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages} })
 }
 
-// Anniversary is a live person's birth day or death day (Kind birthday or death), or its day in a later year, on Day
-// inside a window. Years are the whole years since the day the person's row holds; 0 on that day itself.
-type Anniversary struct {
+// birthday is a live person's birth day, or its day in a later year, on Day inside a window.
+type birthday struct {
 	Day   string
-	Kind  string
 	ID    int64
 	Title string
-	Years int
 }
 
-// anniversariesOn are the anniversaries on a set of days, by day, a birthday before a death, then in the order of the
-// people's titles. The days need not be one window: the stream's days can span decades. Each day is an exact day
-// (YYYY-MM-DD). A day of 29 February comes back on 28 February in a common year.
-func (s *Store) anniversariesOn(ctx context.Context, days []string) ([]Anniversary, error) {
+// birthdaysOn are the birthdays on a set of days: for each person, in the order of the titles, the days in the order
+// of days. The days need not be one window: the stream's days can span decades. Each day is an exact day (YYYY-MM-DD).
+// A day of 29 February comes back on 28 February in a common year.
+func (s *Store) birthdaysOn(ctx context.Context, days []string) ([]birthday, error) {
 	// the days by their month and day ("05-14"), with 29 February on 28 February of a common year
 	on := map[string][]string{}
 	for _, day := range days {
@@ -79,44 +73,24 @@ func (s *Store) anniversariesOn(ctx context.Context, days []string) ([]Anniversa
 	for k := range on {
 		keys = append(keys, k)
 	}
-	set, err := json.Marshal(keys)
-	if err != nil {
-		return nil, err
-	}
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT e.id, n.title, coalesce(p.birth_day, ''), coalesce(p.death_day, '')
+		SELECT e.id, n.title, p.birth_day
 		  FROM people p
 		  JOIN entities e ON e.id = p.id AND e.deleted_at IS NULL
 		  JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
 		 WHERE substr(p.birth_day, 6) IN (SELECT value FROM json_each(:set))
-		    OR substr(p.death_day, 6) IN (SELECT value FROM json_each(:set))
-		 ORDER BY e.preferred_name_key, e.id`, sql.Named("set", string(set)))
-	out := []Anniversary{}
+		 ORDER BY e.preferred_name_key, e.id`, sql.Named("set", jsonArray(keys)))
+	out := []birthday{}
 	var id int64
-	var title, birth, death string
-	if err := each(rows, err, []any{&id, &title, &birth, &death}, func() {
-		for _, k := range []struct{ kind, date string }{{"birthday", birth}, {"death", death}} {
-			if k.date == "" {
-				continue
-			}
-			for _, day := range on[k.date[5:]] {
-				if day < k.date {
-					continue // before the person's day: not yet an anniversary
-				}
-				y1, _ := strconv.Atoi(day[:4])
-				y0, _ := strconv.Atoi(k.date[:4])
-				out = append(out, Anniversary{Day: day, Kind: k.kind, ID: id, Title: title, Years: y1 - y0})
+	var title, birth string
+	if err := each(rows, err, []any{&id, &title, &birth}, func() {
+		for _, day := range on[birth[5:]] {
+			if day >= birth { // before the person's day: not yet an anniversary
+				out = append(out, birthday{Day: day, ID: id, Title: title})
 			}
 		}
 	}); err != nil {
 		return nil, err
 	}
-	// by day, a birthday before a death; the order of the titles stays inside each
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Day != out[j].Day {
-			return out[i].Day < out[j].Day
-		}
-		return out[i].Kind == "birthday" && out[j].Kind == "death"
-	})
 	return out, nil
 }
