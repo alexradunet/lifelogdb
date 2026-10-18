@@ -33,6 +33,7 @@ language-neutral, so a rule lives in the docs and the Go code cites it.
 | `docs/issues/`, `docs/rfcs/`, `docs/plans/` | the process records: incidents, proposals, execution plans ([how a change happens](docs/process.md)) | — |
 | `tests/` | the validation suites (Go tests): every *executed* claim of the docs, run against the DDL in `docs/` and through the writer's own extraction and save | the docs |
 | `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, MCP server ([README](README.md)) | the docs |
+| `site/` | the public page of the project (GitHub Pages) | the README: it names only what the README names, and changes in the same commit as a command or a feature it shows |
 
 ## Engineering priorities and working agreement
 
@@ -76,7 +77,7 @@ not external services or private files.
 | baseline | after **every** change, before completion; aim for about two minutes | `go vet ./... && go test ./...` |
 | additional analysis | Go or dependency changes; also before releases | `staticcheck ./...` and `govulncheck ./...` |
 | order dependence | changes to shared state, test helpers or concurrency | `go test -count=1 -shuffle=on ./...`; replay the reported seed with `-shuffle=<seed>` |
-| races | extended checks on Linux; particularly concurrency changes | `CGO_ENABLED=1 go test -race -count=1 ./...` |
+| races | extended checks on Linux; particularly concurrency changes | `CGO_ENABLED=1 go test -race -count=1 -timeout 40m ./...` (the suites of `tests/` pass the default 10 minutes under the detector) |
 | diagrams | diagram changes | `LIFELOG_MERMAID=1 go test ./tests -run TestMermaidRender` |
 
 - Run `gofmt` on changed Go files. `schema.go` at the root embeds `docs/schema/schema.sql`: there is no copy, and a change to the DDL is live in the binary at the next build.
@@ -155,6 +156,18 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   (wikilinks, calendars, zones), the owner-only rule, and a comparison of a resent payload. A Go check that
   repeats a CHECK or a trigger is a defect (issue 0068): delete it, and let `core.refused` carry the sentence
   SQLite gives. The same holds when a rule changes: edit the trigger, not the code around it.
+- **Read what the schema stores.** A value the DDL holds or generates (`is_journal`, a day, a count) is read from the
+  row, never derived again in Go or in a second SQL expression; a Go predicate or a join that recomputes a stored
+  column is a defect ([plan 133](docs/plans/133-what-the-code-holds-twice.md)). One home per concept holds in the
+  code as in the docs: a value computed and not read, a helper with one caller that only passes through, and an
+  exported name used only inside its package are deleted or folded in the change that finds them.
+- **The catalog is the one list of an action's fields.** A handler reads its input through the action's row
+  (`fieldsOf(r, act)`) and reads no field the row does not list; `Required` of the row is the handler's rule. A field
+  read outside the catalog is unreachable from the CLI and the MCP tools, which refuse what the catalog does not
+  name, so it is a parity defect, not a convenience.
+- **Refused, never ignored.** What a surface does not take is refused with its reason: a flag a command does not
+  read, a field an action does not list, a body type an action does not take (a multipart body to an action with
+  no file field is 415), two flags that name one thing twice. Nothing is dropped in silence.
 - **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror
   every struct with an interface or add a service/repository layer solely for mocks. Use generics only when they make
   actual repeated logic simpler. Share domain behavior, not incidental similarities between unrelated operations.
@@ -185,7 +198,11 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
   failures where data could be lost. Add useful operation context; use `%w` when exposing the cause is intentional and
   `errors.Is`/`errors.As` for semantics. Do not classify errors by incidental strings. Return expected failures, not
   panics; keep process exits at the executable boundary. Avoid duplicate logging and private bodies, readings or file
-  contents in diagnostics; do not expose internal errors indiscriminately to clients.
+  contents in diagnostics; do not expose internal errors indiscriminately to clients. A check or a repair reports a
+  finding only about what it examined: a run that did not finish (a deadline, a cancelled context, a busy file) is
+  an error, never a finding or a result. An error status has its code in `siren`, its line in [API.md](API.md) and
+  its first words in the view (`alertOf`); a new status adds the three together, and `codeOf` never answers
+  `internal` for a status it knows.
 - **Resources and transactions.** Close rows, files and response bodies and call cancellation functions with clear
   ownership. Use existing transaction helpers; do not mix pool calls with an active transaction's operations or perform
   avoidable network/file processing while holding a write transaction. Do not bypass connection setup for convenience
