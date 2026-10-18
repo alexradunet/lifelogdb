@@ -129,8 +129,7 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 // TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing: for each action of the catalog and each of its required
 // fields that is not a path field, a request that leaves the field out, or sends it empty, answers 422 "missing field
 // <name>" and changes nothing in the file. The other required fields carry values that a write accepts, so only the
-// one field is missing. An action with a file field is sent as multipart too, with a file. search is the one
-// exception: GET /search with no q is the search page, which TestEveryViewRenders draws. Before each request the
+// one field is missing. An action with a file field is sent as multipart too, with a file. Before each request the
 // probe page gets a body that no other request gave it, so a save of an empty body or of other words always changes
 // the file. Before each request the test also records a new probe reading, and the /measurements/ actions get its id,
 // so a correct always has a reading that no case corrected before (a reading is corrected one time only). Thus a case
@@ -185,7 +184,7 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 			}
 		}
 		for _, missing := range a.Fields {
-			if !missing.Required || missing.In == "path" || a.Name == "search" {
+			if !missing.Required || missing.In == "path" {
 				continue
 			}
 			for _, empty := range []bool{false, true} {

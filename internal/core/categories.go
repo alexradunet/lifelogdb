@@ -144,7 +144,10 @@ func (t *Tx) filePages(ids []int64, category, from string, move bool) (Filed, er
 			if err != nil {
 				return Filed{}, err
 			}
-			n, _ := res.RowsAffected()
+			n, err := res.RowsAffected()
+			if err != nil {
+				return Filed{}, err
+			}
 			f.Moved += int(n)
 		}
 		added, err := t.link(id, cat, "part-of", "")
@@ -183,7 +186,10 @@ func (t *Tx) unfilePages(ids []int64, from string) (Filed, error) {
 		if err != nil {
 			return Filed{}, err
 		}
-		n, _ := res.RowsAffected()
+		n, err := res.RowsAffected()
+		if err != nil {
+			return Filed{}, err
+		}
 		f.Removed += int(n)
 	}
 	return f, nil

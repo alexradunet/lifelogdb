@@ -77,6 +77,10 @@ func form(r *http.Request) (url.Values, error) {
 		}
 		return v, nil
 	}
+	if ct == "multipart/form-data" {
+		// ParseForm does not read this body, so every field would be empty. Only the file forms (parseFileForm) take it.
+		return nil, &core.Error{Status: http.StatusUnsupportedMediaType, Msg: "this action does not take multipart/form-data: send application/x-www-form-urlencoded or JSON"}
+	}
 	if err := r.ParseForm(); err != nil {
 		return nil, requestBodyError(err)
 	}

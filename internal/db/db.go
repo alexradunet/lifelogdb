@@ -186,8 +186,7 @@ func open(ctx context.Context, path string, keep bool) (*DB, error) {
 	w.SetMaxOpenConns(1) // one writer; BEGIN IMMEDIATE serialises against other processes
 	r, err := sql.Open("lifelog", dsn(path, true))
 	if err != nil {
-		w.Close()
-		return nil, err
+		return nil, errors.Join(err, w.Close())
 	}
 	var id int64
 	// Validate compatibility before activating the writer. Refusal must not run

@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -96,7 +98,7 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 		t.Fatalf("the manifest is not JSON: %v", err)
 	}
 	if m.Name != "Lifelog" || m.StartURL != "/" || m.Display != "standalone" || m.ThemeColor != "#3a2210" || len(m.Shortcuts) != 2 || len(m.Icons) != 2 ||
-		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "multipart/form-data" ||
+		m.ShareTarget.Action != "/days/today/capture" || m.ShareTarget.Method != "POST" || m.ShareTarget.Enctype != "application/x-www-form-urlencoded" ||
 		m.ShareTarget.Params.Text != "text" || len(m.ShareTarget.Params.Files) != 0 { // a phone's share sheet sends text to capture
 		t.Errorf("the manifest says %+v", m)
 	}
@@ -134,7 +136,12 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	}
 
 	// The share target: a POST of text to /days/today/capture writes on the local day.
-	r := submit(h, "/days/today/capture", url.Values{"text": {"Shared from a phone"}}, "")
+	// It posts with the enctype that the manifest declares: a phone sends exactly that.
+	req := httptest.NewRequest("POST", m.ShareTarget.Action, strings.NewReader(url.Values{"text": {"Shared from a phone"}}.Encode()))
+	req.Header.Set("Content-Type", m.ShareTarget.Enctype)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	r := httptest.NewRecorder()
+	h.ServeHTTP(r, req)
 	if r.Code != http.StatusSeeOther {
 		t.Fatalf("POST /days/today/capture: %d %.200s", r.Code, r.Body.String())
 	}
@@ -144,5 +151,30 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	}
 	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); !strings.Contains(props(page)["body"].(string), "Shared from a phone") {
 		t.Errorf("the day page does not hold the shared text: %v", props(page)["body"])
+	}
+}
+
+// TestAMultipartPostWithoutFileFieldsIsRefused: a multipart body to an action that takes no file is answered 415, never
+// read as an empty form (the fields would be lost in silence).
+func TestAMultipartPostWithoutFileFieldsIsRefused(t *testing.T) {
+	_, h, s := apitest.Fresh(t, "cli")
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	if err := mw.WriteField("text", "Lost words"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/days/today/capture", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("multipart POST to capture: %d, want 415: %.200s", rec.Code, rec.Body.String())
+	}
+	if n := scalar(t, s, "SELECT CAST(count(*) AS TEXT) FROM entities WHERE body LIKE '%Lost words%'"); n != "0" {
+		t.Errorf("the refused request wrote %s pages", n)
 	}
 }

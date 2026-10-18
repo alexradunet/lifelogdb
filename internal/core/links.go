@@ -125,7 +125,10 @@ func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 	if err != nil {
 		return false, err // Do turns a refusal of the registry's endpoint types into its 422
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
 	return n > 0, nil
 }
 
@@ -138,7 +141,11 @@ func (t *Tx) unlink(from, to int64, kind string) error {
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
 		return NotFound("no %s link from %d to %d", kind, from, to)
 	}
 	return nil

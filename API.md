@@ -227,7 +227,7 @@ offer no action.
 
 ### search
 
-`GET /search?q=&order=&kind=` (FTS5 syntax over titles and bodies). Hits are also embedded as `item` links. Action: `search`.
+`GET /search?q=&order=&kind=&limit=&offset=` (FTS5 syntax over titles and bodies; an empty `q` is the search page). Hits are also embedded as `item` links. Action: `search`.
 `order` is optional: `best` (the default) lists the best match first; `newest` lists the newest day first. The day of a
 page is its title when it is a day page, and else the local day of its `created_at` (in the zone of the writer). Pages of
 one day keep the order of the best match. Any other `order` is a 422 (`invalid`) that names the two. Links: `self`,

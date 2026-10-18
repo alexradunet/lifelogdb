@@ -3,8 +3,12 @@ package core
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
+
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"lifelog/internal/text"
 )
@@ -136,6 +140,12 @@ func (s *Store) Integrity(ctx context.Context) (*IntegrityResult, error) {
 	}
 	// the FTS check is an INSERT that writes nothing, so it runs on the writing connection
 	if _, err := s.DB.W.ExecContext(ctx, `INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
+		// Only a corruption result is a finding about the index. A deadline, a cancelled context or a busy file says
+		// nothing about it: that is an error, so a restore check does not fail for a reason that is not damage.
+		var se *sqlite.Error
+		if ctx.Err() != nil || !errors.As(err, &se) || se.Code()&0xff != sqlite3.SQLITE_CORRUPT {
+			return nil, fmt.Errorf("integrity: full-text check: %w", err)
+		}
 		r.FullTextError = fmt.Sprint(err)
 	} else {
 		r.FullTextIndexOK = true
