@@ -241,6 +241,21 @@ func TestChooseKeepsThePhotoWithItsDayAndGoesOn(t *testing.T) {
 	}
 }
 
+func TestTheTypeOfTheDownloadNamesTheFile(t *testing.T) {
+	// The list names a HEIC, but Google sends a JPEG: the file is a JPEG, and lifelog makes its picture itself.
+	g := newFakeGoogle(t, photo{ID: "h", Create: "2031-05-01T10:00:00Z", Type: "PHOTO", MIME: "image/heic", Served: "image/jpeg", Seed: 1})
+	ll := newFakeLifelog(t)
+	s := newStack(t, g, ll.URL, true)
+	s.pickAll(t)
+	s.post(t, "/choose", url.Values{"item": {"h"}}, nil)
+	if got := ll.sent(); len(got) != 1 || got[0] != "2031-05-01 2031-05-01.jpg false" {
+		t.Errorf("files sent = %q, want one JPEG and no preview", got)
+	}
+	if g.fetched("/media/h=w1280-h1280") {
+		t.Error("a preview was fetched for a JPEG")
+	}
+}
+
 func TestADayThatGotACoverMeanwhileIsNotWritten(t *testing.T) {
 	g := newFakeGoogle(t, threeDays()...)
 	ll := newFakeLifelog(t)

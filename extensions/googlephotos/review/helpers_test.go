@@ -43,6 +43,7 @@ func jpegOf(t testing.TB, seed int) []byte {
 // photo is a picked item of the fake Google.
 type photo struct {
 	ID, Create, Type, MIME string
+	Served                 string // the type of the original as Google sends it; "" is MIME
 	Seed                   int
 }
 
@@ -121,7 +122,8 @@ func (g *fakeGoogle) mediaItems(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// media serves /media/<id>=<size>. The original of a photo is its synthetic JPEG; every other size is a JPEG too.
+// media serves /media/<id>=<size>. The original has the type of its item: a synthetic JPEG, or, for any other type,
+// synthetic bytes of that type. Every other size is a JPEG, as Google scales a photo to a JPEG.
 func (g *fakeGoogle) media(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer tok" {
 		http.Error(w, "no token", http.StatusUnauthorized)
@@ -135,11 +137,18 @@ func (g *fakeGoogle) media(w http.ResponseWriter, r *http.Request) {
 		if p.ID != id {
 			continue
 		}
-		b := jpegOf(g.t, p.Seed)
-		if size != "d" {
-			b = jpegOf(g.t, p.Seed+100)
+		served := p.MIME
+		if p.Served != "" {
+			served = p.Served
 		}
-		w.Header().Set("Content-Type", "image/jpeg")
+		b, typ := jpegOf(g.t, p.Seed), "image/jpeg"
+		switch {
+		case size != "d":
+			b = jpegOf(g.t, p.Seed+100)
+		case served != "" && served != typ:
+			b, typ = []byte(fmt.Sprintf("synthetic %s %d", served, p.Seed)), served
+		}
+		w.Header().Set("Content-Type", typ)
 		if _, err := w.Write(b); err != nil {
 			g.t.Errorf("write media: %v", err)
 		}

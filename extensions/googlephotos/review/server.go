@@ -419,9 +419,10 @@ func (s *Server) choose(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "download the photo", err)
 		return
 	}
-	mimeType := it.MIME
-	if mimeType == "" {
-		mimeType = typ
+	// The type of the answer says what the bytes are; Google can send another type than the one the list names.
+	mimeType := typ
+	if !strings.HasPrefix(mimeType, "image/") {
+		mimeType = it.MIME
 	}
 	var preview []byte
 	switch mimeType {
