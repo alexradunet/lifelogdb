@@ -11,38 +11,21 @@ import (
 	"lifelog/internal/api/apitest"
 )
 
-// TestTheSidebarShowsTheMonth: the month is this month, with the days that have a day page marked and today framed.
-func TestTheSidebarShowsTheMonth(t *testing.T) {
+// TestTheSidebarDrawsNoMonth: this month is on Calendar, so the sidebar and the phone's sheet do not draw it a
+// second time.
+func TestTheSidebarDrawsNoMonth(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday) // Wednesday 14 May 2031
-	if body := browse(t, h, "/days/"+fixedToday); !strings.Contains(body, "May 2031</a><span class=\"meta\">0 written</span>") {
-		t.Errorf("an empty life log does not show its empty month:\n%s", sidebar(body))
-	}
-
-	for _, day := range []string{"2031-04-30", dayOf(-2), fixedToday} {
-		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "capture"), map[string]string{"text": "Synthetic entry"}))
-	}
-	// A mood alone makes the day page with an empty body: a day page with an empty body is still written.
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-03")), "capture"), map[string]string{"mood": "3"}))
-	if body := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2031-05-03")).Properties.(map[string]any)["body"]; body != "" {
-		t.Fatalf("the day page of 2031-05-03 has the body %q, want an empty body", body)
-	}
-
-	body := browse(t, h, "/days/"+fixedToday)
-	for _, want := range []string{
-		`<a href="/months/2031-05">May 2031</a><span class="meta">3 written</span>`,
-		`<tr><td></td><td></td><td></td><td><a href="/days/2031-05-01" aria-label="Thu 1 May">1</a></td>`,
-		`<a href="/days/2031-05-03" class="written" aria-label="Sat 3 May, written">3</a>`,
-		`<a href="/days/2031-05-12" class="written" aria-label="Mon 12 May, written">12</a>`,
-		`<a href="/days/2031-05-13" aria-label="Tue 13 May">13</a>`,
-		`<a href="/days/2031-05-14" class="written" aria-current="date" aria-label="Wed 14 May, written">14</a>`,
-		`<td><a href="/days/2031-05-31" aria-label="Sat 31 May">31</a></td><td></td></tr>`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the sidebar lacks %s:\n%s", want, sidebar(body))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday)), "capture"), map[string]string{"text": "Synthetic entry"}))
+	for _, path := range []string{"/days/" + fixedToday, "/browse", "/integrity"} {
+		rail := sidebar(browse(t, h, path))
+		if rail == "" {
+			t.Fatalf("%s: no sidebar", path)
 		}
-	}
-	if strings.Contains(sidebar(body), "2031-04-30") {
-		t.Error("the sidebar's month shows a day of another month")
+		for _, bad := range []string{`class="month-box"`, `href="/months/`, `href="/days/2031-05-`} {
+			if strings.Contains(rail, bad) {
+				t.Errorf("%s: the sidebar draws the month (%s):\n%s", path, bad, rail)
+			}
+		}
 	}
 }
 
@@ -72,7 +55,7 @@ func TestThePageOfNoShellHasNoSidebar(t *testing.T) {
 }
 
 // TestThePhoneHasABottomBarAndASheet: the sections of every day (Today, Calendar, Metrics, Browse) and More are one
-// list (a phone's bottom bar); the month and the owner's links are the popover sheet that More opens and Close hides
+// list (a phone's bottom bar); the owner's links are the popover sheet that More opens and Close hides
 // (#sections), with no script; each link is drawn once, and More is marked when the page is in the sheet.
 func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
@@ -95,8 +78,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 	if !strings.Contains(bar[1], `<a href="/browse" aria-current="page">`) || strings.Contains(bar[1], `class="here"`) {
 		t.Errorf("the bottom bar does not mark Browse, or marks More:\n%s", bar[1])
 	}
-	if got := links(sheet[1]); !strings.HasPrefix(got, "/months/2031-05") || strings.Contains(got, "/browse") || strings.Contains(got, "/metrics") ||
-		!strings.HasSuffix(got, "/actions /integrity /actions?new=snapshot") || !strings.Contains(sheet[1], `<a href="/actions?new=snapshot">Snapshot</a>`) {
+	if got := links(sheet[1]); got != "/actions /integrity /actions?new=snapshot" || !strings.Contains(sheet[1], `<a href="/actions?new=snapshot">Snapshot</a>`) {
 		t.Errorf("the sheet: %s", got)
 	}
 	if !strings.Contains(sheet[1], `<button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button>`) {

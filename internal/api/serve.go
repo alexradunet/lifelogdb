@@ -391,7 +391,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 // frame says how answer draws an entity as a page, and for whom. The zero frame gives a program JSON and a browser a
 // page with no sidebar: the answer of a guard, of a picture's error and of a refusal before the routes.
 type frame struct {
-	shell    *core.Store // the store that the sidebar reads; nil: no sidebar, so the page shows nothing of the database
+	shell    *core.Store // the store whose clock the sidebar reads; nil: no sidebar, so the page shows nothing of the database
 	pageOnly bool        // a page for every client, a program too: the answer is presentation and has no JSON form
 	// submitted is the long text that a refused browser form sent (submittedText), which the page of the refusal shows
 	// again. It is used only when the answer is the error of a POST.
@@ -425,7 +425,8 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity,
 func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []byte) {
 	f := view.Facts{URL: r.URL}
 	if fr.shell != nil {
-		f.Shell = shellOf(r.Context(), fr.shell)
+		now := fr.shell.Local() // one read of the clock, so today and the zone of the words agree
+		f.Shell = &view.Shell{Today: now.Format(time.DateOnly), Zone: now.Location()}
 	}
 	if status >= 400 && r.Method == "POST" {
 		f.Submitted = fr.submitted

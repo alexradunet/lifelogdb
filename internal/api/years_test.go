@@ -68,9 +68,8 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 	}
 
 	body := browse(t, h, "/years/2026")
-	grid, _, _ := strings.Cut(strings.SplitN(body, `<div class="year">`, 2)[1], `<p class="sub">`) // the sidebar has a month box of its own
-	if n := strings.Count(grid, `<div class="month-box">`); n != 12 {
-		t.Errorf("%d month boxes in the year, want 12", n)
+	if n := strings.Count(body, `<div class="month-box">`); n != 12 { // the sidebar draws none
+		t.Errorf("%d month boxes on the year's page, want 12", n)
 	}
 	for _, want := range []string{`<a href="/months/2026-01">January</a>`, `<a href="/months/2026-12">December</a>`, `<span class="meta">3 written</span>`,
 		`<a href="/days/2026-10-12" aria-current="date"`, `<a href="/days/2026-10-05" class="written"`, "3 days written", "3 readings", `rel="prev"`, `rel="next"`} {

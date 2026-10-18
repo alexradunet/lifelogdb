@@ -119,15 +119,15 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   The new photo goes in no day page.
 - **The app shell: the Almanac design system** ([plan 092](docs/plans/092-the-app-shell.md)). Every page a browser
   gets is in one shell: a sidebar with the brand and today's date, the search, New, the sections of every day (Today,
-  Calendar, Metrics and Browse), this month with its written days, and the owner's links. Under 900 px it is a phone's layout
+  Calendar, Metrics and Browse) and the owner's links. This month is on Calendar only: the sidebar does not draw it
+  a second time. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
   the sections of every day and More, and the rest as a sheet over the page (`#sections`): a popover that More
   opens and Close, Escape or a tap outside closes, with no script. Inside the page a layout asks the width of its column (`@container column`), not of the
   screen, so a day beside an open sheet lays out as in a narrow window; the title, the leaf and the sheet's padding
   scale with the column by `clamp()`, with no step at a breakpoint
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
-  page's entity: once a page, and for a browser only, the shell reads this
-  month (`GET /months/{month}`), which every client gets from that resource. A page drawn before the handler
+  page's entity: it reads only the clock, for today's date. A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
   bound in Hearthwood, the materials of the owner's Balaur design system
   ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are

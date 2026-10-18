@@ -64,7 +64,7 @@ func TestAMetricIsOnePage(t *testing.T) {
 	if !strings.Contains(record, `<input type="hidden" name="metric" value="Weight">`) || strings.Contains(record, `<select name="metric"`) {
 		t.Errorf("the record form does not fix its metric to the page's: %s", record)
 	}
-	table := strings.Index(body, `class="readings-year"`) // the sidebar draws a month table before the page
+	table := strings.Index(body, `class="readings-year"`)
 	if at := strings.Index(body, record); record == "" || table < 0 || at > table {
 		t.Errorf("Record is not before the readings (record at %d, table at %d)", at, table)
 	}

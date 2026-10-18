@@ -9,17 +9,12 @@ import (
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
-// date and this month. It reads the day pages of this month, as GET /months/{month} gives them to every client, once
-// a page, and only for a page (answer): a JSON answer never runs it.
+// date. It reads only the clock: this month is on Calendar, so the sidebar does not draw it a second time.
 
-// Shell is what the sidebar shows: today, and the weeks of this month with the days that have a day page.
+// Shell is what the sidebar knows: today, and its zone.
 type Shell struct {
-	Today     string
-	Zone      *time.Location // the zone of today: the words for a time use it
-	Month     string         // "October 2026"
-	MonthHref string
-	Written   int
-	Days      []any // the days of this month as the month resource gives them (day, page): the monthbox template draws them
+	Today string
+	Zone  *time.Location // the zone of today: the words for a time use it
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a

@@ -68,7 +68,7 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
   & a{color:var(--rail-ink);
     &[aria-current=page]{font-weight:700; color:var(--rail-accent)}}}
 
-/* The month in the sidebar: a parchment slip in the wood; a written day is tinted, today is framed. */
+/* A month of the year: a parchment slip; a written day is tinted, today is framed. */
 .month-box{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 10px; box-shadow:var(--parch-bevel)}
 .month-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2);
   & a{font-size:14px; font-weight:700; color:var(--ink)}
@@ -118,7 +118,6 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}
-  .rail-more .month-box{max-inline-size:22rem}
   .rail-foot{margin:0}
   .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     &>footer{margin-block-start:var(--space-6)}}
