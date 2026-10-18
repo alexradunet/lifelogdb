@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **133**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **134**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [133](133-what-the-code-holds-twice.md) | What the code holds twice, what it holds for nothing, and four defects: the review against AGENTS.md | P2 | M | owner word 2026-10-18; `9b056bc` | TODO |
 | [132](132-browse-the-notion-way.md) | Browse the Notion way: crumbs and a heading, a tree with +, Move on every row, and file-pages takes a thing out | P2 | M | owner word 2026-10-18; `2a03d2c` | IN REVIEW (owner) |
 | [131](131-the-pareto-pass.md) | The Pareto pass: every action on every surface, one way to do a thing, and the browser's extras cut | P2 | L | owner word 2026-10-18; `c172ccd` | IN REVIEW (owner) |
 | [130](130-the-explore-pass.md) | The explore pass: Calendar opens on a stream of day cards, with zoom levels, a random day and page, and search by kind | P2 | L | owner word 2026-10-17; `5e5a0d8` | IN REVIEW (owner) |
