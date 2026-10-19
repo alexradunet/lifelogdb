@@ -2,8 +2,9 @@
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
 its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
-files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is words in a page. It serves the file three ways: a hypermedia API (with an HTML face for
-the browser), a CLI and an MCP server.
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is words in a page. It serves the file two ways: a hypermedia API (with an HTML face for
+the browser) and a CLI. Everything that names a third party is an extension beside it: the MCP server, the setup of a
+coding agent, Google Photos ([extensions](#extensions)).
 
 The database it writes is specified independently of it, so another program — in any language — can read
 `life.db`, or write its own:
@@ -55,6 +56,32 @@ lifelog snapshot                                   # the owner, before an import
 
 These are this application's own engineering decisions ([D14](docs/decisions/D14-ui-and-tools.md)).
 
+- **The four rings** ([plan 135](docs/plans/135-extensions-outside-the-core.md)). A thing lives in the innermost ring
+  that can hold it. Ring 0 is the file: `schema.sql` is the domain model, and every rule about the data is a CHECK or
+  a trigger there. Ring 1 is the writer, `internal/core` and what it reads: transactions and only what SQLite cannot
+  say. Ring 2 is the catalog and its surfaces, `internal/api` and `cmd/lifelog`: one catalog, one handler, the forms
+  and the CLI's `do`, all generated from the catalog. Ring 3 is the extensions: one program `lifelog-NAME` each, a
+  client of [API.md](API.md), run as `lifelog NAME`, in any language, and the only ring that names a third party
+  ([the contract of an extension](extensions/README.md)). Two tests of `cmd/lifelog` keep the rings: the core names
+  no third party, and the core dials only its own server. The browser stays in ring 2: it draws the entity on the
+  origin of the API, with the forms that post to it.
+
+  ```mermaid
+  flowchart TB
+    subgraph R0["ring 0: the file"]
+      S["schema.sql: the domain model and every rule about the data"]
+    end
+    subgraph R1["ring 1: the writer"]
+      C["internal/core, db, text, photo, preview"]
+    end
+    subgraph R2["ring 2: the catalog and its surfaces"]
+      K["internal/api and cmd/lifelog: the API, the browser, the CLI"]
+    end
+    subgraph R3["ring 3: extensions"]
+      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos: clients of API.md"]
+    end
+    S --> C --> K --> X
+  ```
 - **One handler, three surfaces.** `internal/api` is the only thing the surfaces call. `serve` mounts it on a
   socket; the CLI calls it in-process (`internal/client`), or a running server with `--url`. The MCP server is the
   extension `lifelog-mcp` ([extensions/mcp](extensions/mcp/README.md)): a client of the HTTP API, run as

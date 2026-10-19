@@ -9,7 +9,8 @@
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM. The contract in `docs/` and `schema.sql` do not change. The
   `lifelog` binary loses two commands (`agentic-init`, `mcp`), which come back as extensions under the same command
   lines. The README, `AGENTS.md`, the site and the parity tests change.
-- **Status:** IN PROGRESS.
+- **Status:** IN REVIEW (owner). Built in `193f2f8` (step 1), `14fa315` (step 3), `ab8c1ca` (step 2) and the commit
+  of step 4. The install of the three binaries and the restart of the service wait for the owner.
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-19)

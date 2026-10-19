@@ -237,6 +237,8 @@
 git clone https://github.com/alexradunet/lifelogdb
 cd lifelogdb
 go build -o lifelog ./cmd/lifelog
+go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp
+go build -C extensions/agentic -o ../../lifelog-agentic-init ./cmd/lifelog-agentic-init
 
 <span class="c"># make life.db beside the program</span>
 lifelog init

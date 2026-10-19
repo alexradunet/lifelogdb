@@ -46,7 +46,9 @@ journalctl -u lifelog-snapshot.service
 
 The service runs the installed program, not the one in the repo folder.
 
-1. `go build -o <install path> ./cmd/lifelog`
+1. `go build -o <install path> ./cmd/lifelog`, and the extensions beside it: `go build -C extensions/mcp -o <install
+   folder>/lifelog-mcp ./cmd/lifelog-mcp` and `go build -C extensions/agentic -o <install folder>/lifelog-agentic-init
+   ./cmd/lifelog-agentic-init` ([extensions](../extensions/README.md)).
 2. `systemctl daemon-reload` after a change to a unit file.
 3. `systemctl restart lifelog.service`.
 4. Read the service's log line (`journalctl -u lifelog.service -n 20`): it names the version and the `user_version`.

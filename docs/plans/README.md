@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [135](135-extensions-outside-the-core.md) | Extensions outside the core: what names a third party is a subprocess found by name | P2 | L | owner word 2026-10-19; `7637f66` | IN PROGRESS |
+| [135](135-extensions-outside-the-core.md) | Extensions outside the core: what names a third party is a subprocess found by name | P2 | L | owner word 2026-10-19; `7637f66` | IN REVIEW (owner) |
 | [134](134-a-cover-from-google-photos.md) | A cover from Google Photos: an extension outside the core picks each day's cover from that day's photos | P3 | M | owner word 2026-10-18; `ed046b2` | IN REVIEW (owner) |
 | [133](133-what-the-code-holds-twice.md) | What the code holds twice, what it holds for nothing, and four defects: the review against AGENTS.md | P2 | M | owner word 2026-10-18; `9b056bc` | IN REVIEW (owner) |
 | [132](132-browse-the-notion-way.md) | Browse the Notion way: crumbs and a heading, a tree with +, Move on every row, and file-pages takes a thing out | P2 | M | owner word 2026-10-18; `2a03d2c` | IN REVIEW (owner) |

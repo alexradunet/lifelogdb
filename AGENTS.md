@@ -3,7 +3,9 @@
 ## What this repo is
 
 **The product is `lifelog`, the Go application** ([README](README.md)): one binary at the repo root that writes
-`life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and an MCP server.
+`life.db`, a lifetime-scale, single-user SQLite database, and serves it as a hypermedia API, a CLI and a browser.
+Everything that names a third party (an MCP server, a coding agent's setup, Google Photos) is an extension: a
+separate program, a client of the API, found by name ([the four rings](#the-four-rings)).
 **The database it writes is specified on its own** in [`docs/`](docs/README.md) — goals, the canonical DDL
 ([`docs/schema/schema.sql`](docs/schema/schema.sql)), the storage contract, the decision log (D1–D28), the query
 cookbook, non-goals, research — so that `life.db` can be read, or written by another application, in any language.
@@ -32,7 +34,8 @@ language-neutral, so a rule lives in the docs and the Go code cites it.
 | `docs/guides/` | for people building on the schema: [building a writer](docs/guides/building-a-writer.md) | the contract |
 | `docs/issues/`, `docs/rfcs/`, `docs/plans/` | the process records: incidents, proposals, execution plans ([how a change happens](docs/process.md)) | — |
 | `tests/` | the validation suites (Go tests): every *executed* claim of the docs, run against the DDL in `docs/` and through the writer's own extraction and save | the docs |
-| `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, MCP server ([README](README.md)) | the docs |
+| `cmd/`, `internal/`, `tools/`, `go.mod` | the product: `lifelog` (Go) — hypermedia API, CLI, browser ([README](README.md)) | the docs |
+| `extensions/` | the extensions: one module each, a client of [API.md](API.md), run as `lifelog NAME` ([the contract of an extension](extensions/README.md)) | `API.md` and the contract of an extension; never `lifelog/internal` |
 | `site/` | the public page of the project (GitHub Pages) | the README: it names only what the README names, and changes in the same commit as a command or a feature it shows |
 
 ## Engineering priorities and working agreement
@@ -48,6 +51,8 @@ fast feedback**. Safeguards should catch failures, not create ceremony.
   expanding scope. Contract changes follow the existing process below; routine implementation fixes need no new RFC.
 - Prefer the smallest understandable solution. Do not add layers, frameworks, generic repositories, configuration
   knobs or speculative extension points for hypothetical needs. Do not reorganize working code just for uniformity.
+- An extension is checked in its own folder: `go vet ./... && go test ./...` there. The root's `./...` does not
+  build it. Its end-to-end test builds the real `lifelog` and runs the real line.
 - Keep application engineering guidance here, and its rules for synthetic workloads and performance evidence in
   [tests/README.md](tests/README.md). Keep application decisions and the
   [engineering references](README.md#engineering-references) in [README.md](README.md). The database contract remains
@@ -109,8 +114,8 @@ not external services or private files.
   loss is one night.
 - A system service runs the installed `lifelog` against this file, and a local proxy exposes it on the owner's
   private network. The CLI in this folder and that service are the same writer on one file, which
-  [connections](docs/contract/connections.md) allows. Do not start a second writer stack on it, and do not point a
-  reader at it while the service writes.
+  [connections](docs/contract/connections.md) allows; so is the temporary server that `lifelog NAME` opens for an
+  extension. Do not start a second writer stack on it, and do not point a reader at it while the service writes.
 - The service runs the installed binary, not `./lifelog`. A change is live only after `go build -o <install path>
   ./cmd/lifelog` and a service restart. Report the install path, the restart and the service's own log line when
   you ship a change.
@@ -145,6 +150,42 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 
 ## Go implementation
 
+### The four rings
+
+A thing lives in the innermost ring that can hold it ([plan 135](docs/plans/135-extensions-outside-the-core.md)).
+
+```mermaid
+flowchart TB
+  subgraph R0["ring 0: the file"]
+    S["schema.sql: the tables, CHECKs, triggers and lifelog_meta. The domain model and every rule about the data."]
+  end
+  subgraph R1["ring 1: the writer, in Go"]
+    C["internal/core, db, text, photo, preview: transactions, and only what SQLite cannot say"]
+  end
+  subgraph R2["ring 2: the catalog and its surfaces"]
+    K["internal/api and cmd/lifelog: one catalog, one Siren handler, the forms, the CLI's do, all generated from the catalog"]
+  end
+  subgraph R3["ring 3: extensions, in any language"]
+    X["extensions/NAME, the program lifelog-NAME: a client of API.md, run as lifelog NAME. It names the third party."]
+  end
+  S --> C --> K --> X
+```
+
+```mermaid
+flowchart TD
+  Q["does it open life.db, or run inside a transaction?"] -->|"yes"| C["ring 0 or 1: the file, the writer"]
+  Q -->|"no"| R["does it draw or dispatch the catalog on the same origin as the API?"]
+  R -->|"yes"| K["ring 2: the forms, the CLI"]
+  R -->|"no"| E["ring 3: an extension"]
+```
+
+Two tests of `cmd/lifelog` (`boundary_test.go`) keep the rings, and a change preserves them: **the core names no
+third party** (no Go source of `internal/` or `cmd/` holds a product's or a company's name: the list is in the test,
+and a new one is added in the change that moves the thing out), and **the core dials only its own server** (outside
+`internal/client`, no Go source of `internal/` or `cmd/` makes an HTTP client or dials a socket). Go enforces the
+third: an extension never imports `lifelog/internal`. The browser stays in ring 2 by the owner's word (2026-10-19):
+it draws the entity on the origin of the API, with the forms that post to it.
+
 - **Ordinary Go first.** Follow [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): clear names,
   early error returns, cohesive packages, explicit dependencies and small public surfaces. Keep supporting packages
   under `internal/`. Prefer the standard library; justify a dependency by the complexity or risk it removes.
@@ -171,13 +212,14 @@ schema is frozen ([D13](docs/decisions/D13-migrations-and-freeze.md)):
 - **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror
   every struct with an interface or add a service/repository layer solely for mocks. Use generics only when they make
   actual repeated logic simpler. Share domain behavior, not incidental similarities between unrelated operations.
-- **Preserve the existing application boundaries** ([README decisions](README.md#decisions)). Keep CLI, browser and
-  MCP adapters thin, using the shared API/action catalog rather than duplicating validation or business rules. Reuse
-  the existing core operations; a new surface must not become a second implementation of a write.
+- **Preserve the existing application boundaries** ([README decisions](README.md#decisions)). Keep the CLI, the
+  browser and the MCP extension thin, using the shared API/action catalog rather than duplicating validation or
+  business rules. Reuse the existing core operations; a new surface must not become a second implementation of a
+  write.
 - **Every capability on every surface.** The owner's rule (2026-10-08): whatever `lifelog` can do is reachable through
-  the API, the CLI, the MCP server and the browser alike. The way to get there is the one catalog: a capability is a
-  resource or an action of `GET /actions`, and so the CLI's `do`, the MCP tools and the browser's forms carry it
-  without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
+  the API, the CLI, the MCP server (the extension `lifelog-mcp`) and the browser alike. The way to get there is the one
+  catalog: a capability is a resource or an action of `GET /actions`, and so the CLI's `do`, the MCP tools and the
+  browser's forms carry it without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
   differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
   `snapshot`, `integrity-check`, `rebuild-search`, `resync-links`) are refused to an `agent:*` or `import:*` writer
@@ -268,7 +310,8 @@ won>.`
   work, cancellation, stale versions, repeated imports/retries, correction chains and reopen/recovery. Use subprocess
   tests for process exits or interruption claims. Do not describe process-interruption tests as power-loss proof.
 - **Client parity is a first-class contract.** Run shared behavioral scenarios through applicable CLI, HTTP/HTML and
-  MCP entry points, including in-process and remote dispatch where relevant. Verify the same domain outcomes, validation
+  MCP entry points, including in-process and remote dispatch where relevant (the MCP surface is held by the
+  end-to-end test of `extensions/mcp`, which runs the real `lifelog mcp`). Verify the same domain outcomes, validation
   and persisted state, allowing only intentional presentation, provenance and permission differences. Assert those
   differences too: owner-only actions must remain unavailable to agents. Include a small set of real transport/process
   smoke tests; direct handler calls alone do not prove adapter wiring. Keep most exhaustive cases at their owning layer
