@@ -1,5 +1,6 @@
 // Package pixelart draws the small pictures that a gradient cannot be: the wood tile of the rail, the ground tile of
-// the page and the sprites (docs/plans/137-pixel-wood-and-the-focus-pass.md, docs/plans/138-pixel-art-elsewhere.md).
+// the page, the sprites and the icons (docs/plans/137-pixel-wood-and-the-focus-pass.md,
+// docs/plans/138-pixel-art-elsewhere.md, docs/plans/139-pixel-icons.md).
 // A drawing is deterministic: the same call gives the same pixels, so a file that holds it is checked by comparing
 // pixels with the drawing.
 package pixelart

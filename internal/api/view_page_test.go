@@ -90,7 +90,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/actions", http.StatusOK, nil},
 		{"/actions?new=snapshot", http.StatusOK, []string{`<details class="action" open><summary class="button">Take a snapshot`}}, // the rail's Snapshot link
 		{"/days", http.StatusOK, []string{`<article class="day-card" aria-label="`, `<article class="day-card slim" aria-label="2026-09-28">`,
-			`<a href="/days" aria-current="page">Days</a>`, `</svg>Ana</a>`,
+			`<a href="/days" aria-current="page">Days</a>`, `</span>Ana</a>`,
 			`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,

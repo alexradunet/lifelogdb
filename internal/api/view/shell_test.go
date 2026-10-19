@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/pixelart"
 )
 
 // TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the
@@ -140,5 +141,56 @@ func TestNoStripWithoutState(t *testing.T) {
 	}
 	if rail := drawRail(t, nil); rail != "" {
 		t.Errorf("a page with no shell has a rail:\n%s", rail)
+	}
+}
+
+// TestEveryIconNameIsACellOfTheSheet: the names that templates, the rail and the search hits pass to icon are cells of
+// the icon sheet, and a name that is not a cell draws nothing. A template that passes a name from its data (the file
+// kind of a tile) is checked by its values: the kinds of media.
+func TestEveryIconNameIsACellOfTheSheet(t *testing.T) {
+	names := map[string]string{} // name to where it is used
+	literal := regexp.MustCompile(`\{\{icon "([a-z]+)"\}\}`)
+	entries, err := Files.ReadDir("html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		for _, m := range literal.FindAllStringSubmatch(string(MustFile(e.Name())), -1) {
+			names[m[1]] = e.Name()
+		}
+	}
+	for _, it := range navItems {
+		if it.Icon != "" {
+			names[it.Icon] = "navItems"
+		}
+	}
+	for _, k := range newKinds {
+		names[k.Icon] = "newKinds"
+	}
+	for kind, name := range kindIcons {
+		names[name] = "kindIcons " + kind
+	}
+	for _, name := range []string{"image", "video", "audio"} { // the file_kind of a media tile
+		names[name] = "the kinds of media"
+	}
+	if len(names) < 10 {
+		t.Fatalf("found %d icon names, which is too few: the search for them is broken", len(names))
+	}
+	for name, where := range names {
+		if _, ok := pixelart.IconCell(name); !ok {
+			t.Errorf("%s uses the icon %q, which is not a cell of the icon sheet", where, name)
+		}
+		want := `<span class="icon icon-` + name + `" aria-hidden="true"></span>`
+		if got := string(icon(name)); got != want {
+			t.Errorf("icon(%q) is %q, want %q", name, got, want)
+		}
+	}
+	for _, name := range []string{"", "nope", `x" onload="y`} {
+		if got := icon(name); got != "" {
+			t.Errorf("icon(%q) is %q, want nothing", name, got)
+		}
 	}
 }

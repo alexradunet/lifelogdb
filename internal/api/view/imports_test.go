@@ -8,7 +8,8 @@ import (
 )
 
 // TestTheViewImportsNoStore: the view draws what it is given and reads no store. Of the packages of this module, the
-// view and the packages that it imports, at any depth, import only siren and text: core and db are never among them.
+// view and the packages that it imports, at any depth, import only siren, text and pixelart: core and db are never among them. Pixelart is a leaf that draws pictures
+// and imports nothing of this module; the view reads the names of the icon sheet from it.
 // go/build reads the import lines of the files that a build for one system takes; the tests are not among them. The
 // walk is done for linux and for windows, because a file for one system only (a name that ends in _windows.go, a
 // build line) is not in the build for the other.
@@ -40,10 +41,13 @@ func TestTheViewImportsNoStore(t *testing.T) {
 				}
 			}
 			walk(view)
-			want := map[string]bool{view: true, "lifelog/internal/api/siren": true, "lifelog/internal/text": true}
+			// pixelart is a leaf package of drawings with no import of this module. The view reads the names of the icon
+			// sheet from it, so that the names have one home.
+			want := map[string]bool{view: true, "lifelog/internal/api/siren": true, "lifelog/internal/text": true,
+				"lifelog/internal/pixelart": true}
 			for path := range seen {
 				if !want[path] {
-					t.Errorf("the view imports %s: it may import only siren and text of this module", path)
+					t.Errorf("the view imports %s: it may import only siren, text and pixelart of this module", path)
 				}
 			}
 			for path := range want {

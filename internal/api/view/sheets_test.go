@@ -464,7 +464,7 @@ func TestThePicturesAreTheDrawings(t *testing.T) {
 	for _, c := range []struct {
 		file string
 		want *image.NRGBA
-	}{{"wood.png", pixelart.Wood()}, {"ground.png", pixelart.Ground()}, {"sprites.png", pixelart.Sprites()}} {
+	}{{"wood.png", pixelart.Wood()}, {"ground.png", pixelart.Ground()}, {"sprites.png", pixelart.Sprites()}, {"icons.png", pixelart.Icons()}} {
 		got, err := png.Decode(bytes.NewReader(MustFile(c.file)))
 		if err != nil {
 			t.Fatal(err)
@@ -500,5 +500,39 @@ func TestTheSheetReadsTheSpriteCellsWhereTheyAre(t *testing.T) {
 		if !strings.Contains(app, w) {
 			t.Errorf("app.css lacks %q, which the layout of the sprite sheet needs", w)
 		}
+	}
+}
+
+// TestTheSheetReadsTheIconCellsWhereTheyAre: the same guard for the icon sheet. Each icon has one position at 2 screen
+// pixels a pixel (the span is 20 by 20) and one in a tile at 4 (40 by 40), and the mask sizes are the sheet at those
+// scales.
+func TestTheSheetReadsTheIconCellsWhereTheyAre(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	n := len(pixelart.IconNames)
+	want := []string{
+		fmt.Sprintf("inline-size:%dpx; block-size:%dpx; background-color:currentColor;\n  mask-image:url(/assets/icons.png); mask-size:%dpx %dpx;",
+			pixelart.IconSize*2, pixelart.IconSize*2, n*pixelart.CellSize*2, pixelart.CellSize*2),
+		fmt.Sprintf(".tile-blank span.icon{inline-size:%dpx; block-size:%dpx; mask-size:%dpx %dpx}",
+			pixelart.IconSize*4, pixelart.IconSize*4, n*pixelart.CellSize*4, pixelart.CellSize*4),
+	}
+	at := func(cell, scale int) string {
+		if cell == 0 {
+			return "0 0"
+		}
+		return fmt.Sprintf("-%dpx 0", cell*pixelart.CellSize*scale)
+	}
+	for cell, name := range pixelart.IconNames {
+		want = append(want,
+			fmt.Sprintf(".icon-%s{mask-position:%s}", name, at(cell, 2)),
+			fmt.Sprintf(".tile-blank .icon-%s{mask-position:%s}", name, at(cell, 4)))
+	}
+	for _, w := range want {
+		if !strings.Contains(app, w) {
+			t.Errorf("app.css lacks %q, which the layout of the icon sheet needs", w)
+		}
+	}
+	// One position rule at each of the two scales, and no icon the sheet does not hold.
+	if got := len(regexp.MustCompile(`\.icon-[a-z]+\{`).FindAllString(app, -1)); got != 2*n {
+		t.Errorf("app.css has %d icon position rules, want %d", got, 2*n)
 	}
 }

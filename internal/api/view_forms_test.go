@@ -235,7 +235,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 		{"Reading", "/?new=record#record", "record", "/measurements"},
 		{"File", "/browse?kind=media&new=add-file", "add-file", "/files"},
 	} {
-		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<svg[^>]*>.*?</svg>)?` + kind.title + `</a>`)
+		link := regexp.MustCompile(`<a href="` + regexp.QuoteMeta(strings.ReplaceAll(kind.href, "&", "&amp;")) + `">(<span class="icon[^>]*></span>)?` + kind.title + `</a>`)
 		if !link.MatchString(menu) {
 			t.Errorf("the New menu has no %s at %s", kind.title, kind.href)
 			continue

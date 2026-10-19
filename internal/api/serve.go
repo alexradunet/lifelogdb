@@ -150,6 +150,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /assets/wood.png", install("wood.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/ground.png", install("ground.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/sprites.png", install("sprites.png", "image/png", "public, max-age=31536000, immutable"))
+	m.HandleFunc("GET /assets/icons.png", install("icons.png", "image/png", "public, max-age=31536000, immutable"))
 	return h
 }
 

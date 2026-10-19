@@ -141,7 +141,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	sections := regexp.MustCompile(`(?s)<nav aria-label="Sections">(.*?)</nav>`)
-	entry := regexp.MustCompile(`<a href="([^"]+)"( aria-current="page")?[^>]*><svg class="icon"[^>]*>.*?</svg>([^<]+)</a>`)
+	entry := regexp.MustCompile(`<a href="([^"]+)"( aria-current="page")?[^>]*><span class="icon icon-[a-z]+" aria-hidden="true"></span>([^<]+)</a>`)
 	for path, current := range map[string]string{
 		"/browse": "Browse", "/browse?kind=person": "Browse", "/browse?ghosts=1": "Browse", "/metrics": "Metrics",
 		"/metrics/Weight": "Metrics", "/days/" + fixedToday: "Today", "/months/2031-05": "Calendar", "/search": "",

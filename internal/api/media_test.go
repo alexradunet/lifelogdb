@@ -91,7 +91,7 @@ func TestMediaListsPicturesVideosAndRecordings(t *testing.T) {
 	for _, want := range []string{"<span>3 pictures, 1 video, 2 recordings</span>",
 		`<nav class="kinds" aria-label="Media kind"><a href="/browse?kind=media" aria-current="page">All media</a><a href="/browse?kind=media&amp;media=image">Pictures</a><a href="/browse?kind=media&amp;media=video">Videos</a><a href="/browse?kind=media&amp;media=audio">Recordings</a></nav>`,
 		`<ul class="plain tiles">`, `<img src="` + apitest.Href(photo, "preview") + `" alt="" loading="lazy"><span class="first">Lake.jpg</span><span class="meta">picture · Sat 10 May</span>`,
-		`<span class="tile-blank" aria-hidden="true"><svg class="icon"`, `<span class="first">Walk.mp4</span><span class="meta">video · Mon 12 May</span>`, `<span class="first">Dawn.jpg</span><span class="meta">picture · Wed 14 May</span>`,
+		`<span class="tile-blank" aria-hidden="true"><span class="icon icon-video" aria-hidden="true"></span>`, `<span class="first">Walk.mp4</span><span class="meta">video · Mon 12 May</span>`, `<span class="first">Dawn.jpg</span><span class="meta">picture · Wed 14 May</span>`,
 		`<span class="first">Memo 1.m4a</span><span class="meta">recording · Thu 1 May</span>`, `<span class="first">Blank.jpg</span><span class="meta">picture · no day yet</span>`,
 		`<label class="pick-box"><input type="checkbox" name="ids" value="`} {
 		if !strings.Contains(body, want) {

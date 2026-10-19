@@ -37,7 +37,24 @@ body{background-image:url(/assets/ground.png),var(--grain-ground); background-si
   &>footer{inline-size:100%; max-inline-size:1200px; margin-block-start:var(--space-10); padding-block-start:var(--space-3); border-block-start:2px dotted var(--line)}}
 .shell.bare>.column{max-inline-size:34rem; margin:0 auto}
 
-svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round}
+/* An icon is a glyph of icons.png (10 by 10 pixels in a cell of 16 by 16, 14 cells in a row: 224 by 16), used as a
+   mask over the colour of the text, so it takes the ink of the place it is in. It is drawn at 2 screen pixels a
+   pixel: the span is 20 by 20, and the sheet is 14 * 16 * 2 = 448 by 16 * 2 = 32. The cell n is at x = n * 16 * 2 =
+   n * 32. The order of the cells is pixelart.IconNames, and a test keeps these numbers equal to it. The mask is not
+   prefixed: the browsers of the README (Chromium and Safari, current) take the plain property. */
+span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; background-color:currentColor;
+  mask-image:url(/assets/icons.png); mask-size:448px 32px; mask-repeat:no-repeat; image-rendering:pixelated}
+.icon-today{mask-position:0 0} .icon-calendar{mask-position:-32px 0} .icon-browse{mask-position:-64px 0} .icon-people{mask-position:-96px 0}
+.icon-places{mask-position:-128px 0} .icon-files{mask-position:-160px 0} .icon-metrics{mask-position:-192px 0} .icon-search{mask-position:-224px 0}
+.icon-new{mask-position:-256px 0} .icon-more{mask-position:-288px 0} .icon-image{mask-position:-320px 0} .icon-video{mask-position:-352px 0}
+.icon-audio{mask-position:-384px 0} .icon-week{mask-position:-416px 0}
+/* The same sheet at 4 screen pixels a pixel, where a tile draws an icon large: the span is 40 by 40, the sheet is
+   14 * 16 * 4 = 896 by 16 * 4 = 64, and the cell n is at x = n * 16 * 4 = n * 64. */
+.tile-blank span.icon{inline-size:40px; block-size:40px; mask-size:896px 64px}
+.tile-blank .icon-today{mask-position:0 0} .tile-blank .icon-calendar{mask-position:-64px 0} .tile-blank .icon-browse{mask-position:-128px 0} .tile-blank .icon-people{mask-position:-192px 0}
+.tile-blank .icon-places{mask-position:-256px 0} .tile-blank .icon-files{mask-position:-320px 0} .tile-blank .icon-metrics{mask-position:-384px 0} .tile-blank .icon-search{mask-position:-448px 0}
+.tile-blank .icon-new{mask-position:-512px 0} .tile-blank .icon-more{mask-position:-576px 0} .tile-blank .icon-image{mask-position:-640px 0} .tile-blank .icon-video{mask-position:-704px 0}
+.tile-blank .icon-audio{mask-position:-768px 0} .tile-blank .icon-week{mask-position:-832px 0}
 
 /* The rail is wood: pixel planks, a raised bevel, the outline on its right. Its words are the rail's ink; where the
    owner is, gold on a carved well. */
@@ -129,7 +146,6 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     & ul{flex-direction:row; justify-content:space-around; gap:0; padding:0; background:none; border:0; box-shadow:none}
     & li{flex:1 1 0; min-inline-size:0}
     & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
-      & svg.icon{inline-size:20px; block-size:20px}
       &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}}
   .rail-more-link{display:block}
   .rail-more{display:none}
@@ -616,8 +632,7 @@ ul.rows>li>a.hit-link{display:flex; align-items:center; gap:var(--space-2);
     &.pick{position:relative; display:block}}}
 .tile-link{display:flex; flex-direction:column; gap:2px; color:var(--text); text-decoration:none;
   & img,& .tile-blank{display:block; inline-size:100%; aspect-ratio:1; object-fit:cover; margin-block-end:var(--space-1); background:var(--surface-deep); border:2px solid var(--edge); box-shadow:var(--drop-hard)}
-  & .tile-blank{display:grid; place-items:center; color:var(--text-muted);
-    & svg{inline-size:40%; block-size:40%}}
+  & .tile-blank{display:grid; place-items:center; color:var(--text-muted)}
   & .first{font-weight:700; color:var(--text-strong); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   & .meta{font-size:13px; line-height:19px; color:var(--text-muted)}
   &:hover .first{text-decoration:underline}}

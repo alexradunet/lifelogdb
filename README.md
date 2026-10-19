@@ -216,7 +216,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `GET /manifest.webmanifest` and the icons (`/assets/icon.svg`, and `/assets/icon-192.png` and
   `/assets/icon-512.png` for Android) make the app installable: two shortcuts (Today, Add to today) and a share
   target that posts shared text into Capture (`POST /days/today/capture`). There is no service worker, since the
-  server is the owner's own. A public listener serves the manifest, the icons and the three pictures of `internal/pixelart` (`GET` and `HEAD`) without the
+  server is the owner's own. A public listener serves the manifest, the icons and the four pictures of `internal/pixelart` (`GET` and `HEAD`) without the
   token, because a browser fetches them without its cookie and they hold nothing of the database. The fonts stay
   behind the token.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
@@ -242,8 +242,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
-- **The stylesheet is this application's own: two embedded sheets, three embedded faces, three embedded pictures (the
-  wood tile, the ground tile and the sprite sheet, drawn by `internal/pixelart`), no vendored framework and no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
+- **The stylesheet is this application's own: two embedded sheets, three embedded faces, four embedded pictures (the
+  wood tile, the ground tile, the sprite sheet and the icon sheet, drawn by `internal/pixelart`), no vendored framework and no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
   print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
   components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two sheets are one
   cascade in four layers, `tokens`, `base`, `components` and `utilities`, declared once at the top of `base.css`
@@ -494,8 +494,8 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `extensions/agentic` | its own module, `lifelog-agentic`: `lifelog agentic-init`, the texts and MCP configs for a coding agent opened in the folder of the program; it reads `LIFELOG_EXE` and `LIFELOG_DB`, and imports nothing of `lifelog/internal` | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog`, `lifelog-mcp` and `lifelog-agentic-init` |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
-| `internal/pixelart` | the drawings a gradient cannot be, deterministic: the wood tile of the rail, the ground tile of the page and the sprite sheet (the seal, the mood faces, the inkwell) ([plan 137](docs/plans/137-pixel-wood-and-the-focus-pass.md), [plan 138](docs/plans/138-pixel-art-elsewhere.md)) | determinism, sizes, seams and a known pixel of each sprite; `view` compares each embedded file with its drawing pixel by pixel |
-| `tools/pixelart` | writes the three pictures to `internal/api/view/html/` after a change to a drawing | the view's comparison: a stale file fails it |
+| `internal/pixelart` | the drawings a gradient cannot be, deterministic: the wood tile of the rail, the ground tile of the page, the sprite sheet (the seal, the mood faces, the inkwell) and the icon sheet (14 glyphs of 10 by 10 pixels, used as a mask) ([plan 137](docs/plans/137-pixel-wood-and-the-focus-pass.md), [plan 138](docs/plans/138-pixel-art-elsewhere.md), [plan 139](docs/plans/139-pixel-icons.md)) | determinism, sizes, seams and a known pixel of each sprite; `view` compares each embedded file with its drawing pixel by pixel |
+| `tools/pixelart` | writes the four pictures to `internal/api/view/html/` after a change to a drawing | the view's comparison: a stale file fails it |
 | `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) | the contract suites `TestSuites` and the mutants `TestMutants`, on the DDL of `docs/` |
 
 ## Checks
