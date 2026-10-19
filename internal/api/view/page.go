@@ -63,6 +63,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"rel":           func(r []string) string { return strings.Join(r, " ") },
 	"markdown":      markdown,
 	"markdownCover": markdownCover,
+	"inline":        inline,
 	"box":           boxHTML,
 	"periodWords":   periodWords,
 	"mark":          mark,

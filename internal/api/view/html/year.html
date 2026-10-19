@@ -10,7 +10,7 @@
 {{- with .Link "next"}}
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next year, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 </div></header>
-{{template "period-page" (dict "v" .)}}
+{{template "period-page" (dict "v" . "name" "year")}}
 <div class="year">{{range $y.months}}{{template "monthbox" (dict "href" (printf "/months/%s" .month) "name" (monthName .month) "written" .written "days" .days "today" $.Today)}}{{end}}</div>
 <section class="group" aria-label="Quarters"><h2>Quarters</h2>
 <ul class="plain quarters">{{range $y.quarters}}<li>{{if .page_id}}<a href="/pages/{{num .page_id}}">{{.key}}</a>{{else}}<a href="?new=plan&amp;page={{.key}}#plan">{{.key}}</a> <span class="meta">no page yet</span>{{end}}</li>{{end}}</ul></section>

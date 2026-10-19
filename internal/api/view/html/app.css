@@ -509,12 +509,15 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
    quiet. */
 .plan h3{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); margin-block:var(--space-3) var(--space-1)}
 section.plan>ul.plan-list{padding-inline:var(--space-3); box-shadow:var(--parch-bevel)}
-.plan-row{display:flex; flex-direction:column; gap:var(--space-1)}
-.plan-line{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--space-1) var(--space-3);
-  & .text{min-inline-size:0; overflow-wrap:anywhere}
-  & .meta{display:inline-flex; flex-wrap:wrap; align-items:baseline; gap:var(--space-2)}}
-.plan-acts{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2)}
-form.tick-line{display:inline-flex; gap:var(--space-2)}
+.plan-row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1) var(--space-2);
+  & .text{flex:1 1 8rem; min-inline-size:0; overflow-wrap:anywhere}
+  & .meta{display:inline-flex; flex-wrap:wrap; align-items:center; gap:var(--space-2)}
+  & .plan-acts{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); margin-inline-start:auto;
+    &:has(details[open]){flex:1 1 100%}}
+  & details.action{display:contents}
+  & details.action>summary.button{block-size:var(--control-small); min-block-size:0; padding:0 var(--space-3); font-size:13px}
+  & details.action[open]>.action-form{flex:1 1 100%}}
+form.tick-line{display:inline-flex; flex-direction:row; align-items:center; gap:var(--space-2)}
 .plan-row.closed .text,.plan.past .plan-row{color:var(--text-muted)}
 .box{color:var(--text-muted); font-style:normal}
 .box.done{color:var(--done)}

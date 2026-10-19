@@ -31,7 +31,7 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 		`<span class="text">Call the bank</span>`, `<a href="/pages/` + bank + `">Bank</a>`, `<span class="badge">due Wed 14 May</span>`,
 		`<form class="tick-line" method="post" action="/pages/` + bank + `/tick"><input type="hidden" name="back" value="/days/` + fixedToday + `">` +
 			`<input type="hidden" name="line" value="` + line + `"><input type="hidden" name="text" value="Call the bank">` +
-			`<button name="outcome" value="done">Done</button><button name="outcome" value="dropped" class="quiet">Dropped</button></form>`,
+			`<button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>`,
 		`action="/pages/` + bank + `/carry"`, `<input type="hidden" name="text" value="Call the bank">`, `name="to" value="2031-05-15"`,
 	} {
 		if !strings.Contains(page, want) {
@@ -104,6 +104,24 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 	}
 }
 
+func TestAWikilinkInAPlannedLineIsALink(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": fixedToday, "text": "Buy a present for [[Ana]] and *wrap* it #gift", "on": fixedToday}))
+	page := browse(t, h, "/days/"+fixedToday)
+	planned := page[strings.Index(page, `aria-label="Planned"`):]
+	for _, want := range []string{`class="wikilink">Ana</a>`, `<em>wrap</em>`, `#gift</a>`} {
+		if !strings.Contains(planned, want) {
+			t.Errorf("the planned line does not carry %s:\n%s", want, planned)
+		}
+	}
+	words := planned[strings.Index(planned, `<span class="text">`):]
+	words = words[:strings.Index(words, "</span>")]
+	if strings.Contains(words, "[[Ana]]") || strings.Contains(words, "<p>") {
+		t.Errorf("the planned line is raw or in a paragraph:\n%s", planned)
+	}
+}
+
 func TestAWeekListsItsSevenDaysAndTheirLines(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
@@ -129,12 +147,16 @@ func TestAWeekListsItsSevenDaysAndTheirLines(t *testing.T) {
 	if !strings.Contains(wed, "Book a visit") || !strings.Contains(wed, `name="outcome" value="done"`) {
 		t.Errorf("Wednesday does not hold its line with the tick:\n%s", wed)
 	}
-	for _, want := range []string{`aria-label="The page of the period"`, "Finish the report", `href="/weeks/2031-W19" rel="prev"`, `aria-current="page">Week</a>`, `name="page" value="2031-W20"`} {
+	for _, want := range []string{`aria-label="The page of the period"`, `<h2>The week page</h2>`, "Finish the report", `href="/weeks/2031-W19" rel="prev"`, `aria-current="page">Week</a>`, `name="page" value="2031-W20"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the week does not carry %s", want)
 		}
 	}
-	if !strings.Contains(browse(t, h, "/weeks/2031-W21"), "This week has no page yet") {
+	empty := browse(t, h, "/weeks/2031-W21")
+	if strings.Contains(empty, "The week page") {
+		t.Error("a week with no page draws a heading for it")
+	}
+	if !strings.Contains(empty, "This week has no page yet") {
 		t.Error("a week with no page does not say so")
 	}
 

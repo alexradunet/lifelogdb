@@ -14,7 +14,7 @@
 
 <div class="sheet-margin">
 <div class="sheet">
-{{template "period-page" (dict "v" .)}}
+{{template "period-page" (dict "v" . "name" "week")}}
 <section class="week-days" aria-label="Days">
 <ul class="plain">{{range $w.days}}{{$day := .day}}<li>{{template "dayentry" (dict "v" $ "e" .)}}
 {{with $.LinesOn $day}}{{template "planlist" (dict "v" $ "lines" . "own" $day "to" $to)}}{{end}}</li>{{end}}</ul>

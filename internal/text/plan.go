@@ -360,7 +360,7 @@ func Next(p Plan, done string) (on, due, every string, err error) {
 	}
 	r, ok := parseRepeat(p.Every)
 	if !ok {
-		return "", "", "", errors.New("the line has no every:")
+		return "", "", "", errors.New("the line has no every token")
 	}
 	doneDay, ok := ParseDay(done)
 	if !ok {
@@ -429,11 +429,11 @@ func Line(text, on, due, every string, fromDone bool) (string, error) {
 			return "", fmt.Errorf("%q is not a repeat", every)
 		}
 		if on == "" && due == "" {
-			return "", errors.New("every: needs on: or due:")
+			return "", errors.New("an every token needs an on or a due token")
 		}
 	}
 	if fromDone && every == "" {
-		return "", errors.New("from:done needs every:")
+		return "", errors.New("a from:done token needs an every token")
 	}
 	var b strings.Builder
 	b.WriteString("- [ ] " + strings.Join(words, " "))

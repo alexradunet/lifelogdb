@@ -49,6 +49,17 @@ func markdownCover(src, embed, tickHref, back string) template.HTML {
 	return template.HTML(b.String())
 }
 
+// inline draws the words of a plan line in a list as one inline run: CommonMark emphasis, [[Title]], ![[embed]] and
+// #tag as the body draws them. A line has no block structure, so the one paragraph around the run is cut.
+func inline(words string) template.HTML {
+	html := string(markdownCover(words, "", "", ""))
+	html = strings.TrimSpace(html)
+	if strings.HasPrefix(html, "<p>") && strings.HasSuffix(html, "</p>") && strings.Count(html, "<p>") == 1 {
+		html = html[3 : len(html)-4]
+	}
+	return template.HTML(html)
+}
+
 // A plan line in a body (docs/contract/plan-lines.md, which is the one home of the grammar; text.Plans reads it). Its
 // box becomes a glyph, and the tokens (on:, due:, done:, every:, from:) become small words, so the words read first.
 // The box of an open line is a button of a tick form. The form cannot stand inside the item: in a loose list the item
