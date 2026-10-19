@@ -368,6 +368,7 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & th,& td{border-color:transparent}
   & tbody tr:hover{background:none}
   &>form{align-self:flex-end}
+  &>form.undo{align-self:flex-start; margin-block-start:calc(var(--space-1) * -1)}
   & button.close{font-size:14px}}
 
 /* A list of rows; a row's second line. */

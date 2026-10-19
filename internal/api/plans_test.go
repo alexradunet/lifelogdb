@@ -57,6 +57,21 @@ func TestPlanTickAndCarryWriteALineAndShowItWhereItBelongs(t *testing.T) {
 		t.Errorf("a tick of a closed line: %v, want 409", err)
 	}
 
+	if res["text"] != "Pay rent" || fmt.Sprint(res["page_id"]) == "" || res["outcome"] != "done" {
+		t.Errorf("a tick result lacks the text or the page for an undo: %v", res)
+	}
+	if _, err := c.Do(t.Context(), apitest.Action(t, ticked, "tick"), map[string]string{"line": "1", "text": "Pay rent", "outcome": "reopen", "done": "2031-05-14"}); apitest.Status(err) != 422 || !strings.Contains(err.Error(), "done") {
+		t.Errorf("a reopen with a done field: %v, want 422 naming done", err)
+	}
+	reopened := do("tick", ticked, map[string]string{"line": "1", "text": "Pay rent", "outcome": "reopen"})
+	if rr := reopened.Result.(map[string]any); rr["outcome"] != "reopen" || rr["removed"] != "- [ ] Pay rent due:2031-06-14 every:month" || fmt.Sprint(rr["removed_line"]) != "3" {
+		t.Errorf("the result of a reopen: %v", rr)
+	}
+	if props(reopened)["body"] != "- [ ] Pay rent due:2031-05-14 every:month" {
+		t.Errorf("the body after the reopen: %q", props(reopened)["body"])
+	}
+	ticked = do("tick", reopened, map[string]string{"line": "1", "text": "Pay rent", "outcome": "done"})
+
 	carried := do("carry", ticked, map[string]string{"line": "3", "text": "Pay rent", "to": "2031-05-20"})
 	if res := carried.Result.(map[string]any); fmt.Sprint(res["line"]) != "3" || fmt.Sprint(res["to_line"]) != "1" {
 		t.Errorf("the result of carry: %v", res)

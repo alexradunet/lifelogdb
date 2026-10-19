@@ -1,6 +1,7 @@
 package view
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -11,8 +12,8 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 	c := clock{today: "2026-10-12"}
 	say := func(m map[string]any) string {
 		var out []string
-		for _, l := range resultSentences(m, c) {
-			out = append(out, string(l))
+		for _, l := range resultSentences(m, c, "") {
+			out = append(out, string(l.HTML))
 		}
 		return strings.Join(out, " | ")
 	}
@@ -41,11 +42,37 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		{"tick done", map[string]any{"line": 2.0, "outcome": "done"}, "Done."},
 		{"tick dropped", map[string]any{"line": 2.0, "outcome": "dropped"}, "Dropped."},
 		{"tick with the next line", map[string]any{"line": 2.0, "outcome": "done", "appended": "- [ ] Pay due:2026-12-01", "appended_line": 5.0}, "Done. | The next one is line 5."},
+		{"tick reopen", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0}, "Reopened."},
+		{"tick reopen removed the next", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0, "removed": "- [ ] Pay", "removed_line": 5.0}, "Reopened. | The next one, line 5, is removed."},
+		{"tick reopen kept the next", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0, "next_kept": true}, "Reopened. | The next one was changed since, so it stays."},
 		{"carry", map[string]any{"line": 2.0, "to_id": 9.0, "to_line": 1.0}, `Carried to <a href="/pages/9">its page</a>, line 1.`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},
 	} {
 		if got := say(tc.in); got != tc.want {
 			t.Errorf("%s:\n got %s\nwant %s", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestATickOffersItsUndo: the line of a done or dropped tick carries one form that posts a reopen of the same line to
+// its page and returns to the page the toast is on. Without the page or the words there is no form.
+func TestATickOffersItsUndo(t *testing.T) {
+	m := map[string]any{"line": 2.0, "outcome": "dropped", "text": "Pay <rent>", "page_id": 4.0}
+	lines := resultSentences(m, clock{today: "2026-10-12"}, "/days/2026-10-12")
+	if len(lines) != 1 || lines[0].Form == nil {
+		t.Fatalf("lines %+v", lines)
+	}
+	want := resultForm{Href: "/pages/4/tick", Label: "Undo",
+		Hidden: [][2]string{{"back", "/days/2026-10-12"}, {"line", "2"}, {"text", "Pay <rent>"}, {"outcome", "reopen"}}}
+	if got := *lines[0].Form; got.Href != want.Href || got.Label != want.Label || !slices.Equal(got.Hidden, want.Hidden) {
+		t.Errorf("form %+v, want %+v", got, want)
+	}
+	for _, l := range resultSentences(map[string]any{"line": 2.0, "outcome": "done"}, clock{}, "/") {
+		if l.Form != nil {
+			t.Errorf("a form without a page: %+v", l)
+		}
+	}
+	if l := resultSentences(map[string]any{"line": 2.0, "outcome": "reopen", "text": "x", "page_id": 4.0}, clock{}, "/"); l[0].Form != nil {
+		t.Errorf("a reopen offers no undo: %+v", l)
 	}
 }

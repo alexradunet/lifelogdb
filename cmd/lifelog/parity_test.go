@@ -293,6 +293,7 @@ func parityRows() []parityRow {
 		{"plan on today makes the day page", rowPlanToday},
 		{"plan on a week makes the week page", rowPlanWeek},
 		{"tick with every appends the next line", rowTickRepeats},
+		{"reopen undoes a tick and its next line", rowReopenUndoesATick},
 		{"tick of a changed line", rowTickStale},
 		{"carry to a day plans the copy on it", rowCarryToADay},
 		{"plan on a week the year does not have", rowPlanWeek53},
@@ -1084,6 +1085,23 @@ func rowTickRepeats(x *parityRun) {
 		x.t.Errorf("Rent after the tick: %q, want %q", x.body("Rent"), want)
 	}
 	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "done"}, http.StatusConflict, "stale_version")
+}
+
+// tick with outcome reopen undoes a done tick: the body is the body after the plan, and the next line of the repeat is
+// gone. A reopen takes no done field, and an open line is stale.
+func rowReopenUndoesATick(x *parityRun) {
+	page, line := x.planned(map[string]string{"page": "Rent", "text": "Pay rent", "due": "2031-01-31", "every": "month"})
+	planned := x.body("Rent")
+	x.ok("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "done", "done": "2031-01-31"})
+	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "reopen", "done": "2031-01-31"}, http.StatusUnprocessableEntity, "invalid")
+	res, _ := x.ok("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "reopen"}).Result.(map[string]any)
+	if res["removed"] != "- [ ] Pay rent due:2031-02-28 every:month-31" || fmt.Sprint(res["removed_line"]) != "3" {
+		x.t.Errorf("the result of the reopen: %v", res)
+	}
+	if got := x.body("Rent"); got != planned {
+		x.t.Errorf("Rent after the reopen: %q, want %q", got, planned)
+	}
+	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "reopen"}, http.StatusConflict, "stale_version")
 }
 
 // tick with a text that is not the text of the line is 409 stale_version, and writes nothing.

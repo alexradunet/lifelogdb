@@ -45,21 +45,40 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 		t.Errorf("a past day with no line:\n%s", mainOf(other))
 	}
 
-	// Done from the Planned block: the body then reads as done, with no form for the line.
+	// Done from the Planned block: the body then reads as done, and its box reopens the line.
 	rec := submit(h, "/pages/"+bank+"/tick", url.Values{"line": {line}, "text": {"Call the bank"}, "outcome": {"done"}, "back": {"/"}}, "/")
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("tick: %d %s", rec.Code, rec.Body.String())
 	}
 	body := browse(t, h, "/pages/"+bank)
-	if !strings.Contains(body, `<span class="box done" role="img" aria-label="done">`) || !strings.Contains(body, `<small class="token">done:2031-05-14</small>`) {
+	if !strings.Contains(body, `<button class="box done" form="tick-`+line+`" name="outcome" value="reopen" aria-label="Reopen: Call the bank">`) || !strings.Contains(body, `<small class="token">done:2031-05-14</small>`) {
 		t.Errorf("the ticked line is not drawn as done:\n%s", mainOf(body))
 	}
-	if strings.Contains(body, `form="tick-`+line+`"`) {
+	if strings.Contains(body, `form="tick-`+line+`" name="outcome" value="done"`) {
 		t.Error("a done line still draws a tick button")
 	}
 	// A line that changed since the page was read is a refusal, and it names the cause.
 	if rec := submit(h, "/pages/"+bank+"/tick", url.Values{"line": {line}, "text": {"Call the bank"}, "outcome": {"done"}}, "/"); rec.Code != http.StatusConflict {
 		t.Errorf("tick of a closed line: %d", rec.Code)
+	}
+	// The toast of the tick offers the Undo, which reopens the line and returns to the page.
+	rec = submit(h, "/pages/"+bank+"/tick", url.Values{"line": {line}, "text": {"Call the bank"}, "outcome": {"reopen"}, "back": {"/pages/" + bank}}, "/")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reopen: %d %s", rec.Code, rec.Body.String())
+	}
+	if toast := browse(t, h, rec.Header().Get("Location")); !strings.Contains(toast, "<p>Reopened.</p>") || strings.Contains(toast, `value="Undo"`) || strings.Contains(toast, ">Undo<") {
+		t.Errorf("the toast of a reopen:\n%s", mainOf(toast))
+	}
+	if body := browse(t, h, "/pages/"+bank); !strings.Contains(body, `<button class="box open" form="tick-`+line+`" name="outcome" value="done"`) || strings.Contains(body, "done:2031-05-14") {
+		t.Errorf("the reopened line is not open:\n%s", mainOf(body))
+	}
+	rec = submit(h, "/pages/"+bank+"/tick", url.Values{"line": {line}, "text": {"Call the bank"}, "outcome": {"done"}, "back": {"/pages/" + bank}}, "/")
+	toast := browse(t, h, rec.Header().Get("Location"))
+	for _, want := range []string{"<p>Done.</p>", `<form class="undo" method="post" action="/pages/` + bank + `/tick"><input type="hidden" name="back" value="/pages/` + bank + `">` +
+		`<input type="hidden" name="line" value="` + line + `"><input type="hidden" name="text" value="Call the bank"><input type="hidden" name="outcome" value="reopen"><button class="small quiet">Undo</button></form>`} {
+		if !strings.Contains(toast, want) {
+			t.Errorf("the toast of a tick does not carry %s:\n%s", want, mainOf(toast))
+		}
 	}
 }
 
@@ -81,15 +100,21 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 			t.Errorf("the page does not carry %s:\n%s", want, body)
 		}
 	}
-	if n := strings.Count(body, `<form id="tick-`); n != 1 {
-		t.Errorf("%d tick forms in the body, want 1 (the closed lines and the empty one have none)", n)
+	// The open line, the done line and the dropped line have a form; the carried line and the empty one have none.
+	if n := strings.Count(body, `<form id="tick-`); n != 3 {
+		t.Errorf("%d tick forms in the body, want 3", n)
+	}
+	if !strings.Contains(body, `<button class="box done" form="tick-4" name="outcome" value="reopen" aria-label="Reopen: Post it">`) ||
+		!strings.Contains(body, `<button class="box dropped" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skip">`) {
+		t.Errorf("a closed line has no reopen box:\n%s", body)
 	}
 	// Ticking from the body is the same write as from the Planned block.
 	if rec := submit(h, "/pages/"+id+"/tick", url.Values{"line": {"3"}, "text": {"Buy <b>stamps</b>"}, "outcome": {"done"}, "back": {"/pages/" + id}}, "/pages/"+id); rec.Code != http.StatusSeeOther {
 		t.Fatalf("tick from the body: %d %s", rec.Code, rec.Body.String())
 	}
 	after := browse(t, h, "/pages/"+id)
-	if next := regexp.MustCompile(`<form id="tick-(\d+)"`).FindStringSubmatch(after); next == nil || next[1] == "3" || !strings.Contains(after, `value="Buy &lt;b&gt;stamps&lt;/b&gt;"`) ||
+	// The ticked line keeps its form (it reopens). The next line has a form of a new number.
+	if !regexp.MustCompile(`<button class="box open" form="tick-(\d+)"`).MatchString(after) || strings.Contains(after, `<button class="box open" form="tick-3"`) || !strings.Contains(after, `value="Buy &lt;b&gt;stamps&lt;/b&gt;"`) ||
 		!strings.Contains(after, `<small class="token">on:2031-05-22</small>`) {
 		t.Errorf("the next line of an every: line has no tick form with a new line number:\n%s", mainOf(after))
 	}

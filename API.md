@@ -475,7 +475,9 @@ A plan is a line of a page body ([plan lines](docs/contract/plan-lines.md)). A l
 day, `lines[]` of a month, a year and a period page) has this shape. Three actions write a line, each with a
 [result](#result-of-plan). `plan` (`POST /pages/plan`) adds an open line to the end of the page titled `page`, made on
 the first write: a page, a day (`YYYY-MM-DD` or `today`), or a period (`2026-W43`, `2026-10`, `2026-Q4`, `2026`). `tick`
-(`POST /pages/{id}/tick`) closes the open line `line` of a page as `done` or `dropped`. `carry`
+(`POST /pages/{id}/tick`) closes the open line `line` of a page as `done` or `dropped`, or, with the outcome `reopen`,
+opens a done or dropped line again: it removes the `done:` token, and the next line of a repeat that the tick added, when
+that line is still there. A `reopen` takes no `done` field (422), and a carried line is refused (422): drop its copy. `carry`
 (`POST /pages/{id}/carry`) moves it to the page titled `to`. `tick` and `carry` send the `text` of the line as the
 client read it: a line that changed since is 409 `stale_version`. A file refuses a period that does not exist, such as
 `2027-W53`, with 422 and the name of the constraint.
@@ -795,9 +797,14 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | property | type | meaning |
 |---|---|---|
 | `line` | integer | the line that was closed |
-| `outcome` | string | `done` or `dropped` |
+| `outcome` | string | `done`, `dropped` or `reopen` |
+| `text` | string | the text of the line, as sent |
+| `page_id` | integer | the page of the line |
 | `appended` | string | the next line of a repeat; absent when there is none |
 | `appended_line` | integer | its number in the body; absent when there is none |
+| `removed` | string | after a `reopen`: the next line that was removed; absent when none was |
+| `removed_line` | integer | the number that line had before the reopen; absent when none was removed |
+| `next_kept` | boolean | after a `reopen` of a line with `every:`: `true` when the next line was not found, so it stays; absent otherwise |
 
 ### result of carry
 

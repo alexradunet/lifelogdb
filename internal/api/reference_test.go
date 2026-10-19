@@ -36,7 +36,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"page, person, place, file": pageProperties{},
 		"plan line":                 planLine{},
 		"result of plan":            map[string]any{"page_id": int64(0), "line": 0, "written": ""},
-		"result of tick":            map[string]any{"line": 0, "outcome": "", "appended": "", "appended_line": 0},
+		"result of tick":            map[string]any{"line": 0, "outcome": "", "text": "", "page_id": int64(0), "appended": "", "appended_line": 0, "removed": "", "removed_line": 0, "next_kept": false},
 		"result of carry":           map[string]any{"line": 0, "to_id": int64(0), "to_line": 0},
 		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},

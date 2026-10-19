@@ -13,12 +13,15 @@ stateDiagram-v2
     open --> dropped: tick, outcome dropped
     open --> carried: carry, a copy goes to the target page
     done --> open: every, the next open line is added
+    done --> open: tick, reopen
+    dropped --> open: tick, reopen
 ```
 
-The diagram shows a box and its moves. A move is an edit of one line of a body. Only an open line moves. A `done`,
-`dropped` or `carried` line never moves again. The arrow from `done` to `open` is a new line: a ticked line with
-`every:` adds the next open line to the end of the body. A `dropped` line and a `carried` line add no next line.
-The copy of a carry is a new open line on the target page.
+The diagram shows a box and its moves. A move is an edit of one line of a body. An open line moves to `done`,
+`dropped` or `carried`. A `done` or `dropped` line moves back to `open` when the owner reopens it: a tick closed it
+by mistake. A `carried` line never moves again. The arrow from `done` to `open` that is named `every` is a new line:
+a ticked line with `every:` adds the next open line to the end of the body. A `dropped` line and a `carried` line add
+no next line. The copy of a carry is a new open line on the target page.
 
 ## What a plan line is
 
@@ -43,7 +46,7 @@ followed by `.` or `)`), at any depth. The text of its first line starts with a 
   a plan line.
 - A line number is 1-based, counted from the first line of the body. A line break is LF, CRLF or CR, and each counts
   once. Blank lines count.
-- A line with only a box (`- [ ]`) is a plan line with an empty text. A tick or a carry of an empty text is refused.
+- A line with only a box (`- [ ]`) is a plan line with an empty text. A tick, a reopen or a carry of an empty text is refused.
 - The wikilinks and `#tag`s in the words are read by the save contract as they always are. A plan line adds no link
   kind and no row.
 
@@ -86,8 +89,8 @@ is the offender.
 - `from:done` is on a line with no valid `every:`.
 - `every:` is on a line with no valid `on:` and no valid `due:`.
 
-A malformed line is still a plan line. A reader draws it with its raw text. It is never planned on a day. A tick
-or a carry of it is refused with status 422. The vectors give `bad` as the offending token, as written. A malformed
+A malformed line is still a plan line. A reader draws it with its raw text. It is never planned on a day. A tick,
+a reopen or a carry of it is refused with status 422. The vectors give `bad` as the offending token, as written. A malformed
 line has an empty `on`, `due`, `done` and `every`, and a false `from_done`. Its `text` is computed as for any line.
 
 ## The repeats
@@ -135,6 +138,32 @@ the base. So 31 January becomes 28 February with `every:month-31`, and the next 
 line carries nothing extra after a clamp, and a `from:done` line carries nothing extra, since its day is the done
 day. A `year` line carries nothing extra: a birthday is `people.birth_day` ([D15](../decisions/D15-recurrence.md)).
 
+## The reopen of a closed line
+
+A reopen is a tick with the outcome `reopen`. It undoes a tick that was a mistake. It names a `done` (`[x]` or
+`[X]`) or `dropped` (`[-]`) line by its number and text, as a tick does.
+
+1. The line must be closed and not malformed, with a non-empty text equal to the text the client sends. If the line
+   is open, or has other text, or is not there, the answer is the stale answer of a tick (409). If the line is
+   carried, the reopen is refused with status 422: its copy is on another page, so the owner drops that copy. A
+   malformed line is refused with 422. In each case nothing changes.
+2. The box becomes `[ ]`. The token `done:D` and the one space before it are removed. Every other character of the
+   line stays. A done line with no `done:` token (a hand-written `[x]`) has no token to remove.
+3. If the line was done and has `every:`, the tick added the next line. The reopen removes that line when it is still
+   there and unchanged. The *next line* is the last open plan line after the reopened line whose text, `on:`,
+   `due:`, `every:` and `from:done` equal the line that [the tick](#the-tick-of-an-open-line) writes for the reopened
+   line and its `done:` day. A line with no `done:` token has no next line to find. A `dropped` line has none.
+4. The next line is removed with its line break. If it ends the body, the reopen removes the two LF before it
+   (the tick wrote them), or else the line breaks before it, up to two. If it is in the middle of the body, and a blank
+   line is before it and a blank line after it, one blank line is removed too, so that two blank lines do not meet.
+   A tick and then a reopen, made at once, give back the body before the tick byte for byte.
+5. If the line had `every:` and no next line is found (it was ticked, edited, carried or deleted), the reopen leaves
+   the rest of the body as it is. The result says so.
+
+The vectors give the `body`, the `line` and the `text` of the reopen, and the `after` body. `removed` is the next line
+that the reopen removed, as written, or empty. `error` is empty, or `changed` (the stale answer), `carried` or
+`malformed`. After an error, `after` and `removed` are empty.
+
 ## The carry of an open line
 
 A carry moves a line to another page. The line must be open and not malformed, with a non-empty text equal to the
@@ -154,8 +183,8 @@ inside an open fence or an HTML block), it refuses the write and changes nothing
 The file enforces nothing about a line. The body is prose, and a bad line is a legal body. The writer enforces the
 grammar, and the suites check the writer against the vectors below. This is the precedent of the wikilinks
 ([D19](../decisions/D19-wikilink-save-contract.md)): the body is the truth, and what is read from it is derived and
-disposable. A line has no id. A tick or a carry names the line by its number and its text, so a body edited after
-the reader read it makes the tick stale. A tick is a body edit, as a capture is ([D12](../decisions/D12-no-revision-tables.md)).
+disposable. A line has no id. A tick, a reopen or a carry names the line by its number and its text, so a body edited after
+the reader read it makes the tick stale. A tick or a reopen is a body edit, as a capture is ([D12](../decisions/D12-no-revision-tables.md)).
 The file keeps one derived index, so that a reader need not read every body: the generated column
 `entities.has_box` is true when the body holds one of the five boxes, and the partial index `entities_plans` lists the
 live pages where it is true. The filter is a superset: a `[ ]` in prose counts too, so a reader still parses the
@@ -303,5 +332,38 @@ fields of the new line, empty when absent. `"error": true` means that the tick i
   {"on": "", "due": "9999-06-01", "every": "year", "from_done": false, "done": "9999-06-01", "next_on": "", "next_due": "", "next_every": "", "error": true},
   {"on": "1700-01-01", "due": "2026-10-22", "every": "day", "from_done": false, "done": "2026-10-22", "next_on": "1700-01-02", "next_due": "2026-10-23", "next_every": "day"},
   {"on": "0000-01-01", "due": "2026-10-22", "every": "week", "from_done": true, "done": "0000-01-01", "next_on": "", "next_due": "", "next_every": "", "error": true}
+]
+```
+
+The reopen of a closed line. `after` is the whole body after the reopen. Each one is checked by hand.
+
+<!-- reopen-vectors -->
+
+```json
+[
+  {"body": "- [x] Call the bank done:2026-10-22", "line": 1, "text": "Call the bank", "after": "- [ ] Call the bank", "removed": "", "error": ""},
+  {"body": "- [X] Call the bank done:2026-10-22", "line": 1, "text": "Call the bank", "after": "- [ ] Call the bank", "removed": "", "error": ""},
+  {"body": "- [-] Call the bank on:2026-10-22", "line": 1, "text": "Call the bank", "after": "- [ ] Call the bank on:2026-10-22", "removed": "", "error": ""},
+  {"body": "- [x] Call the bank", "line": 1, "text": "Call the bank", "after": "- [ ] Call the bank", "removed": "", "error": ""},
+  {"body": "Week\n\n- [x] Call the bank on:2026-10-22 done:2026-10-23 b\n- [ ] Other", "line": 3, "text": "Call the bank b", "after": "Week\n\n- [ ] Call the bank on:2026-10-22 b\n- [ ] Other", "removed": "", "error": ""},
+  {"body": "- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "Rent\n\n- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "line": 3, "text": "Pay rent", "after": "Rent\n\n- [ ] Pay rent on:2026-01-31 every:month", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n\n- [x] Pay rent on:2026-02-28 every:month-31 done:2026-02-27", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month\n\n- [x] Pay rent on:2026-02-28 every:month-31 done:2026-02-27", "removed": "", "error": ""},
+  {"body": "- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n\n- [ ] Pay rent on:2026-02-28 due:2026-03-01 every:month-31", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month\n\n- [ ] Pay rent on:2026-02-28 due:2026-03-01 every:month-31", "removed": "", "error": ""},
+  {"body": "Rent\n\n- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n- [ ] Other\n\n- [ ] Pay rent on:2026-02-28 every:month-31\n\nEnd", "line": 3, "text": "Pay rent", "after": "Rent\n\n- [ ] Pay rent on:2026-01-31 every:month\n- [ ] Other\n\nEnd", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\n- [ ] Other\n- [ ] Pay rent on:2026-02-28 every:month-31\n- [ ] Last", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month\n- [ ] Other\n- [ ] Last", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "- [x] Water plants due:2026-10-22 every:week from:done done:2026-10-27\n\n- [ ] Water plants due:2026-11-03 every:week from:done", "line": 1, "text": "Water plants", "after": "- [ ] Water plants due:2026-10-22 every:week from:done", "removed": "- [ ] Water plants due:2026-11-03 every:week from:done", "error": ""},
+  {"body": "Week\r\n\r\n- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\r\n- [ ] Other\r\n\r\n- [ ] Pay rent on:2026-02-28 every:month-31", "line": 3, "text": "Pay rent", "after": "Week\r\n\r\n- [ ] Pay rent on:2026-01-31 every:month\r\n- [ ] Other", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "Week\r\n\r\n- [x] Pay rent on:2026-01-31 every:month done:2026-01-30\r\n- [ ] Pay rent on:2026-02-28 every:month-31\r\n\r\nEnd\r\n", "line": 3, "text": "Pay rent", "after": "Week\r\n\r\n- [ ] Pay rent on:2026-01-31 every:month\r\n\r\nEnd\r\n", "removed": "- [ ] Pay rent on:2026-02-28 every:month-31", "error": ""},
+  {"body": "- [x] Pay rent on:2026-01-31 every:month\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "removed": "", "error": ""},
+  {"body": "- [-] Pay rent on:2026-01-31 every:month\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "line": 1, "text": "Pay rent", "after": "- [ ] Pay rent on:2026-01-31 every:month\n\n- [ ] Pay rent on:2026-02-28 every:month-31", "removed": "", "error": ""},
+  {"body": "- [x] A on:2026-10-22 every:day done:2026-10-22\n\n- [ ] A on:2026-10-23 every:day\n- [ ] A on:2026-10-23 every:day", "line": 1, "text": "A", "after": "- [ ] A on:2026-10-22 every:day\n\n- [ ] A on:2026-10-23 every:day", "removed": "- [ ] A on:2026-10-23 every:day", "error": ""},
+  {"body": "- [ ] Call the bank", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "changed"},
+  {"body": "- [x] Call the bank done:2026-10-22", "line": 2, "text": "Call the bank", "after": "", "removed": "", "error": "changed"},
+  {"body": "- [x] Call the bank done:2026-10-22", "line": 1, "text": "Call the bakn", "after": "", "removed": "", "error": "changed"},
+  {"body": "- [>] Call the bank on:2026-10-22", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "carried"},
+  {"body": "- [x] Call the bank done:2026-13-45", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "malformed"},
+  {"body": "- [-] Call the bank done:2026-10-22", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "malformed"},
+  {"body": "- [x] on:2026-10-22", "line": 1, "text": "", "after": "", "removed": "", "error": "malformed"}
 ]
 ```

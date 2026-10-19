@@ -18,6 +18,8 @@ import (
 var (
 	// ErrLineChanged means that the line is not an open plan line, or that its text differs from the text the client sent.
 	ErrLineChanged = errors.New("the line changed")
+	// ErrCarried means that a reopen names a carried line. Its copy is on another page, so the copy is the line to drop.
+	ErrCarried = errors.New("the line was carried: its copy is on another page, so drop that copy instead")
 	// ErrMalformed means that the line breaks the grammar. The message names the offending token.
 	ErrMalformed = errors.New("the line is malformed")
 )
@@ -448,24 +450,41 @@ func Line(text, on, due, every string, fromDone bool) (string, error) {
 	return b.String(), nil
 }
 
-// openLine finds the open plan line that a tick or a carry names. The line has no id: the number and the text
-// name it, and a body edited since the client read it gives ErrLineChanged.
-func openLine(body string, line int, text string) (Plan, error) {
+// findLine finds the plan line that a tick or a carry names, whatever its box. The line has no id: the number and
+// the text name it, and a body edited since the client read it gives ErrLineChanged.
+func findLine(body string, line int, text string) (Plan, error) {
 	for _, p := range Plans(body) {
-		if p.Line != line {
-			continue
+		if p.Line == line {
+			if p.Text != text {
+				return p, ErrLineChanged
+			}
+			return p, nil
 		}
-		switch {
-		case p.Box != ' ' || p.Text != text:
-			return p, ErrLineChanged
-		case p.Bad != "":
-			return p, fmt.Errorf("%w: %s", ErrMalformed, p.Bad)
-		case p.Text == "":
-			return p, fmt.Errorf("%w: the text is empty", ErrMalformed)
-		}
-		return p, nil
 	}
 	return Plan{}, ErrLineChanged
+}
+
+// checkLine refuses a line that the grammar does not let a tick, a carry or a reopen move.
+func checkLine(p Plan) error {
+	switch {
+	case p.Bad != "":
+		return fmt.Errorf("%w: %s", ErrMalformed, p.Bad)
+	case p.Text == "":
+		return fmt.Errorf("%w: the text is empty", ErrMalformed)
+	}
+	return nil
+}
+
+// openLine finds the open plan line that a tick or a carry names.
+func openLine(body string, line int, text string) (Plan, error) {
+	p, err := findLine(body, line, text)
+	if err == nil && p.Box != ' ' {
+		err = ErrLineChanged
+	}
+	if err == nil {
+		err = checkLine(p)
+	}
+	return p, err
 }
 
 // Tick ends an open line: outcome 'x' (done) or '-' (dropped). A done line gets done:<done>. If it has every:,
@@ -514,4 +533,112 @@ func Carry(body string, line int, text, on string) (newBody, copy string, err er
 		return "", "", err
 	}
 	return body[:p.BoxAt+1] + ">" + body[p.BoxAt+2:], copy, nil
+}
+
+// Reopened is the result of Reopen.
+type Reopened struct {
+	Body        string // the new body
+	Removed     string // the next line of a repeat that the reopen removed, as written; "" if none
+	RemovedLine int    // the number that the removed line had in the old body
+	NextKept    bool   // the line was done with every:, and its next line was not found, so it stays
+}
+
+// Reopen sets a done or dropped line back to open. The box becomes ' ' and the done: token goes, with the space
+// before it. If the line was done with every:, the next line that the tick added goes too, when it is still there and
+// unchanged. The contract says how that line is found and cut.
+func Reopen(body string, line int, text string) (Reopened, error) {
+	p, err := findLine(body, line, text)
+	switch {
+	case err != nil:
+		return Reopened{}, err
+	case p.Box == ' ':
+		return Reopened{}, ErrLineChanged
+	case p.Box == '>':
+		return Reopened{}, ErrCarried
+	}
+	if err := checkLine(p); err != nil {
+		return Reopened{}, err
+	}
+	r := Reopened{Body: body}
+	// The edits go from the end of the body to its start, so that each offset stays valid.
+	if p.Box == 'x' && p.Every != "" {
+		if next, ok := nextLineOf(p, Plans(body)); ok {
+			r.Body, r.Removed, r.RemovedLine = cutLine(body, next), next.Raw, next.Line
+		} else {
+			r.NextKept = true
+		}
+	}
+	if p.Done != "" {
+		for _, t := range p.Tokens {
+			if strings.HasPrefix(body[t[0]:t[1]], "done:") {
+				r.Body = r.Body[:t[0]-1] + r.Body[t[1]:]
+			}
+		}
+	}
+	r.Body = r.Body[:p.BoxAt+1] + " " + r.Body[p.BoxAt+2:]
+	return r, nil
+}
+
+// nextLineOf finds the line that a tick of p added: the last open line after p that equals what Next gives.
+func nextLineOf(p Plan, all []Plan) (Plan, bool) {
+	if p.Done == "" {
+		return Plan{}, false
+	}
+	on, due, every, err := Next(p, p.Done)
+	if err != nil {
+		return Plan{}, false
+	}
+	for i := len(all) - 1; i >= 0; i-- {
+		q := all[i]
+		if q.Line > p.Line && q.Box == ' ' && q.Bad == "" && q.Text == p.Text && q.On == on && q.Due == due &&
+			q.Every == every && q.FromDone == p.FromDone {
+			return q, true
+		}
+	}
+	return Plan{}, false
+}
+
+// breakBefore is the length of the line break that ends just before the offset at.
+func breakBefore(body string, at int) int {
+	switch {
+	case at >= 2 && body[at-2:at] == "\r\n":
+		return 2
+	case at >= 1 && (body[at-1] == '\n' || body[at-1] == '\r'):
+		return 1
+	}
+	return 0
+}
+
+// breakAt is the length of the line break that starts at the offset at.
+func breakAt(body string, at int) int {
+	switch {
+	case strings.HasPrefix(body[at:], "\r\n"):
+		return 2
+	case at < len(body) && (body[at] == '\n' || body[at] == '\r'):
+		return 1
+	}
+	return 0
+}
+
+// cutLine removes the plan line q from the body, with its line break. At the end of the body it removes the line
+// breaks before it instead: two LF, else up to two line breaks. In the middle, if a blank line is before and after it, one blank
+// line goes too, so that two blank lines do not meet.
+func cutLine(body string, q Plan) string {
+	start := lineStarts([]byte(body))[q.Line-1]
+	end := start + len(q.Raw)
+	if end == len(body) {
+		if strings.HasSuffix(body[:start], "\n\n") {
+			return body[:start-2] // what a tick wrote
+		}
+		for i := 0; i < 2; i++ {
+			start -= breakBefore(body, start)
+		}
+		return body[:start]
+	}
+	end += breakAt(body, end)
+	blankBefore := breakBefore(body, start) > 0 && breakBefore(body, start-breakBefore(body, start)) > 0
+	if blankBefore {
+		end += breakAt(body, end)
+	}
+	return body[:start] + body[end:]
 }

@@ -156,9 +156,16 @@ func (h *server) tick(r *http.Request, act spec, src string) (*siren.Entity, err
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"line": res.Line, "outcome": v.Get("outcome")}
+	// text and page_id let a client undo the tick with a reopen.
+	out := map[string]any{"line": res.Line, "outcome": v.Get("outcome"), "text": v.Get("text"), "page_id": id}
 	if res.Appended != "" {
 		out["appended"], out["appended_line"] = res.Appended, res.AppendedLine
+	}
+	if res.Removed != "" {
+		out["removed"], out["removed_line"] = res.Removed, res.RemovedLine
+	}
+	if res.NextKept {
+		out["next_kept"] = true
 	}
 	return withResult(h.pageEntity(r.Context(), id))(out)
 }

@@ -257,6 +257,84 @@ func TestTickRefusals(t *testing.T) {
 	}
 }
 
+func TestReopenRestoresTheBodyByteForByte(t *testing.T) {
+	s := planStore(t)
+	for _, c := range []struct{ name, every, outcome string }{
+		{"done", "", "done"}, {"dropped", "", "dropped"}, {"done with a repeat", "month", "done"},
+	} {
+		r := mustPlan(t, s, "Chores "+c.name, "Pay rent", "", "2026-01-31", c.every, false)
+		before := bodyOf(t, s, r.PageID)
+		v0, _ := s.PageByID(ctx, r.PageID)
+		tick, err := s.Tick(ctx, "cli", r.PageID, 1, "Pay rent", c.outcome, "2026-01-31")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := s.Tick(ctx, "cli", r.PageID, 1, "Pay rent", "reopen", "")
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got := bodyOf(t, s, r.PageID); got != before {
+			t.Errorf("%s: body %q, want %q", c.name, got, before)
+		}
+		if res.Line != 1 || res.Removed != tick.Appended || res.RemovedLine != tick.AppendedLine || res.NextKept {
+			t.Errorf("%s: result %+v after %+v", c.name, res, tick)
+		}
+		if v1, _ := s.PageByID(ctx, r.PageID); v1.Version == v0.Version {
+			t.Errorf("%s: the revision did not advance", c.name)
+		}
+	}
+}
+
+func TestReopenKeepsANextLineThatChanged(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Chores", "Pay rent", "", "2026-01-31", "month", false)
+	if _, err := s.Tick(ctx, "cli", r.PageID, 1, "Pay rent", "done", "2026-01-31"); err != nil {
+		t.Fatal(err)
+	}
+	// the next line is ticked since
+	if _, err := s.Tick(ctx, "cli", r.PageID, 3, "Pay rent", "done", "2026-02-27"); err != nil {
+		t.Fatal(err)
+	}
+	mid := bodyOf(t, s, r.PageID)
+	res, err := s.Tick(ctx, "cli", r.PageID, 1, "Pay rent", "reopen", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(mid, "- [x] Pay rent due:2026-01-31 every:month done:2026-01-31", "- [ ] Pay rent due:2026-01-31 every:month", 1)
+	if got := bodyOf(t, s, r.PageID); got != want || res.Removed != "" || res.RemovedLine != 0 || !res.NextKept {
+		t.Errorf("body %q, want %q, result %+v", got, want, res)
+	}
+}
+
+func TestReopenRefusals(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Chores", "Wash", "", "", "", false)
+	if _, err := s.Tick(ctx, "cli", r.PageID, 1, "Wash", "reopen", ""); status(err) != 409 {
+		t.Errorf("an open line: %v", err)
+	}
+	if _, err := s.Tick(ctx, "cli", r.PageID, 1, "Wash", "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	before := bodyOf(t, s, r.PageID)
+	if _, err := s.Tick(ctx, "cli", r.PageID, 1, "Wash", "reopen", "2026-10-19"); status(err) != 422 {
+		t.Errorf("a done day: %v", err)
+	}
+	if _, err := s.Tick(ctx, "cli", r.PageID, 1, "Dry", "reopen", ""); status(err) != 409 {
+		t.Errorf("other text: %v", err)
+	}
+	c := mustPlan(t, s, "Errands", "Dry", "", "", "", false)
+	if _, err := s.Carry(ctx, "cli", c.PageID, 1, "Dry", "Elsewhere"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Tick(ctx, "cli", c.PageID, 1, "Dry", "reopen", "")
+	if status(err) != 422 || !strings.Contains(err.Error(), "drop that copy") {
+		t.Errorf("a carried line: %v", err)
+	}
+	if bodyOf(t, s, r.PageID) != before {
+		t.Error("a refused reopen changed the body")
+	}
+}
+
 func TestCarryToADayPageSetsOn(t *testing.T) {
 	s := planStore(t)
 	r := mustPlan(t, s, "Chores", "Wash", "2026-10-19", "2026-10-30", "", false)

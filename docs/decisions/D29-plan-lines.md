@@ -9,8 +9,8 @@
   arithmetic of the next date are the page [plan lines](../contract/plan-lines.md), with vectors. The file holds no
   table, column or constraint for a plan: the body is the truth, and a line is derived from it at read time, as a
   wikilink is ([D19](D19-wikilink-save-contract.md)). Three actions of the writer, not of the file, change a line:
-  `plan` adds one, `tick` closes one (and adds the next line of a repeat), `carry` moves one to another page. Each is
-  an edit of a body.
+  `plan` adds one, `tick` closes one (and adds the next line of a repeat) or reopens one closed by mistake (and
+  removes that next line), `carry` moves one to another page. Each is an edit of a body.
 - **Alternatives.**
   - *A `tasks` table* (the earlier [D23](D23-no-tasks.md)): two homes for one fact, and the cost [RFC 0007](../rfcs/0007-personal-tasks-and-occurrences.md) showed.
   - *A derived index table*: a table in the frozen file that stays in its shape for good. Rejected.

@@ -216,29 +216,38 @@ func (s *Store) Plan(ctx context.Context, source, title, words, on, due, every s
 	})
 }
 
-// TickResult is what Tick did: the page and the line it closed, and the next line of a repeat (empty, with line 0,
-// when there is none).
+// TickResult is what Tick did: the page and the line it moved, and the other line of a repeat. A done tick adds the
+// next line (Appended, with AppendedLine; empty and 0 when there is none). A reopen removes it (Removed, with
+// RemovedLine, the number the line had), or says with NextKept that the line had a repeat and the next line was not
+// found, so it stays.
 type TickResult struct {
 	PageID       int64
 	Line         int
 	Appended     string
 	AppendedLine int
+	Removed      string
+	RemovedLine  int
+	NextKept     bool
 }
 
-// outcomes are the outcomes of a tick and the box each one writes.
+// outcomes are the outcomes of a tick that close a line, and the box each one writes.
 var outcomes = map[string]byte{"done": 'x', "dropped": '-'}
 
-// Tick closes the open line at line of the page id when its words match text. The outcome is "done" or "dropped".
-// For done, done is the day it was done ("" means today). A done line with every: adds the next line in the same
-// write.
+// Tick closes the open line at line of the page id when its words match text. The outcome is "done", "dropped" or
+// "reopen". For done, done is the day it was done ("" means today). A done line with every: adds the next line in the
+// same write. A reopen undoes a tick: it opens a done or dropped line, and removes the next line that the tick added
+// when it is still there. It takes no done day.
 func (s *Store) Tick(ctx context.Context, source string, id int64, line int, words, outcome, done string) (TickResult, error) {
 	return alone(s, ctx, source, func(t *Tx) (TickResult, error) {
 		box, ok := outcomes[outcome]
-		if !ok {
-			return TickResult{}, Invalid("outcome %q is not done or dropped", outcome)
+		if !ok && outcome != "reopen" {
+			return TickResult{}, Invalid("outcome %q is not done, dropped or reopen", outcome)
 		}
 		if words == "" {
 			return TickResult{}, Invalid("the text of the line is empty")
+		}
+		if outcome == "reopen" && done != "" {
+			return TickResult{}, Invalid("a reopen takes no done field")
 		}
 		if done == "" {
 			done = t.today()
@@ -253,11 +262,21 @@ func (s *Store) Tick(ctx context.Context, source string, id int64, line int, wor
 		if err != nil {
 			return TickResult{}, err
 		}
+		r := TickResult{PageID: id, Line: line}
+		if outcome == "reopen" {
+			re, err := text.Reopen(body, line, words)
+			if err != nil {
+				return TickResult{}, planError(err)
+			}
+			r.Removed, r.RemovedLine, r.NextKept = re.Removed, re.RemovedLine, re.NextKept
+			_, err = t.SetBody(id, re.Body)
+			return r, err
+		}
 		body, next, err := text.Tick(body, line, words, box, done)
 		if err != nil {
 			return TickResult{}, planError(err)
 		}
-		r := TickResult{PageID: id, Line: line, Appended: next}
+		r.Appended = next
 		if next != "" {
 			if body, r.AppendedLine, err = appendLine(body, next); err != nil {
 				return TickResult{}, err

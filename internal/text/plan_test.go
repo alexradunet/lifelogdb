@@ -119,6 +119,62 @@ func TestNextDayVectors(t *testing.T) {
 	}
 }
 
+type reopenVector struct {
+	Body, Text, After, Removed, Error string
+	Line                              int
+}
+
+func TestReopenVectors(t *testing.T) {
+	var vs []reopenVector
+	vectorsAfter(t, "<!-- reopen-vectors -->", &vs)
+	if len(vs) < 14 {
+		t.Fatalf("only %d reopen vectors, want at least 14", len(vs))
+	}
+	errs := map[string]error{"changed": ErrLineChanged, "carried": ErrCarried, "malformed": ErrMalformed}
+	for _, v := range vs {
+		got, err := Reopen(v.Body, v.Line, v.Text)
+		if v.Error != "" {
+			if !errors.Is(err, errs[v.Error]) {
+				t.Errorf("Reopen(%q, %d) error = %v, want %s", v.Body, v.Line, err, v.Error)
+			}
+			continue
+		}
+		if err != nil || got.Body != v.After || got.Removed != v.Removed {
+			t.Errorf("Reopen(%q, %d) = %q, %q, %v, want %q, %q", v.Body, v.Line, got.Body, got.Removed, err, v.After, v.Removed)
+		}
+	}
+}
+
+// A tick, then a reopen, gives back the body for every open line of the plan-line vectors, with the next line of
+// a repeat appended as the writer does.
+func TestReopenUndoesTick(t *testing.T) {
+	var vs []planVector
+	vectorsAfter(t, "<!-- plan-line-vectors -->", &vs)
+	n := 0
+	for _, v := range vs {
+		for _, p := range Plans(v.Body) {
+			if p.Box != ' ' || p.Bad != "" || p.Text == "" {
+				continue
+			}
+			ticked, next, err := Tick(v.Body, p.Line, p.Text, 'x', "2026-10-22")
+			if err != nil {
+				continue
+			}
+			if next != "" {
+				ticked += "\n\n" + next
+			}
+			got, err := Reopen(ticked, p.Line, p.Text)
+			if err != nil || got.Body != v.Body {
+				t.Errorf("body %q line %d: tick then reopen gave %q, %v", v.Body, p.Line, got.Body, err)
+			}
+			n++
+		}
+	}
+	if n < 10 {
+		t.Fatalf("only %d round trips", n)
+	}
+}
+
 func TestLine(t *testing.T) {
 	ok := []struct {
 		text, on, due, every string

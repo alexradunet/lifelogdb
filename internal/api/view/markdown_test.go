@@ -179,24 +179,28 @@ func TestMarkdownCoverLeavesOutTheCoverOnce(t *testing.T) {
 	}
 }
 
-// TestPlanBoxesInABody: the box of a plan line is a glyph, or the button of a tick form that stands after the body (a
+// TestPlanBoxesInABody: the box of a plan line is a glyph, or the button of a tick form (done for an open box, reopen for a done or dropped one) that stands after the body (a
 // form inside a loose list would end its paragraph); the tokens are small words; a box in a quote, a code block or the
 // middle of a line is left as text; with no tick address no form is drawn.
 func TestPlanBoxesInABody(t *testing.T) {
-	body := "- [ ] Call on:2026-10-22\n\n- [x] Paid done:2026-10-01\n\n> - [ ] quoted\n\n```\n- [ ] code\n```\n\nText [ ] mid\n"
+	body := "- [ ] Call on:2026-10-22\n\n- [x] Paid done:2026-10-01\n\n- [-] Skipped\n\n- [>] Moved\n\n- [x] Bad done:2026-13-45\n\n> - [ ] quoted\n\n```\n- [ ] code\n```\n\nText [ ] mid\n"
 	got := string(markdownCover(body, "", "/pages/7/tick", "/days/today"))
 	for _, want := range []string{
 		`<button class="box open" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
-		`<small class="token">on:2026-10-22</small>`, `<span class="box done" role="img" aria-label="done">`, `<small class="token">done:2026-10-01</small>`,
-		`<div hidden><form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form></div>`,
+		`<small class="token">on:2026-10-22</small>`, `<small class="token">done:2026-10-01</small>`,
+		`<button class="box done" form="tick-3" name="outcome" value="reopen" aria-label="Reopen: Paid">☑</button> Paid`,
+		`<button class="box dropped" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skipped">☒</button> Skipped`,
+		`<span class="box carried" role="img" aria-label="carried">`, `<span class="box done" role="img" aria-label="done">`,
+		`<form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form>`,
 		`[ ] quoted`, `- [ ] code`, `Text [ ] mid`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the body does not carry %s:\n%s", want, got)
 		}
 	}
-	if n := strings.Count(got, "<form"); n != 1 {
-		t.Errorf("%d forms, want 1", n)
+	// The open line and the two closed lines tick; the carried line and the malformed one do not.
+	if n := strings.Count(got, "<form"); n != 3 {
+		t.Errorf("%d forms, want 3", n)
 	}
 	if plain := string(markdown(body)); strings.Contains(plain, "<form") || strings.Contains(plain, "<button") || !strings.Contains(plain, `class="box open"`) {
 		t.Errorf("a body with no tick address draws a form:\n%s", plain)

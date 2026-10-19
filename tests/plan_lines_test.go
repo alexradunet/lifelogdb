@@ -2,6 +2,7 @@ package tests
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -51,6 +52,12 @@ func planLines(s *S) {
 		Error     bool   `json:"error"`
 	}
 	block("<!-- next-day-vectors -->", &days)
+	var reopens []struct {
+		Body, Text, After, Removed, Error string
+		Line                              int
+	}
+	block("<!-- reopen-vectors -->", &reopens)
+	s.K("the reopen vectors are complete", len(reopens) >= 14, len(reopens))
 	s.K("the plan-line vectors are complete", len(lines) >= 40, len(lines))
 	s.K("the next-day vectors are complete", len(days) >= 25, len(days))
 
@@ -71,6 +78,15 @@ func planLines(s *S) {
 			ok = err != nil
 		}
 		s.K("every printed next-day vector reproduces", ok, fmt.Sprintf("%+v: got %q %q %q, %v", v, on, due, every, err))
+	}
+	errs := map[string]error{"changed": text.ErrLineChanged, "carried": text.ErrCarried, "malformed": text.ErrMalformed}
+	for _, v := range reopens {
+		got, err := text.Reopen(v.Body, v.Line, v.Text)
+		ok := err == nil && got.Body == v.After && got.Removed == v.Removed
+		if v.Error != "" {
+			ok = errors.Is(err, errs[v.Error])
+		}
+		s.K("every printed reopen vector reproduces", ok, fmt.Sprintf("%+v: got %+v, %v", v, got, err))
 	}
 }
 

@@ -62,7 +62,7 @@ func inline(words string) template.HTML {
 
 // A plan line in a body (docs/contract/plan-lines.md, which is the one home of the grammar; text.Plans reads it). Its
 // box becomes a glyph, and the tokens (on:, due:, done:, every:, from:) become small words, so the words read first.
-// The box of an open line is a button of a tick form. The form cannot stand inside the item: in a loose list the item
+// The box of an open line is a button of a tick form, and so is the box of a done or dropped line (it reopens). The form cannot stand inside the item: in a loose list the item
 // holds a paragraph, and a form would end it. So the forms stand together after the body, and each button names its
 // form (form="tick-N", N the line).
 var boxGlyph = map[byte][2]string{' ': {"open", "\u2610"}, 'x': {"done", "\u2611"}, '-': {"dropped", "\u2612"}, '>': {"carried", "\u25b7"}}
@@ -73,8 +73,8 @@ type span struct {
 	html       string
 }
 
-// enhancePlans replaces the box and the tokens of each plan line in doc, and returns the tick forms that the open
-// lines need ("" when tickHref is empty or no line ticks).
+// enhancePlans replaces the box and the tokens of each plan line in doc, and returns the tick forms that the open,
+// done and dropped lines need ("" when tickHref is empty or no line ticks).
 func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
 	plans := text.Plans(string(source))
 	if len(plans) == 0 {
@@ -106,9 +106,14 @@ func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
 		}
 		word, glyph := boxGlyph[p.Box][0], boxGlyph[p.Box][1]
 		box := `<span class="box ` + word + `" role="img" aria-label="` + word + `">` + glyph + `</span>`
-		if p.Box == ' ' && p.Bad == "" && p.Text != "" && tickHref != "" {
+		// An open box ticks done. A done or dropped box reopens its line. A carried box stays a glyph.
+		outcome, verb := "done", "Done"
+		if p.Box == 'x' || p.Box == '-' {
+			outcome, verb = "reopen", "Reopen"
+		}
+		if p.Box != '>' && p.Bad == "" && p.Text != "" && tickHref != "" {
 			id := "tick-" + strconv.Itoa(p.Line)
-			box = `<button class="box open" form="` + id + `" name="outcome" value="done" aria-label="Done: ` + esc(p.Text) + `">` + glyph + `</button>`
+			box = `<button class="box ` + word + `" form="` + id + `" name="outcome" value="` + outcome + `" aria-label="` + verb + `: ` + esc(p.Text) + `">` + glyph + `</button>`
 			forms.WriteString(`<form id="` + id + `" method="post" action="` + esc(tickHref) + `">` +
 				`<input type="hidden" name="back" value="` + esc(back) + `">` +
 				`<input type="hidden" name="line" value="` + strconv.Itoa(p.Line) + `">` +
@@ -145,7 +150,7 @@ func replaceSpans(block ast.Node, spans []span) {
 // on the last node.
 func splitText(t *ast.Text, spans []span) []ast.Node {
 	a, b := t.Segment.Start, t.Segment.Stop
-	var out []ast.Node
+	out := []ast.Node{} // empty and not nil when a span covers all of t: t goes away
 	cursor, hit := a, false
 	piece := func(from, to int) {
 		if to > from {

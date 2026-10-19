@@ -13,8 +13,19 @@ import (
 // The receipt carries the result's JSON across the browser's redirect; here it becomes the toast's lines. A key that
 // no sentence knows is shown as a fact, so nothing of a result is lost.
 
-// resultLine is one line of the toast: a sentence, or the facts of what no sentence said.
-type resultLine = template.HTML
+// resultLine is one line of the toast: a sentence, or the facts of what no sentence said. A sentence may carry one
+// form, a button that posts one more write (the Undo of a tick).
+type resultLine struct {
+	HTML template.HTML
+	Form *resultForm
+}
+
+// resultForm is a post that a toast offers: its address, its hidden fields in order and the words of its button.
+type resultForm struct {
+	Href   string
+	Hidden [][2]string
+	Label  string
+}
 
 // ResultLines are the toast's lines for the view's result; a result that JSON cannot carry is an error.
 func (v *view) ResultLines() ([]resultLine, error) {
@@ -22,7 +33,7 @@ func (v *view) ResultLines() ([]resultLine, error) {
 	switch r := v.Result.(type) {
 	case string:
 		if err := json.Unmarshal([]byte(r), &x); err != nil {
-			return []resultLine{template.HTML(template.HTMLEscapeString(r))}, nil
+			return []resultLine{{HTML: template.HTML(template.HTMLEscapeString(r))}}, nil
 		}
 	default:
 		var err error
@@ -34,13 +45,14 @@ func (v *view) ResultLines() ([]resultLine, error) {
 	if !ok {
 		var sb strings.Builder
 		v.clock().writeValue(&sb, x)
-		return []resultLine{template.HTML(sb.String())}, nil
+		return []resultLine{{HTML: template.HTML(sb.String())}}, nil
 	}
-	return resultSentences(m, v.clock()), nil
+	return resultSentences(m, v.clock(), v.Here), nil
 }
 
-// resultSentences says a result object. Each key a sentence says is taken; what is left is drawn as facts.
-func resultSentences(m map[string]any, c clock) []resultLine {
+// resultSentences says a result object. Each key a sentence says is taken; what is left is drawn as facts. here is the
+// page the toast is drawn on, where the form of a sentence returns to.
+func resultSentences(m map[string]any, c clock, here string) []resultLine {
 	left := map[string]any{}
 	for k, v := range m {
 		left[k] = v
@@ -52,7 +64,9 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	}
 	esc := template.HTMLEscapeString
 	var out []resultLine
-	say := func(format string, a ...any) { out = append(out, template.HTML(fmt.Sprintf(format, a...))) }
+	say := func(format string, a ...any) {
+		out = append(out, resultLine{HTML: template.HTML(fmt.Sprintf(format, a...))})
+	}
 
 	// The sync shape: what the save contract did with the [[links]] and #tags of a body. Linked says the links this
 	// save added, not every link of the page again; the whole list is the JSON's.
@@ -126,10 +140,33 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 		pageID, _ := take("page_id")
 		say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
 	} else if outcome, ok := take("outcome"); ok {
-		say("%s.", map[bool]string{true: "Done", false: "Dropped"}[outcome == "done"])
-		if next, ok := take("appended_line"); ok {
-			delete(left, "appended")
-			say("The next one is line %s.", Num(next))
+		pageID, _ := take("page_id")
+		words, hasWords := take("text")
+		switch outcome {
+		case "reopen":
+			say("Reopened.")
+			if gone, ok := take("removed_line"); ok {
+				delete(left, "removed")
+				say("The next one, line %s, is removed.", Num(gone))
+			}
+			if b, _ := take("next_kept"); b == true {
+				say("The next one was changed since, so it stays.")
+			}
+		default:
+			say("%s.", map[bool]string{true: "Done", false: "Dropped"}[outcome == "done"])
+			// The Undo posts a reopen of the same line to its page, and the browser returns to where it is.
+			if n := Num(pageID); n != "" && n != "0" && hasLine && hasWords {
+				f := &resultForm{Href: lineHref("tick", pageID), Label: "Undo",
+					Hidden: [][2]string{{"line", Num(line)}, {"text", fmt.Sprint(words)}, {"outcome", "reopen"}}}
+				if here != "" {
+					f.Hidden = append([][2]string{{"back", here}}, f.Hidden...)
+				}
+				out[len(out)-1].Form = f
+			}
+			if next, ok := take("appended_line"); ok {
+				delete(left, "appended")
+				say("The next one is line %s.", Num(next))
+			}
 		}
 	} else if to, ok := take("to_id"); ok {
 		toLine, _ := take("to_line")
@@ -154,7 +191,7 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 	if len(left) > 0 {
 		var sb strings.Builder
 		c.writeValue(&sb, left)
-		out = append(out, template.HTML(sb.String()))
+		out = append(out, resultLine{HTML: template.HTML(sb.String())})
 	}
 	return out
 }

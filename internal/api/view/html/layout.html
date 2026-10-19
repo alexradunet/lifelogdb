@@ -48,7 +48,7 @@
      design system, at the top of the page, where it stays until the next page, for it may name what the write did
      not do. It is an open dialog in the flow of the page: Escape closes it (closedby), and so does its Close, a
      form of the dialog's own; no script. */}}
-{{define "feedback"}}{{if .Result}}<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2>{{range .ResultLines}}<p>{{.}}</p>{{end}}<form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>{{end}}{{end}}
+{{define "feedback"}}{{if .Result}}<dialog open closedby="closerequest" class="toast" aria-label="Result"><h2>Result</h2>{{range .ResultLines}}<p>{{.HTML}}</p>{{with .Form}}<form class="undo" method="post" action="{{.Href}}">{{range .Hidden}}<input type="hidden" name="{{index . 0}}" value="{{index . 1}}">{{end}}<button class="small quiet">{{.Label}}</button></form>{{end}}{{end}}<form method="dialog" class="tiny"><button class="close">Close</button></form></dialog>{{end}}{{end}}
 
 {{/* foot closes the page: the footer with the access keys and the search dialog
      (docs/plans/108-the-browser-made-current.md): a modal the rail's Search opens by its command, with the search

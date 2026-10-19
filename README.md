@@ -445,7 +445,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
 | `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
-| `tick` | `POST /pages/{id}/tick` | `do tick` | `tick` | a plan line where it is drawn: Done, Dropped |
+| `tick` | `POST /pages/{id}/tick` | `do tick` | `tick` | a plan line where it is drawn: Done, Dropped, Reopen |
 | `carry` | `POST /pages/{id}/carry` | `do carry` | `carry` | a plan line where it is drawn: Carry |
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
 | `create-place` | `POST /places` | `do create-place` | `create_place` | Browse, Places: New place |
