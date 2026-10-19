@@ -473,6 +473,10 @@ budget are kept without an automatically generated preview.
 An extension is a client of the HTTP API ([API.md](API.md)). It lives in its own folder with its own Go module. It is
 not built into `lifelog`, and `go build ./...` here does not build it.
 
+The command line `lifelog NAME [ARGS...]` runs the program `lifelog-NAME`, found beside `lifelog` or on `PATH`. It gives
+the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`. The contract, for an author, is
+[`extensions/README.md`](extensions/README.md).
+
 - [`extensions/googlephotos`](extensions/googlephotos/README.md): a local page where the owner picks, for each day
   that has no cover, one photo of that day from Google Photos.
 

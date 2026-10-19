@@ -14,8 +14,7 @@ import (
 
 // TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt: a flag a command does not take is refused, never
 // ignored: --dry-run belongs to file, --public to serve. The usage names every command of the table. A setup command
-// of the machine (init, agentic-init) keeps the OS's interrupt, as does a line with no command or a command that is not
-// in the table; every other command takes the interrupt through its context, snapshot too, as it runs through the
+// of the machine (init, agentic-init) keeps the OS's interrupt, as does a line with no command; a name that is no command is an extension, which gets the interrupt through its context and passes it on; every other command takes the interrupt through its context, snapshot too, as it runs through the
 // client since plan 082.
 func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--snapshots", "x"}} {
@@ -55,12 +54,12 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("the usage does not name %s", c.name)
 		}
 	}
-	for _, args := range [][]string{nil, {"init"}, {"agentic-init"}, {"help"}, {"unknown"}} {
+	for _, args := range [][]string{nil, {"init"}, {"agentic-init"}, {"help"}} {
 		if commandConsumesContext(opts{args: args}) {
 			t.Errorf("%v takes the interrupt through its context; want the OS's interrupt", args)
 		}
 	}
-	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "cover", "snapshot"} {
+	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "cover", "snapshot", "an-extension"} {
 		if !commandConsumesContext(opts{args: []string{cmd}}) {
 			t.Errorf("%s must take the interrupt through its context", cmd)
 		}
@@ -77,8 +76,8 @@ func TestAnUnknownCommandIsAnErrorAndNotTheUsage(t *testing.T) {
 		usage bool   // main writes the usage and exits 2; else it exits 1
 		want  string // the error that main writes; "" for none
 	}{
-		{[]string{"unknown"}, false, `unknown command "unknown" (lifelog help)`},
-		{[]string{"unknown", "--dry-run"}, false, `unknown command "unknown" (lifelog help)`},
+		{[]string{"unknown"}, false, `unknown command "unknown": no command of lifelog and no lifelog-unknown beside this program or on PATH (lifelog help)`},
+		{[]string{"unknown", "--dry-run"}, false, `unknown command "unknown": no command of lifelog and no lifelog-unknown beside this program or on PATH (lifelog help)`},
 		{nil, true, ""},
 		{[]string{"help"}, true, ""},
 		{[]string{"search", "x", "--dry-run"}, true, "search does not take --dry-run"},

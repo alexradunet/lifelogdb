@@ -256,6 +256,7 @@ func usageText() string {
 		b.WriteString(c.usage)
 		b.WriteString("\n")
 	}
+	b.WriteString("\n  lifelog NAME [ARGS...]              runs the extension lifelog-NAME beside this program or on PATH (extensions/README.md)\n")
 	b.WriteString(globalUsage)
 	return b.String()
 }
@@ -272,6 +273,30 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public, "--force": &o.force}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
+		if len(o.args) > 0 && o.args[0] != "help" && commandNamed(o.args[0]) == nil {
+			// The extension mode (extensions/README.md). The words after the name belong to the extension, and its flags
+			// may have any name. So lifelog reads only the two flags that choose the database, and passes the rest as it
+			// is, in its order.
+			name, val, hasVal := strings.Cut(a, "=")
+			if name != "--db" && name != "--url" {
+				o.args = append(o.args, a)
+				continue
+			}
+			if !hasVal {
+				if i+1 >= len(argv) {
+					return o, fmt.Errorf("%s needs a value", name)
+				}
+				i++
+				val = argv[i]
+			}
+			o.given = append(o.given, name)
+			if name == "--db" {
+				o.db, o.dbExplicit = val, true
+			} else {
+				o.url = val
+			}
+			continue
+		}
 		if a == "--" {
 			o.args = append(o.args, argv[i+1:]...)
 			break
@@ -309,16 +334,20 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 			*p = val
 		}
 	}
-	if len(o.args) > 0 {
-		if cmd := commandNamed(o.args[0]); cmd != nil {
-			for _, f := range o.given {
-				if !slices.Contains(cmd.flags, f) && (!slices.Contains(globalFlags, f) || slices.Contains(cmd.refuses, f)) {
-					return o, fmt.Errorf("%s does not take %s", cmd.name, f)
+	if len(o.args) > 0 && o.args[0] != "help" {
+		cmd := commandNamed(o.args[0])
+		for _, f := range o.given {
+			switch {
+			case cmd == nil: // an extension: extension() refuses --source and --human with their reasons
+				if !slices.Contains(globalFlags, f) {
+					return o, fmt.Errorf("an extension takes only the global flags before its name, not %s", f)
 				}
+			case !slices.Contains(cmd.flags, f) && (!slices.Contains(globalFlags, f) || slices.Contains(cmd.refuses, f)):
+				return o, fmt.Errorf("%s does not take %s", cmd.name, f)
 			}
-			if o.dbExplicit && o.url != "" {
-				return o, errors.New("--db and --url name two databases: give one")
-			}
+		}
+		if o.dbExplicit && o.url != "" {
+			return o, errors.New("--db and --url name two databases: give one")
 		}
 	}
 	return o, nil
@@ -328,7 +357,10 @@ func main() {
 	e := env{stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr, getenv: os.Getenv, executable: os.Executable, clock: time.Now}
 	err := runArgs(context.Background(), e, os.Args[1:])
 	var usage usageError
+	var exit exitError
 	switch {
+	case errors.As(err, &exit): // an extension ran and said its own message
+		os.Exit(exit.code)
 	case errors.As(err, &usage):
 		if usage.err != nil {
 			fmt.Fprintln(e.stderr, usage.err)
@@ -376,7 +408,10 @@ func commandConsumesContext(o opts) bool {
 		return false
 	}
 	cmd := commandNamed(o.args[0])
-	return cmd != nil && !cmd.setup
+	if cmd == nil { // an extension takes the interrupt too, and passes it on
+		return o.args[0] != "help"
+	}
+	return !cmd.setup
 }
 
 // runContext runs the command of the line e.o: its prepare, then the client (a running server over --url, or the
@@ -386,7 +421,7 @@ func runContext(ctx context.Context, e env) (err error) {
 	o := e.o
 	cmd := commandNamed(o.args[0])
 	if cmd == nil {
-		return fmt.Errorf("unknown command %q (lifelog help)", o.args[0])
+		return extension(ctx, e, o.args[0], o.args[1:])
 	}
 	e.cmd = cmd
 	args := o.args[1:]
