@@ -1,8 +1,12 @@
 package main
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -15,9 +19,15 @@ import (
 // change that moves it out adds its name here.
 var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "opencode", "anthropic", "openai", "modelcontextprotocol"}
 
-// dials are the ways a Go program talks to a server. Only internal/client, the client of lifelog's own server, may
-// use them: so every integration with the outside world is an extension by force.
-var dials = []string{"http.Client", "http.DefaultClient", "http.Get(", "http.Post(", "http.NewRequest", "net.Dial"}
+// dialPackages are the packages a Go program talks to a server with. The core imports them under their own names only,
+// so that the words of dials below cannot hide behind an alias or a dot import.
+var dialPackages = []string{"net", "net/http", "crypto/tls"}
+
+// dials are the ways a Go program opens a connection. Only internal/client, the client of lifelog's own server, may
+// use them: so every integration with the outside world is an extension by force. A server (net.Listen, http.Server)
+// is not a dial.
+var dials = []string{"http.Client", "http.DefaultClient", "http.DefaultTransport", "http.Transport", "http.Get(", "http.Head(",
+	"http.Post(", "http.PostForm(", "http.NewRequest", ".RoundTrip(", "net.Dial", "tls.Dial"}
 
 func TestTheCoreNamesNoThirdParty(t *testing.T) {
 	for path, text := range coreSources(t) {
@@ -31,7 +41,18 @@ func TestTheCoreNamesNoThirdParty(t *testing.T) {
 }
 
 func TestTheCoreDialsOnlyItsServer(t *testing.T) {
+	fset := token.NewFileSet()
 	for path, text := range coreSources(t) {
+		f, err := parser.ParseFile(fset, path, text, parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imp := range f.Imports {
+			pkg, _ := strconv.Unquote(imp.Path.Value)
+			if imp.Name != nil && slices.Contains(dialPackages, pkg) {
+				t.Errorf("%s imports %s as %s: the core imports it under its own name, so a dial cannot hide", path, pkg, imp.Name.Name)
+			}
+		}
 		if strings.HasPrefix(filepath.ToSlash(path), "internal/client/") {
 			continue
 		}

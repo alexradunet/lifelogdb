@@ -33,11 +33,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	fs := flag.NewFlagSet("lifelog-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	agent := fs.String("agent", "mcp", "the name of the agent: the server writes as agent:NAME")
-	defaultURL := getenv("LIFELOG_URL") // set when it runs as "lifelog mcp"
-	if defaultURL == "" {
-		defaultURL = "http://127.0.0.1:7777"
-	}
-	base := fs.String("url", defaultURL, "address of lifelog (default $LIFELOG_URL, else http://127.0.0.1:7777); $LIFELOG_TOKEN is sent as a bearer token when it is set")
+	// The address is $LIFELOG_URL, which `lifelog mcp` sets, or --url. There is no default: a guess such as
+	// 127.0.0.1:7777 could be the owner's service, and a stale config with a missing file would then write there.
+	base := fs.String("url", getenv("LIFELOG_URL"), "address of lifelog (default $LIFELOG_URL); $LIFELOG_TOKEN is sent as a bearer token when it is set")
 	fs.String("source", "", "refused: name the agent with --agent")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -50,9 +48,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	if named["source"] { // one way to name the writer of MCP: an agent's
 		return errors.New("mcp writes as agent:NAME: name the agent with --agent, not --source")
 	}
+	if *base == "" {
+		return errors.New("no LIFELOG_URL and no --url: run it as `lifelog mcp` on a life.db that exists, or start `lifelog serve` and give --url")
+	}
 	c := client.Remote(*base, siren.AgentPrefix+*agent, getenv("LIFELOG_TOKEN"))
-	if err := mcp.Serve(ctx, c, version, stdin, stdout); err != nil {
+	s, err := mcp.New(ctx, c, version)
+	if err != nil {
 		return fmt.Errorf("%w (run it as `lifelog mcp`, or start `lifelog serve` and give --url)", err)
+	}
+	if err := mcp.Run(ctx, s, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
+		return err // an interrupt ends the session cleanly: the signal is the owner's word
 	}
 	return nil
 }

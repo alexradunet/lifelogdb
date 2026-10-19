@@ -9,8 +9,12 @@
 - **Priority:** P2. **Effort:** L. **Risk:** MEDIUM. The contract in `docs/` and `schema.sql` do not change. The
   `lifelog` binary loses two commands (`agentic-init`, `mcp`), which come back as extensions under the same command
   lines. The README, `AGENTS.md`, the site and the parity tests change.
-- **Status:** IN REVIEW (owner). Built in `193f2f8` (step 1), `14fa315` (step 3), `ab8c1ca` (step 2) and the commit
-  of step 4. The install of the three binaries and the restart of the service wait for the owner.
+- **Status:** IN REVIEW (owner). Built in `193f2f8` (step 1), `14fa315` (step 3), `ab8c1ca` (step 2) and `f3edb90`
+  (step 4); the counter-review's findings are fixed in the commit after it: an extension never guesses an address
+  (a missing file gave `lifelog mcp` no `LIFELOG_URL`, and the fallback `127.0.0.1:7777` was the owner's service), a
+  clean interrupt is no error, a stop error is said, `--` protects the extension's words, a file beside the program
+  that cannot run is refused, and the dial test refuses an aliased import. The install of the three binaries and the
+  restart of the service wait for the owner.
 - **Resolves:** no issue, no RFC. The owner's words are the incident.
 
 ## The owner's words (2026-10-19)
@@ -119,7 +123,7 @@ The rules, which `extensions/README.md` states for an author:
 |---|---|---|---|---|
 | `extensions/googlephotos` | `lifelog-gphotos` | `lifelog gphotos [--addr A] [--credentials F] [--zone Z]` | `import:google-photos` | yes |
 | `extensions/agentic` | `lifelog-agentic-init` | `lifelog agentic-init [--force]` | nothing | no: it reads `LIFELOG_EXE` and `LIFELOG_DB`, and refuses to run without them |
-| `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else `http://127.0.0.1:7777`; `--source` is refused as today |
+| `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `--source` is refused as today |
 
 `lifelog-gphotos` reads `LIFELOG_URL` before its `--url` flag, so `lifelog gphotos` works as the other two do.
 

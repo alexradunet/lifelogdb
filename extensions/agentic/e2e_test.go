@@ -172,6 +172,9 @@ func TestTheFilesAndTheDatabaseBesideTheProgram(t *testing.T) {
 	if out := f.ok("init"); out != "created "+f.db+"\n" {
 		t.Errorf("init with no path: %q, want the life.db beside the program", out)
 	}
+	if out := f.ok("day", "2031-04-11"); !strings.Contains(out, "2031-04-11") { // a command with no --db reads that file
+		t.Errorf("day with no --db: %q, want the day page of the life.db beside the program", out)
+	}
 	again := f.ok("agentic-init")
 	if strings.Contains(again, "written") || strings.Contains(again, "no life.db yet") || !strings.Contains(again, "unchanged") {
 		t.Errorf("a second agentic-init:\n%s", again)
@@ -437,13 +440,12 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	if err := json.Unmarshal([]byte(f.ok("actions", "--db", f.db)), &actions); err != nil {
 		t.Fatal(err)
 	}
-	// The tools of lifelog-mcp are the actions that are not the owner's, and get.
-	owners, tools := map[string]bool{}, map[string]bool{"get": true} // the tool names: a hyphen of the action's name is a _
+	// The tools are the list of the real lifelog-mcp; the owner's actions are the catalog's, with _ for a hyphen.
+	tools := listTools(t, f, f.lifelog, []string{"mcp", "--agent", "test", "--db", f.db})
+	owners := map[string]bool{}
 	for _, a := range actions {
 		if a.Owner {
 			owners[strings.ReplaceAll(a.Name, "-", "_")] = true
-		} else {
-			tools[strings.ReplaceAll(a.Name, "-", "_")] = true
 		}
 	}
 	if len(owners) == 0 || len(tools) < 10 || len(help.flags) < 10 || len(help.global) == 0 {

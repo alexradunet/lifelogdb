@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -28,5 +30,16 @@ func main() {
 	if len(args) > 0 && strings.HasPrefix(args[0], "exit=") {
 		n, _ := strconv.Atoi(strings.TrimPrefix(args[0], "exit="))
 		os.Exit(n)
+	}
+	if len(args) > 0 && args[0] == "wait" {
+		// An extension that ends cleanly on an interrupt: it writes "ready" beside the file, then waits for the signal.
+		interrupted := make(chan os.Signal, 1)
+		signal.Notify(interrupted, os.Interrupt)
+		if err := os.WriteFile(filepath.Join(filepath.Dir(os.Getenv("LIFELOG_DB")), "ready"), nil, 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		<-interrupted
+		fmt.Println("interrupted=yes")
 	}
 }

@@ -55,8 +55,8 @@ flowchart LR
 | stdin, stdout, stderr | Inherited. An MCP server on stdio works. |
 
 The temporary server is the same writer as the CLI. [Connections](../docs/contract/connections.md) allows it beside
-the service. A setup extension needs no server, and a client extension that has no `LIFELOG_URL` must refuse with a
-line that says what to run.
+the service. A setup extension needs no server, and a client extension that has no `LIFELOG_URL` and no `--url` must refuse with a
+line that says what to run. It never guesses an address: `127.0.0.1:7777` may be the server of another file.
 
 ## Exit and signals
 
@@ -82,4 +82,4 @@ the rule that exists already ([API.md](../API.md)). `GET /actions` of the server
 |---|---|---|---|---|
 | `extensions/googlephotos` | `lifelog-gphotos` | `lifelog gphotos [--addr A] [--credentials F] [--zone Z]` | `import:google-photos` | yes |
 | `extensions/agentic` | `lifelog-agentic-init` | `lifelog agentic-init [--force]` | nothing | no: it reads `LIFELOG_EXE` and `LIFELOG_DB`, and refuses to run without them |
-| `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else `http://127.0.0.1:7777`; `--source` is refused as today |
+| `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `--source` is refused as today |

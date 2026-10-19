@@ -36,7 +36,7 @@ beside `lifelog`.
 | line | what happens |
 |---|---|
 | `lifelog mcp [--agent NAME] [--db FILE]` | `lifelog` finds `lifelog-mcp` beside itself, serves the file on a temporary loopback server, and runs the extension against it ([extensions/README.md](../README.md)). |
-| `lifelog-mcp [--agent NAME] [--url URL]` | It talks to a running `lifelog serve`. The default URL is `$LIFELOG_URL`, else `http://127.0.0.1:7777`. |
+| `lifelog-mcp [--agent NAME] --url URL` | It talks to a running `lifelog serve` at `URL` (default `$LIFELOG_URL`). With neither, it refuses: a guessed address could be another file's server. |
 
 `--agent` defaults to `mcp`. `$LIFELOG_TOKEN` is sent as a bearer token when it is set (a `--public` server needs it).
 

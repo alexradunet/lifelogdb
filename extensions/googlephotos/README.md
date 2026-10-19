@@ -44,7 +44,7 @@ Open `http://127.0.0.1:7790`.
 | flag | meaning |
 |---|---|
 | `--addr` | where the page listens. Default `127.0.0.1:7790`. Only a loopback address is allowed. |
-| `--url` | the address of lifelog. Default `$LIFELOG_URL` when it is set (as in `lifelog gphotos`), else `http://127.0.0.1:7777`. When `$LIFELOG_TOKEN` is set, it is sent as a bearer token. |
+| `--url` | the address of lifelog. Default `$LIFELOG_URL`, which `lifelog gphotos` sets. With neither, it refuses. When `$LIFELOG_TOKEN` is set, it is sent as a bearer token. |
 | `--credentials` | the JSON of the Desktop OAuth client. Default: `credentials.json` beside the token file. |
 | `--zone` | the IANA zone that gives the day of a photo. Default: the local zone. |
 

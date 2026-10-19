@@ -33,11 +33,9 @@ func main() {
 func run(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("lifelog-gphotos", flag.ContinueOnError)
 	addr := fs.String("addr", "127.0.0.1:7790", "address of the review page (a loopback address)")
-	defaultURL := os.Getenv("LIFELOG_URL") // set when it runs as "lifelog gphotos"
-	if defaultURL == "" {
-		defaultURL = "http://127.0.0.1:7777"
-	}
-	base := fs.String("url", defaultURL, "address of lifelog (default $LIFELOG_URL, else http://127.0.0.1:7777); $LIFELOG_TOKEN is sent as a bearer token when it is set")
+	// The address is $LIFELOG_URL, which `lifelog gphotos` sets, or --url. There is no default: a guess such as
+	// 127.0.0.1:7777 could be another file's server.
+	base := fs.String("url", os.Getenv("LIFELOG_URL"), "address of lifelog (default $LIFELOG_URL); $LIFELOG_TOKEN is sent as a bearer token when it is set")
 	credentials := fs.String("credentials", "", "JSON of the Desktop OAuth client from Google Cloud (default: credentials.json beside the token file)")
 	zoneName := fs.String("zone", "", "IANA zone that gives the day of a photo (default: the local zone)")
 	if err := fs.Parse(args); err != nil {

@@ -157,6 +157,11 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 		t.Error("get /actions lists no action")
 	}
 
+	// The session writes as an agent: the owner's integrity check is refused to it (API.md, "integrity").
+	if text := callError(t, ctx, session, "get", map[string]any{"href": "/integrity"}); !strings.Contains(text, "forbidden") {
+		t.Errorf("get /integrity as an agent answered %s, want forbidden", text)
+	}
+
 	if err := session.Close(); err != nil {
 		t.Errorf("close: %v", err)
 	}
@@ -189,6 +194,31 @@ func TestSourceIsRefusedOnTheLineOfMCP(t *testing.T) {
 	}
 	if want := "mcp writes as agent:NAME: name the agent with --agent, not --source"; !strings.Contains(stderr.String(), want) {
 		t.Errorf("stderr %q, want %q", stderr.String(), want)
+	}
+}
+
+// TestWithoutAServerTheMCPServerRefuses: lifelog-mcp never guesses an address, because 127.0.0.1:7777 may be the
+// server of another file. Alone with no LIFELOG_URL and no --url it refuses, and so does `lifelog mcp` on a file that
+// does not exist, which gives it no LIFELOG_URL.
+func TestWithoutAServerTheMCPServerRefuses(t *testing.T) {
+	b := build(t)
+	const want = "no LIFELOG_URL and no --url"
+	for _, line := range [][]string{
+		{filepath.Join(b.dir, "lifelog-mcp"), "--agent", "x"},
+		{b.lifelog, "mcp", "--agent", "x", "--db", filepath.Join(b.dir, "missing", "life.db")},
+	} {
+		cmd := exec.Command(line[0], line[1:]...)
+		cmd.Env = env()
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() == 0 {
+			t.Fatalf("%v: %v, want a non-zero status", line[1:], err)
+		}
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("%v: stderr %q, want %q", line[1:], stderr.String(), want)
+		}
 	}
 }
 

@@ -32,8 +32,11 @@ func findExtension(exe, name string) (string, error) {
 	if strings.ContainsAny(name, `/\`) { // a name is a word, never a path
 		return "", notFound
 	}
-	if path, err := exec.LookPath(filepath.Join(filepath.Dir(exe), "lifelog-"+name)); err == nil {
+	beside := filepath.Join(filepath.Dir(exe), "lifelog-"+name)
+	if path, err := exec.LookPath(beside); err == nil {
 		return path, nil
+	} else if _, statErr := os.Stat(beside); statErr == nil {
+		return "", fmt.Errorf("%s is beside this program but cannot run: %w", beside, err) // a file that is not executable
 	}
 	if path, err := exec.LookPath("lifelog-" + name); err == nil {
 		return path, nil
@@ -73,7 +76,18 @@ func extension(ctx context.Context, e env, name string, args []string) (err erro
 			if serr != nil {
 				return serr
 			}
-			defer func() { err = errors.Join(err, stop()) }()
+			defer func() {
+				serr := stop()
+				if serr == nil {
+					return
+				}
+				var exit exitError
+				if errors.As(err, &exit) { // main says nothing of an exitError: the file's error is said here
+					fmt.Fprintln(e.stderr, "lifelog:", serr)
+					return
+				}
+				err = errors.Join(err, serr)
+			}()
 			url = "http://" + addr
 		}
 	}
@@ -81,11 +95,18 @@ func extension(ctx context.Context, e env, name string, args []string) (err erro
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = e.stdin, e.stdout, e.stderr
 	cmd.Env = extensionEnv(os.Environ(), exe, file, url)
-	if runtime.GOOS != "windows" { // Windows cannot send an interrupt to another process: it keeps the default, a kill
+	if runtime.GOOS != "windows" {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	} else {
+		// Windows cannot send an interrupt to another process, and the console gives the extension the Ctrl-C itself.
+		// So Cancel does nothing, and WaitDelay gives the extension the same ten seconds to end as on Unix.
+		cmd.Cancel = func() error { return nil }
 	}
 	cmd.WaitDelay = 10 * time.Second
 	err = cmd.Run()
+	if errors.Is(err, context.Canceled) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		return nil // the interrupt was the owner's word, and the extension ended cleanly on it
+	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		return exitError{code: max(ee.ExitCode(), 1)} // -1: a signal ended it

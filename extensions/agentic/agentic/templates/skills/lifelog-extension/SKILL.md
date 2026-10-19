@@ -33,6 +33,7 @@ An extension is a client of the API of lifelog. It is a separate program. It doe
 3. Keep the state of the extension (a token, a cursor) in its own folder, for example `os.UserConfigDir()/lifelog-NAME/`.
    Never keep it in `life.db`.
 4. A page that the extension serves listens on loopback (`127.0.0.1`) only.
-5. In Go, make it its own module. Use the standard library. Import nothing from `lifelog/internal`.
+5. In Go, make it its own module. Use the standard library, unless a protocol needs an SDK. Import nothing from
+   `lifelog/internal`. Build it as `lifelog-NAME` and put it beside `{{.Exe}}`.
 6. Test it with synthetic data. Fake the third party. Never use the owner's `life.db`.
 7. Ask the owner before you build it, and before you run it on real data.

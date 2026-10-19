@@ -255,6 +255,10 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 			// The extension mode (extensions/README.md). The words after the name belong to the extension, and its flags
 			// may have any name. So lifelog reads only the two flags that choose the database, and passes the rest as it
 			// is, in its order.
+			if a == "--" { // from here on, even --db and --url are the extension's words, and so is the -- itself
+				o.args = append(o.args, argv[i:]...)
+				break
+			}
 			name, val, hasVal := strings.Cut(a, "=")
 			if name != "--db" && name != "--url" {
 				o.args = append(o.args, a)

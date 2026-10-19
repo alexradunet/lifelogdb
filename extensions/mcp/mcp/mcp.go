@@ -22,6 +22,11 @@ func Serve(ctx context.Context, c *client.Client, version string, in io.ReadClos
 	if err != nil {
 		return err
 	}
+	return Run(ctx, s, in, out)
+}
+
+// Run runs a built server on in and out until the client goes away or ctx ends.
+func Run(ctx context.Context, s *mcp.Server, in io.ReadCloser, out io.Writer) error {
 	return s.Run(ctx, &mcp.IOTransport{Reader: in, Writer: openWriter{out}})
 }
 

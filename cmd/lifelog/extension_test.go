@@ -86,6 +86,7 @@ func TestAnExtensionGetsTheWordsAfterItsNameInOrder(t *testing.T) {
 		{[]string{"fake", "--force", "--mood=3", "--", "--x"}, "--force|--mood=3|--|--x"},
 		{[]string{"fake", "--source", "x", "--human", "-h"}, "--source|x|--human|-h"}, // after the name they are the extension's
 		{[]string{"fake", "one", "--db", filepath.Join(dir, "none.db"), "two", "--db=x.db", "three"}, "one|two|three"},
+		{[]string{"fake", "--", "--db", "x", "--url", "u"}, "--|--db|x|--url|u"}, // after --, even these are the extension's
 	} {
 		got, err := run(tc.argv...)
 		if err != nil {
@@ -221,6 +222,62 @@ func TestAnUnknownExtensionNamesBothPlaces(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: %v, want it to contain %q", name, err, want)
 		}
+	}
+}
+
+// TestAFileBesideTheProgramThatCannotRunIsRefused: a lifelog-NAME beside the program that is not executable is an
+// error, not a silent fall-through to a program of the same name on PATH.
+func TestAFileBesideTheProgramThatCannotRunIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no executable bit")
+	}
+	beside, onPath := t.TempDir(), t.TempDir()
+	fakeExtension(t, onPath)
+	if err := os.WriteFile(filepath.Join(beside, "lifelog-fake"), []byte("not a program"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", strings.Join([]string{onPath, os.Getenv("PATH")}, string(os.PathListSeparator)))
+	_, run := extensionEnvAt(t, beside)
+	_, err := run("fake")
+	if err == nil || !strings.Contains(err.Error(), "beside this program but cannot run") {
+		t.Errorf("err = %v, want the refusal of the file beside the program", err)
+	}
+}
+
+// TestAnInterruptThatTheExtensionEndsCleanlyOnIsNoError: an interrupt reaches the extension through the context; when
+// it ends with status 0 on it, lifelog ends with no error, as the owner asked for the stop.
+func TestAnInterruptThatTheExtensionEndsCleanlyOnIsNoError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows cannot send an interrupt to a process: the console does")
+	}
+	dir := t.TempDir()
+	fakeExtension(t, dir)
+	e, _, _ := testEnv(t)
+	e.executable = func() (string, error) { return filepath.Join(dir, "lifelog"), nil }
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- runArgs(ctx, e, []string{"fake", "wait", "--db", filepath.Join(dir, "none.db")}) }()
+	ready := filepath.Join(dir, "ready")
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		select {
+		case <-tick.C:
+		case err := <-done:
+			t.Fatalf("the extension ended before it was ready: %v", err)
+		case <-deadline.C:
+			t.Fatal("the extension never said it was ready")
+		}
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("after an interrupt the extension ended cleanly on: %v, want no error", err)
 	}
 }
 
