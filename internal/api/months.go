@@ -39,9 +39,14 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
+	lines, err := h.linesIn(ctx, from, through)
+	if err != nil {
+		return nil, err
+	}
 	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
-	e := &siren.Entity{Class: []string{"month"}, Title: name, Links: []siren.Link{link("self", siren.MonthHref(first), name)}}
+	e := &siren.Entity{Class: []string{"month"}, Title: name, Links: []siren.Link{link("self", siren.MonthHref(first), name)},
+		Actions: []siren.Action{planAction(first.Format("2006-01"))}}
 	// A month has a page when its first day is a day.
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{prev, siren.MonthHref(prev), prev.Format(layoutMonth)},
@@ -51,7 +56,7 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
-	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": days}
+	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": days, "lines": lines}
 	return e, nil
 }
 

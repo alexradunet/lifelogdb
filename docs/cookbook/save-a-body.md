@@ -54,8 +54,13 @@ INSERT INTO entities(entity_type, preferred_name_key, day, created_at, updated_a
 VALUES ('page', :key, CASE WHEN date(:title) IS :title THEN :title END,
         strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 RETURNING id;   -- the app keeps it as :target_id
+-- a period key (2026, 2026-10, 2026-Q4, 2026-W43) is spelled in upper case, whatever the body wrote (D30)
 INSERT INTO entity_names(entity_id, title, name_key)
-VALUES (:target_id, :title, :key);
+VALUES (:target_id,
+        CASE WHEN :key GLOB '[0-9][0-9][0-9][0-9]' OR :key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+               OR :key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR :key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]'
+             THEN upper(:key) ELSE :title END,
+        :key);
 
 -- 3) link it (:target_id is :found_id, or the id 2b returned)
 INSERT INTO links(from_id, to_id, kind, created_at, source)

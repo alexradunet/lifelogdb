@@ -53,25 +53,32 @@ func TestActionDescriptionsNameOnlyTheirFields(t *testing.T) {
 }
 
 // TestTheCatalogNamesNoRemovedFeature: no action's description or field title tells a client of a feature the
-// docs removed: a photo's position (D21) or a task and what is due (D23). An MCP agent reads these texts as the
-// truth. Each pattern names a removed feature, not a bare word, so a true text such as "due to" or the position of a
-// row stays free.
+// docs removed: a photo's position (D21), or the tables of tasks, deadlines and occurrences (D23). An MCP agent reads
+// these texts as the truth. RFC 0022 reopened planning as a line of a page (D29): the words "task" and "due" are free
+// again, as in "plan line" and "the day it must be done by", so this test guards the removed features by their
+// routes (/tasks, /deadlines, /occurrences) and by the words occurrence and reminder, not by those words. Each
+// pattern names a removed feature, not a bare word, so a true text such as "due to" or the position of a row stays
+// free.
 func TestTheCatalogNamesNoRemovedFeature(t *testing.T) {
 	c, _, _ := apitest.Fresh(t, "cli")
-	removed := regexp.MustCompile(`(?i)\b(` + strings.Join([]string{
-		`tasks?`, `overdue`, `what (is|was) due`, `due (days?|dates?)`, // D23
+	removed := regexp.MustCompile(`(?i)(/(tasks|deadlines|occurrences)\b|\b(` + strings.Join([]string{
+		`occurrences?`, `reminders?`, // D23
 		`(a|the) photo's position`, `positions? of (a|the) photos?`, `and position`, `positions? near`,
 		`position as its point`, `the place it was taken`, // D21
-	}, "|") + `)\b`)
-	// The texts that the catalog said before plan 121 removed them, and two true texts.
+	}, "|") + `)\b)`)
+	// The texts of the removed features, and two true texts.
 	for s, want := range map[string]bool{
-		"Open the day view of a local day (YYYY-MM-DD): its journal, what was due and its readings.": true,
-		"A photo's own day (its EXIF date) and position are read from the original":                  true,
-		"its day page gets an at link to the place it was taken in, and shows it":                    true,
-		"a position near no place is reported":                                                       true,
-		"at names the place, which takes the position as its point":                                  true,
-		"Refused due to a stale version.":                                                            false,
-		"The position of a row in the list.":                                                         false,
+		"GET /tasks lists the open tasks.":                                               true,
+		"Add a deadline: POST /deadlines.":                                               true,
+		"An occurrence repeats on its day.":                                              true,
+		"A reminder is sent on the day.":                                                 true,
+		"A photo's own day (its EXIF date) and position are read from the original":      true,
+		"its day page gets an at link to the place it was taken in, and shows it":        true,
+		"a position near no place is reported":                                           true,
+		"at names the place, which takes the position as its point":                      true,
+		"Add a plan line: the day it must be done by is due, and a task is a plan line.": false,
+		"Refused due to a stale version.":                                                false,
+		"The position of a row in the list.":                                             false,
 	} {
 		if got := removed.MatchString(s); got != want {
 			t.Fatalf("the pattern finds a removed feature in %q: %v, want %v", s, got, want)

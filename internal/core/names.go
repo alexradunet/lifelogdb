@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"strings"
 
 	"lifelog/internal/text"
@@ -12,6 +13,7 @@ import (
 // insertPage is the universal insert convention (cookbook/capture.md): entities first, RETURNING id, then the
 // owned-name row with that id. The writer sets no import_key on an entity.
 func (t *Tx) insertPage(typ, title, key string, day any, body string) (id int64, err error) {
+	title = periodSpelling(title, key)
 	err = t.tx.QueryRowContext(t.ctx, `INSERT INTO entities(entity_type, preferred_name_key, day, body, created_at, updated_at, source)
                          VALUES (?, ?, ?, ?, `+nowSQL+`, `+nowSQL+`, ?)
 	                     RETURNING id`, typ, key, day, body, t.source).Scan(&id)
@@ -20,6 +22,19 @@ func (t *Tx) insertPage(typ, title, key string, day any, body string) (id int64,
 	}
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO entity_names(entity_id, title, name_key) VALUES (?, ?, ?)`, id, title, key)
 	return id, err
+}
+
+// periodKey is the shape of a period key, folded (entities.period, D30): a year, a month, a quarter or an ISO week. The
+// file decides whether the period exists (entities_period_exists).
+var periodKey = regexp.MustCompile(`^[0-9]{4}(-[0-9]{2}|-q[0-9]|-w[0-9]{2})?$`)
+
+// periodSpelling is the title that the file accepts for the key: a period page is spelled in upper case (D30), so
+// 2026-w43 is written 2026-W43. Any other title stays as it is.
+func periodSpelling(title, key string) string {
+	if periodKey.MatchString(key) {
+		return strings.ToUpper(key)
+	}
+	return title
 }
 
 // pageRef is what a lookup by title or a livePage finds. Version is the decimal entities.revision token (Page.Version).

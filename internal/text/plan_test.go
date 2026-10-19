@@ -275,3 +275,11 @@ func FuzzPlans(f *testing.F) {
 		}
 	})
 }
+
+func TestPlansOfALongBody(t *testing.T) {
+	const n = 20000
+	body := strings.Repeat("- [ ] a\n", n)
+	if got := len(Plans(body)); got != n {
+		t.Fatalf("got %d plans, want %d", got, n)
+	}
+}

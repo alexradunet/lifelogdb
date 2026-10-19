@@ -385,6 +385,17 @@ func semanticIntegrity(s *S, checks []string) {
 		s.K(witness, c.integrityOK() && c.tab(checks[6]) == c.tab("SELECT id FROM entity_names WHERE name_key=?", key))
 	}
 
+	// A period page has only its own key (D30): the same query finds an alias on it, and a period key on another page.
+	c = s.fresh()
+	week, ordinary := c.page("2026-W43"), c.page("Ordinary two")
+	s.K("period-name integrity accepts a period page and an ordinary page", c.tab(checks[6]) == "")
+	bypass(c, "entity_names_day_insert", func() {
+		c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,?,?)", week, "October week", "october week")
+		c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,?,?)", ordinary, "2026-q1", "2026-q1")
+	})
+	s.K("period-name integrity detects an alias on a period page and a period key on another page, spelled in lower case",
+		c.integrityOK() && c.tab(checks[6]) == c.tab("SELECT id FROM entity_names WHERE name_key IN ('october week','2026-q1') ORDER BY id"))
+
 	// The rules that only a trigger holds (links_endpoint_types, measurements_scale_range) have a query each.
 	c = s.fresh()
 	start, day, category, place := c.page("Start"), c.dayPage("2026-10-02", ""), c.page("Category"), c.thing("place")

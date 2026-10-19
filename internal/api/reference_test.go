@@ -30,9 +30,13 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
 		"search":                    map[string]any{"q": "", "order": "", "kind": "", "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
-		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}},
-		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}},
-		"page, person, place, file": core.Page{},
+		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "lines": []planLine{}},
+		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "lines": []planLine{}},
+		"page, person, place, file": pageProperties{},
+		"plan line":                 planLine{},
+		"result of plan":            map[string]any{"page_id": int64(0), "line": 0, "written": ""},
+		"result of tick":            map[string]any{"line": 0, "outcome": "", "appended": "", "appended_line": 0},
+		"result of carry":           map[string]any{"line": 0, "to_id": int64(0), "to_line": 0},
 		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},
 		"series":                    map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "unit": ""},
@@ -51,6 +55,11 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for section, shape := range shapes {
 		want := map[string]bool{}
 		walk("", reflect.ValueOf(shape), want)
+		for p := range want { // the fields of a plan line are in their own section, "plan line"
+			if strings.HasPrefix(p, "planned[].") || strings.HasPrefix(p, "lines[].") {
+				delete(want, p)
+			}
+		}
 		got, ok := documented[section]
 		if !ok {
 			t.Errorf("API.md has no section %q", section)

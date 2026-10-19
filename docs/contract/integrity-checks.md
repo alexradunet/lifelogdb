@@ -21,7 +21,11 @@ SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
  WHERE (length(n.name_key)=10 AND date(n.name_key) IS n.name_key
    AND (e.entity_type<>'page' OR e.preferred_name_key IS NOT n.name_key OR e.day IS NOT n.name_key OR n.title IS NOT n.name_key))
  OR (e.is_journal
-   AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key)) ORDER BY n.id; -- no rows
+   AND (n.name_key IS NOT e.preferred_name_key OR n.title IS NOT e.preferred_name_key))
+ OR (e.period IS NOT NULL AND n.name_key IS NOT e.preferred_name_key)
+ OR ((n.name_key GLOB '[0-9][0-9][0-9][0-9]' OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+       OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]')
+   AND (e.preferred_name_key IS NOT n.name_key OR n.title IS NOT upper(n.name_key))) ORDER BY n.id; -- no rows
 SELECT l.id FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
  WHERE (l.kind='at' AND NOT coalesce(f.is_journal,0))
  OR (l.kind='part-of' AND coalesce(t.is_journal,0))
@@ -46,7 +50,7 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   the closed kind registry (`link_kinds`) only, even when a damaged file bypassed the insertion and type-change guards (executed).
   It does not check the three rules that the registry cannot say, which the next group holds.
   The remaining semantic queries detect a correction of a missing reading or of another metric,
-  correction rows unreachable from an original reading (cycles or dangling chains), and invalid journal-name ownership
+  correction rows unreachable from an original reading (cycles or dangling chains), and invalid journal-name and period-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
   reachable reading once; it does not follow every row's full ancestry.
   Journal diagnostics report `entity_names.id`; other diagnostics report the inspected table's `id`.

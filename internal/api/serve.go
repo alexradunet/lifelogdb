@@ -107,7 +107,7 @@ func newServer(s *core.Store) *server {
 	m := http.NewServeMux()
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{
-		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "create-person": h.createPerson,
+		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "plan": h.plan, "tick": h.tick, "carry": h.carry, "create-person": h.createPerson,
 		"create-place": h.createPlace, "add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote,
 		"revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
 		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,

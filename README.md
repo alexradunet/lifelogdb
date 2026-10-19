@@ -135,6 +135,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   People and Places list each name with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
   else the icon of a person.
+- **Plan lines** ([plan 136](docs/plans/136-plan-lines-and-period-pages.md), [D29](docs/decisions/D29-plan-lines.md)).
+  A plan is a list item of a page body whose text starts with a box, with tokens at its end:
+  `- [ ] Pay rent due:2026-11-01 every:month`. The file has no table for it. The actions `plan`, `tick` and `carry` write
+  the line, and a day, a month, a year and a period page (`2026-W43`, `2026-Q4`) list the lines they hold
+  ([the grammar](docs/contract/plan-lines.md)).
 - **A cover for every page** ([plan 127](docs/plans/127-a-cover-for-every-page.md)). A page's cover is the first live
   file with a preview that its body embeds (`![[Ana.jpg]]`); a day page's first photo is its cover with no action. A
   file page has none: its own picture stands for it. The browser draws the cover as a square at the head of the
@@ -434,6 +439,9 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
+| `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
+| `tick` | `POST /pages/{id}/tick` | `do tick` | `tick` | a plan line where it is drawn: Done, Dropped |
+| `carry` | `POST /pages/{id}/carry` | `do carry` | `carry` | a plan line where it is drawn: Carry |
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
 | `create-place` | `POST /places` | `do create-place` | `create_place` | Browse, Places: New place |
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |

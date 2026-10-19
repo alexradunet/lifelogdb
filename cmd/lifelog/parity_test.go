@@ -104,8 +104,18 @@ func openCLI(t *testing.T, _ http.Handler, path, source string) surfaceCall {
 	}
 }
 
+// onlyKeys says that every key of args is one of keys.
+func onlyKeys(args map[string]string, keys ...string) bool {
+	for k := range args {
+		if !slices.Contains(keys, k) {
+			return false
+		}
+	}
+	return true
+}
+
 // cliLine is the command line of an action: the shortcut of the CLI when one takes these fields (page TITLE, rename
-// ID TITLE, day [DAY]), else do ACTION field=value, with the fields in the order of their names.
+// ID TITLE, day [DAY], plan TEXT with its flags), else do ACTION field=value, with the fields in the order of their names.
 func cliLine(action string, args map[string]string) []string {
 	day, onlyDay := args["day"]
 	switch {
@@ -113,6 +123,14 @@ func cliLine(action string, args map[string]string) []string {
 		return []string{"page", args["title"]}
 	case action == "rename" && len(args) == 2 && args["id"] != "" && args["title"] != "":
 		return []string{"rename", args["id"], args["title"]}
+	case action == "plan" && args["text"] != "" && args["from_done"] == "" && onlyKeys(args, "page", "text", "on", "due", "every"):
+		line := []string{"plan", args["text"]}
+		for _, k := range []string{"page", "on", "due", "every"} {
+			if args[k] != "" {
+				line = append(line, "--"+k, args[k])
+			}
+		}
+		return line
 	case action == "open-day" && len(args) == 0:
 		return []string{"day"}
 	case action == "open-day" && len(args) == 1 && onlyDay:
@@ -272,6 +290,12 @@ func parityRows() []parityRow {
 		{"file-pages", rowFilePages},
 		{"file-pages with from", rowUnfilePages},
 		{"file-pages with a day page", rowFileADayPage},
+		{"plan on today makes the day page", rowPlanToday},
+		{"plan on a week makes the week page", rowPlanWeek},
+		{"tick with every appends the next line", rowTickRepeats},
+		{"tick of a changed line", rowTickStale},
+		{"carry to a day plans the copy on it", rowCarryToADay},
+		{"plan on a week the year does not have", rowPlanWeek53},
 	}
 	for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 		rows = append(rows, parityRow{"rename a " + kind, func(x *parityRun) { rowRename(x, kind) }})
@@ -996,4 +1020,100 @@ func rowSearchLimit(x *parityRun) {
 	if e := x.ok("search", map[string]string{}); e.Class[0] != "search" { // an empty q is the search page
 		x.t.Errorf("search with no q: %v", e.Class)
 	}
+}
+
+// planned makes a plan line with the action and returns the page id and the line number of its result.
+func (x *parityRun) planned(args map[string]string) (page, line string) {
+	x.t.Helper()
+	res, _ := x.ok("plan", args).Result.(map[string]any)
+	return fmt.Sprint(res["page_id"]), fmt.Sprint(res["line"])
+}
+
+// body is the body of the page with the title, through the HTTP API.
+func (x *parityRun) body(title string) any {
+	x.t.Helper()
+	e, err := x.page(title)
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	return props(x.t, e)["body"]
+}
+
+// plan on the word today makes the day page of the server's today and adds the line to it (D29). An agent plans as
+// the owner does: no plan action is the owner's alone.
+func rowPlanToday(x *parityRun) {
+	e := x.ok("plan", map[string]string{"page": "today", "text": "Call the bank", "due": "2031-05-24"})
+	if p := props(x.t, e); e.Title != parityToday || p["is_day_page"] != true || p["body"] != "- [ ] Call the bank due:2031-05-24" {
+		x.t.Errorf("plan on today: %q %v", e.Title, p)
+	}
+	if res, _ := e.Result.(map[string]any); fmt.Sprint(res["line"]) != "1" || res["written"] != "- [ ] Call the bank due:2031-05-24" {
+		x.t.Errorf("the result of plan: %v", e.Result)
+	}
+	// An open line shows from its day on: not on today, which is before 2031-05-24, and on that day.
+	for day, n := range map[string]int{parityToday: 0, "2031-05-24": 1} {
+		planned, _ := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/"+day)))["planned"].([]any)
+		if len(planned) != n {
+			x.t.Errorf("planned on %s: %v, want %d lines", day, planned, n)
+		}
+	}
+}
+
+// plan on a week key makes the week page, titled with the key; the page is a period page, and its lines hold the line.
+func rowPlanWeek(x *parityRun) {
+	e := x.ok("plan", map[string]string{"page": "2031-W21", "text": "Review the week", "on": "2031-05-20"})
+	p := props(x.t, e)
+	if e.Title != "2031-W21" || p["period"] != "week" || p["body"] != "- [ ] Review the week on:2031-05-20" {
+		x.t.Errorf("plan on 2031-W21: %q %v", e.Title, p)
+	}
+	if lines, _ := p["lines"].([]any); len(lines) != 1 {
+		x.t.Errorf("the lines of the week page: %v", p["lines"])
+	}
+}
+
+// tick with outcome done on a line that repeats adds the next line in the same write. A repeat from 31 January keeps
+// the last day of February and the day 31 in its every (docs/contract/plan-lines.md).
+func rowTickRepeats(x *parityRun) {
+	page, line := x.planned(map[string]string{"page": "Rent", "text": "Pay rent", "due": "2031-01-31", "every": "month"})
+	e := x.ok("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "done", "done": "2031-01-31"})
+	res, _ := e.Result.(map[string]any)
+	next := "- [ ] Pay rent due:2031-02-28 every:month-31"
+	if res["appended"] != next || fmt.Sprint(res["appended_line"]) != "3" {
+		x.t.Errorf("the result of tick: %v", res)
+	}
+	if want := "- [x] Pay rent due:2031-01-31 every:month done:2031-01-31\n\n" + next; x.body("Rent") != want {
+		x.t.Errorf("Rent after the tick: %q, want %q", x.body("Rent"), want)
+	}
+	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Pay rent", "outcome": "done"}, http.StatusConflict, "stale_version")
+}
+
+// tick with a text that is not the text of the line is 409 stale_version, and writes nothing.
+func rowTickStale(x *parityRun) {
+	page, line := x.planned(map[string]string{"page": "Errands", "text": "Buy bread"})
+	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Buy milk", "outcome": "done"}, http.StatusConflict, "stale_version")
+	x.refused("tick", map[string]string{"id": page, "line": "0", "text": "Buy bread", "outcome": "done"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("tick", map[string]string{"id": page, "line": line, "text": "Buy bread", "outcome": "later"}, http.StatusUnprocessableEntity, "invalid")
+	if x.body("Errands") != "- [ ] Buy bread" {
+		x.t.Errorf("Errands after the refusals: %q", x.body("Errands"))
+	}
+}
+
+// carry to a day marks the line carried and adds its copy to the day page, planned for that day (on:).
+func rowCarryToADay(x *parityRun) {
+	page, line := x.planned(map[string]string{"page": "Errands", "text": "Buy bread", "due": "2031-05-30"})
+	e := x.ok("carry", map[string]string{"id": page, "line": line, "text": "Buy bread", "to": "2031-05-22"})
+	if res, _ := e.Result.(map[string]any); fmt.Sprint(res["line"]) != line || fmt.Sprint(res["to_line"]) != "1" {
+		x.t.Errorf("the result of carry: %v", res)
+	}
+	if x.body("Errands") != "- [>] Buy bread due:2031-05-30" || x.body("2031-05-22") != "- [ ] Buy bread on:2031-05-22 due:2031-05-30" {
+		x.t.Errorf("after the carry: %q and %q", x.body("Errands"), x.body("2031-05-22"))
+	}
+}
+
+// 2031 has 52 ISO weeks: the file refuses week 53, by the name of its constraint (D30), and writes nothing.
+func rowPlanWeek53(x *parityRun) {
+	msg := x.refused("plan", map[string]string{"page": "2031-W53", "text": "Never"}, http.StatusUnprocessableEntity, "invalid")
+	if !strings.Contains(msg, "entities_period_exists") {
+		x.t.Errorf("plan on 2031-W53: %q, want the CHECK entities_period_exists", msg)
+	}
+	x.absent("2031-W53")
 }

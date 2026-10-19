@@ -21,8 +21,10 @@
     `part-of` link from or to a period page. An `at` link stays day-only ([D16](D16-places.md)).
   - `lifelog_meta.periods` and the comment in the `entities` statement say the same in the file.
   - A plain page with a period-shaped title in a file built before this rule is adopted at the rebuild, since there is no
-    migration before the freeze ([D13](D13-migrations-and-freeze.md)). A page of that title with an alias or a `part-of` link is refused,
-    and the owner renames it.
+    migration before the freeze ([D13](D13-migrations-and-freeze.md)). In such a file the page keeps its alias and its links, since a period page is never
+    renamed (`entities_day_identity`) and an alias is never deleted (`entity_names_no_delete`). The owner tombstones it and writes
+    the period page anew, with a new title for the old content if it must stay. At a rebuild from imports the alias insert is
+    refused, and the importer skips it.
 - **Alternatives.**
   - A `periods` table: rejected. It is a second home for a page, with its own id, name and body.
   - A plain page the owner titles `2026 Q4`: rejected. The writer cannot find it by its key, and the calendar cannot draw it.

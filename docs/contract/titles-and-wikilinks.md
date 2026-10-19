@@ -212,3 +212,6 @@ its title (a pure-ASCII title). Capture appends to today's page and creates it o
 ([capture](../cookbook/capture.md)); `[[2026-09-29]]` reaches it like any other title, and a link that names a day before anything
 was written that day creates that day's page, empty ([save a body](../cookbook/save-a-body.md)). A day page is an ordinary page in every
 other way: its `[[links]]` say who the day was with and where ([the days that name someone](../cookbook/days-that-name.md)).
+A period key (`2026-W43`, `2026-10`, `2026-Q4`, `2026`) resolves without regard to case, so `[[2026-w43]]` reaches the
+week page. The title of a period page is its key in upper case, and a save that makes the page spells it so
+([D30](../decisions/D30-period-pages.md)).

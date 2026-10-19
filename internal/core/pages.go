@@ -234,6 +234,7 @@ type Page struct {
 	Type      string  `json:"entity_type"`
 	Title     string  `json:"title"`
 	Day       string  `json:"day,omitempty"`
+	Period    string  `json:"period,omitempty"` // year, month, quarter or week for a period page (D30), read from entities.period
 	Body      string  `json:"body"`
 	CreatedAt string  `json:"created_at"`
 	Version   string  `json:"version"`
@@ -255,18 +256,18 @@ type Person struct {
 // PageByID reads a page, tombstoned or not (the caller decides what a tombstone shows).
 func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 	p := &Page{ID: id}
-	var day, deleted sql.NullString
+	var day, deleted, period sql.NullString
 	err := s.DB.R.QueryRowContext(ctx, `
-		SELECT e.entity_type, n.title, e.day, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at, e.is_journal
+		SELECT e.entity_type, n.title, e.day, e.period, e.body, e.created_at, CAST(e.revision AS TEXT), e.deleted_at, e.is_journal
 		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).
-		Scan(&p.Type, &p.Title, &day, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.IsDayPage)
+		Scan(&p.Type, &p.Title, &day, &period, &p.Body, &p.CreatedAt, &p.Version, &deleted, &p.IsDayPage)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, NotFound("no page %d", id)
 	}
 	if err != nil {
 		return nil, err
 	}
-	p.Day, p.DeletedAt = day.String, deleted.String
+	p.Day, p.Period, p.DeletedAt = day.String, period.String, deleted.String
 	if p.Type == "person" {
 		var b, d sql.NullString
 		p.Person = &Person{}

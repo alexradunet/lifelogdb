@@ -163,7 +163,7 @@ func TestARequestWithoutARequiredFieldIsRefusedAndWritesNothing(t *testing.T) {
 	// A value that a write accepts, for each required field; a field with options takes its first option.
 	valid := map[string]string{"title": "Probe title", "body": "new words", "to": "Required probe",
 		"kind": "part-of", "ids": page, "category": "Probe category", "metric": "weight", "day": "2026-09-02",
-		"value": "70", "name": "Probe metric", "q": "words"}
+		"value": "70", "name": "Probe metric", "q": "words", "page": "Required probe", "text": "Call the bank", "line": "1"}
 	// state is the file in short: the rows of each table, and the sum of the edit revisions, so an edit shows too.
 	state := func() string {
 		return scalar(t, s, `SELECT (SELECT count(*) || ' ' || total(revision) FROM entities) || ' ' ||
@@ -270,7 +270,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Fatal(err)
 	}
 	dayPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page")))
-	if got := names(dayPage); got != "save-body,set-cover,link,unlink,tombstone-pages" {
+	if got := names(dayPage); got != "save-body,plan,tick,carry,set-cover,link,unlink,tombstone-pages" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
 	if !hasOption(apitest.Action(t, dayPage, "link"), "kind", "at") {
@@ -282,7 +282,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
 	// A plain page may start part-of only, which file-pages writes, so it offers no link (D16: at is from a day
 	// page only); with from it takes it out of one.
-	if got := names(ana); got != "save-body,promote,rename,set-cover,file-pages,tombstone-pages" {
+	if got := names(ana); got != "save-body,plan,tick,carry,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
@@ -677,7 +677,7 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := apitest.Must(t)(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,promote,rename,set-cover,file-pages,tombstone-pages" {
+	if current.Title != "Correct" || names(current) != "save-body,plan,tick,carry,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)

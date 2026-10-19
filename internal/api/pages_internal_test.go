@@ -24,6 +24,9 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 	}{
 		{"a plain page", core.Page{ID: 9, Type: "page", Title: "Writing", Version: "4"}, []string{"part-of"}, []string{
 			"save-body /pages/9/body version:4",
+			"plan /pages/plan page:Writing from_done=0|1",
+			"tick /pages/9/tick outcome=done|dropped",
+			"carry /pages/9/carry",
 			"promote /pages/9/promote to=person|place",
 			"rename /pages/9/rename",
 			"set-cover /pages/9/cover",
@@ -33,6 +36,9 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		{"a category page", core.Page{ID: 9, Type: "page", Title: "Writing", Version: "4", In: filedHere}, []string{"part-of"}, []string{
 			"create-page /pages category:Writing",
 			"save-body /pages/9/body version:4",
+			"plan /pages/plan page:Writing from_done=0|1",
+			"tick /pages/9/tick outcome=done|dropped",
+			"carry /pages/9/carry",
 			"promote /pages/9/promote to=person|place",
 			"rename /pages/9/rename",
 			"set-cover /pages/9/cover",
@@ -41,6 +47,9 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a day page", core.Page{ID: 2, Type: "page", Title: "2026-10-16", Day: "2026-10-16", IsDayPage: true, Version: "1"}, []string{"at"}, []string{
 			"save-body /pages/2/body version:1",
+			"plan /pages/plan page:2026-10-16 from_done=0|1",
+			"tick /pages/2/tick outcome=done|dropped",
+			"carry /pages/2/carry",
 			"set-cover /pages/2/cover",
 			"link /pages/2/links kind=at",
 			"unlink /pages/2/unlink kind=at",
@@ -48,6 +57,9 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a person", core.Page{ID: 5, Type: "person", Title: "Ana", Version: "2", Person: &core.Person{Name: "Ana Popescu"}}, []string{"part-of"}, []string{
 			"save-body /pages/5/body version:2",
+			"plan /pages/plan page:Ana from_done=0|1",
+			"tick /pages/5/tick outcome=done|dropped",
+			"carry /pages/5/carry",
 			"rename /pages/5/rename",
 			"set-cover /pages/5/cover",
 			"file-pages /pages/file ids:5 category=Health|Writing move=0|1 move:0",
@@ -55,6 +67,9 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a place", core.Page{ID: 6, Type: "place", Title: "Lisbon", Version: "1"}, []string{"part-of"}, []string{
 			"save-body /pages/6/body version:1",
+			"plan /pages/plan page:Lisbon from_done=0|1",
+			"tick /pages/6/tick outcome=done|dropped",
+			"carry /pages/6/carry",
 			"rename /pages/6/rename",
 			"set-cover /pages/6/cover",
 			"file-pages /pages/file ids:6 category=Health|Writing move=0|1 move:0",
@@ -62,12 +77,18 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a file", core.Page{ID: 15, Type: "file", Title: "Recipe.txt", Version: "1", File: &core.File{MIME: "text/plain"}}, []string{"part-of"}, []string{
 			"save-body /pages/15/body version:1",
+			"plan /pages/plan page:Recipe.txt from_done=0|1",
+			"tick /pages/15/tick outcome=done|dropped",
+			"carry /pages/15/carry",
 			"rename /pages/15/rename",
 			"file-pages /pages/file ids:15 category=Health|Writing move=0|1 move:0",
 			"tombstone-pages /pages/tombstone ids:15",
 		}},
 		{"a metric", core.Page{ID: 7, Type: "metric", Title: "weight", Version: "3"}, []string{"part-of"}, []string{
 			"save-body /pages/7/body version:3",
+			"plan /pages/plan page:weight from_done=0|1",
+			"tick /pages/7/tick outcome=done|dropped",
+			"carry /pages/7/carry",
 			"rename /pages/7/rename",
 			"set-cover /pages/7/cover",
 			"file-pages /pages/file ids:7 category=Health|Writing move=0|1 move:0",

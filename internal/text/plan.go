@@ -3,6 +3,7 @@ package text
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +41,10 @@ type Plan struct {
 
 // Plans lists the plan lines of a body in order.
 func Plans(body string) []Plan {
-	src := []byte(body)
-	starts := lineStarts(src)
+	starts := lineStarts([]byte(body))
+	// goldmark does not end a line at a lone CR. The copy has the same length, so every offset stays valid.
 	var out []Plan
-	_ = ast.Walk(md.Parser().Parse(gtext.NewReader(src)), func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+	_ = ast.Walk(md.Parser().Parse(gtext.NewReader(loneCRToLF(body))), func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		item, ok := n.(*ast.ListItem)
 		if !entering || !ok || inQuote(item) {
 			return ast.WalkContinue, nil
@@ -64,6 +65,17 @@ func Plans(body string) []Plan {
 		return ast.WalkContinue, nil
 	})
 	return out
+}
+
+// loneCRToLF replaces each CR that no LF follows by an LF. The result has the length of the body.
+func loneCRToLF(body string) []byte {
+	b := []byte(body)
+	for i, c := range b {
+		if c == '\r' && (i+1 == len(b) || b[i+1] != '\n') {
+			b[i] = '\n'
+		}
+	}
+	return b
 }
 
 func inQuote(n ast.Node) bool {
@@ -102,12 +114,10 @@ var tokenKeys = map[string]bool{"on": true, "due": true, "done": true, "every": 
 
 // readPlan reads the line that holds the offset at (the start of the content of a list item).
 func readPlan(body string, starts []int, at int) (Plan, bool) {
-	ln := 0
-	for i := len(starts) - 1; i >= 0; i-- {
-		if starts[i] <= at {
-			ln = i
-			break
-		}
+	ln := sort.SearchInts(starts, at+1) - 1
+	// The box starts the item on the line of the bullet. Only blanks before it means the bullet is on an earlier line.
+	if strings.Trim(body[starts[ln]:at], " \t") == "" {
+		return Plan{}, false
 	}
 	eol := strings.IndexAny(body[at:], "\r\n")
 	if eol < 0 {
@@ -379,9 +389,9 @@ func Next(p Plan, done string) (on, due, every string, err error) {
 	if other == "" {
 		return "", nextDay, every, nil
 	}
-	// The other date keeps its distance in days from the primary date.
+	// The other date keeps its distance in days from the primary date. Both are UTC midnights; Duration would saturate.
 	ot, _ := ParseDay(other)
-	shifted, err := inRange(next.AddDate(0, 0, int(ot.Sub(pt).Hours()/24)))
+	shifted, err := inRange(next.AddDate(0, 0, int((ot.Unix()-pt.Unix())/86400)))
 	if err != nil {
 		return "", "", "", err
 	}

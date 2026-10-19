@@ -38,6 +38,9 @@ followed by `.` or `)`), at any depth. The text of its first line starts with a 
   items. A list item inside a block quote is quoted text, at any depth: it is not a plan line.
 - The box is read from the source characters of the item's first line, not from the rendered inline text. A
   continuation line, a second paragraph and a box in the middle of a line are not plan lines.
+- The box starts the first block of the item, on the line of the bullet. An item whose first block is not a
+  paragraph (a heading, a code block, a quote, a list), or whose content starts on the line after the bullet, is not
+  a plan line.
 - A line number is 1-based, counted from the first line of the body. A line break is LF, CRLF or CR, and each counts
   once. Blank lines count.
 - A line with only a box (`- [ ]`) is a plan line with an empty text. A tick or a carry of an empty text is refused.
@@ -49,8 +52,8 @@ followed by `.` or `)`), at any depth. The text of its first line starts with a 
 After the box, the line has words and tokens. A **token** is `key:value`, where the key is one of `on`, `due`,
 `done`, `every` or `from`, and the value is one or more characters that are not a space. The token starts after a
 space (or after the box) and ends before a space (or at the end of the line). Keys are lower case. Any other
-`key:value` is words: `http://x`, `note:x`, `ON:2026-10-22`, `(on:2026-10-22)`, a token in a code span, and `on:`
-with no value.
+`key:value` is words: `http://x`, `note:x`, `ON:2026-10-22`, `(on:2026-10-22)` and `on:`
+with no value. The rule is lexical: a token inside a code span is a token.
 
 The **text** of a line is its source after the box, without its tokens, with each run of spaces (U+0020) made one
 space and with the spaces at both ends removed. It is not normalised: `tick` and `carry` compare it byte by byte
@@ -114,6 +117,8 @@ A tick has an outcome, `done` or `dropped`, and a day (the done day).
    last token of the line (after the words, if the line has no token). Every other character of the line stays.
 3. If the outcome is `done` and the line has `every:`, the writer adds the next line to the end of the body.
    A `dropped` line adds nothing.
+   The writer reads the new body back and finds the appended line as a plan line. If it cannot (the body ended
+   inside an open fence or an HTML block), it refuses the write and changes nothing.
 
 **The next line.** The *primary date* is `due:` if the line has it, else `on:`. The *base* is the primary date.
 With `from:done` the base is the done day. The new primary date is the rule of the repeat applied to the base.
@@ -140,6 +145,9 @@ text the client sends.
    are `on:`, `due:`, `every:` and `from:done` of the line, in that order. If the target is a day page, `on:` is the
    target day. It replaces the `on:` of the line, or it is added. `due:` stays. If the target is not a day page,
    `on:` stays as it is.
+
+The writer reads the new body of the target back and finds the copy as a plan line. If it cannot (the body ended
+inside an open fence or an HTML block), it refuses the write and changes nothing.
 
 ## What enforces it
 
@@ -226,6 +234,10 @@ Every writer must reproduce them. A `body` is a JSON string. `plans` lists the p
   {"body": "- [ ] a\n[ ] b", "plans": [{"line": 1, "box": " ", "text": "a", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}]},
   {"body": "- [ ] a\n\n  [ ] b", "plans": [{"line": 1, "box": " ", "text": "a", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}]},
   {"body": "- [ ] a\r\n- [x] b", "plans": [{"line": 1, "box": " ", "text": "a", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}, {"line": 2, "box": "x", "text": "b", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}]},
+  {"body": "- [ ] a\r- [x] b", "plans": [{"line": 1, "box": " ", "text": "a", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}, {"line": 2, "box": "x", "text": "b", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}]},
+  {"body": "-\n  [ ] b", "plans": []},
+  {"body": "- [ ] a\n  ---", "plans": []},
+  {"body": "- [ ] run `x on:2026-10-22 y` now", "plans": [{"line": 1, "box": " ", "text": "run `x y` now", "on": "2026-10-22", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}]},
   {"body": "Plans for the week.\n\n- [ ] one\n- [x] two done:2026-10-20\n\nSome prose.\n\n- [-] three\n- [ ] bad on:x", "plans": [{"line": 3, "box": " ", "text": "one", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}, {"line": 4, "box": "x", "text": "two", "on": "", "due": "", "done": "2026-10-20", "every": "", "from_done": false, "bad": ""}, {"line": 8, "box": "-", "text": "three", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": ""}, {"line": 9, "box": " ", "text": "bad", "on": "", "due": "", "done": "", "every": "", "from_done": false, "bad": "on:x"}]}
 ]
 ```
@@ -284,6 +296,7 @@ fields of the new line, empty when absent. `"error": true` means that the tick i
   {"on": "", "due": "9999-12-25", "every": "week", "from_done": false, "done": "9999-12-25", "next_on": "", "next_due": "", "next_every": "", "error": true},
   {"on": "", "due": "9999-12-15", "every": "month", "from_done": false, "done": "9999-12-15", "next_on": "", "next_due": "", "next_every": "", "error": true},
   {"on": "", "due": "9999-06-01", "every": "year", "from_done": false, "done": "9999-06-01", "next_on": "", "next_due": "", "next_every": "", "error": true},
+  {"on": "1700-01-01", "due": "2026-10-22", "every": "day", "from_done": false, "done": "2026-10-22", "next_on": "1700-01-02", "next_due": "2026-10-23", "next_every": "day"},
   {"on": "0000-01-01", "due": "2026-10-22", "every": "week", "from_done": true, "done": "0000-01-01", "next_on": "", "next_due": "", "next_every": "", "error": true}
 ]
 ```

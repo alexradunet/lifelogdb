@@ -107,7 +107,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	for _, tool := range listed.Tools {
 		tools[tool.Name] = true
 	}
-	for _, name := range []string{"find", "capture", "get", "save_body", "add_file"} {
+	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry"} {
 		if !tools[name] {
 			t.Errorf("no tool %q", name)
 		}
@@ -123,6 +123,16 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	capture, _ := call(t, ctx, session, "capture", map[string]any{"day": "2031-05-20", "text": text})
 	if capture.Title != "2031-05-20" {
 		t.Errorf("capture answered %q, want the day page 2031-05-20", capture.Title)
+	}
+
+	// plan adds a plan line to a day page (a flag field is a number), and tick closes it: a repeat adds the next line.
+	planned, _ := call(t, ctx, session, "plan", map[string]any{"page": "2031-05-20", "text": "Pay rent", "due": "2031-05-20", "every": "month", "from_done": 1})
+	if want := "Walked by the river, synthetic entry.\n\n- [ ] Pay rent due:2031-05-20 every:month from:done"; props(t, planned)["body"] != want {
+		t.Errorf("plan wrote the body %q, want %q", props(t, planned)["body"], want)
+	}
+	ticked, _ := call(t, ctx, session, "tick", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 3, "text": "Pay rent", "outcome": "done", "done": "2031-05-20"})
+	if res, _ := ticked.Result.(map[string]any); res["appended"] != "- [ ] Pay rent due:2031-06-20 every:month from:done" {
+		t.Errorf("tick answered the result %v, want the next line", ticked.Result)
 	}
 
 	// save_body with a stale version is the error entity stale_version.
