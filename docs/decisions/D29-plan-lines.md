@@ -13,8 +13,10 @@
   an edit of a body.
 - **Alternatives.**
   - *A `tasks` table* (the earlier [D23](D23-no-tasks.md)): two homes for one fact, and the cost [RFC 0007](../rfcs/0007-personal-tasks-and-occurrences.md) showed.
-  - *A derived index table*: a table in the frozen file that stays in its shape for good. Not needed until a
-    measured scan is slow (the reopen trigger is in [non-goals](../architecture/non-goals.md)).
+  - *A derived index table*: a table in the frozen file that stays in its shape for good. Rejected.
+  - *A generated column with a partial index* (`entities.has_box`, `entities_plans`): chosen, after `planned_day`
+    took about 850 ms at lifetime scale. Any filter on `body` reads every body. SQLite keeps the index at every write,
+    it is disposable, and the body is its one home. `planned_day` takes about 49 ms with it.
   - *The emoji grammar of Obsidian Tasks* ([R76](../research/references.md#r76)): the owner chose words, in the
     manner of todo.txt ([R77](../research/references.md#r77)), since a `key:value` token reads without a legend.
   - *An RFC 5545 RRULE* ([D15](D15-recurrence.md)): a broad parser for a small need. The repeats are a short list.

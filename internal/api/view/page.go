@@ -63,6 +63,8 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"rel":           func(r []string) string { return strings.Join(r, " ") },
 	"markdown":      markdown,
 	"markdownCover": markdownCover,
+	"box":           boxHTML,
+	"periodWords":   periodWords,
 	"mark":          mark,
 	"rejected":      rejected,
 	"chart":         chart,
@@ -84,19 +86,14 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"shortDay":      shortDay,
 	"addDays":       addDays,
 	"nameWords":     nameWords,
-	"monthName": func(month string) string { // "2026-10" to "October"
-		if t, ok := siren.MonthOf(month); ok {
-			return t.Format("January")
-		}
-		return month
-	},
-	"crumbs":    func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
-	"add":       func(a, b int) int { return a + b },
-	"segmented": segmented,
-	"checkbox":  checkbox,
-	"alert":     alertOf,
-	"beyond":    beyond,
-	"kindIcon":  kindIcon,
+	"monthName":     monthName,
+	"crumbs":        func(path string) string { return strings.ReplaceAll(path, "/", " › ") }, // "Family/Cousins" to "Family › Cousins"
+	"add":           func(a, b int) int { return a + b },
+	"segmented":     segmented,
+	"checkbox":      checkbox,
+	"alert":         alertOf,
+	"beyond":        beyond,
+	"kindIcon":      kindIcon,
 }).ParseFS(Files, "html/*.html"))
 
 // newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one
@@ -137,7 +134,7 @@ var viewOf = map[string]string{
 	"days": "stream", "search": "search", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
-	"month": "month", "year": "year",
+	"month": "month", "year": "year", "week": "week",
 	"preview": "preview", "cover-choice": "cover-choice",
 }
 
@@ -418,4 +415,12 @@ func group(list any, key string) []bucket {
 		out[i].Items = append(out[i].Items, it)
 	}
 	return out
+}
+
+// monthName is a month in words, "2026-10" to "October".
+func monthName(month string) string {
+	if t, ok := siren.MonthOf(month); ok {
+		return t.Format("January")
+	}
+	return month
 }

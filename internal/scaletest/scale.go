@@ -77,6 +77,8 @@ type Manifest struct {
 	PreviewBytes     int64   `json:"preview_bytes"`
 	PopularBacklinks int     `json:"popular_backlinks"`
 	RareMatches      int     `json:"rare_search_matches"`
+	PlanLines        int     `json:"plan_lines"`
+	OpenOnLastDay    int     `json:"open_plan_lines_on_last_day"`
 }
 
 type Sample struct {
@@ -124,6 +126,7 @@ type fixture struct {
 	backlinks map[string]bool
 	rare      map[string]bool
 	probes    map[string]probePage
+	planDays  []string // the planned day of each plan line written, in order
 }
 
 // Run creates a new throwaway directory, validates known answers, then measures
@@ -313,6 +316,11 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 					f.manifest.RareMatches++
 					f.rare[date] = true
 				}
+				if day%7 == 0 { // every seventh day page holds an open line planned on that day
+					line := "- [ ] " + planWords(rng) + " on:" + date
+					body += "\n\n" + line
+					f.planDays = append(f.planDays, date)
+				}
 				if _, _, _, e := tx.CaptureWithKey("", date, body, nil); e != nil {
 					return e
 				}
@@ -400,6 +408,11 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 			for n := start; n < min(start+50, p.Notes); n++ {
 				body := payload(fmt.Sprintf("Synthetic note %d café Ελληνικά [[Scale Popular]]. ", n), []int{256, 1024, 4096, 16384, 65536}[n%5]*p.TextMultiplier)
 				date := anchor.AddDate(0, 0, n%p.Days).Format(time.DateOnly)
+				if n%10 == 0 { // every tenth note holds an open line due on a day of the range
+					due := anchor.AddDate(0, 0, n*7919%p.Days).Format(time.DateOnly)
+					body += "\n\n- [ ] " + planWords(rng) + " due:" + due
+					f.planDays = append(f.planDays, due)
+				}
 				if _, _, e := tx.CreatePage(fmt.Sprintf("Scale Note %06d", n), body, date); e != nil {
 					return e
 				}
@@ -427,8 +440,16 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 			return x.day < y.day
 		})
 	}
+	f.manifest.PlanLines = len(f.planDays)
+	f.manifest.OpenOnLastDay = len(f.planDays) // every planned day is in the range, so none is after the last day
 	f.manifest.LogicalSHA256 = fmt.Sprintf("%x", digest.Sum(nil))
 	return f, nil
+}
+
+// planWords is the synthetic text of a plan line: two words from a fixed list, drawn with the seeded generator.
+func planWords(rng *rand.Rand) string {
+	words := []string{"call", "write", "buy", "fix", "read", "visit", "plan", "send"}
+	return words[rng.Intn(len(words))] + " " + words[rng.Intn(len(words))]
 }
 
 func hashText(s string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(s))) }
@@ -517,6 +538,14 @@ func verify(ctx context.Context, s *core.Store, f *fixture) error {
 			return fmt.Errorf("duplicate popular backlink %q", edge.Title)
 		}
 		seenBacklinks[edge.Title] = true
+	}
+	last := anchor.AddDate(0, 0, f.manifest.Profile.Days-1).Format(time.DateOnly)
+	open, more, err := s.Planned(ctx, last, f.manifest.PlanLines+1)
+	if err != nil {
+		return err
+	}
+	if len(open) != f.manifest.OpenOnLastDay || more != 0 {
+		return fmt.Errorf("open plan lines on %s got %d (+%d more) want %d", last, len(open), more, f.manifest.OpenOnLastDay)
 	}
 	ic, err := s.Integrity(ctx)
 	if err != nil {
@@ -682,6 +711,27 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 			if c.Day > s.Today() || j > 0 && c.Day >= cards[j-1].Day {
 				return fmt.Errorf("the stream at offset %d is out of order at %s", middle, c.Day)
 			}
+		}
+		last := anchor.AddDate(0, 0, f.manifest.Profile.Days-1)
+		lastDay, monday := last.Format(time.DateOnly), last.AddDate(0, 0, -6).Format(time.DateOnly)
+		var planned, week []core.PlanItem
+		if err := record(report, "planned_day", func() error { var e error; planned, _, e = s.Planned(ctx, lastDay, 200); return e }); err != nil {
+			return err
+		}
+		if want := min(f.manifest.OpenOnLastDay, 200); len(planned) != want {
+			return fmt.Errorf("planned day got %d lines want %d", len(planned), want)
+		}
+		if err := record(report, "plan_lines_week", func() error { var e error; week, e = s.PlanLines(ctx, monday, lastDay); return e }); err != nil {
+			return err
+		}
+		inWeek := 0
+		for _, d := range f.planDays {
+			if d >= monday && d <= lastDay {
+				inWeek++
+			}
+		}
+		if len(week) != inWeek {
+			return fmt.Errorf("plan lines of the last week got %d want %d", len(week), inWeek)
 		}
 		var hits []core.Hit
 		if err := record(report, "search_rare", func() error {

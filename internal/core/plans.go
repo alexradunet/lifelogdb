@@ -26,12 +26,14 @@ type PlanItem struct {
 // maxWindowDays is the longest window of PlanLines.
 const maxWindowDays = 366
 
-// pagesWithBoxes reads every live page whose body can hold a plan line: the box starts with "[". The parser then
-// reads the bodies. The title is the preferred name.
+// pagesWithBoxes reads every live page whose body can hold a plan line. has_box is the one home of that test, kept by
+// SQLite and read through the index entities_plans: a filter on body itself reads every body (380 ms for the five
+// boxes on the lifetime fixture, 1,600 ms). The filter is a superset, so the parser still reads the bodies. The title
+// is the preferred name.
 const pagesWithBoxes = `
 	SELECT e.id, n.title, e.is_journal, coalesce(e.period, ''), e.body
 	  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
-	 WHERE e.deleted_at IS NULL AND instr(e.body, '[') > 0`
+	 WHERE e.has_box AND e.deleted_at IS NULL`
 
 // planItems lists the lines that keep accepts, with the day to sort them by, in the order of that day, title and line.
 // A malformed line has no day, so keep sees it with Bad set and refuses it.

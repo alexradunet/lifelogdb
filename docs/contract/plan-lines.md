@@ -156,6 +156,11 @@ grammar, and the suites check the writer against the vectors below. This is the 
 ([D19](../decisions/D19-wikilink-save-contract.md)): the body is the truth, and what is read from it is derived and
 disposable. A line has no id. A tick or a carry names the line by its number and its text, so a body edited after
 the reader read it makes the tick stale. A tick is a body edit, as a capture is ([D12](../decisions/D12-no-revision-tables.md)).
+The file keeps one derived index, so that a reader need not read every body: the generated column
+`entities.has_box` is true when the body holds one of the five boxes, and the partial index `entities_plans` lists the
+live pages where it is true. The filter is a superset: a `[ ]` in prose counts too, so a reader still parses the
+bodies it finds. A writer in another language may ignore the index or use it. It is disposable, and the body stays
+the only home of the words.
 The decision and its price are in [D29](../decisions/D29-plan-lines.md).
 
 ## Test vectors

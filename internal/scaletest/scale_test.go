@@ -14,8 +14,9 @@ func TestSmallWorkloadKnownAnswersAndReproducibility(t *testing.T) {
 	}
 	m := first.Manifest
 	// 14*4 roots, corrections at 0/17/34/51 and retractions at 0/31.
+	// Plan lines: day pages 0 and 7 (every seventh day, counted from day 0) and note 0 (every tenth note): 3.
 	// Twelve journal pages and eight notes each name the shared topic.
-	if m.Roots != 56 || m.Corrections != 4 || m.Retractions != 2 || m.CurrentReadings != 54 || m.JournalPages != 12 || m.Files != 14 || m.PopularBacklinks != 20 || m.RareMatches != 2 || m.PreviewBytes != 0 {
+	if m.Roots != 56 || m.Corrections != 4 || m.Retractions != 2 || m.CurrentReadings != 54 || m.JournalPages != 12 || m.Files != 14 || m.PopularBacklinks != 20 || m.RareMatches != 2 || m.PreviewBytes != 0 || m.PlanLines != 3 || m.OpenOnLastDay != 3 {
 		t.Fatalf("small known answers: %+v", m)
 	}
 	if _, err := os.Stat(first.Directory); !os.IsNotExist(err) {
@@ -28,7 +29,7 @@ func TestSmallWorkloadKnownAnswersAndReproducibility(t *testing.T) {
 	if first.Manifest != second.Manifest {
 		t.Fatalf("same seed changed logical fixture: %+v / %+v", first.Manifest, second.Manifest)
 	}
-	if len(first.Operations) != 10 {
+	if len(first.Operations) != 12 {
 		t.Fatalf("workflow measurements: %+v", first.Operations)
 	}
 }

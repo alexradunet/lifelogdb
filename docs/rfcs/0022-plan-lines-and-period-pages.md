@@ -60,7 +60,25 @@ derived index (option B), and the grammar stays as it is.
 - The mutants of the period DDL, named by plan 136: both CHECKs, the `w` pattern, the three widened triggers, the
   `part-of` clause, and `at` left day-only.
 - The document and diagram suites for the new page, the diagrams and the cookbook recipe.
-- No new SQLite behaviour is claimed here beyond the date probes that the suites of plan 136 execute.
+- No new SQLite behaviour is claimed here beyond the date probes that the suites of plan 136 execute, and one more:
+  a partial index may name a VIRTUAL generated column, and a body write moves a row in and out of it (the
+  `plan-lines-index` suite).
+- Measured on the lifetime fixture (74,450 live rows, 82 MB of bodies, 3,009 plan lines). Any filter on `body` reads
+  every body, so the reopen trigger of plan 136 fired. The owner chose no table. The generated column `has_box` with
+  the partial index `entities_plans` is the smallest derived index.
+
+  | read | before | after |
+  |---|---|---|
+  | `day_view` | 0.6 ms | 0.6 ms |
+  | `pagesWithBoxes` SQL, `instr(body,'[')` (19,654 rows) | 380 ms | not used |
+  | the same with the five box literals (3,009 rows) | 1,600 ms | not used |
+  | `planned_day` (median of 3) | 854 ms | 49 ms |
+  | `plan_lines_week` (median of 3) | 844 ms | 53 ms |
+  | `capture_commit` (median of 3) | 1.38 ms | 1.18 ms |
+  | `save_commit` (median of 3) | 0.53 ms | 0.63 ms |
+
+  The index costs no measurable time on a body write (the differences are inside the spread of 3 samples). The 49 ms
+  that remain are the parse of the 3,009 pages with a box and the sort.
 
 ## Outcome
 

@@ -8,11 +8,12 @@
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head"><div class="what">
-<span class="kind">{{if $p.is_day_page}}day page{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
+<span class="kind">{{if $p.is_day_page}}day page{{else if $p.period}}{{periodWords $p.period}}{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
 <h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
 {{if not $p.deleted_at}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
 {{if $p.is_day_page}}<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
 {{with .Link "series"}}<p class="sub"><a href="{{.}}">Its readings</a></p>{{end}}
+{{with $.PeriodViews}}<p class="sub">{{range .}}<a href="{{.Href}}">{{.Title}}</a> {{end}}</p>{{end}}
 </div></header>
 
 {{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: restore it to bring it back.</p>
@@ -24,9 +25,13 @@
 {{if not $p.body}}<p class="empty">Nothing written here yet.</p>{{end}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{if $p.body}}<section class="page-body" aria-label="The page">
-<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed}}</div>
+<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed ($.TickHref $p.id) $.Here}}</div>
 {{template "rejected-names" $p.body}}
 </section>{{end}}
+{{if $p.period}}{{if not $p.deleted_at}}<section class="group plan" aria-label="Planned">
+<div class="panel-head"><h2>Planned</h2>{{template "boxed" (form (.Action "plan") "page" .Title "autofocus" "text" "more" "on,due,every,from_done" "back" $.Here)}}</div>
+{{if $p.lines}}{{template "planlist" (dict "v" $ "lines" $p.lines "own" .Title "to" (addDays $.Today 1))}}{{else}}<p class="empty">Nothing is planned in this period.</p>{{end}}
+</section>{{end}}{{end}}
 {{with $.Filed}}<section class="group filed" aria-label="Filed here">
 <div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2><a href="/browse?in={{$.Title}}">Open in Browse</a>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
 <ul class="plain rows">{{range .Subs}}<li><a class="entry" href="{{.Href}}"><span class="first">{{.Title}}</span><span class="meta"><span class="badge">category</span></span></a></li>{{end}}{{range .Items}}<li><a class="entry" href="{{.Href}}"><span class="first">{{$.Date .Title}}</span><span class="meta">{{range .Class}}{{if ne . "page"}}<span class="badge">{{.}}</span>{{end}}{{end}}</span></a></li>{{end}}</ul>
@@ -48,9 +53,10 @@
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
 <div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if or (.Action "rename") (.Action "promote") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
+{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
+{{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "more" "on,due,every,from_done" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}</div></section>{{end}}

@@ -73,3 +73,25 @@ func planLines(s *S) {
 		s.K("every printed next-day vector reproduces", ok, fmt.Sprintf("%+v: got %q %q %q, %v", v, on, due, every, err))
 	}
 }
+
+// planLinesIndex probes the derived index of contract/plan-lines: the generated column has_box and the partial index
+// entities_plans. The index is a superset filter that follows every body write.
+func planLinesIndex(s *S) {
+	c := s.fresh()
+	const q = "SELECT e.id FROM entities e WHERE e.has_box AND e.deleted_at IS NULL"
+	plan := c.plan(q)
+	s.K("the plans query reads the pages through entities_plans", strings.Contains(plan, "entities_plans"), plan)
+	count := func() int64 { return c.n("SELECT count(*) FROM entities WHERE has_box AND deleted_at IS NULL") }
+	id := c.pageW("Errands", nil, "no box here, only [a link] and []")
+	s.K("a page without a box is not in the index", count() == 0)
+	for _, box := range []string{"[ ]", "[x]", "[X]", "[-]", "[>]"} {
+		c.must("UPDATE entities SET body = ? WHERE id = ?", "- "+box+" Call the bank", id)
+		s.K("a body with the box "+box+" enters the index", count() == 1, box)
+		c.must("UPDATE entities SET body = 'plain' WHERE id = ?", id)
+		s.K("a body edited to plain text leaves the index after "+box, count() == 0, box)
+	}
+	c.must("UPDATE entities SET body = 'a [ ] in prose' WHERE id = ?", id)
+	s.K("a box in prose counts: the index is a superset", count() == 1)
+	c.must("UPDATE entities SET deleted_at = "+NOW+" WHERE id = ?", id)
+	s.K("a tombstoned page leaves the index", count() == 0)
+}

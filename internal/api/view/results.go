@@ -120,6 +120,24 @@ func resultSentences(m map[string]any, c clock) []resultLine {
 		say("Shown on its day page.")
 	}
 
+	// plan, tick and carry (docs/plans/136-plan-lines-and-period-pages.md). The line is the number in the body.
+	line, hasLine := take("line")
+	if _, ok := take("written"); ok {
+		pageID, _ := take("page_id")
+		say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
+	} else if outcome, ok := take("outcome"); ok {
+		say("%s.", map[bool]string{true: "Done", false: "Dropped"}[outcome == "done"])
+		if next, ok := take("appended_line"); ok {
+			delete(left, "appended")
+			say("The next one is line %s.", Num(next))
+		}
+	} else if to, ok := take("to_id"); ok {
+		toLine, _ := take("to_line")
+		say(`Carried to <a href="/pages/%s">its page</a>, line %s.`, Num(to), Num(toLine))
+	} else if hasLine {
+		left["line"] = line
+	}
+
 	// capture sent again (D28).
 	if b, _ := take("already"); b == true {
 		say("Already added. Nothing changed.")

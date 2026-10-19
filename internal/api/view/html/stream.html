@@ -33,6 +33,7 @@
      the page is marked, then Today. It takes v (the view) and current (days, month or year). */}}
 {{define "zoom"}}{{$v := .v}}{{$c := .current}}<nav class="kinds chips zoom" aria-label="Zoom">
 {{- with $v.Link "days"}}<a href="{{.}}"{{if eq $c "days"}} aria-current="page"{{end}}>Days</a>{{end}}
+{{- with $v.Link "week"}}<a href="{{.}}"{{if eq $c "week"}} aria-current="page"{{end}}>Week</a>{{end}}
 {{- with $v.Link "month"}}<a href="{{.}}"{{if eq $c "month"}} aria-current="page"{{end}}>Month</a>{{end}}
 {{- with $v.Link "year"}}<a href="{{.}}"{{if eq $c "year"}} aria-current="page"{{end}}>Year</a>{{end}}
 <a href="/days/today">Today</a></nav>{{end}}

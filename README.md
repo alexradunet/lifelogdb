@@ -467,7 +467,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `rebuild-search` | `POST /search/rebuild` | `do rebuild-search` | none, the owner's | Integrity checks: Rebuild search |
 | `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks: Resync links |
 
-The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/months/{m}`,
+The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/weeks/{week}`, `/months/{m}`,
 `/years/{y}`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
 which the CLI's `get` and the MCP tool `get` read, or the browser's presentation (`/render`, the fonts, the manifest,
 the icon and the pictures), which the CLI and the MCP server do not carry.

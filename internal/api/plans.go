@@ -112,6 +112,12 @@ func planAction(page string) siren.Action {
 	return action("plan", nil, map[string]any{"page": page})
 }
 
+// lineActions are the tick and the carry of a view that lists lines of any page (the day, a week, a month, a year). They
+// stay templated: the line names its page, and the browser fills the address (view.LineAction).
+func lineActions() []siren.Action {
+	return []siren.Action{templated(specOf("tick")), templated(specOf("carry"))}
+}
+
 // lineNumber is the field line: a whole number of 1 or more.
 func lineNumber(v url.Values) (int, error) {
 	f, err := strconv.ParseFloat(v.Get("line"), 64)

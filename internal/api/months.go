@@ -46,8 +46,7 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	name := first.Format(layoutMonth)
 	prev, next := first.AddDate(0, -1, 0), first.AddDate(0, 1, 0)
 	e := &siren.Entity{Class: []string{"month"}, Title: name, Links: []siren.Link{link("self", siren.MonthHref(first), name)},
-		Actions: []siren.Action{planAction(first.Format("2006-01"))}}
-	// A month has a page when its first day is a day.
+		Actions: append([]siren.Action{planAction(first.Format("2006-01"))}, lineActions()...)}
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{prev, siren.MonthHref(prev), prev.Format(layoutMonth)},
 		neighbour{next, siren.MonthHref(next), next.Format(layoutMonth)})...)
@@ -56,7 +55,11 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
-	e.Properties = map[string]any{"month": first.Format("2006-01"), "today": today, "days": days, "lines": lines}
+	props := map[string]any{"month": first.Format("2006-01"), "today": today, "days": days, "lines": lines}
+	if err := h.withPeriodPage(ctx, e, props, first.Format("2006-01")); err != nil {
+		return nil, err
+	}
+	e.Properties = props
 	return e, nil
 }
 
@@ -65,11 +68,15 @@ func (h *server) month(r *http.Request) (*siren.Entity, error) {
 func zoomLinks(anchor time.Time) []siren.Link {
 	out := []siren.Link{link("days", "/days", "Days")}
 	out = append(out, link("month", siren.MonthHref(anchor), anchor.Format(layoutMonth)))
+	out = append(out, link("week", weekHref(mondayOf(anchor)), weekName(mondayOf(anchor))))
 	if siren.IsYear(anchor.Year()) {
 		out = append(out, link("year", siren.YearHref(anchor.Year()), strconv.Itoa(anchor.Year())))
 	}
 	return out
 }
+
+// mondayOf is the Monday of the ISO week that holds t.
+func mondayOf(t time.Time) time.Time { return t.AddDate(0, 0, -((int(t.Weekday()) + 6) % 7)) }
 
 // anchorIn is the day a period's zoom is anchored on: today when it is inside the period, else its first day.
 func anchorIn(today string, first, last time.Time) time.Time {

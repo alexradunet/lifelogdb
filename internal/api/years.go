@@ -21,6 +21,12 @@ type yearMonth struct {
 	Days    []writtenDay `json:"days"`
 }
 
+// yearQuarter is a quarter of a year: its key, and the id of its page, 0 when it has none.
+type yearQuarter struct {
+	Key    string `json:"key"`
+	PageID int64  `json:"page_id,omitempty"`
+}
+
 var yearPattern = regexp.MustCompile(`^\d{4}$`)
 
 func (h *server) year(r *http.Request) (*siren.Entity, error) {
@@ -48,7 +54,7 @@ func (h *server) year(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &siren.Entity{Class: []string{"year"}, Title: s, Actions: []siren.Action{planAction(s)}}
+	e := &siren.Entity{Class: []string{"year"}, Title: s, Actions: append([]siren.Action{planAction(s)}, lineActions()...)}
 	months := []yearMonth{}
 	days := writtenDays(entries, first, last) // the days of the year, built once: each month takes its own
 	for m := first; m.Year() == year; m = m.AddDate(0, 1, 0) {
@@ -72,6 +78,20 @@ func (h *server) year(r *http.Request) (*siren.Entity, error) {
 	}
 	e.Links = append(e.Links, zoomLinks(anchorIn(h.s.Today(), first, last))...)
 	e.Links = append(e.Links, link("index", "/", "Home"))
-	e.Properties = map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months, "lines": lines}
+	props := map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months, "lines": lines}
+	if err := h.withPeriodPage(ctx, e, props, s); err != nil {
+		return nil, err
+	}
+	// The four quarters have no view of their own: each is a link to its page, or to the plan form that makes it.
+	quarters := make([]yearQuarter, 4)
+	for i := range quarters {
+		key := fmt.Sprintf("%s-Q%d", s, i+1)
+		quarters[i] = yearQuarter{Key: key}
+		if quarters[i].PageID, err = h.s.PageID(ctx, key); err != nil {
+			return nil, err
+		}
+	}
+	props["quarters"] = quarters
+	e.Properties = props
 	return e, nil
 }

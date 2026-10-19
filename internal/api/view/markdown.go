@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -21,15 +22,20 @@ import (
 // not this rendering, is what the save contract wrote.
 var bodyMD = goldmark.New()
 
-func markdown(src string) template.HTML { return markdownCover(src, "") }
+func markdown(src string) template.HTML { return markdownCover(src, "", "", "") }
 
 // markdownCover is markdown with the page's cover drawn apart, above the body (docs/plans/127-a-cover-for-every-page.md):
 // the first embed that names the cover (embed, its title as the body writes it) is left out, and so is its paragraph
 // when nothing else is in it. An empty embed leaves out nothing.
-func markdownCover(src, embed string) template.HTML {
+//
+// tickHref is the address of the tick action of the page the body belongs to, and back the page the browser returns to
+// after it: they turn the open plan lines of the body into boxes that tick. An empty tickHref draws every box without
+// a form (a deleted page, the preview, a search snippet, a card of the stream).
+func markdownCover(src, embed, tickHref, back string) template.HTML {
 	var b bytes.Buffer
 	source := []byte(src)
 	doc := bodyMD.Parser().Parse(gtext.NewReader(source))
+	forms := enhancePlans(doc, source, tickHref, back)
 	enhanceText(doc, source)
 	if embed != "" {
 		leaveOutEmbed(doc, source, text.TitleKey(embed))
@@ -37,7 +43,134 @@ func markdownCover(src, embed string) template.HTML {
 	if err := bodyMD.Renderer().Render(&b, source, doc); err != nil {
 		return template.HTML("<pre>" + template.HTMLEscapeString(src) + "</pre>")
 	}
+	if forms != "" {
+		b.WriteString("<div hidden>" + forms + "</div>")
+	}
 	return template.HTML(b.String())
+}
+
+// A plan line in a body (docs/contract/plan-lines.md, which is the one home of the grammar; text.Plans reads it). Its
+// box becomes a glyph, and the tokens (on:, due:, done:, every:, from:) become small words, so the words read first.
+// The box of an open line is a button of a tick form. The form cannot stand inside the item: in a loose list the item
+// holds a paragraph, and a form would end it. So the forms stand together after the body, and each button names its
+// form (form="tick-N", N the line).
+var boxGlyph = map[byte][2]string{' ': {"open", "\u2610"}, 'x': {"done", "\u2611"}, '-': {"dropped", "\u2612"}, '>': {"carried", "\u25b7"}}
+
+// span is a range of the source that is drawn as html instead.
+type span struct {
+	start, end int
+	html       string
+}
+
+// enhancePlans replaces the box and the tokens of each plan line in doc, and returns the tick forms that the open
+// lines need ("" when tickHref is empty or no line ticks).
+func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
+	plans := text.Plans(string(source))
+	if len(plans) == 0 {
+		return ""
+	}
+	byBox := make(map[int]text.Plan, len(plans))
+	for _, p := range plans {
+		byBox[p.BoxAt] = p
+	}
+	esc := template.HTMLEscapeString
+	var forms strings.Builder
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		item, ok := n.(*ast.ListItem)
+		if !entering || !ok {
+			return ast.WalkContinue, nil
+		}
+		switch item.FirstChild().(type) {
+		case *ast.TextBlock, *ast.Paragraph:
+		default:
+			return ast.WalkContinue, nil
+		}
+		block := item.FirstChild()
+		if block.Lines().Len() == 0 {
+			return ast.WalkContinue, nil
+		}
+		p, ok := byBox[block.Lines().At(0).Start]
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+		word, glyph := boxGlyph[p.Box][0], boxGlyph[p.Box][1]
+		box := `<span class="box ` + word + `" role="img" aria-label="` + word + `">` + glyph + `</span>`
+		if p.Box == ' ' && p.Bad == "" && p.Text != "" && tickHref != "" {
+			id := "tick-" + strconv.Itoa(p.Line)
+			box = `<button class="box open" form="` + id + `" name="outcome" value="done" aria-label="Done: ` + esc(p.Text) + `">` + glyph + `</button>`
+			forms.WriteString(`<form id="` + id + `" method="post" action="` + esc(tickHref) + `">` +
+				`<input type="hidden" name="back" value="` + esc(back) + `">` +
+				`<input type="hidden" name="line" value="` + strconv.Itoa(p.Line) + `">` +
+				`<input type="hidden" name="text" value="` + esc(p.Text) + `"></form>`)
+		}
+		spans := []span{{p.BoxAt, p.BoxAt + 3, box}}
+		for _, t := range p.Tokens {
+			spans = append(spans, span{t[0], t[1], `<small class="token">` + esc(string(source[t[0]:t[1]])) + `</small>`})
+		}
+		replaceSpans(block, spans)
+		return ast.WalkSkipChildren, nil
+	})
+	return forms.String()
+}
+
+// replaceSpans draws the spans of the source as html in the text nodes of a block. A span may cover parts of several
+// nodes (goldmark splits "[ ]" at the brackets), and html is written where the span starts. The spans are in order.
+func replaceSpans(block ast.Node, spans []span) {
+	for c := block.FirstChild(); c != nil; {
+		next := c.NextSibling()
+		if t, ok := c.(*ast.Text); ok {
+			if pieces := splitText(t, spans); pieces != nil {
+				for _, n := range pieces {
+					block.InsertBefore(block, c, n)
+				}
+				block.RemoveChild(block, c)
+			}
+		}
+		c = next
+	}
+}
+
+// splitText is the nodes that replace t when a span overlaps it, and nil when none does. The line break of t stays
+// on the last node.
+func splitText(t *ast.Text, spans []span) []ast.Node {
+	a, b := t.Segment.Start, t.Segment.Stop
+	var out []ast.Node
+	cursor, hit := a, false
+	piece := func(from, to int) {
+		if to > from {
+			out = append(out, ast.NewTextSegment(gtext.NewSegment(from, to)))
+		}
+	}
+	for _, s := range spans {
+		if s.end <= a || s.start >= b {
+			continue
+		}
+		hit = true
+		piece(cursor, s.start)
+		if s.start >= a {
+			h := ast.NewString([]byte(s.html))
+			h.SetCode(true) // written as it is: the html was escaped when it was built
+			out = append(out, h)
+		}
+		cursor = min(max(cursor, s.end), b)
+	}
+	if !hit {
+		return nil
+	}
+	piece(cursor, b)
+	if t.SoftLineBreak() || t.HardLineBreak() {
+		var last *ast.Text
+		if len(out) > 0 {
+			last, _ = out[len(out)-1].(*ast.Text)
+		}
+		if last == nil {
+			last = ast.NewTextSegment(gtext.NewSegment(b, b))
+			out = append(out, last)
+		}
+		last.SetSoftLineBreak(t.SoftLineBreak())
+		last.SetHardLineBreak(t.HardLineBreak())
+	}
+	return out
 }
 
 // leaveOutEmbed removes the first embed whose title has the key, in the order of the text, and its paragraph when

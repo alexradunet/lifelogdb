@@ -425,7 +425,7 @@ func TestTheStreamPagesByDay(t *testing.T) {
 	if apitest.Href(top, "next") != "/days?limit=2&offset=2" || apitest.Href(top, "prev") != "" {
 		t.Errorf("the top page links next %q, prev %q", apitest.Href(top, "next"), apitest.Href(top, "prev"))
 	}
-	for rel, want := range map[string]string{"days": "/days", "week": "", "month": "/months/2031-05", "year": "/years/2031"} {
+	for rel, want := range map[string]string{"days": "/days", "week": "/weeks/2031-W20", "month": "/months/2031-05", "year": "/years/2031"} {
 		if got := apitest.Href(top, rel); got != want {
 			t.Errorf("the zoom link %s is %q, want %q", rel, got, want)
 		}

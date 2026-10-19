@@ -35,7 +35,11 @@ type Plan struct {
 	FromDone bool
 	Bad      string // the first offending token of a malformed line, else ""
 
-	boxAt  int // offset in the body of the "[" of the box
+	// BoxAt is the offset in the body of the "[" of the box, and Tokens the offsets (start, end) of the tokens of a
+	// line that is not malformed. A reader that draws the body uses them to find the line in its own parse.
+	BoxAt  int
+	Tokens [][2]int
+
 	editAt int // offset in the body where a "done:" token goes: after the last token, else after the last word
 }
 
@@ -129,7 +133,7 @@ func readPlan(body string, starts []int, at int) (Plan, bool) {
 	if len(s) < 3 || s[0] != '[' || s[2] != ']' || !strings.ContainsRune(" xX->", rune(s[1])) || (len(s) > 3 && s[3] != ' ') {
 		return Plan{}, false
 	}
-	p := Plan{Line: ln + 1, Box: s[1], Raw: body[starts[ln]:eol], boxAt: at}
+	p := Plan{Line: ln + 1, Box: s[1], Raw: body[starts[ln]:eol], BoxAt: at}
 	if p.Box == 'X' {
 		p.Box = 'x'
 	}
@@ -165,6 +169,7 @@ func readPlan(body string, starts []int, at int) (Plan, bool) {
 		return p, true
 	}
 	for _, t := range toks {
+		p.Tokens = append(p.Tokens, [2]int{t.at, t.end})
 		switch t.key {
 		case "on":
 			p.On = t.val
@@ -475,7 +480,7 @@ func Tick(body string, line int, text string, outcome byte, done string) (newBod
 		return "", "", err
 	}
 	if outcome == '-' {
-		return body[:p.boxAt+1] + "-" + body[p.boxAt+2:], "", nil
+		return body[:p.BoxAt+1] + "-" + body[p.BoxAt+2:], "", nil
 	}
 	if !IsDay(done) {
 		return "", "", fmt.Errorf("%q is not a day", done)
@@ -489,7 +494,7 @@ func Tick(body string, line int, text string, outcome byte, done string) (newBod
 			return "", "", err
 		}
 	}
-	return body[:p.boxAt+1] + "x" + body[p.boxAt+2:p.editAt] + " done:" + done + body[p.editAt:], appended, nil
+	return body[:p.BoxAt+1] + "x" + body[p.BoxAt+2:p.editAt] + " done:" + done + body[p.editAt:], appended, nil
 }
 
 // Carry moves an open line to another page. The box becomes '>', and copy is the open line for the end of the
@@ -508,5 +513,5 @@ func Carry(body string, line int, text, on string) (newBody, copy string, err er
 	if copy, err = Line(p.Text, on, p.Due, p.Every, p.FromDone); err != nil {
 		return "", "", err
 	}
-	return body[:p.boxAt+1] + ">" + body[p.boxAt+2:], copy, nil
+	return body[:p.BoxAt+1] + ">" + body[p.BoxAt+2:], copy, nil
 }

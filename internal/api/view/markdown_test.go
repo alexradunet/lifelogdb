@@ -170,11 +170,35 @@ func TestMarkdownCoverLeavesOutTheCoverOnce(t *testing.T) {
 		{"an embed inside a link is not one", "[![[Lake.jpg]]](https://example.org) ![[Lake.jpg]]", "Lake.jpg",
 			[]string{img("Lake.jpg"), "example.org"}, []int{0, 1}},
 	} {
-		got := string(markdownCover(c.body, c.embed))
+		got := string(markdownCover(c.body, c.embed, "", ""))
 		for i, w := range c.want {
 			if n := strings.Count(got, w); n != c.count[i] {
 				t.Errorf("%s: %q drawn %d times, want %d, in %s", c.name, w, n, c.count[i], got)
 			}
 		}
+	}
+}
+
+// TestPlanBoxesInABody: the box of a plan line is a glyph, or the button of a tick form that stands after the body (a
+// form inside a loose list would end its paragraph); the tokens are small words; a box in a quote, a code block or the
+// middle of a line is left as text; with no tick address no form is drawn.
+func TestPlanBoxesInABody(t *testing.T) {
+	body := "- [ ] Call on:2026-10-22\n\n- [x] Paid done:2026-10-01\n\n> - [ ] quoted\n\n```\n- [ ] code\n```\n\nText [ ] mid\n"
+	got := string(markdownCover(body, "", "/pages/7/tick", "/days/today"))
+	for _, want := range []string{
+		`<button class="box open" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
+		`<small class="token">on:2026-10-22</small>`, `<span class="box done" role="img" aria-label="done">`, `<small class="token">done:2026-10-01</small>`,
+		`<div hidden><form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form></div>`,
+		`[ ] quoted`, `- [ ] code`, `Text [ ] mid`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the body does not carry %s:\n%s", want, got)
+		}
+	}
+	if n := strings.Count(got, "<form"); n != 1 {
+		t.Errorf("%d forms, want 1", n)
+	}
+	if plain := string(markdown(body)); strings.Contains(plain, "<form") || strings.Contains(plain, "<button") || !strings.Contains(plain, `class="box open"`) {
+		t.Errorf("a body with no tick address draws a form:\n%s", plain)
 	}
 }

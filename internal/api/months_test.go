@@ -147,11 +147,11 @@ func TestTheZoomLinksEveryLevel(t *testing.T) {
 	for _, tc := range []struct {
 		page, days, week, month, year string
 	}{
-		{"/months/2031-05", "/days", "", "/months/2031-05", "/years/2031"},
-		{"/months/2031-04", "/days", "", "/months/2031-04", "/years/2031"},
-		{"/years/2031", "/days", "", "/months/2031-05", "/years/2031"},
-		{"/years/2030", "/days", "", "/months/2030-01", "/years/2030"},
-		{"/months/9999-12", "/days", "", "/months/9999-12", "/years/9999"},
+		{"/months/2031-05", "/days", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
+		{"/months/2031-04", "/days", "/weeks/2031-W14", "/months/2031-04", "/years/2031"},
+		{"/years/2031", "/days", "/weeks/2031-W20", "/months/2031-05", "/years/2031"},
+		{"/years/2030", "/days", "/weeks/2030-W01", "/months/2030-01", "/years/2030"},
+		{"/months/9999-12", "/days", "/weeks/9999-W48", "/months/9999-12", "/years/9999"},
 	} {
 		e := apitest.Must(t)(c.Get(t.Context(), tc.page))
 		got := strings.Join([]string{apitest.Href(e, "days"), apitest.Href(e, "week"), apitest.Href(e, "month"), apitest.Href(e, "year")}, " ")
@@ -160,7 +160,7 @@ func TestTheZoomLinksEveryLevel(t *testing.T) {
 		}
 	}
 	body := browse(t, h, "/months/2031-04")
-	if n := strings.Count(body, `aria-current="page">`); !strings.Contains(body, `<a href="/months/2031-04" aria-current="page">Month</a>`) || strings.Contains(body, ">Week<") || n != 2 {
+	if n := strings.Count(body, `aria-current="page">`); !strings.Contains(body, `<a href="/months/2031-04" aria-current="page">Month</a>`) || !strings.Contains(body, `<a href="/weeks/2031-W14">Week</a>`) || n != 2 {
 		t.Errorf("the month's zoom marks %d links (want its Month and the sidebar's Calendar): %.300s", n, body[strings.Index(body, `aria-label="Zoom"`):])
 	}
 }

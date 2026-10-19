@@ -283,14 +283,15 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 		Class: []string{"day"}, Title: day,
 		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent},
 		Links:      []siren.Link{link("self", siren.DayHref(day), day)},
-		Actions:    []siren.Action{action("capture", map[string]string{"day": day}, nil), record, planAction(day)},
+		Actions:    append([]siren.Action{action("capture", map[string]string{"day": day}, nil), record, planAction(day)}, lineActions()...),
 	}
 	// 0000-01-01 has no day before it, and 9999-12-31 none after it.
 	before, after := t.AddDate(0, 0, -1), t.AddDate(0, 0, 1)
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{before, siren.DayHref(before.Format(time.DateOnly)), "Previous day"},
 		neighbour{after, siren.DayHref(after.Format(time.DateOnly)), "Next day"})...)
-	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", siren.MonthHref(t), t.Format(layoutMonth)))
+	e.Links = append(e.Links, link("metrics", "/metrics", "Metrics"), link("index", "/", "Home"), link("month", siren.MonthHref(t), t.Format(layoutMonth)),
+		link("week", weekHref(mondayOf(t)), weekName(mondayOf(t))))
 	if d.PageID != 0 {
 		e.Links = append(e.Links, link("page", siren.PageHref(d.PageID), "The day page"))
 		p, err := h.s.PageByID(ctx, d.PageID)

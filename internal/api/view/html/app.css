@@ -503,6 +503,25 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & .readings{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
   & .about{padding:var(--space-3)}}
 .also ul.plain>li{padding:var(--space-2) 0}
+
+/* Plan lines (plan 136): a row holds the words, the page and the badges, then Done, Dropped and Carry. A box in a body
+   is a glyph, or one button of a tick form that stands apart (markdown.go). A past day, and a line that is closed, is
+   quiet. */
+.plan h3{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); margin-block:var(--space-3) var(--space-1)}
+section.plan>ul.plan-list{padding-inline:var(--space-3); box-shadow:var(--parch-bevel)}
+.plan-row{display:flex; flex-direction:column; gap:var(--space-1)}
+.plan-line{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:var(--space-1) var(--space-3);
+  & .text{min-inline-size:0; overflow-wrap:anywhere}
+  & .meta{display:inline-flex; flex-wrap:wrap; align-items:baseline; gap:var(--space-2)}}
+.plan-acts{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2)}
+form.tick-line{display:inline-flex; gap:var(--space-2)}
+.plan-row.closed .text,.plan.past .plan-row{color:var(--text-muted)}
+.box{color:var(--text-muted); font-style:normal}
+.box.done{color:var(--done)}
+.box.open{color:var(--text-link)}
+button.box{inline-size:var(--space-5); block-size:var(--space-5); padding:0; border:0; background:none; box-shadow:none; font-size:18px; line-height:1; vertical-align:text-bottom;
+  &:active{transform:none}}
+.token{font:400 12px/16px var(--mono); color:var(--muted)}
 @container column (max-width:867px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
 @container column (max-width:867px){
   .day-head{align-items:flex-start;

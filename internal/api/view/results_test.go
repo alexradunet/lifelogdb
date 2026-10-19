@@ -37,6 +37,11 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		{"a capture sent again", map[string]any{"already": true}, "Already added. Nothing changed."},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
+		{"plan", map[string]any{"page_id": 4.0, "line": 3.0, "written": "- [ ] Call"}, `Planned on line 3 of <a href="/pages/4">its page</a>.`},
+		{"tick done", map[string]any{"line": 2.0, "outcome": "done"}, "Done."},
+		{"tick dropped", map[string]any{"line": 2.0, "outcome": "dropped"}, "Dropped."},
+		{"tick with the next line", map[string]any{"line": 2.0, "outcome": "done", "appended": "- [ ] Pay due:2026-12-01", "appended_line": 5.0}, "Done. | The next one is line 5."},
+		{"carry", map[string]any{"line": 2.0, "to_id": 9.0, "to_line": 1.0}, `Carried to <a href="/pages/9">its page</a>, line 1.`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},
 	} {
 		if got := say(tc.in); got != tc.want {

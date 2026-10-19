@@ -10,10 +10,12 @@
 {{- with .Link "next"}}
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next month, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 </div></header>
+{{template "period-page" (dict "v" .)}}
 <div class="scroll"><table class="calendar">
 {{template "weekdays" false}}
 <tbody>{{range weeks $m.days}}<tr>{{range .}}{{if .}}<td{{if .page}} class="written{{if .picture}} pictured{{end}}"{{end}}{{if eq .day $.Today}} aria-current="date"{{end}}><a href="/days/{{.day}}">{{with .picture}}<img class="cell-cover" src="{{.}}" alt="" loading="lazy">{{end}}<span class="n">{{dayOfMonth .day}}</span>{{with .first_line}}<span class="first">{{.}}</span>{{end}}
 {{- with .mood}}<span class="meta">{{template "moodwords" .}}</span>{{end}}</a></td>{{else}}<td></td>{{end}}{{end}}</tr>
 {{end}}</tbody></table></div>
+{{template "period-plan" (dict "v" . "key" $m.month)}}
 
 {{template "foot" .}}{{end}}

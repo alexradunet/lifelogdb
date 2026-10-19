@@ -30,8 +30,9 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
 		"search":                    map[string]any{"q": "", "order": "", "kind": "", "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
-		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "lines": []planLine{}},
-		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "lines": []planLine{}},
+		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
+		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
+		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "lines": []planLine{}, "quarters": []yearQuarter{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
 		"page, person, place, file": pageProperties{},
 		"plan line":                 planLine{},
 		"result of plan":            map[string]any{"page_id": int64(0), "line": 0, "written": ""},
@@ -94,7 +95,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"},
 		{"integrity", "/integrity"}, {"cover-choice", ids["page"] + "/cover"},
-		{"month", "/months/2031-05"}, {"year", "/years/2031"},
+		{"month", "/months/2031-05"}, {"year", "/years/2031"}, {"week", "/weeks/2031-W20"},
 	}
 	named := func(section, key string) bool { // a list is documented as "name[]"
 		return documented[section][key] || documented[section][key+"[]"]

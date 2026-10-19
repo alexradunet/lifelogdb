@@ -251,4 +251,9 @@ workload expects eleven operations. Run `go run ./tools/lifescale -profile lifet
 - [ ] Step 3: the reads and the three writes, with their tests.
 - [ ] Step 4: the catalog, API.md, the README table, the CLI, parity, the MCP end-to-end test.
 - [ ] Step 5: the browser, looked at by the owner.
-- [ ] Step 6: `planned_day` at lifetime scale recorded here; the service restarted and its log line recorded here.
+- [~] Step 6, measured: `planned_day` at lifetime scale was 854 ms (median of 3; 750 ms in an earlier run), the
+  day view 0.6 ms. The reopen trigger fired, and the owner chose no table. Decision: the generated column
+  `entities.has_box` with the partial index `entities_plans` (derived, disposable, one home: the body). After it:
+  `planned_day` 49 ms, `plan_lines_week` 53 ms, `capture_commit` 1.18 ms (was 1.38), `save_commit` 0.63 ms (was 0.53),
+  `day_view` 0.58 ms. The remaining 49 ms are the parse of 3,009 pages; it is still above the day view's budget, and a
+  derived table is the next step only if that proves slow in use. Still open: the service restarted and its log line recorded here.

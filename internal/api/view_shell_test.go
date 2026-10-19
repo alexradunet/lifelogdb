@@ -72,7 +72,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /days /metrics /browse popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /weeks/today /days /metrics /browse popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if !strings.Contains(bar[1], `<a href="/browse" aria-current="page">`) || strings.Contains(bar[1], `class="here"`) {
@@ -166,7 +166,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 				marked = append(marked, m[3])
 			}
 		}
-		if want := "Today=/days/today Calendar=/days Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
+		if want := "Today=/days/today This week=/weeks/today Calendar=/days Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
 			t.Errorf("%s: the sections are %v, want %s", path, got, want)
 		}
 		if strings.Join(marked, " ") != current {

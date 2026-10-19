@@ -110,7 +110,7 @@ holds something: a live entity with that day (its day page, a page, a file) or a
 never in it. The query takes `limit` and `offset`, as every list; 30 and 0 by default.
 
 Links: `prev` (Newer days; absent on the top page), `next` (Older days; absent on the oldest page), the zoom: `days`
-(`/days`), `month` and `year` (the period of the top card's day, or of today when the page has no card; a period that
+(`/days`), `week`, `month` and `year` (the period of the top card's day, or of today when the page has no card; a period that
 has no page is absent), `index`. Actions: `open-day`, `random-page` with `kind` day.
 
 | property | type | meaning |
@@ -263,9 +263,9 @@ action `search` and no properties: a browser draws it as the page to search from
 
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
-`prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar),
+`prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar), `week` (its week),
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `plan` (with `page` this day) and, once the day page exists, `set-cover` and `save-body`
+`record`, `plan` (with `page` this day), `tick` and `carry` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover` and `save-body`
 of it (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
@@ -312,8 +312,8 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 
 `GET /months/{YYYY-MM}` (a value that is not a month is 422): the calendar of a month. Links: `prev`, `next` (the
 months before and after; 0000-01 has no `prev` and 9999-12 no `next`), the zoom (as `/days` has it): `days`
-(`/days`), `month` and `year` (of today when today is in the month, else of its first day; a period that has no page
-is absent), `index`. Embedded: a `day` link to each day of the month. The day view holds the rest of a day. Actions: `plan` with `page` this month (`YYYY-MM`).
+(`/days`), `week`, `month` and `year` (of today when today is in the month, else of its first day; a period that has no page
+is absent), `page` (the page of the month, titled `YYYY-MM`, once it exists), `index`. Embedded: a `day` link to each day of the month. The day view holds the rest of a day. Actions: `plan` with `page` this month (`YYYY-MM`), `tick` and `carry` as on [a week](#week), and `save-body` once the page of the month exists.
 
 | property | type | meaning |
 |---|---|---|
@@ -327,13 +327,51 @@ is absent), `index`. Embedded: a `day` link to each day of the month. The day vi
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
 | `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
 | `lines[]` | list | the [plan lines](#plan-line) planned in the month, and the lines done in it |
+| `page_id` | integer | the period's page, once it exists; absent otherwise |
+| `body` | string | its body; absent with `page_id` |
+| `version` | string | its version, for `save-body`; absent with `page_id` |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
+
+### week
+
+`GET /weeks/{YYYY-Www}` (`/weeks/today` redirects; a value that is not an ISO 8601 week, or a week its year does not
+have, is 422): the seven days of a week, Monday first, and its plan lines. Links: `prev`, `next` (the weeks before
+and after), the zoom (as `/days` has it, with `week`), `page` (the page of the week, titled `2026-W43`, once it
+exists), `index`. Embedded: a `day` link to each day. Actions: `plan` with `page` this week, `tick` and `carry` for
+the lines of any page (the `{id}` of their href is the `page_id` of the line), and `save-body` once the page of the
+week exists.
+
+| property | type | meaning |
+|---|---|---|
+| `week` | string | the week, `YYYY-Www`; also the title of its page |
+| `from` | day | its Monday |
+| `through` | day | its Sunday |
+| `today` | day | this machine's local day |
+| `days[]` | list | each day of the week, in order |
+| `days[].day` | day | the day |
+| `days[].page` | boolean | a live day page exists for it |
+| `days[].first_line` | string | the first line of that page's body that has text, as plain text; absent when none |
+| `days[].mood` | list | the values of the day's current Mood readings; absent when none |
+| `days[].readings` | integer | the current readings on the day, of every metric but the Mood; absent when none |
+| `days[].picture` | string | the address of the picture of the day page's cover; absent when it has none |
+| `lines[]` | list | the [plan lines](#plan-line) planned in the week, and the lines done in it |
+| `page_id` | integer | the period's page, once it exists; absent otherwise |
+| `body` | string | its body; absent with `page_id` |
+| `version` | string | its version, for `save-body`; absent with `page_id` |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
 
 ### year
 
 `GET /years/{YYYY}` (a value that is not a year, 0001 to 9999, is 422): the twelve months of a year. Links: `prev`,
 `next` (the years before and after; 0001 has no `prev` and 9999 no `next`), the zoom (as `/days` has it): `days`
-(`/days`), `month` and `year` (of today when today is in the year, else of 1 January), `index`. Embedded: a `month`
-link to each month. Actions: `plan` with `page` this year.
+(`/days`), `week`, `month` and `year` (of today when today is in the year, else of 1 January), `page` (the page of the year, once it exists), `index`. Embedded: a `month`
+link to each month. Actions: `plan` with `page` this year, `tick` and `carry` as on [a week](#week), and `save-body` once the page of the year exists.
 
 | property | type | meaning |
 |---|---|---|
@@ -348,6 +386,16 @@ link to each month. Actions: `plan` with `page` this year.
 | `months[].days[].day` | day | the day |
 | `months[].days[].page` | boolean | a live day page exists for it |
 | `lines[]` | list | the [plan lines](#plan-line) planned in the year, and the lines done in it |
+| `quarters[]` | list | the four quarters, in order |
+| `quarters[].key` | string | the key of the quarter's page, `2026-Q4` |
+| `quarters[].page_id` | integer | the quarter's page, once it exists; absent otherwise |
+| `page_id` | integer | the period's page, once it exists; absent otherwise |
+| `body` | string | its body; absent with `page_id` |
+| `version` | string | its version, for `save-body`; absent with `page_id` |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
 
 ### page, person, place, file
 

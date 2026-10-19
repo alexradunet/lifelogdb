@@ -123,6 +123,8 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /days/today", h.serve(h.today))
 	m.HandleFunc("GET /days/{day}", h.serve(h.day))
 	m.HandleFunc("GET /months/{month}", h.serve(h.month))
+	m.HandleFunc("GET /weeks/today", h.serve(h.currentWeek))
+	m.HandleFunc("GET /weeks/{week}", h.serve(h.week))
 	m.HandleFunc("GET /years/{year}", h.serve(h.year))
 	m.HandleFunc("GET /pages/{id}", h.serve(h.page))
 	m.HandleFunc("GET /pages/{id}/cover", h.serve(h.coverChoice))
