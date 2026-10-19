@@ -112,6 +112,8 @@ var installFiles = map[string]bool{
 	"/assets/icon-192.png":  true,
 	"/assets/icon-512.png":  true,
 	"/assets/wood.png":      true,
+	"/assets/ground.png":    true,
+	"/assets/sprites.png":   true,
 }
 
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {

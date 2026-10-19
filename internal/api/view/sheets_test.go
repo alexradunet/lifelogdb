@@ -2,6 +2,7 @@ package view
 
 import (
 	"bytes"
+	"image"
 	"image/color"
 	"image/png"
 	"math"
@@ -455,22 +456,27 @@ func apca(t *testing.T, fg, bg string) float64 {
 	return (c + loWoBoffset) * 100
 }
 
-// TestTheWoodTileIsTheDrawing: html/wood.png is the output of pixelart.Wood, not an edited picture. The pixels are
-// compared and not the bytes, because the PNG encoder may change. tools/pixelwood writes the file.
-func TestTheWoodTileIsTheDrawing(t *testing.T) {
-	got, err := png.Decode(bytes.NewReader(MustFile("wood.png")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := pixelart.Wood()
-	if got.Bounds() != want.Bounds() {
-		t.Fatalf("wood.png is %v, want %v", got.Bounds(), want.Bounds())
-	}
-	b := want.Bounds()
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			if g, w := color.NRGBAModel.Convert(got.At(x, y)), want.At(x, y); g != w {
-				t.Fatalf("pixel (%d,%d) is %v, want %v: run go run ./tools/pixelwood", x, y, g, w)
+// TestThePicturesAreTheDrawings: each html/*.png picture is the output of its drawing in pixelart, not an edited
+// picture. The pixels are compared and not the bytes, because the PNG encoder may change. tools/pixelart writes the
+// files.
+func TestThePicturesAreTheDrawings(t *testing.T) {
+	for _, c := range []struct {
+		file string
+		want *image.NRGBA
+	}{{"wood.png", pixelart.Wood()}, {"ground.png", pixelart.Ground()}, {"sprites.png", pixelart.Sprites()}} {
+		got, err := png.Decode(bytes.NewReader(MustFile(c.file)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Bounds() != c.want.Bounds() {
+			t.Fatalf("%s is %v, want %v", c.file, got.Bounds(), c.want.Bounds())
+		}
+		b := c.want.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				if g, w := color.NRGBAModel.Convert(got.At(x, y)), c.want.At(x, y); g != w {
+					t.Fatalf("%s: pixel (%d,%d) is %v, want %v: run go run ./tools/pixelart", c.file, x, y, g, w)
+				}
 			}
 		}
 	}

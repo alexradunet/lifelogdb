@@ -2,8 +2,10 @@
    and the components of the Almanac design system, bound in Hearthwood (docs/plans/096-bound-in-hearthwood.md). Every
    colour, size and font is a token of base.css; no rule here names a colour of its own. A material sets its text
    through the aliases of base.css (--text, --text-strong, --text-muted, --text-link, --rule): a parchment element
-   and a wood element reset them once, here. There is one image, the wood tile of the rail (wood.png, drawn by
-   internal/pixelart): a tile of pixel art is a drawing, and a gradient cannot be one. The icons and the chart are
+   and a wood element reset them once, here. There are three images, all drawn by
+   internal/pixelart: the wood tile of the rail (wood.png), the faint ground tile of the page (ground.png) and one
+   sheet of small sprites (sprites.png: the seal, the mood faces, the inkwell). A pixel drawing is a picture, and a
+   gradient cannot be one. The icons and the chart are
    inline <svg>, and the grain and the stitch are CSS. This sheet is the components and the utilities
    layers of the one cascade base.css declares (docs/plans/108-the-browser-made-current.md): a utility is a class
    no component restyles, so it may come last. There is no script: a sheet, a dialog and a popover are the
@@ -26,6 +28,10 @@ main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text
 .shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh}
 .shell.bare{display:block}
 /* The column is a container: a layout inside it asks the width of the column, not of the screen. */
+/* The ground: a faint tile of boards under the page, a third of the rail's strength. It is pixel art, so it is drawn
+   unsmoothed; the column sets smoothing back, so a picture in the page is drawn as a picture. */
+body{background-image:url(/assets/ground.png),var(--grain-ground); background-size:480px 288px,4px 4px; image-rendering:pixelated}
+.column{image-rendering:auto}
 .column{container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);
   &>main{flex:1; inline-size:100%; max-inline-size:1200px; display:flex; flex-direction:column; gap:var(--space-4);
     &>h2{margin-block-start:var(--space-4)}}
@@ -406,6 +412,17 @@ fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s
   & small{position:absolute; inset-inline:0; inset-block-end:1px; opacity:0; font:400 10px/1 var(--mono); text-align:center; color:inherit}
   & label:is(:hover,:has(:checked)) small{opacity:1}}
 
+/* The mood's slabs have a five-pixel face before the number: cell N of the sprite sheet is the face of the mood N
+   (pixelart.CellFace). A cell is 16 px, drawn at 3x: 48 px. The offset of the face N is -48 * N px: -48, -96, -144,
+   -192, -240. The face is 5 by 5 pixels, so 15 by 15 px. It is in ink, so a chosen slab and a plain one show it alike. */
+fieldset.segmented.mood span{display:flex; align-items:center; justify-content:center; gap:4px;
+  &::before{content:""; flex:none; inline-size:15px; block-size:15px; background:url(/assets/sprites.png) 0 0/336px 48px no-repeat; image-rendering:pixelated}}
+fieldset.segmented.mood label:has(input[value="1"]) span::before{background-position:-48px 0}
+fieldset.segmented.mood label:has(input[value="2"]) span::before{background-position:-96px 0}
+fieldset.segmented.mood label:has(input[value="3"]) span::before{background-position:-144px 0}
+fieldset.segmented.mood label:has(input[value="4"]) span::before{background-position:-192px 0}
+fieldset.segmented.mood label:has(input[value="5"]) span::before{background-position:-240px 0}
+
 /* Capture: the main box of Today and of a day. The text box is a draft: dashed, and solid gold while it has the
    focus. Then the mood and Add on one row. */
 .capture{
@@ -495,7 +512,10 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
 /* The sheet's padding and the gap between its parts scale with the column, from a phone's to the wide sheet's. */
 .sheet{--sheet-gap:clamp(20px, 16px + 1cqi, 24px); position:relative; display:flex; flex-direction:column; gap:var(--sheet-gap); min-inline-size:0;
   padding:var(--sheet-gap) clamp(16px, 2px + 3.75cqi, 32px); box-shadow:var(--parch-bevel);
-  &::after{content:""; position:absolute; inset-block-start:6px; inset-inline-end:6px; inline-size:7px; block-size:7px; background:var(--accent-ink)}
+  /* The wax seal in the corner: cell 0 of the sprite sheet (16 px a cell) at 3x. The sheet is 7 cells wide, so
+     112 * 3 = 336 px by 16 * 3 = 48 px; the seal is 5 by 5 pixels, so 15 by 15 px. */
+  &::after{content:""; position:absolute; inset-block-start:6px; inset-inline-end:6px; inline-size:15px; block-size:15px;
+    background:url(/assets/sprites.png) 0 0/336px 48px no-repeat; image-rendering:pixelated}
   &>*+*{padding-block-start:var(--sheet-gap); border-block-start:2px dotted var(--edge)}
   &>details{padding-block-start:var(--space-3);
     &:first-child{padding-block-start:0}
@@ -797,6 +817,12 @@ details.metric-sub>summary>h3::after{content:none} /* a small group has no stitc
 .sr{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
 /* An empty state, which names the way forward. */
 .empty{color:var(--text-muted); font-size:15px; line-height:22px}
+/* An empty journal and an empty list of readings have an inkwell before the words: cell 6 of the sprite sheet at 2x
+   (pixelart.CellInkwell). The sheet is 112 * 2 = 224 px by 32 px and the cell is 32 px, so the offset is -6 * 32 =
+   -192 px. The drawing is 12 by 12 pixels, so 24 by 24 px. It is inline, so the words and the link around it keep
+   their spaces. */
+:is(.journal,.margin .group) p.empty::before{content:""; display:inline-block; vertical-align:middle; inline-size:24px; block-size:24px; margin-inline-end:14px;
+  background:url(/assets/sprites.png) -192px 0/224px 32px no-repeat; image-rendering:pixelated; opacity:.8}
 /* What an action does, before its form; the note under a table or a search. */
 .desc{display:block; font-size:13px; line-height:19px; color:var(--text-muted)}
 }
