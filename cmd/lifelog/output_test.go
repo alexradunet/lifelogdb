@@ -74,7 +74,6 @@ func TestACommandReportsAFailedWriteOfItsOutput(t *testing.T) {
 	live := filepath.Join(t.TempDir(), "life.db")
 	for _, argv := range [][]string{
 		{"init", live},
-		{"agentic-init"},
 		{"actions", "--db", live},
 		{"actions", "--db", live, "--human"},
 		{"day", "2031-04-11", "--db", live},

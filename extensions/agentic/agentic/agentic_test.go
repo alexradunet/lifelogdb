@@ -26,8 +26,8 @@ func read(t *testing.T, p Paths, name string) string {
 }
 
 var allFiles = []string{
-	".agents/skills/lifelog-import-notes/SKILL.md", ".agents/skills/lifelog-keep-photos/SKILL.md",
-	".claude/skills/lifelog-import-notes/SKILL.md", ".claude/skills/lifelog-keep-photos/SKILL.md",
+	".agents/skills/lifelog-extension/SKILL.md", ".agents/skills/lifelog-import-notes/SKILL.md", ".agents/skills/lifelog-keep-photos/SKILL.md",
+	".claude/skills/lifelog-extension/SKILL.md", ".claude/skills/lifelog-import-notes/SKILL.md", ".claude/skills/lifelog-keep-photos/SKILL.md",
 	".codex/config.toml", ".mcp.json", ".pi/mcp.json", "AGENTS.md", "CLAUDE.md", "opencode.json",
 }
 
@@ -109,8 +109,8 @@ func TestEachSkillFollowsTheSharedFormat(t *testing.T) {
 			t.Errorf("%s: description of %d characters", name, l)
 		}
 	}
-	if n != 4 {
-		t.Errorf("%d skill files, want 2 skills in 2 folders", n)
+	if n != 6 {
+		t.Errorf("%d skill files, want 3 skills in 2 folders", n)
 	}
 }
 
@@ -153,5 +153,23 @@ func TestASecondRunKeepsTheOwnersEdits(t *testing.T) {
 	}
 	if state(res) != Replaced || strings.Contains(read(t, p, "AGENTS.md"), "The owner's own line.") {
 		t.Fatalf("--force: %s", state(res))
+	}
+}
+
+// TestTheExtensionSkillNamesTheContract: a page for an agent that builds an extension names the three variables that
+// an extension receives and the header that names its writer (extensions/README.md).
+func TestTheExtensionSkillNamesTheContract(t *testing.T) {
+	p := paths(t)
+	files, err := Files(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range skillDirs {
+		text := string(files[dir+"/lifelog-extension/SKILL.md"])
+		for _, want := range []string{"LIFELOG_URL", "LIFELOG_EXE", "LIFELOG_DB", "Lifelog-Source"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s: the skill does not name %s", dir, want)
+			}
+		}
 	}
 }

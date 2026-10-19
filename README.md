@@ -23,6 +23,7 @@ The database it writes is specified independently of it, so another program — 
 ```
 go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
 go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp   # the MCP server, beside lifelog (an extension)
+go build -C extensions/agentic -o ../../lifelog-agentic-init ./cmd/lifelog-agentic-init   # agentic-init, beside lifelog (an extension)
 lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
@@ -236,8 +237,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   around them.
 - **The folder of the program** ([plan 090](docs/plans/090-agentic-init.md)). Without `--db`, `LIFELOG_DB` or
   `--url`, a command uses the `life.db` beside the executable, and `lifelog init` with no path makes it there; a
-  missing file is still refused. `lifelog agentic-init [--force]` writes into that folder, from templates embedded
-  in the binary: `AGENTS.md` (the folder, the modes, the tools, the rules and a privacy note), a `CLAUDE.md` that
+  missing file is still refused. `lifelog agentic-init [--force]` is the extension `lifelog-agentic-init`
+  ([extensions/agentic](extensions/agentic/README.md)). It writes into that folder, from templates embedded in the
+  extension: `AGENTS.md` (the folder, the modes, the tools, the rules and a privacy note), a `CLAUDE.md` that
   imports it, three skills in `.agents/skills/` and `.claude/skills/`, and the MCP config of Claude Code
   (`.mcp.json`), Codex (`.codex/config.toml`), OpenCode (`opencode.json`) and Pi (`.pi/mcp.json`), each starting
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
@@ -449,7 +451,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types, the `Lifelog-Source` header, the JSON writer and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test | `api.New` on a store, through `apitest.Fresh`, or `apitest.FreshOn` for a store with a fixed clock; a test inside package `api` cannot import `apitest` (an import cycle), so it makes its store with `dbtest.New`; the pure functions of the handler (`backOf`, `errorEntity`, `browseQueryOf`) with table tests; `view.Draw` and the pure functions of `view` with table tests |
 | `internal/client` | the hypermedia client, transport only: in-process or remote; of this module it imports only `siren`, so it builds no `core`, no `db` and no SQLite | `client.InProcess` and `client.Remote` on one handler: `TestTheTwoTransportsGiveEqualAnswers` |
 | `extensions/mcp` | its own module, `lifelog-mcp`: the catalog as MCP tools, over HTTP; it has its own copy of `siren` and `client`, and imports nothing of `lifelog/internal` | `mcp.New` on a fake catalog (`go test ./...` in the folder); `TestTheMCPServerOnTheRealLifelog` builds the real `lifelog` and `lifelog-mcp` and runs `lifelog mcp --agent test` |
-| `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder |
+| `extensions/agentic` | its own module, `lifelog-agentic`: `lifelog agentic-init`, the texts and MCP configs for a coding agent opened in the folder of the program; it reads `LIFELOG_EXE` and `LIFELOG_DB`, and imports nothing of `lifelog/internal` | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog`, `lifelog-mcp` and `lifelog-agentic-init` |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
 | `tests` | the validation suites of the docs ([tests/README.md](tests/README.md)) | the contract suites `TestSuites` and the mutants `TestMutants`, on the DDL of `docs/` |
@@ -484,6 +486,8 @@ the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`.
   that has no cover, one photo of that day from Google Photos.
 - [`extensions/mcp`](extensions/mcp/README.md): the MCP server, `lifelog mcp [--agent NAME]`. Every action of the
   catalog that is not the owner's is a tool.
+- [`extensions/agentic`](extensions/agentic/README.md): `lifelog agentic-init [--force]`. It writes `AGENTS.md`, the
+  skills and the MCP configs for a coding agent opened in the folder of the program.
 
 ## Engineering references
 

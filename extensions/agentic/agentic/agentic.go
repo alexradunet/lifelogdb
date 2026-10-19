@@ -1,4 +1,4 @@
-// Package agentic is `lifelog agentic-init` (docs/plans/090-agentic-init.md): it makes the folder of the executable
+// Package agentic is `lifelog agentic-init` (plan 090): it makes the folder of the executable
 // ready for a coding agent opened in it. It writes AGENTS.md (and a CLAUDE.md that imports it), the skills in the two
 // folders the frameworks read, and an MCP config for Claude Code, Codex, OpenCode and Pi, each starting lifelog's
 // own MCP server on the folder's life.db.

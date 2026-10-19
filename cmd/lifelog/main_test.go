@@ -14,7 +14,7 @@ import (
 
 // TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt: a flag a command does not take is refused, never
 // ignored: --dry-run belongs to file, --public to serve. The usage names every command of the table. A setup command
-// of the machine (init, agentic-init) keeps the OS's interrupt, as does a line with no command; a name that is no command is an extension, which gets the interrupt through its context and passes it on; every other command takes the interrupt through its context, snapshot too, as it runs through the
+// of the machine (init) keeps the OS's interrupt, as does a line with no command; a name that is no command is an extension, which gets the interrupt through its context and passes it on; every other command takes the interrupt through its context, snapshot too, as it runs through the
 // client since plan 082.
 func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 	for _, argv := range [][]string{{"search", "x", "--dry-run"}, {"day", "--public"}, {"search", "x", "--day", "2026-01-01"}, {"capture", "hello", "--snapshots", "x"}} {
@@ -33,8 +33,6 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 	}{
 		{[]string{"init", "--url", "http://x"}, "init does not take --url"},
 		{[]string{"init", "--source", "x"}, "init does not take --source"},
-		{[]string{"agentic-init", "--url", "http://x"}, "agentic-init does not take --url"},
-		{[]string{"agentic-init", "--source", "x"}, "agentic-init does not take --source"},
 		{[]string{"serve", "--human"}, "serve does not take --human"},
 		{[]string{"day", "--db", "a.db", "--url", "http://x"}, "--db and --url name two databases: give one"},
 	} {
@@ -42,7 +40,7 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("%v: %v, want %q", tc.argv, err, tc.want)
 		}
 	}
-	for _, argv := range [][]string{{"init", "--db", "a.db"}, {"agentic-init", "--db", "a.db"}, {"day", "--url", "http://x", "--human"}} {
+	for _, argv := range [][]string{{"init", "--db", "a.db"}, {"day", "--url", "http://x", "--human"}} {
 		if _, err := parse(argv, noVars); err != nil {
 			t.Errorf("%v: %v, want the flags taken", argv, err)
 		}
@@ -53,7 +51,7 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("the usage does not name %s", c.name)
 		}
 	}
-	for _, args := range [][]string{nil, {"init"}, {"agentic-init"}, {"help"}} {
+	for _, args := range [][]string{nil, {"init"}, {"help"}} {
 		if commandConsumesContext(opts{args: args}) {
 			t.Errorf("%v takes the interrupt through its context; want the OS's interrupt", args)
 		}

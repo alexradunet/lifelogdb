@@ -32,7 +32,7 @@ const version = "0.1.0"
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
 	db, url, source, mood, day, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
-	human, dbExplicit, force                     bool
+	human, dbExplicit                            bool
 	args                                         []string // the words of the line that are no flag
 	given                                        []string // the flags the line named
 	serve                                        serveFlags
@@ -89,7 +89,7 @@ type command struct {
 	usage      string                     // its lines of the usage text; "" for an alias with none of its own
 	flags      []string                   // the flags it takes, besides the global ones
 	refuses    []string                   // the global flags it does not take: it would ignore them
-	setup      bool                       // a setup command of the machine (init, agentic-init): no client, and the OS's interrupt
+	setup      bool                       // a setup command of the machine (init): no client, and the OS's interrupt
 	ownHandler bool                       // it builds the handler of its listener (serve): it gets the store and no client
 	prepare    func(o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
 	run        func(ctx context.Context, e env, args []string) error
@@ -109,11 +109,6 @@ var commands = []command{
 	{name: "init", setup: true, gap: true, refuses: []string{"--url", "--source"},
 		usage: "  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)",
 		run:   initDB},
-	{name: "agentic-init", setup: true, flags: []string{"--force"}, refuses: []string{"--url", "--source"},
-		usage: "  lifelog agentic-init [--force]      make this program's folder ready for a coding agent: AGENTS.md, CLAUDE.md,\n" +
-			"                                      skills, and the MCP config of Claude Code, Codex, OpenCode and Pi; a file\n" +
-			"                                      with another text is kept unless --force",
-		run: func(_ context.Context, e env, _ []string) error { return agenticInit(e) }},
 	{name: "serve", ownHandler: true, refuses: []string{"--human"}, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
 		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
 			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
@@ -253,7 +248,7 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 		"--mood": &o.mood, "--day": &o.day,
 		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime,
 		"--token-file": &o.serve.tokenFile, "--tls-cert": &o.serve.tlsCert, "--tls-key": &o.serve.tlsKey, "--snapshots": &o.snapshots}
-	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public, "--force": &o.force}
+	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if len(o.args) > 0 && o.args[0] != "help" && commandNamed(o.args[0]) == nil {
@@ -497,7 +492,7 @@ func initDB(ctx context.Context, e env, args []string) error {
 }
 
 // dbPath is the life.db a command uses, in this order: --db, $LIFELOG_DB, the file beside this program
-// (docs/plans/090-agentic-init.md).
+// (plan 090).
 func dbPath(e env) (string, error) {
 	o := e.o
 	if o.dbExplicit || o.db != "" { // --db, else $LIFELOG_DB, which parse reads first
@@ -511,7 +506,7 @@ func dbPath(e env) (string, error) {
 }
 
 // program is the path of the running program, with its symbolic links resolved. life.db lives in its folder when no
-// --db or LIFELOG_DB names another, and agentic-init writes there (docs/plans/090-agentic-init.md).
+// --db or LIFELOG_DB names another, and the extensions find it there (plan 090).
 func program(e env) (string, error) {
 	exe, err := e.executable()
 	if err != nil {

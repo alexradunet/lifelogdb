@@ -68,3 +68,4 @@ through LM Studio or llama.cpp) keeps the text here.
 |---|---|
 | `lifelog-import-notes` | put a folder of notes (a journal of daily notes, topic notes) into `life.db`, with the owner |
 | `lifelog-keep-photos` | keep a chosen photo or file for a day |
+| `lifelog-extension` | build a program `lifelog-NAME` that reads and writes the life log through the API |
