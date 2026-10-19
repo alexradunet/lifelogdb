@@ -2,6 +2,7 @@ package view
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -478,6 +479,26 @@ func TestThePicturesAreTheDrawings(t *testing.T) {
 					t.Fatalf("%s: pixel (%d,%d) is %v, want %v: run go run ./tools/pixelart", c.file, x, y, g, w)
 				}
 			}
+		}
+	}
+}
+
+// TestTheSheetReadsTheSpriteCellsWhereTheyAre: the numbers in app.css (the size of the sheet, the offset of a cell) are
+// a copy of the layout of the sprite sheet, and a CSS file cannot read a Go constant. This test keeps the copy equal:
+// the seal and the faces at 3x, the inkwell at 2x.
+func TestTheSheetReadsTheSpriteCellsWhereTheyAre(t *testing.T) {
+	app := string(appCSS)
+	const seal, inkwell = 3, 2
+	want := []string{
+		fmt.Sprintf("0 0/%dpx %dpx", pixelart.Cells*pixelart.CellSize*seal, pixelart.CellSize*seal),
+		fmt.Sprintf("-%dpx 0/%dpx %dpx", pixelart.CellInkwell*pixelart.CellSize*inkwell, pixelart.Cells*pixelart.CellSize*inkwell, pixelart.CellSize*inkwell),
+	}
+	for n := 1; n <= 5; n++ { // the face of the mood n is the cell CellFace+n-1
+		want = append(want, fmt.Sprintf(`input[value="%d"]) span::before{background-position:-%dpx 0}`, n, (pixelart.CellFace+n-1)*pixelart.CellSize*seal))
+	}
+	for _, w := range want {
+		if !strings.Contains(app, w) {
+			t.Errorf("app.css lacks %q, which the layout of the sprite sheet needs", w)
 		}
 	}
 }

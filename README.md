@@ -211,7 +211,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `GET /manifest.webmanifest` and the icons (`/assets/icon.svg`, and `/assets/icon-192.png` and
   `/assets/icon-512.png` for Android) make the app installable: two shortcuts (Today, Add to today) and a share
   target that posts shared text into Capture (`POST /days/today/capture`). There is no service worker, since the
-  server is the owner's own. A public listener serves the manifest, the icons and the wood tile of the rail (`GET` and `HEAD`) without the
+  server is the owner's own. A public listener serves the manifest, the icons and the three pictures of `internal/pixelart` (`GET` and `HEAD`) without the
   token, because a browser fetches them without its cookie and they hold nothing of the database. The fonts stay
   behind the token.
 - **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native

@@ -23,7 +23,7 @@
 | the oak ground | a faint tile of pixel boards under the page, in place of the 4px conic grain alone: the calmer set of the mock-ups (plain vertical boards, no knots, no ends, a third of the rail's strength) |
 | the parchment edge | unchanged: the straight 2px edge stays; the square notch in the corner of a sheet becomes a wax seal, five by five pixels |
 | the mood slabs | a five-pixel face beside each number, from a frown to a grin; the word of part 3 stays |
-| empty states | a small drawing before "Nothing written" on the journal and "No readings" in the margin: an inkwell, twelve by twelve pixels at two screen pixels a pixel |
+| empty states | a small drawing before "Nothing written" on the journal only: an inkwell, twelve by twelve pixels at two screen pixels a pixel. The margin lies on the oak, and the dark ink of a sprite would need a second drawing in the dark scheme |
 | the leaf | unchanged (no rings) |
 | the icons | unchanged |
 | how the small drawings ship | one sprite sheet, `html/sprites.png`, drawn by `internal/pixelart` from rows of characters in the Go source, so a maintainer reads the picture in the code; the sheet reads the cells by position |
@@ -42,7 +42,7 @@ flowchart LR
   R --> S["body: url(/assets/ground.png) at 3x over --ground, pixelated; .column back to auto"]
 ```
 
-- `Ground()` is the wood's drawing turned on its side: boards of 32, seams, grain and dither, no board ends and no
+- `Ground()` is the wood's drawing, transposed: boards of 32, seams, grain and dither, no board ends and no
   knots, every alpha multiplied by .3. The tile is 160 by 96; at three screen pixels a pixel it is 480 by 288.
 - `body` keeps `--grain-ground` as its second layer. `image-rendering:pixelated` is set on `body` for the tile and
   reset to `auto` on `.column`, so a picture in the page is drawn as a picture; the rail sets its own.
@@ -63,14 +63,17 @@ flowchart LR
   small palette in the same file (the seal's red and its light, the ink, the ink's light). The colours are the
   sheet's: a sprite is a picture, not a shade. `Sprites()` is deterministic; `tools/pixelwood` becomes
   `tools/pixelart` and writes the three files; the view's test compares each embedded file with its drawing.
-- **The seal.** `.sheet::after` and `article::after` draw cell 0 at 3x (15 by 15) where the 7px square was; the
-  square goes.
-- **The faces.** The `field` template marks the mood's fieldset `class="segmented mood"`. In `.mood`, each slab's
+- **The seal.** `.sheet::after` and `.day-card::after` (the stream's day card is the only article) draw cell 0 at 3x
+  (15 by 15) where the 7px square was; the square goes. The head of a card keeps clear of it, and the print sheet
+  hides it.
+- **The faces.** The `field` template marks the mood's fieldset `class="segmented faces"` (`.mood` is already the badge class). In `.faces`, each slab's
   span draws its face before the number: `label:has(input[value="N"]) span::before` draws cell N at 3x. The slab
   grows to hold both (the face, a gap of 4px, the number); the word of part 3 stays under them. The face is in ink,
   so a chosen slab (accent-soft) and a plain slab show it alike.
-- **The inkwell.** `.journal p.empty::before` and `.margin .group p.empty::before` draw cell 6 at 2x (24 by 24),
-  before the words, at opacity .8; `p.empty` becomes a flex row with a gap. No other empty state draws it.
+- **The inkwell.** `.journal p.empty::before` draws cell 6 at 2x (24 by 24), before the words, at opacity .8, as an
+  inline box so the words and the link keep their spaces. No other empty state draws it.
+- The numbers in `app.css` copy the layout of the sheet. A test of the view reads them against the constants of
+  `internal/pixelart`.
 - The sprite colours are two new tokens in `base.css` (`--seal`, `--seal-light`) only if a rule needs them; the
   sheet carries its own colours, so the sheet's rules name no colour.
 
@@ -81,10 +84,10 @@ flowchart LR
 | `internal/pixelart/ground.go`, `sprites.go`, tests | the two drawings; determinism, sizes, a known pixel of each |
 | `tools/pixelart/main.go` (was `tools/pixelwood`) | writes `wood.png`, `ground.png`, `sprites.png` |
 | `internal/api/view/html/ground.png`, `sprites.png` | the files |
-| `internal/api/view/sheets_test.go` | the comparison of each embedded picture with its drawing |
+| `internal/api/view/sheets_test.go` | the comparison of each embedded picture with its drawing; the sheet's cell numbers against the constants |
 | `internal/api/serve.go`, `public.go`, `assets_test.go` | the two routes, install files |
-| `internal/api/view/html/base.css`, `app.css` | the ground, the seal, the faces, the inkwell; the header comment counts three pictures |
-| `internal/api/view/html/layout.html` | `class="segmented mood"` on the mood's fieldset |
+| `internal/api/view/html/app.css` | the ground, the seal, the faces, the inkwell, the print rules; the header comment counts three pictures |
+| `internal/api/view/html/layout.html` | `class="segmented faces"` on the mood's fieldset |
 | `README.md` | "one embedded picture" becomes three; the table rows of the packages |
 
 ## Checks
@@ -97,6 +100,6 @@ flowchart LR
 ## Done when
 
 - The ground shows faint boards in both schemes and stays quieter than the sheet.
-- Every sheet has the seal; the mood slabs have their faces and still show the word when chosen; the two empty
-  states draw the inkwell; the leaf and the icons are unchanged.
+- Every sheet has the seal; the mood slabs have their faces and still show the word when chosen; an empty journal
+  draws the inkwell; the leaf and the icons are unchanged.
 - The three pictures are each the output of `internal/pixelart`, checked by a test.
