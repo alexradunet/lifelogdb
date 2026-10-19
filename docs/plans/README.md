@@ -8,9 +8,9 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [139](139-pixel-icons.md) | Pixel icons: the icons of the rail, the New menu and the kinds as 10 by 10 glyphs | P3 | S | owner word 2026-10-19; `5dce8b1` | TODO |
-| [138](138-pixel-art-elsewhere.md) | Pixel art elsewhere: the ground, the seal, the mood faces and the empty states | P3 | S | owner word 2026-10-19; `284e955` | TODO |
-| [137](137-pixel-wood-and-the-focus-pass.md) | Pixel wood and the focus pass: a drawn rail, two heading levels, a writing mode, and a Today strip | P2 | M | owner word 2026-10-19; `cdc9240` | TODO |
+| [139](139-pixel-icons.md) | Pixel icons: the icons of the rail, the New menu and the kinds as 10 by 10 glyphs | P3 | S | owner word 2026-10-19; `5dce8b1` | IN REVIEW (owner) |
+| [138](138-pixel-art-elsewhere.md) | Pixel art elsewhere: the ground, the seal, the mood faces and the empty states | P3 | S | owner word 2026-10-19; `284e955` | IN REVIEW (owner) |
+| [137](137-pixel-wood-and-the-focus-pass.md) | Pixel wood and the focus pass: a drawn rail, two heading levels, a writing mode, and a Today strip | P2 | M | owner word 2026-10-19; `cdc9240` | IN REVIEW (owner) |
 | [136](136-plan-lines-and-period-pages.md) | Plan lines and period pages: the planning axis without a table | P1 | L | owner word 2026-10-19; `9cde014` | IN REVIEW (owner) |
 | [135](135-extensions-outside-the-core.md) | Extensions outside the core: what names a third party is a subprocess found by name | P2 | L | owner word 2026-10-19; `7637f66` | IN REVIEW (owner) |
 | [134](134-a-cover-from-google-photos.md) | A cover from Google Photos: an extension outside the core picks each day's cover from that day's photos | P3 | M | owner word 2026-10-18; `ed046b2` | IN REVIEW (owner) |

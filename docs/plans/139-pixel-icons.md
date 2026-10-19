@@ -7,7 +7,7 @@
 
 - **Date / baseline:** 2026-10-19, `5dce8b1` (master).
 - **Priority:** P3. **Effort:** S. **Risk:** LOW: one drawing, one template function, the sheets.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Live since 2026-10-19 22:26, in the master build `c24ac92` (plans 136 to 139 in one binary); the owner looks and says what to keep.
 - **Resolves:** the last candidate of part 6 of [plan 137](137-pixel-wood-and-the-focus-pass.md). The page of
   mock-ups left the icons out by the agent's call; the owner's word was "everything except the leaf on rings", and
   then "Where are the icons?".

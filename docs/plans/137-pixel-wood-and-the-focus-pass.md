@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-19, `cdc9240` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW for parts 1 to 3 (the sheets and one embedded picture); MEDIUM for
   parts 4 and 5 (the rail reads the day of today on every page; Home gets two reads).
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Live since 2026-10-19 22:26, in the master build `c24ac92` (plans 136 to 139 in one binary); the owner looks and says what to keep.
 - **Resolves:** the owner's request of 2026-10-19 (below). No issue: a look is not an incident.
 
 ## The owner's words (2026-10-19)

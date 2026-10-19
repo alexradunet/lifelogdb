@@ -7,7 +7,7 @@
 
 - **Date / baseline:** 2026-10-19, `284e955` (the branch `plan-137-parts-4-5`, on `901a1a3` of master).
 - **Priority:** P3. **Effort:** S. **Risk:** LOW: the sheets, two embedded pictures and one template attribute.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Live since 2026-10-19 22:26, in the master build `c24ac92` (plans 136 to 139 in one binary); the owner looks and says what to keep.
 - **Resolves:** part 6 of [plan 137](137-pixel-wood-and-the-focus-pass.md), with the owner's pick.
 
 ## The owner's words (2026-10-19)
