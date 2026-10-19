@@ -159,10 +159,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   scale with the column by `clamp()`, with no step at a breakpoint
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
   page's entity: it reads the clock, for today's date, and the Today strip
-  ([plan 137](docs/plans/137-pixel-wood-and-the-focus-pass.md)): "2 of 4 done" over the entry, the mood and the habits
-  in use (the unitless metrics read in the last 14 days), each chip a link to the form that does the thing, and the
-  days written in a row ([the streak](docs/cookbook/streaks.md)). On a phone the strip is in the sheet. While the
-  entry box has the focus, the rest of the page steps back (writing mode). A page drawn before the handler
+  ([plan 137](docs/plans/137-pixel-wood-and-the-focus-pass.md)). The strip says "2 of 4 done" over the entry, the mood
+  and the habits in use. A habit in use is a unitless metric with a reading in the last 14 days. Each chip is a link
+  to the form that does the thing. The strip also shows the days written in a row ([the streak](docs/cookbook/streaks.md)).
+  On a phone the strip is in the sheet. While the entry box has the focus, the rest of the page steps back (writing
+  mode). A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
   bound in Hearthwood, the materials of the owner's Balaur design system
   ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are

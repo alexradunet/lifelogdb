@@ -12,19 +12,18 @@ import (
 // keeps this copy equal to it.
 const streakQuery = `
 WITH RECURSIVE
-  written(day) AS (
-    SELECT p.day FROM entities p
-     WHERE p.is_journal AND p.deleted_at IS NULL AND p.body <> ''
-       AND p.day > date(:today, '-3660 day') AND p.day <= :today),
   start(day) AS (
-    SELECT CASE WHEN EXISTS (SELECT 1 FROM written WHERE day = :today) THEN :today ELSE date(:today, '-1 day') END),
+    SELECT CASE WHEN EXISTS (SELECT 1 FROM entities p WHERE p.day = :today AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '')
+                THEN :today ELSE date(:today, '-1 day') END),
   run(day, n) AS (
-    SELECT s.day, 1 FROM start s WHERE s.day IN (SELECT day FROM written)
+    SELECT s.day, 1 FROM start s
+     WHERE EXISTS (SELECT 1 FROM entities p WHERE p.day = s.day AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '')
     UNION ALL
     SELECT date(r.day, '-1 day'), r.n + 1 FROM run r
-     WHERE date(r.day, '-1 day') IN (SELECT day FROM written) AND r.n < 3660)
+     WHERE r.n < 3660
+       AND EXISTS (SELECT 1 FROM entities p WHERE p.day = date(r.day, '-1 day') AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> ''))
 SELECT coalesce(max(n), 0) AS streak,
-       EXISTS (SELECT 1 FROM written WHERE day = :today) AS written_today
+       EXISTS (SELECT 1 FROM entities p WHERE p.day = :today AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '') AS written_today
   FROM run`
 
 // Streak is the count of days written in a row that ends today, or yesterday when today has no words yet
@@ -41,7 +40,8 @@ func (s *Store) Streak(ctx context.Context, today string) (streak int, writtenTo
 const HabitDays = 14
 
 // Habit is a unitless metric in use (D24). Done is nil when it has no reading today, else whether the newest
-// reading of today is not 0.
+// reading of today is not 0. A unitless count read in the last 14 days is shown as a habit, and any value other
+// than 0 today counts as done. This is the trade of D24: nothing tells a habit from a count.
 type Habit struct {
 	Name string
 	Done *bool

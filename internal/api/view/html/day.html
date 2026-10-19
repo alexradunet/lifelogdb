@@ -43,7 +43,7 @@
 {{template "cover" .}}
 {{- with $d.earlier}}
 <section class="group" aria-label="On this day">
-<h2>On this day</h2>
+<div class="panel-head"><h2>On this day</h2></div>
 <ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $ "e" .)}}</li>{{end}}</ul></section>{{end}}
 {{- if or $d.readings (.Action "record")}}
 <section class="group" aria-label="Readings">

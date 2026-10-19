@@ -29,7 +29,7 @@ func doAction(t *testing.T, c *client.Client, from, action string, v map[string]
 
 // TestTheTodayStripReadsTheLife: three days written in a row ending today, a mood today, and three habits in use:
 // Walk done today, Stretch with a reading ten days ago and none today, Smoke recorded 0 today. A metric with a unit
-// is no habit. The strip counts the entry, the mood and Walk: 3 of 6. The head of today shows the same streak.
+// is no habit. The strip counts the entry, the mood and Walk: 3 of 5. The head of today shows the same streak.
 func TestTheTodayStripReadsTheLife(t *testing.T) {
 	h, do := lifeOf(t)
 	for _, n := range []string{"Walk", "Stretch", "Smoke"} {

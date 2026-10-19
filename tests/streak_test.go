@@ -55,6 +55,11 @@ func streaks(s *S) {
 	s.K("a day page with an empty body is not written: the streak ends yesterday", answer(c) == "2|0", answer(c))
 
 	c = s.fresh()
+	c.dayPage(today, "   \n\t\r\n ")
+	run(c, 1, 2)
+	s.K("a day page with a body of only spaces, tabs and line breaks is not written", answer(c) == "2|0", answer(c))
+
+	c = s.fresh()
 	run(c, 0, 5)
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE is_journal AND day=?", back(2))
 	s.K("a tombstoned day page breaks the run: today, yesterday and the day before count 2", answer(c) == "2|1", answer(c))

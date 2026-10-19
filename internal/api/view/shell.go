@@ -10,7 +10,7 @@ import (
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
-// date. It reads only the clock: this month is on Calendar, so the sidebar does not draw it a second time.
+// date. It reads the clock and the Today strip. This month is on Calendar, so the sidebar does not draw it a second time.
 
 // Shell is what the sidebar knows: today, and its zone, and the Today strip.
 type Shell struct {

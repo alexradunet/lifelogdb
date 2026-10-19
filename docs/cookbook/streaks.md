@@ -7,26 +7,25 @@ today nor yesterday has words, the streak is 0.
 ```sql
 -- :today is the local day of the reader, 'YYYY-MM-DD'. The columns: the streak, and whether today has words.
 WITH RECURSIVE
-  written(day) AS (
-    SELECT p.day FROM entities p
-     WHERE p.is_journal AND p.deleted_at IS NULL AND p.body <> ''
-       AND p.day > date(:today, '-3660 day') AND p.day <= :today),
   start(day) AS (
-    SELECT CASE WHEN EXISTS (SELECT 1 FROM written WHERE day = :today) THEN :today ELSE date(:today, '-1 day') END),
+    SELECT CASE WHEN EXISTS (SELECT 1 FROM entities p WHERE p.day = :today AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '')
+                THEN :today ELSE date(:today, '-1 day') END),
   run(day, n) AS (
-    SELECT s.day, 1 FROM start s WHERE s.day IN (SELECT day FROM written)
+    SELECT s.day, 1 FROM start s
+     WHERE EXISTS (SELECT 1 FROM entities p WHERE p.day = s.day AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '')
     UNION ALL
     SELECT date(r.day, '-1 day'), r.n + 1 FROM run r
-     WHERE date(r.day, '-1 day') IN (SELECT day FROM written) AND r.n < 3660)
+     WHERE r.n < 3660
+       AND EXISTS (SELECT 1 FROM entities p WHERE p.day = date(r.day, '-1 day') AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> ''))
 SELECT coalesce(max(n), 0) AS streak,
-       EXISTS (SELECT 1 FROM written WHERE day = :today) AS written_today
+       EXISTS (SELECT 1 FROM entities p WHERE p.day = :today AND p.is_journal AND p.deleted_at IS NULL AND trim(p.body, ' ' || char(9,10,13)) <> '') AS written_today
   FROM run;
 ```
 
 - `is_journal` is the stored column of the day page ([D5](../decisions/D05-pages-and-day-pages.md)): the query reads it
   and never works out again what a day page is.
-- The query looks back at most 3660 days (about ten years), so its cost has a limit. A longer streak reads as 3660.
-- A day page with no words (an empty body) does not count as written.
+- The query looks up one day page at a time, by its day, going back from today. Its cost follows the streak, not the size of the record. It stops at 3660 days (about ten years), so a longer streak reads as 3660.
+- A day page whose body is only spaces, tabs or line breaks is not written. It does not count.
 - A tombstoned day page does not count ([D11](../decisions/D11-tombstones.md)).
-- A day page of a future day does not count: the window ends at `:today`.
+- A day page of a future day does not count: the query only goes back from `:today`.
 - A habit has no streak here. Habits have no periods ([D24](../decisions/D24-habits.md)).
