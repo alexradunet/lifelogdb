@@ -136,6 +136,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}
   .rail-foot{margin:0; padding-block-start:0; border-block-start:0}
+  .rail,.rail>nav{background-image:url(/assets/wood.png),var(--grain-ground); background-size:252px 480px,4px 4px; background-repeat:repeat} /* the bars carry no shade of the tall rail */
   .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     &>footer{margin-block-start:var(--space-6)}}
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
@@ -175,7 +176,7 @@ small .mood{font-size:12px; padding:2px 8px}
    after them, a dotted rule of the material to the end of the line. The small groups are inside a part: a quiet
    tracked label with no stitch. The title of a field has the face of a small group (base.css). */
 .panel-head :is(h2,h3),.section>h2,details.metric-group>summary>:is(h2,h3){font:400 24px/26px var(--display); letter-spacing:.02em; color:var(--text-strong)}
-.margin .group>h2,.capture>h2,.record>h2,.also>h2{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted)}
+.margin .group>h2,.capture>h2,.record>h2,.also>h2,details.metric-sub>summary>h3,.cover-choice>section>h2{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted)}
 .panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.record>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-inline-size:0}
 .panel-head :is(h2,h3)::before,.section>h2::before{content:""; flex:none; inline-size:7px; block-size:7px; rotate:45deg; background:var(--accent-ink)}
 .margin .panel-head h2::before{background:var(--accent)}
@@ -310,7 +311,7 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
     &.pictured>a::before{content:""; position:absolute; inset:0; z-index:0;
       background:linear-gradient(to bottom, color-mix(in srgb, var(--surface) 90%, transparent) 0, color-mix(in srgb, var(--surface) 78%, transparent) 60%, color-mix(in srgb, var(--surface) 45%, transparent) 100%)}
     &.pictured>a:hover::before{background:color-mix(in srgb, var(--surface) 55%, transparent)}
-    & .cell-cover{position:absolute; inset:0; z-index:-1; inline-size:100%; block-size:100%; object-fit:cover}
+    & .cell-cover{position:absolute; inset:0; z-index:-1; inline-size:100%; block-size:100%; object-fit:cover; image-rendering:auto} /* the wood is pixelated; a picture is not */
     &.written{background-color:var(--accent-soft);
       & .n{color:var(--accent-ink)}}
     &[aria-current=date]{border-color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-ink);
@@ -418,7 +419,7 @@ fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s
 /* Writing mode: while the box has the focus and holds words, the rest of the page steps back and the box takes a
    halo. The box takes the focus on arrival, so the focus alone is not the sign: the first word is. */
 .column:has(.capture textarea:focus:not(:placeholder-shown)){
-  & :is(.journal,.margin,.page-head .tools,.page-head .sub,.column>footer){opacity:.4}
+  & :is(.journal,.margin>*,.page-head .tools,.page-head .sub,.column>footer){opacity:.4} /* the margin's parts, not the margin: on a phone it is display:contents */
   & .capture textarea{border-color:var(--focus); box-shadow:0 0 0 4px var(--focus-halo)}}
 
 /* Record on a metric's page (docs/plans/100-one-page-a-metric.md): the day and the value side by side, the folded
@@ -652,7 +653,7 @@ li.tile:is(:hover,:focus-within)>a.row-move{opacity:1}
    transition of display and overlay keeps the element in the top layer while it leaves (overlay is Chromium's and
    Safari's; Firefox ends the exit at once, which is no loss). */
 @media (prefers-reduced-motion:no-preference){
-  :is(.journal,.margin,.page-head .tools,.page-head .sub,.column>footer){transition:opacity .25s}
+  :is(.journal,.margin>*,.page-head .tools,.page-head .sub,.column>footer){transition:opacity .25s}
   /* A toast that opens drops 3 px and settles. It does not loop. */
   .toast[open]{animation:land .18s ease-out}
   @keyframes land{from{translate:0 -3px}}
@@ -748,10 +749,11 @@ details.metric-group,details.metric-sub{
     &>:is(h2,h3){display:flex; align-items:baseline; gap:var(--space-2); flex:1 1 auto; min-inline-size:0; margin:0;
       & small{color:var(--text-muted); font:400 13px/19px var(--mono)}
       &::after{content:""; flex:1; align-self:center; block-size:2px; min-inline-size:24px;
-        background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.7}}
+        background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.35}}
     & .meta{flex:none; font-weight:400; font-size:13px; line-height:19px; color:var(--text-muted)}}
   &[open]>summary{margin-block-end:var(--space-3)}}
 details.metric-sub{margin-block:var(--space-4) var(--space-2); padding-inline-start:var(--space-4); border-inline-start:2px solid var(--line-soft)}
+details.metric-sub>summary>h3::after{content:none} /* a small group has no stitch */
 .group-tools{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-4); margin-block-start:var(--space-4);
   &>a:not(.button){font-size:13px; line-height:19px}}
 @container column (max-width:487px){details.metric-group,details.metric-sub{&>summary>:is(h2,h3)::after{content:none}}}

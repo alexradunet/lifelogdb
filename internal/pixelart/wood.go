@@ -67,7 +67,9 @@ func grain(img *image.NRGBA, rnd *rand.Rand, bx int) {
 	k := float64(1 + rnd.IntN(2))
 	inside := func(x int) bool { return bx+1 < x && x < bx+boardWidth-1 }
 	for y := range woodHeight {
-		x := int(math.Round(x0 + amp*math.Sin(2*math.Pi*k*float64(y)/woodHeight+phase)))
+		// The conversions round each product before the sum: the compiler may not fuse them into one operation,
+		// which differs by platform and would move a pixel.
+		x := int(math.Round(x0 + float64(amp*math.Sin(float64(2*math.Pi*k*float64(y)/woodHeight)+phase))))
 		if inside(x) {
 			put(img, x, y, shadow, .16)
 		}
