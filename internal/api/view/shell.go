@@ -2,6 +2,7 @@ package view
 
 import (
 	"html/template"
+	"net/url"
 	"strings"
 	"time"
 
@@ -11,10 +12,78 @@ import (
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
 // date. It reads only the clock: this month is on Calendar, so the sidebar does not draw it a second time.
 
-// Shell is what the sidebar knows: today, and its zone.
+// Shell is what the sidebar knows: today, and its zone, and the Today strip.
 type Shell struct {
 	Today string
 	Zone  *time.Location // the zone of today: the words for a time use it
+	Strip *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
+}
+
+// Strip is the Today strip of the rail: what is done today, and how many days in a row the owner wrote. The server
+// fills it once a page, so the rail and the head of the day read the same streak.
+type Strip struct {
+	Written bool    // the day page of today has words
+	Mood    bool    // a mood reading of today
+	Habits  []Habit // the habits in use, by name
+	Streak  int     // days written in a row, ending today or yesterday
+}
+
+// Habit is a habit in use (D24). Done is nil when it has no reading today, else whether the reading is not 0.
+type Habit struct {
+	Name string
+	Done *bool
+}
+
+// State is "open" with no reading today, "done" or "no" by the reading.
+func (h Habit) State() string {
+	switch {
+	case h.Done == nil:
+		return "open"
+	case *h.Done:
+		return "done"
+	}
+	return "no"
+}
+
+// Href is the page that records the habit as done: the form of the reading on Home, with the habit and the value 1
+// filled in from the query (shown). A chip leads to the one form; it is not a second way to record.
+func (h Habit) Href() string {
+	return "/?new=record&metric=" + url.QueryEscape(h.Name) + "&value=1#record"
+}
+
+// Total is how many things the strip counts: the entry, the mood and each habit.
+func (s *Strip) Total() int { return 2 + len(s.Habits) }
+
+// DoneCount is how many of them are done today.
+func (s *Strip) DoneCount() int {
+	n := 0
+	for _, done := range []bool{s.Written, s.Mood} {
+		if done {
+			n++
+		}
+	}
+	for _, h := range s.Habits {
+		if h.Done != nil && *h.Done {
+			n++
+		}
+	}
+	return n
+}
+
+// Strip is the strip of the rail; nil on a page with no shell or no state.
+func (v *view) Strip() *Strip {
+	if v.Shell == nil {
+		return nil
+	}
+	return v.Shell.Strip
+}
+
+// Streak is the days written in a row, 0 when the page has no strip. The head of a day shows it when it is 2 or more.
+func (v *view) Streak() int {
+	if s := v.Strip(); s != nil {
+		return s.Streak
+	}
+	return 0
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a

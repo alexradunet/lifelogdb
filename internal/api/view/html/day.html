@@ -9,7 +9,7 @@
 <header class="page-head day-head">
 <div class="day-title">{{template "leaf" .Title}}
 <div class="what"><h1>{{weekday .Title}}{{template "mood" $d.mood}}</h1>
-<p class="sub">{{if $today}}<span class="tag open">today</span>{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
+<p class="sub">{{if $today}}<span class="tag open">today</span>{{if ge .Streak 2}} <span class="tag">{{.Streak}} days in a row</span>{{end}}{{else}}<a href="/days/today">Go to today</a>{{end}}</p></div></div>
 <div class="tools">
 {{- $prev := shortDay (addDays .Title -1)}}{{$next := shortDay (addDays .Title 1)}}
 {{- with .Link "prev"}}
@@ -41,6 +41,10 @@
 
 <div class="margin">
 {{template "cover" .}}
+{{- with $d.earlier}}
+<section class="group" aria-label="On this day">
+<h2>On this day</h2>
+<ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $ "e" .)}}</li>{{end}}</ul></section>{{end}}
 {{- if or $d.readings (.Action "record")}}
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>

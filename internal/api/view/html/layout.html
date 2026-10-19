@@ -35,6 +35,9 @@
 </nav>
 <div class="rail-more" id="sections" popover>
 <div class="rail-more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button></div>
+{{with .Strip}}<section class="rail-today" aria-label="Today"><div class="line"><b>Today</b><span class="n">{{.DoneCount}} of {{.Total}} done</span></div>
+<div class="chips"><a class="chip{{if .Written}} done{{end}}" href="/days/today#capture">{{if .Written}}✓ {{end}}entry</a><a class="chip{{if .Mood}} done{{end}}" href="/days/today#capture">{{if .Mood}}✓ {{end}}mood</a>{{range .Habits}}{{if eq .State "open"}}<a class="chip" href="{{.Href}}">{{.Name}}</a>{{else if eq .State "done"}}<span class="chip done">✓ {{.Name}}</span>{{else}}<span class="chip">{{.Name}} · no</span>{{end}}{{end}}</div>
+{{if ge .Streak 2}}<div class="streak">{{.Streak}} days in a row</div>{{end}}</section>{{end}}
 <p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/actions?new=snapshot">Snapshot</a></p>
 </div>
 </aside>{{end}}

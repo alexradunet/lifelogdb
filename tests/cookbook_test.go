@@ -15,7 +15,7 @@ func cookbook(s *S) {
 	cookbookMeasurementReads(s)
 	bl := s.d.CookbookBlocks()
 	first, order := s.d.Blocks()
-	s.K("the cookbook has at least 18 SQL blocks, one or more per recipe, 18 recipes", len(bl) >= 18 && len(first) == 18 && slices.Equal(order, s.d.CookbookOrder()), order)
+	s.K("the cookbook has at least 19 SQL blocks, one or more per recipe, 19 recipes", len(bl) >= 19 && len(first) == 19 && slices.Equal(order, s.d.CookbookOrder()), order)
 
 	seeded := func(hardened bool, path string) (*C, P) {
 		c := s.freshWith(F{Hardened: hardened, Path: path})
@@ -41,7 +41,7 @@ func cookbook(s *S) {
 		old := c.pageW("Sourdogh", nil, "Feed the starter. [[Lifelog]]")
 		link(old, wp, "wikilink")
 		return c, P{"include_deleted": 0, "old_id": old, "new_title": "Sourdough starter", "new_key": "sourdough starter", "found_id": wp, "target_id": wp, "target_ids": "[]", "place_id": pl, "day_page_id": dp, "mistaken_row_id": 2, "from_day": "2026-01-15", "to_day": "2026-09-10",
-			"day": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
+			"day": "2026-09-29", "today": "2026-09-29", "page_id": wp, "person_id": pe, "entity_id": pe, "handle_title": "Bob Sample", "handle_key": "bob sample", "ghost_id": gh,
 			"query": "schema", "key": "newpage", "title": "Newpage", "metric_id": w, "wrong_row_id": 1, "source": "ui",
 			"import_key": "notes/sourdough.md", "metric": "vitamin_d", "as_of": "2099-01-01T00:00:00.000Z", "parent_id": cat,
 			"sha256": strings.Repeat("ab", 32), "mime": "image/heic", "preview": jpegBytes, "file_title": "2026-09-29 Lake.jpg", "append_embed": 1,

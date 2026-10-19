@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,6 +34,12 @@ func (h *server) recentDaysUpTo(ctx context.Context, today string) ([]recentDay,
 	if err != nil {
 		return nil, err
 	}
+	return h.withMoods(ctx, entries)
+}
+
+// withMoods are the entries as the root lists them, in the same order, each with its mood and the address of its
+// picture.
+func (h *server) withMoods(ctx context.Context, entries []core.DayEntry) ([]recentDay, error) {
 	out := []recentDay{}
 	if len(entries) == 0 {
 		return out, nil
@@ -49,6 +56,38 @@ func (h *server) recentDaysUpTo(ctx context.Context, today string) ([]recentDay,
 		out = append(out, recentDay{DayEntry: d, Mood: moods[d.Day], Picture: pictureHref(d.Picture)})
 	}
 	return out, nil
+}
+
+// earlierYears is how many earlier years a day looks back to for "On this day".
+const earlierYears = 5
+
+// sameDayEarlier are the day pages of day in the years before it, the nearest year first: year minus 1, then 2, and so
+// on while a page exists, at most earlierYears of them. A year in which the date does not exist (29 February) is
+// passed over, and does not end the list.
+func (h *server) sameDayEarlier(ctx context.Context, day string) ([]recentDay, error) {
+	t, ok := text.ParseDay(day)
+	if !ok {
+		return nil, nil
+	}
+	var entries []core.DayEntry
+	for back := 1; back <= earlierYears && t.Year()-back >= 0; back++ {
+		d := fmt.Sprintf("%04d-%02d-%02d", t.Year()-back, int(t.Month()), t.Day())
+		if !text.IsDay(d) {
+			continue
+		}
+		found, err := h.s.DayEntries(ctx, d, d, false, 1)
+		if err != nil {
+			return nil, err
+		}
+		if len(found) == 0 {
+			break
+		}
+		entries = append(entries, found[0])
+	}
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	return h.withMoods(ctx, entries)
 }
 
 // The root is the entry point of the API: the newest day pages, and every action that starts something. A browser's
@@ -237,6 +276,8 @@ type dayView struct {
 	Today string    `json:"today"`
 	// Recent are the newest day pages, on the day of today only: Home is the page of today.
 	Recent []recentDay `json:"recent,omitempty"`
+	// Earlier are the day pages of this day in the years before, the nearest year first: "On this day".
+	Earlier []recentDay `json:"earlier,omitempty"`
 	// Cover is the cover of the day page, which the journal draws above it; absent when it has none.
 	Cover *core.Cover `json:"cover,omitempty"`
 }
@@ -266,13 +307,17 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 			return nil, err
 		}
 	}
+	earlier, err := h.sameDayEarlier(ctx, day)
+	if err != nil {
+		return nil, err
+	}
 	record, err := h.recordAction(ctx, "", day)
 	if err != nil {
 		return nil, err
 	}
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
-		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Today: today, Recent: recent},
+		Class: []string{"day"}, Title: day, Properties: dayView{Day: *d, Mood: mood, Today: today, Recent: recent, Earlier: earlier},
 		Links:   []siren.Link{link("self", siren.DayHref(day), day)},
 		Actions: []siren.Action{action("capture", map[string]string{"day": day}, nil), record},
 	}

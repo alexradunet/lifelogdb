@@ -70,6 +70,17 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
 .rail-more{display:contents}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
+/* The Today strip: a carved well under the sections (in the More sheet on a phone, before the owner's links). A chip
+   is a link to the form that does the thing; a done one is gold with a check. */
+.rail-today{display:flex; flex-direction:column; gap:6px; padding:10px; background:var(--rail-deep); border:1px solid var(--outline); box-shadow:var(--bevel-in); color:var(--rail-ink); font-size:13px; line-height:18px;
+  & .line{display:flex; justify-content:space-between; align-items:baseline;
+    & b{color:var(--rail-accent); font-weight:700}
+    & .n{font:400 12px/16px var(--mono)}}
+  & .chips{display:flex; flex-wrap:wrap; gap:4px}
+  & .chip{display:inline-flex; align-items:center; gap:4px; padding:2px 8px; font:400 12px/16px var(--mono); color:var(--rail-ink); text-decoration:none; background:var(--chip-ground); border:1px solid var(--rail-hairline);
+    &:is(a):hover{color:var(--rail-accent); border-color:var(--rail-accent)}
+    &.done{color:var(--rail-on-accent); background:var(--rail-accent); border-color:var(--rail-accent)}}
+  & .streak{font:400 12px/16px var(--mono); color:var(--rail-ink)}}
 .rail-foot{margin-block-start:auto; padding:var(--space-3) var(--space-2) 0; border-block-start:1px solid var(--rail-hairline); font-size:13px; line-height:19px; color:var(--rail-ink);
   & a{color:var(--rail-ink);
     &[aria-current=page]{font-weight:700; color:var(--rail-accent)}}}

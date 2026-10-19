@@ -51,7 +51,7 @@
   --grain-ground:repeating-conic-gradient(light-dark(#2c20120a, #ffd69606) 0% 25%,transparent 0% 50%);
   --grain-ink:repeating-conic-gradient(#402c120b 0% 25%,transparent 0% 50%);
   --rail-shade:linear-gradient(90deg,#00000040,transparent 14px); --rail-foot-shade:linear-gradient(180deg,transparent 60%,#00000040);
-  --accent-tint:#f2c14e1f; --rail-hairline:#f2c14e2e; --focus-halo:#0e7f6b22;
+  --accent-tint:#f2c14e1f; --rail-hairline:#f2c14e2e; --chip-ground:#00000030; --rail-on-accent:#1c0d04; --focus-halo:#0e7f6b22;
   --bevel-up:inset 0 3px 0 var(--bevel-light),inset 3px 0 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark),inset -3px 0 0 var(--bevel-dark);
   --bevel-in:inset 0 3px 0 var(--bevel-dark),inset 3px 0 0 var(--bevel-dark),inset 0 -3px 0 var(--bevel-light),inset -3px 0 0 var(--bevel-light);
   --parch-bevel:inset 0 2px 0 var(--paper-light),inset 0 -3px 0 var(--surface-deep),0 3px 0 var(--bevel-dark);

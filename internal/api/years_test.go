@@ -146,7 +146,8 @@ func TestTheEdgesOfTheCalendarLinkOnlyToPages(t *testing.T) {
 				continue
 			}
 			checked[m[1]] = true
-			if code := answers(m[1], "text/html"); code != http.StatusOK && code != http.StatusSeeOther {
+			// a browser keeps the fragment (#capture of the Today strip) to itself; httptest would send it in the path
+			if code := answers(strings.SplitN(m[1], "#", 2)[0], "text/html"); code != http.StatusOK && code != http.StatusSeeOther {
 				t.Errorf("%s: its HTML links %s, which answers %d", tc.page, m[1], code)
 			}
 		}
