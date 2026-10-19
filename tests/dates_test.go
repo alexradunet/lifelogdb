@@ -13,6 +13,7 @@ import (
 // and not `=`, the zone, and created_at written by the writer.
 func dates(s *S) {
 	exactTimeBoundaries(s)
+	isoWeekProbes(s)
 	fractional := s.fresh()
 	s.K("measurements.created_at accepts a UTC instant with milliseconds", fractional.tryx("INSERT INTO measurements(metric_id,day,value,source,created_at) VALUES (1,'2026-01-01',3,'ui','2026-01-01T12:34:56.123Z')") == "OK")
 
@@ -133,4 +134,48 @@ func exactTimeBoundaries(s *S) {
 		}
 	}
 	c.must("ROLLBACK")
+}
+
+// isoWeekProbes: the SQLite behaviour that entities.period and entities_period_exists rely on (D30), executed. An ISO
+// week starts on a Monday and week 1 holds 4 January, so the Monday of week 1 is the Monday on or before 4 January:
+// date(Y-01-04, '-6 days', 'weekday 1'). Week 53 exists when that Monday of week 53 is on or before 28 December.
+func isoWeekProbes(s *S) {
+	c := s.connect("")
+	s.K("date('2026-01-04','-6 days','weekday 1') is Monday 2025-12-29, the first day of week 2026-W01", c.str("SELECT date('2026-01-04','-6 days','weekday 1')") == "2025-12-29")
+	monday := func(year, week int) string {
+		return c.str("SELECT date(?||'-01-04','-6 days','weekday 1','+'||((?-1)*7)||' days')", fmt.Sprint(year), week)
+	}
+	for _, v := range []struct {
+		year, week int
+		want       string
+	}{
+		{2020, 1, "2019-12-30"}, {2020, 52, "2020-12-21"}, {2020, 53, "2020-12-28"},
+		{2021, 1, "2021-01-04"}, {2021, 52, "2021-12-27"}, {2021, 53, "2022-01-03"},
+		{2026, 1, "2025-12-29"}, {2026, 52, "2026-12-21"}, {2026, 53, "2026-12-28"},
+		{2027, 1, "2027-01-04"}, {2027, 52, "2027-12-27"}, {2027, 53, "2028-01-03"},
+	} {
+		got := monday(v.year, v.week)
+		s.K(fmt.Sprintf("the Monday of ISO week %d-W%02d is %s", v.year, v.week, v.want), got == v.want, got)
+	}
+	s.K("a week 53 exists when its Monday is on or before 28 December: 2020 and 2026 yes, 2021 and 2027 no",
+		monday(2020, 53) <= "2020-12-28" && monday(2026, 53) <= "2026-12-28" && monday(2021, 53) > "2021-12-28" && monday(2027, 53) > "2027-12-28")
+	// the rule of the CHECK (1 January is a Thursday, or a Wednesday of a leap year) equals the Monday rule in every year
+	// that both can compute: 0001 to 9998, since the Monday of week 53 of 9999 may leave the calendar
+	differ := c.n(`WITH RECURSIVE y(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM y WHERE n < 9998),
+	  k(year) AS (SELECT printf('%04d', n) FROM y)
+	  SELECT count(*) FROM k WHERE
+	   (date(year||'-01-04','-6 days','weekday 1','+364 days') <= year||'-12-28')
+	   IS NOT (strftime('%w', year||'-01-01') = '4' OR (strftime('%w', year||'-01-01') = '3' AND date(year||'-02-29') IS year||'-02-29'))`)
+	s.K("week 53 by its Monday and week 53 by the weekday of 1 January agree in every year 0001 to 9998", differ == 0, differ)
+	c.must("CREATE TABLE wk (k TEXT NOT NULL, CONSTRAINT wk_w CHECK (substr(k, 7, 2) - 1 BETWEEN 0 AND 51)) STRICT")
+	s.K("'43' - 1 is 42: text digits are numbers in arithmetic", c.n("SELECT '43' - 1") == 42)
+	s.K("...inside a CHECK on a STRICT table: week 43 is accepted and week 00 is refused", c.tryx("INSERT INTO wk VALUES ('2026-w43')") == "OK" && strings.Contains(c.tryx("INSERT INTO wk VALUES ('2026-w00')"), "wk_w"))
+	c.must(`CREATE TABLE per (k TEXT NOT NULL, p TEXT GENERATED ALWAYS AS (CASE
+	  WHEN k GLOB '[0-9][0-9][0-9][0-9]' THEN 'year' WHEN k GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN 'month'
+	  WHEN k GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' THEN 'quarter' WHEN k GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]' THEN 'week' END) VIRTUAL) STRICT`)
+	for _, v := range [][2]string{{"2026", "year"}, {"2026-10", "month"}, {"2026-q4", "quarter"}, {"2026-w43", "week"}, {"2026-10-19", ""}, {"2026-w4", ""}, {"20261", ""}, {"2026-W43", ""}} {
+		c.must("INSERT INTO per(k) VALUES (?)", v[0])
+		got := c.str("SELECT coalesce(p, '') FROM per WHERE k = ? ORDER BY rowid DESC LIMIT 1", v[0])
+		s.K(fmt.Sprintf("a VIRTUAL generated column over GLOB reads %q as %q (a date is none, an upper-case key is none)", v[0], v[1]), got == v[1], got)
+	}
 }

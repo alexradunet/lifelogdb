@@ -257,6 +257,21 @@ the gaps are intentional.
   `freq_interval` / `freq_recurrence_factor` / `freq_relative_interval` — the shape
   `repeat` / `repeat_weekdays` / `repeat_every` of [D15](../decisions/D15-recurrence.md)'s deferred design follows.
 
+## Plans as lines of text (D15, D23, D29)
+
+- <a id="r76"></a>**[R76]** Obsidian Tasks: *Tasks Emoji Format* and *Recurring Tasks* —
+  <https://publish.obsidian.md/tasks/Reference/Task+Formats/Tasks+Emoji+Format>,
+  <https://publish.obsidian.md/tasks/Getting+Started/Recurring+Tasks> A task is a checkbox line of a note, read at
+  read time with no table of its own; dates and a repeat are marks on the line. Taken: the derive-at-read model. Not
+  taken: the emoji marks. → [D29](../decisions/D29-plan-lines.md).
+- <a id="r77"></a>**[R77]** todo.txt format — <https://github.com/todotxt/todo.txt> One task is one line of plain
+  text, with `key:value` tokens (`due:2026-10-24`) among the words. Taken: the `key:value` tokens, and a text that
+  any editor can change. → [D29](../decisions/D29-plan-lines.md).
+- <a id="r78"></a>**[R78]** Org mode manual: *Repeated tasks* — <https://orgmode.org/manual/Repeated-tasks.html> Three
+  repeater meanings: from the date (`+`), from the date but never in the past (`++`), and from the done day (`.+`).
+  Taken: "from the date" (the default) and "from the done day" (`from:done`) of a plan line. →
+  [D15](../decisions/D15-recurrence.md), [D29](../decisions/D29-plan-lines.md).
+
 ## Location (D21)
 
 - <a id="r71"></a>**[R71]** RFC 7946, *The GeoJSON Format* (2016) — <https://datatracker.ietf.org/doc/html/rfc7946>

@@ -11,7 +11,7 @@ import (
 )
 
 // diagrams: the mermaid diagrams of the docs say what the DDL says.
-// A  structure: exactly the eight diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
+// A  structure: exactly the ten diagrams, each announced by a `%% diagram: <id>` line, each of a known type;
 // B  the two ER diagrams draw keys only: every table is drawn; every drawn column is a PK or FK column with its
 //
 //	declared type and marks; every PK and FK column is drawn somewhere; every foreign key is a relationship and
@@ -35,7 +35,8 @@ func diagrams(s *S) {
 		}
 	}
 	want := map[string]string{"er-core": "erDiagram", "er-facts": "erDiagram", "link-map": "flowchart", "page-life": "stateDiagram-v2",
-		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart", "capture-key": "flowchart"}
+		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart", "capture-key": "flowchart",
+		"plan-line": "stateDiagram-v2", "plan-a-project": "flowchart"}
 	once := len(byID) == len(want)
 	counts := map[string]int{}
 	for k, v := range byID {
@@ -43,7 +44,7 @@ func diagrams(s *S) {
 		_, known := want[k]
 		once = once && known && len(v) == 1
 	}
-	s.K("exactly the eight diagrams, each once", once, counts)
+	s.K("exactly the ten diagrams, each once", once, counts)
 	var wantIDs []string
 	for k := range want {
 		wantIDs = append(wantIDs, k)

@@ -25,7 +25,8 @@ SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
 SELECT l.id FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
  WHERE (l.kind='at' AND NOT coalesce(f.is_journal,0))
  OR (l.kind='part-of' AND coalesce(t.is_journal,0))
- OR (l.kind='part-of' AND coalesce(f.is_journal,0)) ORDER BY l.id; -- no rows
+ OR (l.kind='part-of' AND coalesce(f.is_journal,0))
+ OR (l.kind='part-of' AND (t.period IS NOT NULL OR f.period IS NOT NULL)) ORDER BY l.id; -- no rows
 SELECT m.id FROM measurements m JOIN metrics x ON x.id=m.metric_id
  WHERE m.value IS NOT NULL AND x.unit GLOB '[0-9]*-[0-9]*' AND x.unit NOT GLOB '*[^0-9-]*' AND x.unit NOT GLOB '*-*-*'
  AND CAST(substr(x.unit, 1, instr(x.unit, '-') - 1) AS REAL) < CAST(substr(x.unit, instr(x.unit, '-') + 1) AS REAL)
@@ -53,7 +54,7 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
   finds a row written while the trigger was missing. The link query covers the three rules of `links_endpoint_types`
   that `link_kinds` cannot say, since a day page and a plain page are both `page`: an `at` link starts at a day page,
   a `part-of` link never ends at a day page, and a `part-of` link never starts at one ([D16](../decisions/D16-places.md),
-  [D26](../decisions/D26-metric-categories.md)). The scale query covers `measurements_scale_range`: a reading of a scale
+  [D26](../decisions/D26-metric-categories.md)). A `part-of` link also never starts or ends at a period page ([D30](../decisions/D30-period-pages.md)). The scale query covers `measurements_scale_range`: a reading of a scale
   (a unit `lo-hi`) is a whole number inside the range. A retraction has no value and is never held. Both queries
   read every row, so they find a row written while the trigger was missing. Both report the `id` of the inspected
   table (executed with the trigger dropped before the bad row was written).

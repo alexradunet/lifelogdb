@@ -56,4 +56,6 @@ behavioral vectors remain in the [storage contract](README.md).
 | 22 | Where are the photos, the recordings and the scans? | `files` | `never stored in life.db`, `sha256`, `JPEG` |
 | 23 | Can a type change reinterpret retained edges? | `typed_links`, `entities_endpoint_types` | `incoming`, `outgoing`, `retained` |
 | 24 | How are stale edits rejected when write clocks coincide, and what counts as an edit? | `edit_revisions` | `monotonic`, `independent`, `no-ops`, `rollback`, `exhaustion`, `creation is not an edit`, `never the page it points at` |
+| 25 | What is a page named `2026-W43`, `2026-10`, `2026-Q4` or `2026`? | `periods`, `entities` | `canonical key`, `day is NULL`, `ISO 8601`, `entities_period_exists` |
+| 26 | Can a period page be a day, be filed, be renamed or have an alias? | `entities`, `entities_day_identity`, `links_endpoint_types` | `entities_period_page`, `period identity cannot be renamed`, `never a period page`, `never filed in a category` |
 

@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0086 are listed below; the next one is **0087**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0087 are listed below; the next one is **0088**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0087](0087-a-plan-written-as-words-cannot-be-read-as-a-plan.md) | A plan written as words cannot be read as a plan | resolved |
 | [0086](0086-today-is-the-hubs-day.md) | The days rule says never a server's day, and the word today is the hub's day | resolved |
 | [0085](0085-a-resent-capture-appends-twice.md) | A capture that a client sends again appends its paragraph twice and records a second mood | resolved |
 | [0084](0084-a-range-out-of-order-is-a-plain-unit.md) | A scale's unit with its bounds out of order is the unit of a plain number for good | resolved |

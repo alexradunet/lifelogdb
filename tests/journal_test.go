@@ -15,6 +15,7 @@ import (
 // events, with explicit planning kept separate from observed habits.
 func journal(s *S) {
 	journalDefinition(s)
+	periods(s)
 
 	// ---- the day page (pages_day_page)
 	c := s.fresh()
@@ -344,4 +345,108 @@ func captureKeys(s *S) {
 	s.K("...and one key under another source is another row", c.rolledBack(insert, "agent:probe", "k1", first) == "OK")
 	s.K("an UPDATE of a capture key is refused (capture_keys_no_update)", strings.Contains(c.rolledBack("UPDATE capture_keys SET import_key='moved' WHERE import_key='k2'"), "append-only"))
 	s.K("a DELETE of a capture key is refused (capture_keys_no_delete)", strings.Contains(c.rolledBack("DELETE FROM capture_keys WHERE import_key='k2'"), "never deleted"))
+}
+
+// periods: a period page (D30) is a page whose canonical key is a week, a month, a quarter or a year: entities.period
+// names its shape, entities_period_page and entities_period_exists hold it, and it has the identity rules of a day page.
+func periods(s *S) {
+	c := s.fresh()
+	for _, v := range []struct{ title, want string }{
+		{"2026-W43", "week"}, {"2026-10", "month"}, {"2026-Q4", "quarter"}, {"2026", "year"}, {"2026-W53", "week"}, {"2020-W53", "week"},
+		{"0000", "year"}, {"9999-12", "month"}, {"2026-W01", "week"}, {"2026-W52", "week"},
+	} {
+		id, err := c.tryIdentity("page", v.title, M{})
+		s.K(fmt.Sprintf("the page %q is accepted and its period is %s", v.title, v.want), err == nil && c.str("SELECT period FROM entities WHERE id=?", id) == v.want && c.n("SELECT is_journal FROM entities WHERE id=?", id) == 0, err)
+		if err == nil {
+			s.K(fmt.Sprintf("...its key is %q and its day is NULL", text.TitleKey(v.title)), c.n("SELECT day IS NULL FROM entities WHERE id=?", id) == 1 && c.str("SELECT preferred_name_key FROM entities WHERE id=?", id) == text.TitleKey(v.title))
+		}
+	}
+	s.K("a day page and a plain page have no period", c.n("SELECT period IS NULL FROM entities WHERE id=?", c.dayPage("2026-10-19", "")) == 1 && c.n("SELECT period IS NULL FROM entities WHERE id=?", c.page("Ferritin")) == 1)
+	s.K("SELECT * returns the generated column period right after is_journal", c.col("SELECT name FROM pragma_table_xinfo('entities') ORDER BY cid")[5] == "period")
+
+	// ---- a period that does not exist
+	for _, bad := range []string{"2027-W53", "2021-W53", "2026-W00", "2026-W54", "2026-13", "2026-00", "2026-Q5", "2026-Q0", "2026-Q9", "2026-W99"} {
+		_, err := c.tryIdentity("page", bad, M{})
+		s.K(fmt.Sprintf("the period %q does not exist: entities_period_exists refuses it", bad), err != nil && strings.Contains(err.Error(), "entities_period_exists"), err)
+	}
+	// every year from 1990 to 2060: week 53 is accepted exactly when the Monday of that week is on or before 28 December
+	wrong := []string{}
+	w := s.fresh()
+	for y := 1990; y <= 2060; y++ {
+		key := fmt.Sprintf("%d-W53", y)
+		_, err := w.tryIdentity("page", key, M{})
+		if (err == nil) != (c.str("SELECT date(?||'-01-04','-6 days','weekday 1','+364 days') <= ?||'-12-28'", fmt.Sprint(y), fmt.Sprint(y)) == "1") {
+			wrong = append(wrong, key)
+		}
+	}
+	s.K("week 53 exists in a year exactly when its Monday is on or before 28 December (1990 to 2060)", len(wrong) == 0, wrong)
+
+	// ---- a period page is a plain page without a day
+	_, err := c.tryIdentity("page", "2026-W44", M{"day": "2026-10-26"})
+	s.K("a period page with a day is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
+	_, err = c.tryIdentity("person", "2026", M{})
+	s.K("a person titled 2026 is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
+	_, err = c.tryIdentity("place", "2026-Q3", M{})
+	s.K("a place titled 2026-Q3 is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
+	year := c.str("SELECT id FROM entities WHERE preferred_name_key='2026'")
+	s.K("a year page is not promoted to a person (entities_period_page)", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", year), "entities_period_page"))
+
+	// ---- one spelling, no alias, no rename, never filed
+	month := c.str("SELECT id FROM entities WHERE preferred_name_key='2026-10'")
+	week := c.str("SELECT id FROM entities WHERE preferred_name_key='2026-w43'")
+	_, err = c.tryIdentity("page", "2026-w43b", M{})
+	s.K("a title that only looks like a period is a plain page (2026-w43b)", err == nil)
+	s.K("a lower-case spelling of a week is refused: the one spelling is 2026-W43", strings.Contains(func() string { _, e := c.tryIdentity("page", "2026-w45", M{}); return fmt.Sprint(e) }(), "a period page has only its canonical key name"))
+	s.K("an alias on a month page is refused", strings.Contains(c.tryx("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'October 2026','october 2026')", month), "a period page has only its canonical key name"))
+	s.K("an alias that is another period key on a plain page is refused", strings.Contains(c.tryx("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'2026-Q1','2026-q1')", c.page("Plain page")), "a period page has only its canonical key name"))
+	s.K("a period key is not an alias of a period page", strings.Contains(c.tryx("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'2026-Q1','2026-q1')", year), "a period page has only its canonical key name"))
+	s.K("a week spelled in lower case cannot be set by an update", strings.Contains(c.tryx("UPDATE entity_names SET title='2026-w43' WHERE entity_id=?", week), "a period spelling is its canonical key"))
+	s.K("a year page cannot be renamed", func() bool {
+		other := c.page("Rename target")
+		return strings.Contains(c.tryx("UPDATE entities SET preferred_name_key='rename target' WHERE id=?", year), "period identity cannot be renamed") && other != 0
+	}())
+	plain := c.page("Becomes a period")
+	s.K("a plain page does not acquire a period key through its aliases", func() bool {
+		c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Alias of it','alias of it')", plain)
+		_, e := c.query("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'2028-W10','2028-w10')", plain)
+		return e != nil && strings.Contains(c.tryx("UPDATE entities SET preferred_name_key='2028-w10' WHERE id=?", plain), "period identity cannot be renamed or acquired")
+	}())
+	filed, category := c.page("Filed page"), c.page("A category")
+	c.must("INSERT INTO links(from_id,to_id,kind,created_at,source) VALUES (?,?,'part-of',"+NOW+",'ui')", filed, category)
+	// the entity row comes before its name row (the key's FK is deferred), so a page with no name yet is filed, or made
+	// a category, and then selects a period key: only its part-of links can refuse that
+	for _, x := range []struct {
+		lbl  string
+		link func(e int64) string
+	}{
+		{"a page with no name yet, filed in a category, cannot become a period page", func(e int64) string { return c.link(e, category, "part-of") }},
+		{"a category with no name yet cannot become a period page", func(e int64) string { return c.link(filed, e, "part-of") }},
+	} {
+		c.must("BEGIN IMMEDIATE")
+		e := c.n("INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at) VALUES ('page','plans 3','ui'," + NOW + "," + NOW + ") RETURNING id")
+		linked := x.link(e)
+		r := c.tryx("UPDATE entities SET preferred_name_key='2029-q1' WHERE id=?", e)
+		s.K(x.lbl+" (D30)", linked == "OK" && strings.Contains(r, "never becomes a period page"), linked, r)
+		c.must("ROLLBACK")
+	}
+	c.must("BEGIN IMMEDIATE")
+	e := c.n("INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at) VALUES ('page','plans 4','ui'," + NOW + "," + NOW + ") RETURNING id")
+	s.K("a page with no name yet and no part-of link becomes a period page, and its name follows",
+		c.tryx("UPDATE entities SET preferred_name_key='2029-q1' WHERE id=?", e) == "OK" &&
+			c.tryx("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'2029-Q1','2029-q1')", e) == "OK" && c.str("SELECT period FROM entities WHERE id=?", e) == "quarter")
+	c.must("ROLLBACK")
+
+	s.K("a part-of link from a week page is refused (a period page is never filed)", strings.Contains(c.link(week, category, "part-of"), "a period page is never filed in a category"))
+	s.K("a part-of link to a month page is refused (a category is never a period page)", strings.Contains(c.link(filed, month, "part-of"), "a category is a plain page, never a period page"))
+	s.K("a part-of link to a year page is refused", strings.HasPrefix(c.link(filed, year, "part-of"), "ERR"))
+	s.K("an at link from a week page is refused: it starts at a day page only (D16)", strings.Contains(c.link(week, c.thing("place"), "at"), "an at link starts at a day page"))
+	s.K("an at link from a day page still works", c.link(c.dayPage("2026-10-20", ""), c.thing("place"), "at") == "OK")
+	s.K("a wikilink from and to a period page works", c.link(week, month, "wikilink") == "OK" && c.link(c.page("Notes"), week, "wikilink") == "OK")
+
+	// ---- a day page is as before
+	_, err = c.tryIdentity("page", "2026-10-21", M{"day": "2026-10-21"})
+	s.K("a day page is accepted, with its day, and has no period", err == nil && c.n("SELECT count(*) FROM entities WHERE preferred_name_key='2026-10-21' AND period IS NULL AND is_journal=1") == 1)
+	s.K("a day page cannot hold a period spelling or key as its alias", strings.HasPrefix(c.tryx("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'2026-W43','2026-w43x')", c.dayPage("2026-10-22", "")), "ERR"))
+	s.K("the integrity query of the link day rules finds no period page in a part-of link", c.n(`SELECT count(*) FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
+	 WHERE l.kind='part-of' AND (t.period IS NOT NULL OR f.period IS NOT NULL)`) == 0)
 }

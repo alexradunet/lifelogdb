@@ -21,7 +21,7 @@ What each one is for, and where it is explained. Its rules are in its `CREATE` s
 
 | object | holds | why | used in |
 |---|---|---|---|
-| `entities` | one named identity and prose body per linkable thing: id, type, day, provenance, preferred-name selection and tombstone | [D8](../decisions/D08-entities-and-links.md), [D11](../decisions/D11-tombstones.md) | [capture](../cookbook/capture.md) |
+| `entities` | one named identity and prose body per linkable thing: id, type, day, provenance, preferred-name selection and tombstone; a day page and a period page have canonical keys | [D8](../decisions/D08-entities-and-links.md), [D11](../decisions/D11-tombstones.md), [D30](../decisions/D30-period-pages.md) | [capture](../cookbook/capture.md) |
 | `entity_names` | authoritative preferred spellings and retained direct aliases, globally unique normalized keys | [D5](../decisions/D05-pages-and-day-pages.md), [D16](../decisions/D16-places.md), [D20](../decisions/D20-named-pages.md) | [titles and wikilinks](../contract/titles-and-wikilinks.md), [capture](../cookbook/capture.md) |
 | `people` | what a person has beyond its page | [D20](../decisions/D20-named-pages.md) | [a person or a place](../cookbook/person-or-place.md) |
 | `metrics` | the registry of what is measured, each metric filed in a category page | [D7](../decisions/D07-measurements.md), [D26](../decisions/D26-metric-categories.md) | [a metric series](../cookbook/metric-series.md), [metrics by category](../cookbook/metrics-by-category.md) |

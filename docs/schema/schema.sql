@@ -22,6 +22,7 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, health metrics and the files kept as their text and a small picture, of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app: the local calendar day of the device that captured it when the client names the date, and the local day of the writer''s own clock and zone when the client sends the word today or no day; never recomputed from an instant; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
+  ('periods',   'a period page has a canonical key like a day page: a week 2026-W43 (ISO 8601: Monday first, week 1 holds 4 January), a month 2026-10, a quarter 2026-Q4 or a year 2026; its key is reserved, it has no alias, no rename and no day (day is NULL), it is never filed and never a category, and entities.period names its shape (D30)'),
   ('deletes',   'life data is never deleted except links rows: an entity is a tombstone (entities.deleted_at); revival clears the tombstone, so lifecycle transitions are not retained history; a measurement is corrected by inserting a row; BEFORE DELETE triggers enforce it on entities and every domain row; ordinary active reads filter lifecycle tombstones; explicit historical and append-only audits retain them; the registries (link_kinds, lifelog_meta) are the owner''s administrative rows, deletable while nothing references them (each CREATE comment says so)'),
   ('source',    'entities, links and measurements: source names the original inserter of the row, not the last editor or an audit trail (ui, cli, api, agent:<name>, import:<name>; schema for the rows this file seeds); written at insert, never changed; import_key is unique per source on entities and on capture_keys, and per source and metric on measurements; a present import_key is 1 to 512 bytes without NUL'),
   ('edit_revisions', 'entities.revision is a monotonic integer edit token independent of updated_at; creation is not an edit (nothing advances a row whose creation transaction is its only write: it keeps revision 1 and the updated_at its insert wrote, its owned preferred name and typed detail row included); a later change of the row''s own content advances it: names, body, day, type, lifecycle, typed detail and the links it leaves (a link advances only the page it leaves, never the page it points at; a wikilink is derived from the body and advances nothing); no-ops do not, rollback restores it, exhaustion refuses; clients compare the token inside BEGIN IMMEDIATE, never a timestamp; exact increment counts are not meaningful'),
@@ -40,6 +41,10 @@ CREATE TABLE entities (
   -- A canonical date key is the one plain journal-day identity for that local day: its day equals its
   -- preferred key, neither may transfer, and its only registry spelling is that date. Other objects
   -- may have a day without being journal days. Their aliases and preferred names remain editable.
+  -- A period page is the same kind of identity for a longer span (D30): its preferred key is a week (2026-W43), a
+  -- month (2026-10), a quarter (2026-Q4) or a year (2026), written in the key as 2026-w43 and 2026-q4. Its day is
+  -- NULL, it shares the identity rules of a day page, and it is the owner's horizon: the week, the month, the
+  -- quarter or the year a plan or a review belongs to.
   -- Body saves synchronize wikilinks by resolved entity id (D19); invalid names do not block a save.
   -- Type changes refuse any incoming or outgoing link whose registered endpoint types would become invalid;
   -- no retained edge is silently removed. Nothing is ever deleted: deleted_at is the tombstone (D11), never
@@ -60,6 +65,13 @@ CREATE TABLE entities (
   -- triggers on entities rows read this column, and so does the integrity SQL. entity_names.name_key has no such
   -- column: a rule about a NAME being date-shaped spells the predicate out.
   is_journal  INTEGER NOT NULL GENERATED ALWAYS AS (length(preferred_name_key) = 10 AND date(preferred_name_key) IS preferred_name_key) VIRTUAL,
+  -- The one definition of "a period page" (D30): the folded key has the shape of a year, a month, a quarter or an
+  -- ISO week. A key of ten characters never has these shapes, so a page is never both a day and a period.
+  period      TEXT GENERATED ALWAYS AS (CASE
+                WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]' THEN 'year'
+                WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN 'month'
+                WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' THEN 'quarter'
+                WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]' THEN 'week' END) VIRTUAL,
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (length(updated_at) = 24 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(updated_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   revision    INTEGER NOT NULL DEFAULT 1 CONSTRAINT entities_revision CHECK (revision >= 1), -- edit token, independent of the clock; overflow refuses the write
@@ -70,6 +82,17 @@ CREATE TABLE entities (
   UNIQUE (id, entity_type),
   CONSTRAINT entities_day_page CHECK (NOT is_journal OR day IS preferred_name_key),
   CONSTRAINT entities_day_page_plain CHECK (NOT is_journal OR entity_type = 'page'),
+  CONSTRAINT entities_period_page CHECK (period IS NULL OR (entity_type = 'page' AND day IS NULL)),
+  -- the period exists: a month 01..12, a quarter 1..4, a week 01..52, and week 53 only in a year that has one (the
+  -- year starts on a Thursday, or on a Wednesday and is a leap year); the Monday of week 53 is then on or before 28 December
+  CONSTRAINT entities_period_exists CHECK (period IS NULL OR period = 'year'
+    OR (period = 'month' AND date(preferred_name_key || '-01') IS preferred_name_key || '-01')
+    OR (period = 'quarter' AND substr(preferred_name_key, 7, 1) BETWEEN '1' AND '4')
+    OR (period = 'week' AND (substr(preferred_name_key, 7, 2) BETWEEN '01' AND '52'
+        OR (substr(preferred_name_key, 7, 2) = '53'
+            AND (strftime('%w', substr(preferred_name_key, 1, 4) || '-01-01') = '4'
+              OR (strftime('%w', substr(preferred_name_key, 1, 4) || '-01-01') = '3'
+                  AND date(substr(preferred_name_key, 1, 4) || '-02-29') IS substr(preferred_name_key, 1, 4) || '-02-29')))))),
   CONSTRAINT entities_deleted_after_created CHECK (deleted_at IS NULL OR deleted_at >= created_at),
   FOREIGN KEY (id, preferred_name_key) REFERENCES entity_names(entity_id, name_key) DEFERRABLE INITIALLY DEFERRED
 ) STRICT;
@@ -121,10 +144,21 @@ CREATE TRIGGER entity_names_day_insert BEFORE INSERT ON entity_names BEGIN
    AND ((e.is_journal
          AND (NEW.name_key IS NOT e.preferred_name_key OR NEW.title IS NOT e.preferred_name_key))
      OR (length(NEW.name_key) = 10 AND date(NEW.name_key) IS NEW.name_key AND e.preferred_name_key IS NOT NEW.name_key)));
+ -- a period key is reserved like a date (D30): only its own page has it, as its preferred name, spelled in upper case
+ SELECT RAISE(ABORT, 'a period page has only its canonical key name (D30)')
+ WHERE EXISTS (SELECT 1 FROM entities e WHERE e.id = NEW.entity_id
+   AND ((e.period IS NOT NULL AND NEW.name_key IS NOT e.preferred_name_key)
+     OR ((NEW.name_key GLOB '[0-9][0-9][0-9][0-9]' OR NEW.name_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+           OR NEW.name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR NEW.name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]')
+         AND (e.preferred_name_key IS NOT NEW.name_key OR NEW.title IS NOT upper(NEW.name_key)))));
 END;
 CREATE TRIGGER entity_names_day_update BEFORE UPDATE OF title ON entity_names BEGIN
  SELECT RAISE(ABORT, 'a journal day spelling is its canonical date')
  WHERE length(OLD.name_key) = 10 AND date(OLD.name_key) IS OLD.name_key AND NEW.title IS NOT OLD.name_key;
+ SELECT RAISE(ABORT, 'a period spelling is its canonical key (D30)')
+ WHERE (OLD.name_key GLOB '[0-9][0-9][0-9][0-9]' OR OLD.name_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+           OR OLD.name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR OLD.name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]')
+   AND NEW.title IS NOT upper(OLD.name_key);
 END;
 CREATE TRIGGER entities_day_identity BEFORE UPDATE OF preferred_name_key ON entities
  WHEN NEW.preferred_name_key IS NOT OLD.preferred_name_key
@@ -137,6 +171,14 @@ BEGIN
  -- day page is never filed and never a category (D26, links_endpoint_types)
  SELECT RAISE(ABORT, 'a page with a part-of link never becomes a day page (D26)')
  WHERE NEW.is_journal
+   AND (EXISTS (SELECT 1 FROM links l WHERE l.from_id = OLD.id AND l.kind = 'part-of')
+     OR EXISTS (SELECT 1 FROM links l WHERE l.to_id = OLD.id AND l.kind = 'part-of'));
+ SELECT RAISE(ABORT, 'period identity cannot be renamed or acquired through aliases (D30)')
+ WHERE OLD.period IS NOT NULL
+    OR (NEW.period IS NOT NULL
+        AND EXISTS (SELECT 1 FROM entity_names n WHERE n.entity_id = OLD.id AND n.name_key IS NOT NEW.preferred_name_key));
+ SELECT RAISE(ABORT, 'a page with a part-of link never becomes a period page (D30)')
+ WHERE NEW.period IS NOT NULL
    AND (EXISTS (SELECT 1 FROM links l WHERE l.from_id = OLD.id AND l.kind = 'part-of')
      OR EXISTS (SELECT 1 FROM links l WHERE l.to_id = OLD.id AND l.kind = 'part-of'));
 END;
@@ -451,6 +493,11 @@ BEGIN
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id), 0);
   SELECT RAISE(ABORT, 'a day page is never filed in a category (D26)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
+  -- a period page (D30) is neither a category nor filed; an at link still starts at a day page only
+  SELECT RAISE(ABORT, 'a category is a plain page, never a period page (D30)')
+   WHERE NEW.kind = 'part-of' AND coalesce((SELECT period IS NOT NULL FROM entities WHERE id = NEW.to_id), 0);
+  SELECT RAISE(ABORT, 'a period page is never filed in a category (D30)')
+   WHERE NEW.kind = 'part-of' AND coalesce((SELECT period IS NOT NULL FROM entities WHERE id = NEW.from_id), 0);
 END;
 CREATE VIEW ghost_pages AS
   -- Empty live plain objects older than 30 days without graph or measurement-capture references,

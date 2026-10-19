@@ -1,11 +1,11 @@
 # Lifelog — database architecture
 
-**Status:** freeze candidate. Until the first kept write that a rebuild would lose — the freeze — [schema.sql](schema/schema.sql) is edited in place, and the canonical file is rebuilt (a fresh file from `schema.sql`, then the imports run again) rather than migrated ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 imports of a real notes folder have already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md) and [D24](decisions/D24-habits.md); the owner's import with an agent comes after the freeze ([imports](contract/imports.md)). The checklist before the freeze: [process](process.md#before-the-freeze).
+**Status:** freeze candidate. Until the first kept write that a rebuild would lose — the freeze — [schema.sql](schema/schema.sql) is edited in place, and the canonical file is rebuilt (a fresh file from `schema.sql`, then the imports run again) rather than migrated ([D13](decisions/D13-migrations-and-freeze.md)). The 2026-10 imports of a real notes folder have already taught [D5](decisions/D05-pages-and-day-pages.md), [D22](decisions/D22-events.md), [D23](decisions/D23-no-tasks.md), [D29](decisions/D29-plan-lines.md), [D30](decisions/D30-period-pages.md) and [D24](decisions/D24-habits.md); the owner's import with an agent comes after the freeze ([imports](contract/imports.md)). The checklist before the freeze: [process](process.md#before-the-freeze).
 
 **Scope of the project:** A lifetime personal database — a life log and its backup: a journal of day pages, notes and wiki pages, people, places,
 health metrics and the files the owner keeps, as their text and a small picture ([D9](decisions/D09-binary-files.md)).
-A span of life is a plain page ([D22](decisions/D22-events.md)), and a plan is words in a page
-([D23](decisions/D23-no-tasks.md)). Money and a location track remain deferred ([D18](decisions/D18-money.md), [D21](decisions/D21-location-history.md)). It is one SQLite file,
+A span of life is a plain page ([D22](decisions/D22-events.md)), and a plan is a line of a page
+([D23](decisions/D23-no-tasks.md), [D29](decisions/D29-plan-lines.md)); a week, a month, a quarter and a year are pages with a key ([D30](decisions/D30-period-pages.md)). Money and a location track remain deferred ([D18](decisions/D18-money.md), [D21](decisions/D21-location-history.md)). It is one SQLite file,
 plus a custom UI for data entry and daily use.
 Other devices are clients of the one writing application ([D3](decisions/D03-integer-ids.md)); everything else (view generators, AI
 features, sync or merge between copies of the database) is explicitly out of scope.
@@ -36,15 +36,15 @@ connection settings, imports) are in the [storage contract](contract/README.md);
 
 - [Overview](contract/README.md): [titles and wikilinks](contract/titles-and-wikilinks.md),
   [integrity checks](contract/integrity-checks.md), [connection setup](contract/connections.md),
-  [threat model and the 2075 test](contract/threat-model.md), [imports](contract/imports.md)
+  [plan lines](contract/plan-lines.md), [threat model and the 2075 test](contract/threat-model.md), [imports](contract/imports.md)
 
 **Decisions** — why each rule is the way it is.
 
-- [Decision log](decisions/README.md): D1–D28, one record each
+- [Decision log](decisions/README.md): D1–D30, one record each, among them [D29](decisions/D29-plan-lines.md) (plan lines) and [D30](decisions/D30-period-pages.md) (period pages)
 
 **Cookbook** — the canonical reads and writes, every block executed.
 
-- [Query cookbook](cookbook/README.md)
+- [Query cookbook](cookbook/README.md): including [plan a project](cookbook/plan-a-project.md)
 
 **Guides** — for people building on the schema.
 

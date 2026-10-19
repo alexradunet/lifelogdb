@@ -4,6 +4,7 @@
 
 - **Decision.** A page is a named, linkable identity with its prose in `entities` and its spellings in `entity_names`; people, places, metrics and files use the same prose home. See [titles and wikilinks](../contract/titles-and-wikilinks.md) for the shared predicate and save grammar.
   - The journal is one canonical identity per local day (`entities_day_page`, `entities_day_page_plain`, `entities_day_identity`, `entity_names_day_insert`, `entity_names_day_update`). What makes a page a journal day page, a preferred key that is a canonical local date, is written once, as the generated column `entities.is_journal`, which those rules and the integrity SQL read; `entity_names.name_key` has no such column, so the two name triggers spell the predicate out for a name. Capture appends to that identity ([capture](../cookbook/capture.md)); dated ordinary pages remain distinct.
+  - A week, a month, a quarter and a year have the same kind of identity: a period page, whose canonical key is `2026-W43`, `2026-10`, `2026-Q4` or `2026`, with no `day`. It shares the rules of a day page: one page per key, no alias, no rename, never filed ([D30](D30-period-pages.md)).
   - Dated is a property, not a type: a link target normally has no day; a page deliberately written has the day its owner gives it ([day view](../cookbook/day-view.md)).
   - Tags and explicit references are read from prose and resolve owned names to ids; tags are never expanded into rewritten body text.
   - Stable-id rename selects an owned preferred spelling and retains old names ([rename a page](../cookbook/rename-a-page.md)). `entity_names_fixed` and `entity_names_no_delete` reserve ownership; `entity_names_title_safe` supports portable, reference-addressable handles. A rename never merges another owner's ghost or tombstone.
@@ -15,7 +16,7 @@
   - Rename into another owner's name, even an empty ghost: rejected — rename is not merge.
   - ASCII-only uniqueness or an application collation: rejected — Unicode names need the shared normalization, and a stored index must remain usable without a private collation (executed).
   - Id-named handles without filename checks: rejected — relaxing a restriction later is possible; tightening it after freeze can meet existing incompatible names ([D13](D13-migrations-and-freeze.md)).
-- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; task projects and capture provenance keep meaningful empty pages out of cleanup.
+- **Costs accepted.** A day-page entry has no separate timestamp; a time worth keeping stays in prose. There is no inbox. Retained names consume the global namespace, including after tombstoning. Empty unreferenced pages appear in `ghost_pages` for the owner's review; capture provenance keeps meaningful empty pages out of cleanup.
 - **Search and names.** `entities_fts` is a derived token index, separate from exact owned-name resolution.
   Its tokenizer avoids SQLite's compatibility default that leaves compound Latin diacritics folded inconsistently;
   the tokenizer choice lives in its `CREATE` statement. It still does not implement the full casefold used by name

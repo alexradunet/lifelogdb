@@ -2,7 +2,7 @@
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
 its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
-files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is words in a page. It serves the file two ways: a hypermedia API (with an HTML face for
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is a line of a page. It serves the file two ways: a hypermedia API (with an HTML face for
 the browser) and a CLI. Everything that names a third party is an extension beside it: the MCP server, the setup of a
 coding agent, Google Photos ([extensions](#extensions)).
 

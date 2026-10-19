@@ -56,6 +56,7 @@ DETACH s;
    The key deduplicates within one `source` only: the same reading from two
    sources is two rows, for the app to match and the owner to retract one. A file is the exception: it is found by
    the hash of its original, `files.sha256`, whatever its source, and kept once ([keep a file](../cookbook/keep-a-file.md)).
+   An imported checkbox is a plan line like any other; with no `on:` or `due:` it is listed only on its own page ([plan lines](plan-lines.md)).
 4. **What a failure does.** `ON CONFLICT … DO NOTHING` handles the named duplicate key; it is not
    validation of a skipped payload. A malformed day or impossible value can still raise before the
    duplicate is skipped. A duplicate with a dangling reference can be skipped without testing that
