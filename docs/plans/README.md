@@ -9,7 +9,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [137](137-pixel-wood-and-the-focus-pass.md) | Pixel wood and the focus pass: a drawn rail, two heading levels, a writing mode, and a Today strip | P2 | M | owner word 2026-10-19; `cdc9240` | TODO |
-| [136](136-plan-lines-and-period-pages.md) | Plan lines and period pages: the planning axis without a table | P1 | L | owner word 2026-10-19; `9cde014` | TODO |
+| [136](136-plan-lines-and-period-pages.md) | Plan lines and period pages: the planning axis without a table | P1 | L | owner word 2026-10-19; `9cde014` | IN REVIEW (owner) |
 | [135](135-extensions-outside-the-core.md) | Extensions outside the core: what names a third party is a subprocess found by name | P2 | L | owner word 2026-10-19; `7637f66` | IN REVIEW (owner) |
 | [134](134-a-cover-from-google-photos.md) | A cover from Google Photos: an extension outside the core picks each day's cover from that day's photos | P3 | M | owner word 2026-10-18; `ed046b2` | IN REVIEW (owner) |
 | [133](133-what-the-code-holds-twice.md) | What the code holds twice, what it holds for nothing, and four defects: the review against AGENTS.md | P2 | M | owner word 2026-10-18; `9b056bc` | IN REVIEW (owner) |

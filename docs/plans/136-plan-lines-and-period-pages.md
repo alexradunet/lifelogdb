@@ -10,7 +10,10 @@
   vectors) and two decisions; `schema.sql` gains one generated column and two CHECKs and widens four triggers, no
   new table and no new trigger; the catalog gains three actions; the browser gains a Planned block, boxes in a body
   and a week view. D23 and D15 keep "no table" and are rewritten in place.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Built in `cc829df` (steps 1 and 2), `9f7f963` (steps 3 and 4, and the fixes of the
+  counter-review of `cc829df`), `2b12236` (steps 5 and 6: the browser, the measurement, the box index) and `26cf777`
+  (the visual pass). The install and the restart of the service wait for the owner: the live file was made with the
+  DDL before `entities.period` and `entities.has_box`, and before the freeze there is no migration (D13).
 - **Resolves:** issue 0087 through RFC 0022, D29 and D30 (written in step 1). The owner's words are the incident.
 
 ## The owner's words (2026-10-19)
@@ -212,11 +215,29 @@ server.
 
 ## Step 6 — measure and ship
 
-`internal/scaletest/scale.go`: the fixture writes a plan line into every seventh day page and into one note in ten,
-with the count of open lines as a known answer; the exercise adds `record(report, "planned_day", …)`; the small
-workload expects eleven operations. Run `go run ./tools/lifescale -profile lifetime -seed 2075 -samples 5` and record
-`planned_day` here; the reopen trigger of a derived index is a `planned_day` above the `day_view` budget. Then
-`go build -o ~/.local/bin/lifelog ./cmd/lifelog`, the service restart and its log line, recorded here.
+`internal/scaletest/scale.go` writes a plan line into every seventh day page and into every tenth note, with the
+count of open lines as a known answer, and records `planned_day` and `plan_lines_week`. The lifetime profile
+(18,262 day pages, 4,000 notes, 74,450 live rows, 82 MB of bodies; seed 2075, three samples, medians):
+
+| read | before | after the box index |
+|---|---|---|
+| `day_view` | 0.61 ms | 0.58 ms |
+| `planned_day` | 854 ms | 49 ms |
+| `plan_lines_week` | 844 ms | 53 ms |
+| `capture_commit` | 1.38 ms | 1.18 ms |
+| `save_commit` | 0.53 ms | 0.63 ms |
+
+Any prefilter on the body reads every body (the SQL alone took 380 ms with `instr(body, '[')`, and 1,600 ms with
+the five box literals), so the plan's reopen trigger fired, and the derived index it foresaw is the VIRTUAL generated
+column `entities.has_box` with the partial index `entities_plans`, executed by the `plan-lines-index` suite. The
+remaining 49 ms is the parse of the 3,009 pages that hold a box. A derived table stays out unless that is slow in
+use ([non-goals](../architecture/non-goals.md)).
+
+**The install waits for the owner.** The binary builds with `go build -o ~/.local/bin/lifelog ./cmd/lifelog`, and the
+service restarts with `sudo systemctl restart lifelog`; but the live `life.db` was made with the DDL before
+`entities.period`, `entities.has_box` and `entities_plans`, and before the freeze a file is rebuilt from
+`schema.sql` and the imports, or the owner changes the live file by hand with a snapshot taken first (D13). The
+owner decides which, and runs it.
 
 ## Checks
 
@@ -246,14 +267,12 @@ workload expects eleven operations. Run `go run ./tools/lifescale -profile lifet
 
 ## Done when
 
-- [ ] Step 1: the records, the contract page, the DDL, the suites and the mutants, one commit, green.
-- [ ] Step 2: `internal/text/plan.go` reproduces every vector.
-- [ ] Step 3: the reads and the three writes, with their tests.
-- [ ] Step 4: the catalog, API.md, the README table, the CLI, parity, the MCP end-to-end test.
-- [ ] Step 5: the browser, looked at by the owner.
-- [~] Step 6, measured: `planned_day` at lifetime scale was 854 ms (median of 3; 750 ms in an earlier run), the
-  day view 0.6 ms. The reopen trigger fired, and the owner chose no table. Decision: the generated column
-  `entities.has_box` with the partial index `entities_plans` (derived, disposable, one home: the body). After it:
-  `planned_day` 49 ms, `plan_lines_week` 53 ms, `capture_commit` 1.18 ms (was 1.38), `save_commit` 0.63 ms (was 0.53),
-  `day_view` 0.58 ms. The remaining 49 ms are the parse of 3,009 pages; it is still above the day view's budget, and a
-  derived table is the next step only if that proves slow in use. Still open: the service restarted and its log line recorded here.
+- [x] Step 1: the records, the contract page, the DDL, the suites and the mutants, one commit, green (`cc829df`).
+- [x] Step 2: `internal/text/plan.go` reproduces every vector (`cc829df`).
+- [x] Step 3: the reads and the three writes, with their tests (`9f7f963`).
+- [x] Step 4: the catalog, API.md, the README table, the CLI, parity, the MCP end-to-end test (`9f7f963`).
+- [x] Step 5: the browser, looked at on the review server on a desktop and a phone (`2b12236`, `26cf777`); the
+      owner looks next.
+- [x] Step 6, measured: the table above; the box index (`2b12236`).
+- [ ] Step 6, shipped: the live file brought to the DDL, the binary installed, the service restarted and its log line
+      recorded here (the owner).
