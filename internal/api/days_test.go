@@ -188,7 +188,7 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 
 	body := browse(t, h, "/days/"+fixedToday)
 	form := captureForm(t, body, "/days/"+fixedToday+"/capture")
-	for _, want := range []string{`<fieldset class="segmented mood"><legend>Mood</legend>`,
+	for _, want := range []string{`<fieldset class="segmented faces"><legend>Mood</legend>`,
 		`<label title="awful"><input type="radio" name="mood" value="1"><span>1 <small>awful</small></span></label>`,
 		`<label title="okay"><input type="radio" name="mood" value="3"><span>3 <small>okay</small></span></label>`,
 		`<label title="great"><input type="radio" name="mood" value="5"><span>5 <small>great</small></span></label>`, `<input type="hidden" name="back" value="/days/` + fixedToday + `">`} {
