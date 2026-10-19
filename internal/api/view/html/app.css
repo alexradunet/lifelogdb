@@ -2,8 +2,9 @@
    and the components of the Almanac design system, bound in Hearthwood (docs/plans/096-bound-in-hearthwood.md). Every
    colour, size and font is a token of base.css; no rule here names a colour of its own. A material sets its text
    through the aliases of base.css (--text, --text-strong, --text-muted, --text-link, --rule): a parchment element
-   and a wood element reset them once, here. There is no image: the icons and the chart are inline <svg>, and the
-   grain, the planks and the stitch are CSS. This sheet is the components and the utilities
+   and a wood element reset them once, here. There is one image, the wood tile of the rail (wood.png, drawn by
+   internal/pixelart): a tile of pixel art is a drawing, and a gradient cannot be one. The icons and the chart are
+   inline <svg>, and the grain and the stitch are CSS. This sheet is the components and the utilities
    layers of the one cascade base.css declares (docs/plans/108-the-browser-made-current.md): a utility is a class
    no component restyles, so it may come last. There is no script: a sheet, a dialog and a popover are the
    browser's own, and a rule here only dresses them. */
@@ -12,10 +13,14 @@
 /* The two materials of this sheet, as reusable declarations: parchment (what is written) and wood (the chrome).
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
 .rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
-  color:var(--text); background-color:var(--rail); background-image:var(--planks),var(--grain-ground); background-size:auto,4px 4px}
+  color:var(--text); background-color:var(--rail); background-image:url(/assets/wood.png),var(--grain-ground); background-size:252px 480px,4px 4px; image-rendering:pixelated}
 .sheet,.panel,.leaf,.month-box,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,.day-card,
 main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
+
+/* The rail and its nav add two shades over the tile: one at the left edge, one at the foot. */
+.rail,.rail>nav{background-image:url(/assets/wood.png),var(--rail-shade),var(--rail-foot-shade),var(--grain-ground);
+  background-size:252px 480px,auto,auto,4px 4px; background-repeat:repeat,no-repeat,no-repeat,repeat}
 
 /* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
 .shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh}
@@ -29,7 +34,7 @@ main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text
 
 svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round}
 
-/* The rail is wood: planks, a raised bevel, the outline on its right. Its words are the rail's ink; where the
+/* The rail is wood: pixel planks, a raised bevel, the outline on its right. Its words are the rail's ink; where the
    owner is, gold on a carved well. */
 .rail{position:sticky; inset-block-start:0; block-size:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
   padding:var(--space-4) var(--space-3); border-inline-end:2px solid var(--outline); box-shadow:var(--bevel-up);
@@ -53,18 +58,19 @@ svg.icon{flex:none; inline-size:16px; block-size:16px; fill:none; stroke:current
   &::backdrop{background:rgb(0 0 0 / .35)}}
 .new-menu-head{display:flex; align-items:center; justify-content:space-between;
   & .label{color:var(--rail-accent); font-weight:700}}
-/* A section is a link; More, which opens the phone's sheet, is a button drawn as one. */
+/* The sections are a carved well in the wood; the current one is lit by a gold bar at its left. More, which opens the
+   phone's sheet, is a button drawn as a link. */
 .rail nav{
-  & ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none}
+  & ul{display:flex; flex-direction:column; gap:2px; margin:0; padding:4px; list-style:none; background:var(--rail-deep); border:1px solid var(--outline); box-shadow:var(--bevel-in)}
   & li{margin:0}
   & button{all:unset; box-sizing:border-box; cursor:pointer}
-  & :is(a,button){display:flex; align-items:center; gap:10px; padding:7px 10px; color:var(--rail-ink); white-space:nowrap;
+  & :is(a,button){display:flex; align-items:center; gap:10px; padding:8px 10px; color:var(--rail-ink); white-space:nowrap;
     &:hover{color:var(--rail-accent); text-decoration:none}
-    &[aria-current=page]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 0 2px 0 var(--bevel-dark),inset 0 -2px 0 var(--bevel-light)}}}
+    &[aria-current=page]{background:var(--accent-tint); color:var(--rail-accent); font-weight:700; box-shadow:inset 3px 0 0 var(--rail-accent)}}}
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
 .rail-more{display:contents}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
-.rail-foot{margin-block-start:auto; padding:0 var(--space-2); font-size:13px; line-height:19px; color:var(--rail-ink);
+.rail-foot{margin-block-start:auto; padding:var(--space-3) var(--space-2) 0; border-block-start:1px solid var(--rail-hairline); font-size:13px; line-height:19px; color:var(--rail-ink);
   & a{color:var(--rail-ink);
     &[aria-current=page]{font-weight:700; color:var(--rail-accent)}}}
 
@@ -104,7 +110,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail .rail-new.primary{inline-size:auto}
   .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
     padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
-    & ul{flex-direction:row; justify-content:space-around; gap:0}
+    & ul{flex-direction:row; justify-content:space-around; gap:0; padding:0; background:none; border:0; box-shadow:none}
     & li{flex:1 1 0; min-inline-size:0}
     & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
       & svg.icon{inline-size:20px; block-size:20px}
@@ -118,7 +124,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}
-  .rail-foot{margin:0}
+  .rail-foot{margin:0; padding-block-start:0; border-block-start:0}
   .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     &>footer{margin-block-start:var(--space-6)}}
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
@@ -138,6 +144,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
 .page-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px;
   & .what{display:flex; flex-direction:column; gap:2px; min-inline-size:0}
   & h1{overflow-wrap:anywhere}
+  & .what h1{padding-block-end:6px; background:linear-gradient(var(--primary),var(--primary)) 0 100%/56px 4px no-repeat} /* a short ember underline */
   & .tools{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
   & .sub{margin-block-start:var(--space-1)}}
 .mood{display:inline-block; font:500 15px/1 var(--mono); padding:5px 10px; border:1px solid var(--edge); background:var(--surface-deep); color:var(--ink);
@@ -150,14 +157,19 @@ small .mood{font-size:12px; padding:2px 8px}
 /* A panel: one group of the entity, on parchment. */
 .panel{display:flex; flex-direction:column; gap:var(--space-3); min-inline-size:0; padding:var(--space-4); box-shadow:var(--parch-bevel)}
 .panel-head{display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);
-  & a{font-size:13px; line-height:19px; flex:none}
-  & h3{font-size:15px; line-height:22px}}
+  & a{font-size:13px; line-height:19px; flex:none}}
 .section{display:flex; flex-direction:column; gap:10px; min-inline-size:0}
 
-/* The heading of a group carries a stitch after it: a dotted rule of the material, to the end of the line. */
+/* Two levels of heading. The big groups open a part of a page: the display face, a rivet before them and a stitch
+   after them, a dotted rule of the material to the end of the line. The small groups are inside a part: a quiet
+   tracked label with no stitch. The title of a field has the face of a small group (base.css). */
+.panel-head :is(h2,h3),.section>h2,details.metric-group>summary>:is(h2,h3){font:400 24px/26px var(--display); letter-spacing:.02em; color:var(--text-strong)}
+.margin .group>h2,.capture>h2,.record>h2,.also>h2{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted)}
 .panel-head :is(h2,h3),.margin .group>h2,.capture>h2,.record>h2,.also>h2,.section>h2{display:flex; align-items:center; gap:10px; flex:1 1 auto; min-inline-size:0}
-.panel-head :is(h2,h3)::after,.margin .group>h2::after,.capture>h2::after,.record>h2::after,.also>h2::after,.section>h2::after{content:""; flex:1; block-size:2px; min-inline-size:24px;
-  background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.7}
+.panel-head :is(h2,h3)::before,.section>h2::before{content:""; flex:none; inline-size:7px; block-size:7px; rotate:45deg; background:var(--accent-ink)}
+.margin .panel-head h2::before{background:var(--accent)}
+.panel-head :is(h2,h3)::after,.section>h2::after{content:""; flex:1; block-size:2px; min-inline-size:24px;
+  background:linear-gradient(to right,var(--rule) 50%,transparent 50%) 0 0/8px 2px repeat-x; opacity:.35}
 
 /* A short name of a kind (an entity type, a category) and a state, in mono on a small slab. The state's colour only
    repeats its word. */
@@ -368,16 +380,19 @@ details.action{border:0; padding:0; background:none; position:relative;
 details>.actions{margin-block-start:var(--space-1)}
 
 /* A choice of a few short values, as a row of radio buttons: slabs, and the chosen one is pressed. It works with no
-   script. */
+   script. A slab may hold a small word under its value (the mood): the word is in the markup for a reader and for a
+   screen reader, and the sheet shows it only on the chosen and the hovered slab. The slabs keep one width. */
 fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-1);
-  & legend{float:inline-start; margin-inline-end:var(--space-2); font-size:13px; line-height:19px; color:var(--text-muted)}
+  & legend{float:inline-start; margin-inline-end:var(--space-2)}
   & label{position:relative; display:block; color:var(--ink); padding-block-end:3px;
-    &:hover span{filter:brightness(1.04)}}
+    &:hover span{background:var(--accent-soft)}}
   & input{position:absolute; inset:0; inline-size:100%; block-size:100%; margin:0; opacity:0; cursor:pointer;
     &:checked+span{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; box-shadow:var(--slab-pressed); transform:translateY(3px)}
     &:focus-visible+span{outline:2px solid var(--focus); outline-offset:2px}}
-  & span{display:grid; place-items:center; min-inline-size:var(--control); block-size:var(--control); padding:0 var(--space-2); font:400 15px/1 var(--mono);
-    background:var(--surface-deep); color:var(--ink); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard)}}
+  & span{position:relative; display:grid; place-items:center; min-inline-size:var(--control); block-size:var(--control); padding:0 var(--space-2); font:400 15px/1 var(--mono);
+    letter-spacing:0; text-transform:none; background:var(--surface-deep); color:var(--ink); border:2px solid var(--outline); box-shadow:var(--slab-bevel),var(--drop-hard)}
+  & small{position:absolute; inset-inline:0; inset-block-end:1px; opacity:0; font:400 10px/1 var(--mono); text-align:center; color:inherit}
+  & label:is(:hover,:has(:checked)) small{opacity:1}}
 
 /* Capture: the main box of Today and of a day. The text box is a draft: dashed, and solid gold while it has the
    focus. Then the mood and Add on one row. */
@@ -389,6 +404,11 @@ fieldset.segmented{display:flex; flex-wrap:wrap; align-items:center; gap:var(--s
      the textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
   & textarea{field-sizing:content; min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
     &:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}}}
+/* Writing mode: while the box has the focus and holds words, the rest of the page steps back and the box takes a
+   halo. The box takes the focus on arrival, so the focus alone is not the sign: the first word is. */
+.column:has(.capture textarea:focus:not(:placeholder-shown)){
+  & :is(.journal,.margin,.page-head .tools,.page-head .sub,.column>footer){opacity:.4}
+  & .capture textarea{border-color:var(--focus); box-shadow:0 0 0 4px var(--focus-halo)}}
 
 /* Record on a metric's page (docs/plans/100-one-page-a-metric.md): the day and the value side by side, the folded
    fields under them, then the button: the order on the screen is the order of the keys. */
@@ -468,9 +488,8 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   &>details{padding-block-start:var(--space-3);
     &:first-child{padding-block-start:0}
     &:not([open])+*{margin-block-start:calc(-1 * var(--space-3))}}
-  & h2{font-size:15px; line-height:22px}
   & .panel-head{margin-block-end:var(--space-3)}}
-.journal .panel-head h2{color:var(--muted); font-weight:400}
+.journal .panel-head h2{color:var(--muted)}
 .journal-text{max-inline-size:var(--measure-read); font-size:clamp(17px, 16px + .25cqi, 18px); line-height:clamp(28px, 26px + .5cqi, 30px);
   &>*+*{margin-block-start:var(--space-4)}}
 .capture>h2,.record>h2{margin-block-end:var(--space-3)}
@@ -507,7 +526,6 @@ dialog.palette{inline-size:min(36rem, calc(100vw - 2rem)); max-block-size:min(32
   & .entry{border-block-end:0}}
 .result-group{display:flex; flex-direction:column; padding-block:var(--space-4);
   &>.panel-head{margin-block-end:var(--space-2);
-    & :is(h2,h3){font-size:18px; line-height:24px}
     & .meta{font-size:13px; flex:none}}
   & ul.plain>li{padding:var(--space-3) 0; border-block-start:1px solid var(--line-soft); border-block-end:0}}
 .snippet{margin-block-start:2px; font-size:14px; line-height:20px; color:var(--muted)}
@@ -623,6 +641,10 @@ li.tile:is(:hover,:focus-within)>a.row-move{opacity:1}
    transition of display and overlay keeps the element in the top layer while it leaves (overlay is Chromium's and
    Safari's; Firefox ends the exit at once, which is no loss). */
 @media (prefers-reduced-motion:no-preference){
+  :is(.journal,.margin,.page-head .tools,.page-head .sub,.column>footer){transition:opacity .25s}
+  /* A toast that opens drops 3 px and settles. It does not loop. */
+  .toast[open]{animation:land .18s ease-out}
+  @keyframes land{from{translate:0 -3px}}
   dialog.palette{opacity:0; translate:0 -8px; transition:opacity .12s, translate .12s, overlay .12s allow-discrete, display .12s allow-discrete;
     &[open]{opacity:1; translate:0 0;
       @starting-style{opacity:0; translate:0 -8px}}

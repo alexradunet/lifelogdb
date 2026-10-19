@@ -155,7 +155,7 @@
 {{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
-     options as a row of radio buttons (the options of the field mood also carry their words), other options as a
+     options as a row of radio buttons (the options of the field mood also carry their words: a small word in the slab, which the sheet shows on the chosen slab), other options as a
      select, a textarea, or an input of the field's type. A field of page titles with options is an input with a datalist of them (List), so the reader picks a title or
      types a new one. A select of an optional field starts empty, so the form sends no value that the reader did not
      pick. A required radio, textarea or input is marked required, so the browser does not send it empty, and an
@@ -163,7 +163,7 @@
      of one field does not say it (Sole), and the browser still refuses an empty box. A form with a text area offers Preview
      (formView.Preview, drawn by form), which sends the form to /render in a new tab, so the words stay in the form. */}}
 {{define "field"}}{{if checkbox .Field}}<label><input type="checkbox" name="{{.Name}}" value="1"{{if eq (num .Value) "1"}} checked{{end}}{{if .Focus}} autofocus{{end}}><span>{{or .Title .Name}}</span></label>
-{{else if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}{{$o := .}}{{$w := ""}}{{if eq $n "mood"}}{{$w = moodWord $o}}{{end}}<label{{with $w}} title="{{.}}"{{end}}><input type="radio" name="{{$n}}" value="{{$o}}"{{if eq $o $v}} checked{{end}}{{if $req}} required{{end}}><span{{with $w}} aria-label="{{$o}}, {{.}}"{{end}}>{{$o}}</span></label>{{end}}</fieldset>
+{{else if segmented .Field}}<fieldset class="segmented"><legend>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}{{$o := .}}{{$w := ""}}{{if eq $n "mood"}}{{$w = moodWord $o}}{{end}}<label{{with $w}} title="{{.}}"{{end}}><input type="radio" name="{{$n}}" value="{{$o}}"{{if eq $o $v}} checked{{end}}{{if $req}} required{{end}}><span>{{$o}}{{with $w}} <small>{{.}}</small>{{end}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>

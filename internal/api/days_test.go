@@ -189,9 +189,9 @@ func TestTheMoodIsAChoiceOfFive(t *testing.T) {
 	body := browse(t, h, "/days/"+fixedToday)
 	form := captureForm(t, body, "/days/"+fixedToday+"/capture")
 	for _, want := range []string{`<fieldset class="segmented"><legend>Mood</legend>`,
-		`<label title="awful"><input type="radio" name="mood" value="1"><span aria-label="1, awful">1</span></label>`,
-		`<label title="okay"><input type="radio" name="mood" value="3"><span aria-label="3, okay">3</span></label>`,
-		`<label title="great"><input type="radio" name="mood" value="5"><span aria-label="5, great">5</span></label>`, `<input type="hidden" name="back" value="/days/` + fixedToday + `">`} {
+		`<label title="awful"><input type="radio" name="mood" value="1"><span>1 <small>awful</small></span></label>`,
+		`<label title="okay"><input type="radio" name="mood" value="3"><span>3 <small>okay</small></span></label>`,
+		`<label title="great"><input type="radio" name="mood" value="5"><span>5 <small>great</small></span></label>`, `<input type="hidden" name="back" value="/days/` + fixedToday + `">`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the day's Capture lacks %s:\n%s", want, form)
 		}

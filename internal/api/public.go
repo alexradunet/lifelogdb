@@ -103,14 +103,15 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 // owner ends the login by a new token file.
 const loginMaxAge = 365 * 24 * 60 * 60
 
-// installFiles are the files that a browser fetches without its cookie to install the app. They are embedded and
-// static, and they hold nothing of the database. A GET or a HEAD of them needs no token. The fonts are not here:
-// the page fetches them with its cookie.
+// installFiles are the files that a browser fetches without its cookie to install the app. The wood tile is one:
+// it is an image of the sheet, fetched like an icon. They are embedded and static, and they hold nothing of the
+// database. A GET or a HEAD of them needs no token. The fonts are not here: the page fetches them with its cookie.
 var installFiles = map[string]bool{
 	"/manifest.webmanifest": true,
 	"/assets/icon.svg":      true,
 	"/assets/icon-192.png":  true,
 	"/assets/icon-512.png":  true,
+	"/assets/wood.png":      true,
 }
 
 func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {

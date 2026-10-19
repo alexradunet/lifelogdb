@@ -1,11 +1,16 @@
 package view
 
 import (
+	"bytes"
+	"image/color"
+	"image/png"
 	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"lifelog/internal/pixelart"
 )
 
 // TestTheBaseSheetCarriesNoAppVocabulary keeps the two sheets apart: base.css styles ordinary HTML, and this
@@ -448,4 +453,25 @@ func apca(t *testing.T, fg, bg string) float64 {
 		return 0
 	}
 	return (c + loWoBoffset) * 100
+}
+
+// TestTheWoodTileIsTheDrawing: html/wood.png is the output of pixelart.Wood, not an edited picture. The pixels are
+// compared and not the bytes, because the PNG encoder may change. tools/pixelwood writes the file.
+func TestTheWoodTileIsTheDrawing(t *testing.T) {
+	got, err := png.Decode(bytes.NewReader(MustFile("wood.png")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := pixelart.Wood()
+	if got.Bounds() != want.Bounds() {
+		t.Fatalf("wood.png is %v, want %v", got.Bounds(), want.Bounds())
+	}
+	b := want.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if g, w := color.NRGBAModel.Convert(got.At(x, y)), want.At(x, y); g != w {
+				t.Fatalf("pixel (%d,%d) is %v, want %v: run go run ./tools/pixelwood", x, y, g, w)
+			}
+		}
+	}
 }
