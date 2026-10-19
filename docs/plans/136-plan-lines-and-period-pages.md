@@ -12,8 +12,7 @@
   and a week view. D23 and D15 keep "no table" and are rewritten in place.
 - **Status:** IN REVIEW (owner). Built in `cc829df` (steps 1 and 2), `9f7f963` (steps 3 and 4, and the fixes of the
   counter-review of `cc829df`), `2b12236` (steps 5 and 6: the browser, the measurement, the box index) and `26cf777`
-  (the visual pass). The install and the restart of the service wait for the owner: the live file was made with the
-  DDL before `entities.period` and `entities.has_box`, and before the freeze there is no migration (D13).
+  (the visual pass). Shipped on 2026-10-19: the live file brought to the DDL and the service restarted (step 6).
 - **Resolves:** issue 0087 through RFC 0022, D29 and D30 (written in step 1). The owner's words are the incident.
 
 ## The owner's words (2026-10-19)
@@ -233,11 +232,24 @@ column `entities.has_box` with the partial index `entities_plans`, executed by t
 remaining 49 ms is the parse of the 3,009 pages that hold a box. A derived table stays out unless that is slow in
 use ([non-goals](../architecture/non-goals.md)).
 
-**The install waits for the owner.** The binary builds with `go build -o ~/.local/bin/lifelog ./cmd/lifelog`, and the
-service restarts with `sudo systemctl restart lifelog`; but the live `life.db` was made with the DDL before
-`entities.period`, `entities.has_box` and `entities_plans`, and before the freeze a file is rebuilt from
-`schema.sql` and the imports, or the owner changes the live file by hand with a snapshot taken first (D13). The
-owner decides which, and runs it.
+**Shipped on 2026-10-19.** The owner ran each line. The live file was made with the DDL before `entities.period`,
+`entities.has_box` and `entities_plans`, and before the freeze there is no migration (D13), so a one-off program
+outside the git tree, `plan136-bin OLD.sql NEW.sql LIFE.db [--dry-run]` in `~/.local/share/lifelog-oneoff/plan136/`,
+made the change. It rewrote the stored text of `entities` (two virtual columns and two CHECKs; the record format did not
+change), the four triggers, the index and the meta row `periods`, in one transaction.
+
+1. `sudo -n systemctl stop lifelog.service`.
+2. A snapshot, `/home/cico/life/snapshots/2026-10-19-plan-136/life-2026-10-19.db`: its restore check was clean.
+3. The dry run refused one page: a plain page titled `1984` (a book) was filed in `Books`, and D30 makes a four-digit
+   title a year page, which is never filed. The owner wrote the page anew as `1984 (novel)` (id 2121, in `Books`, the
+   same body), took page 643 out of `Books` and tombstoned it. The second dry run was clean.
+4. The real run committed. Page 643 is now a tombstoned year page, its day set to NULL. Every check held, also after
+   the file was opened again: the file equals `schema.sql`, integrity ok, no row breaks the period CHECKs, and the plan of
+   the pages with a box uses `entities_plans`.
+5. `lifelog-plan136 get /integrity`: ok, with no schema drift.
+6. The previous binary is kept as `~/.local/bin/lifelog.prev`, and the new one is installed at `~/.local/bin/lifelog`.
+7. The service started, and its log line reads:
+   `Oct 19 22:10:52 balaur lifelog[309025]: lifelog: serving /home/cico/dev/lifelogdb/life.db on http://127.0.0.1:7777 (public: token required; the token travels in clear, use a private network) (version 0.1.0, user_version 1)`.
 
 ## Checks
 
@@ -274,5 +286,5 @@ owner decides which, and runs it.
 - [x] Step 5: the browser, looked at on the review server on a desktop and a phone (`2b12236`, `26cf777`); the
       owner looks next.
 - [x] Step 6, measured: the table above; the box index (`2b12236`).
-- [ ] Step 6, shipped: the live file brought to the DDL, the binary installed, the service restarted and its log line
-      recorded here (the owner).
+- [x] Step 6, shipped: the live file brought to the DDL, the binary installed, the service restarted and its log line
+      recorded above (2026-10-19).
