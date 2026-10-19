@@ -148,6 +148,8 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /assets/icon-192.png", install("icon-192.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-512.png", install("icon-512.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/wood.png", install("wood.png", "image/png", "public, max-age=31536000, immutable"))
+	m.HandleFunc("GET /assets/ground.png", install("ground.png", "image/png", "public, max-age=31536000, immutable"))
+	m.HandleFunc("GET /assets/sprites.png", install("sprites.png", "image/png", "public, max-age=31536000, immutable"))
 	return h
 }
 
@@ -430,6 +432,13 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 	if fr.shell != nil {
 		now := fr.shell.Local() // one read of the clock, so today and the zone of the words agree
 		f.Shell = &view.Shell{Today: now.Format(time.DateOnly), Zone: now.Location()}
+		// A failed read draws the page with no strip: the strip is a help. The page of an error has logged its own
+		// cause, so only the page of a good answer logs this one.
+		strip, err := todayStrip(r.Context(), fr.shell, f.Shell.Today)
+		if err != nil && status < http.StatusBadRequest {
+			logFault(r, "the Today strip cannot be read", err)
+		}
+		f.Shell.Strip = strip
 	}
 	if status >= 400 && r.Method == "POST" {
 		f.Submitted = fr.submitted

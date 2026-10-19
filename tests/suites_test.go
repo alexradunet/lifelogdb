@@ -37,6 +37,7 @@ var suites = []struct {
 	{"snapshots", snapshots},
 	{"evolution", evolution},
 	{"cookbook", cookbook},
+	{"streaks", streaks},
 	{"temporal-model", temporalCookbookModels},
 	{"document", document},
 	{"diagrams", diagrams},

@@ -290,6 +290,12 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `recent[].first_line` | string | the first line of its body, as `recent[]` of the root; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings; absent when none |
 | `recent[].picture` | string | the address of the picture of the day page's cover, as `recent[].picture` of the root; absent when it has none |
+| `earlier[]` | list | the day pages of this day in the years before it (year minus 1, then 2, and so on while a page exists; at most 5; a year in which the date does not exist, 29 February, is passed over and does not end the list), the nearest year first, shaped as `recent[]`; absent when there is none |
+| `earlier[].day` | day | the day |
+| `earlier[].page_id` | integer | the day page's id |
+| `earlier[].first_line` | string | as `recent[].first_line` |
+| `earlier[].mood` | list | as `recent[].mood`; absent when none |
+| `earlier[].picture` | string | as `recent[].picture`; absent when it has none |
 | `cover` | object | the day page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
