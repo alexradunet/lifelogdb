@@ -36,7 +36,6 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 		{[]string{"agentic-init", "--url", "http://x"}, "agentic-init does not take --url"},
 		{[]string{"agentic-init", "--source", "x"}, "agentic-init does not take --source"},
 		{[]string{"serve", "--human"}, "serve does not take --human"},
-		{[]string{"mcp", "--human"}, "mcp does not take --human"},
 		{[]string{"day", "--db", "a.db", "--url", "http://x"}, "--db and --url name two databases: give one"},
 	} {
 		if _, err := parse(tc.argv, noVars); err == nil || err.Error() != tc.want {
@@ -59,7 +58,7 @@ func TestTheCommandTableDecidesTheFlagsTheUsageAndTheInterrupt(t *testing.T) {
 			t.Errorf("%v takes the interrupt through its context; want the OS's interrupt", args)
 		}
 	}
-	for _, cmd := range []string{"serve", "mcp", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "cover", "snapshot", "an-extension"} {
+	for _, cmd := range []string{"serve", "get", "actions", "do", "capture", "day", "page", "search", "rename", "file", "cover", "snapshot", "an-extension"} {
 		if !commandConsumesContext(opts{args: []string{cmd}}) {
 			t.Errorf("%s must take the interrupt through its context", cmd)
 		}
@@ -170,26 +169,6 @@ func TestInitHonoursThePathWhenTheEnvironmentNamesAnother(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err == nil {
 		t.Errorf("a refused init made %s", other)
-	}
-}
-
-// TestMCPNamesItsWriterOneWay: the MCP server writes as agent:NAME, which --agent names; a --source on its line is
-// refused, never overridden in silence (docs/plans/131-the-pareto-pass.md, part 2).
-func TestMCPNamesItsWriterOneWay(t *testing.T) {
-	cmd := commandNamed("mcp")
-	o, err := parse([]string{"mcp", "--agent", "codex"}, noVars)
-	if err == nil {
-		o, err = cmd.prepare(o)
-	}
-	if err != nil || o.source != "agent:codex" {
-		t.Errorf("mcp --agent codex: source %q, %v; want agent:codex", o.source, err)
-	}
-	o, err = parse([]string{"mcp", "--source", "cli"}, noVars)
-	if err == nil {
-		_, err = cmd.prepare(o)
-	}
-	if err == nil || !strings.Contains(err.Error(), "--agent") {
-		t.Errorf("mcp --source cli: %v, want a refusal that names --agent", err)
 	}
 }
 

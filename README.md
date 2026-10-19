@@ -22,6 +22,7 @@ The database it writes is specified independently of it, so another program — 
 
 ```
 go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
+go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp   # the MCP server, beside lifelog (an extension)
 lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
@@ -29,7 +30,7 @@ lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
 lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
-lifelog mcp --agent lmstudio               # MCP on stdio; rows are written as agent:lmstudio
+lifelog mcp --agent lmstudio               # MCP on stdio (the extension lifelog-mcp); rows are written as agent:lmstudio
 lifelog snapshot --snapshots ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
 lifelog file IMG_0001.HEIC --preview IMG_0001.jpg   # a photo lifelog cannot read: send a JPEG of it
@@ -54,7 +55,9 @@ lifelog snapshot                                   # the owner, before an import
 These are this application's own engineering decisions ([D14](docs/decisions/D14-ui-and-tools.md)).
 
 - **One handler, three surfaces.** `internal/api` is the only thing the surfaces call. `serve` mounts it on a
-  socket; the CLI and the MCP server call it in-process (`internal/client`), or a running server with `--url`.
+  socket; the CLI calls it in-process (`internal/client`), or a running server with `--url`. The MCP server is the
+  extension `lifelog-mcp` ([extensions/mcp](extensions/mcp/README.md)): a client of the HTTP API, run as
+  `lifelog mcp`, which gives it a temporary server on the file.
   Writes go through `internal/core` only: no generic UPDATE or DELETE exists anywhere.
 - **Server shutdown drains admitted requests.** An interrupt or a SIGTERM closes the listener, then allows ten seconds for active
   requests to finish before closing their connections. Shutdown completes before the database closes; expiration
@@ -365,7 +368,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   case-insensitive `localhost` at the actual listener port, with brackets for IPv6. An omitted HTTP port means 80, not
   the listener's port. Custom hostnames, service-name ports and proxy deployments are unsupported. Forwarded headers
   confer no trust; absolute-form request targets are refused. The network guard protects reads, previews and writes;
-  in-process CLI/MCP dispatch is unchanged. Browser-origin protection inside it rejects cross-origin writes while
+  in-process CLI dispatch is unchanged. Browser-origin protection inside it rejects cross-origin writes while
   keeping same-origin forms and non-browser clients that send no browser origin headers working. `--token-file`,
   `--allow-origin`, `--tls-cert` and `--tls-key` are refused without `--public`, never ignored.
 - **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
@@ -437,7 +440,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | path | what | test it at |
 |---|---|---|
 | `schema.go` (root) | `lifelog.Schema`: `docs/schema/schema.sql`, embedded so the binary carries the DDL; `internal/db` reads it | `internal/db` applies it in every test; `tests/` builds from the file itself |
-| `cmd/lifelog` | the binary: `init`, `serve`, `mcp`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
+| `cmd/lifelog` | the binary: `init`, `serve`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them) | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test | `db.Init` and `db.Open` on a file in `t.TempDir()` |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, the parse of a day and an instant, the markers that a plain-text line cuts (`BlockMark`) and the marks of a match in a snippet of the search (`SnippetOpen`, `SnippetClose`); tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) | the pure functions with table tests, and the vectors of the contract page (`TestWikilinkVectors`, `TestTitleKeyVectors`) |
 | `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files | `core.Store` on `dbtest.New`, with a fixed `Clock` for a test of today |
@@ -445,7 +448,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `internal/photo` | what a photo's metadata says: the day and time taken and the orientation (JPEG and HEIC); `phototest` builds synthetic ones | `photo.Read` on the photos of `phototest`; `FuzzRead` |
 | `internal/api` | the action catalog, the routes, Siren and HTML; the local and the `--public` network guards; `siren` holds the Siren types, the `Lifelog-Source` header, the JSON writer and the addresses of the resources, which the clients import too; `view` draws an entity as a page (the templates, the sheets and the fonts are in its `html/`) and imports no store; `apitest` makes a fresh handler and its clients for a test | `api.New` on a store, through `apitest.Fresh`, or `apitest.FreshOn` for a store with a fixed clock; a test inside package `api` cannot import `apitest` (an import cycle), so it makes its store with `dbtest.New`; the pure functions of the handler (`backOf`, `errorEntity`, `browseQueryOf`) with table tests; `view.Draw` and the pure functions of `view` with table tests |
 | `internal/client` | the hypermedia client, transport only: in-process or remote; of this module it imports only `siren`, so it builds no `core`, no `db` and no SQLite | `client.InProcess` and `client.Remote` on one handler: `TestTheTwoTransportsGiveEqualAnswers` |
-| `internal/mcp` | the catalog as MCP tools: the tool list, the arguments of a model and the call of a tool; it imports `client` and `siren`, and no `api` | `mcp.New` on a client of `apitest.Fresh`; the columns `mcp` and `mcp-remote` of the parity table |
+| `extensions/mcp` | its own module, `lifelog-mcp`: the catalog as MCP tools, over HTTP; it has its own copy of `siren` and `client`, and imports nothing of `lifelog/internal` | `mcp.New` on a fake catalog (`go test ./...` in the folder); `TestTheMCPServerOnTheRealLifelog` builds the real `lifelog` and `lifelog-mcp` and runs `lifelog mcp --agent test` |
 | `internal/agentic` | `lifelog agentic-init`: the texts and MCP configs for a coding agent opened in the folder of the program | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
@@ -479,6 +482,8 @@ the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`.
 
 - [`extensions/googlephotos`](extensions/googlephotos/README.md): a local page where the owner picks, for each day
   that has no cover, one photo of that day from Google Photos.
+- [`extensions/mcp`](extensions/mcp/README.md): the MCP server, `lifelog mcp [--agent NAME]`. Every action of the
+  catalog that is not the owner's is a tool.
 
 ## Engineering references
 

@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
+	"lifelog-mcp/client"
+	"lifelog-mcp/siren"
 )
 
 // tool is one function a model may call: an action of the catalog, or the read get.

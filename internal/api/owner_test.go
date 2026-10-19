@@ -17,7 +17,7 @@ import (
 // The owner-only actions are refused to an agent and to an import, with 403 and the code forbidden. The full-text
 // check of the integrity checks (integrity-check) holds the write lock while it runs, so it is the owner's alone too:
 // its GET route refuses as a POST route does. A refused action writes nothing: no metric, and no file in the snapshot
-// folder. That they are never MCP tools is a test of mcp (TestTheToolsAreTheActionsThatAreNotTheOwners).
+// folder. That they are never MCP tools is a test of the extension extensions/mcp (TestTheToolsAreTheActionsThatAreNotTheOwners).
 func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	d, snapshots := dbtest.New(t), t.TempDir()
 	h := api.New(&core.Store{DB: d, SnapshotDir: snapshots})

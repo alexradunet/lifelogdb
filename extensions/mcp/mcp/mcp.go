@@ -1,5 +1,5 @@
 // Package mcp serves the API's action catalog as MCP tools over stdio: one narrow tool per action (small local
-// models do better with fixed tools than with free browsing), plus get to follow links. Every call goes through the API handler, and every result is the resource's Siren
+// models do better with fixed tools than with free browsing), plus get to follow links. Every call goes through the lifelog API, and every result is the resource's Siren
 // entity, links and actions included.
 package mcp
 
@@ -11,11 +11,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
+	"lifelog-mcp/client"
+	"lifelog-mcp/siren"
 )
 
-// Serve runs the MCP server on in and out, the stdin and the stdout of `lifelog mcp`, until the client goes away. It
+// Serve runs the MCP server on in and out, the stdin and the stdout of the process, until the client goes away. It
 // closes in at the end and leaves out open, as the SDK's StdioTransport does with the stdio of the process.
 func Serve(ctx context.Context, c *client.Client, version string, in io.ReadCloser, out io.Writer) error {
 	s, err := New(ctx, c, version)

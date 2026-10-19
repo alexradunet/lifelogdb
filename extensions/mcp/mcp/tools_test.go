@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog-mcp/siren"
 )
 
 func TestToolsRefuseNormalizedDuplicates(t *testing.T) {
@@ -68,7 +68,7 @@ func TestArgumentsFlattenToFormValues(t *testing.T) {
 func TestAFileFieldIsThePathOfALocalFile(t *testing.T) {
 	list, err := tools([]siren.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
-		{Name: "audio", Type: "file", Title: "A recording", Accept: "audio/*"}}}})
+		{Name: "audio", Type: "file", Title: "A recording"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

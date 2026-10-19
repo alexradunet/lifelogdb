@@ -95,9 +95,10 @@ func agenticFolder(t *testing.T) (e env, dir, exe string) {
 
 // TestTheMCPConfigsStartTheMCPServerOfThisProgram: each MCP config that agentic-init writes starts this program with
 // the line "mcp --agent NAME --db FILE". NAME is the agent of its framework and FILE is the life.db beside the program.
-// The program runs that line and serves its tools on the file.
+// The extension lifelog-mcp serves that line (extensions/mcp): step 2 of plan 135 moves this test into the agentic
+// extension and runs the real lifelog-mcp.
 func TestTheMCPConfigsStartTheMCPServerOfThisProgram(t *testing.T) {
-	e, dir, exe := agenticFolder(t)
+	_, dir, exe := agenticFolder(t)
 	for _, c := range []struct{ file, agent string }{
 		{".mcp.json", "claude"}, {".pi/mcp.json", "pi"}, {"opencode.json", "opencode"}, {".codex/config.toml", "codex"},
 	} {
@@ -106,9 +107,6 @@ func TestTheMCPConfigsStartTheMCPServerOfThisProgram(t *testing.T) {
 		if command != exe || !slices.Equal(args, want) {
 			t.Errorf("%s: %s %q, want %s %q", c.file, command, args, exe, want)
 			continue
-		}
-		if tools := mcpToolNames(t, e, args); !tools["find"] {
-			t.Errorf("%s: the server of its line lists the tools %v, without find", c.file, tools)
 		}
 	}
 }
@@ -183,7 +181,7 @@ func mcpServerOf(t *testing.T, dir, name string) (command string, args []string)
 //   - The sentence of AGENTS.md that calls actions the owner's only names the tool names of all the owner's actions
 //     of the catalog, and no one of them is a tool. The scan of the texts reads AGENTS.md without that sentence, so
 //     an owner's name in any other sentence fails.
-//   - A backticked name that looks like a tool (lowercase words joined by _) is a tool of lifelog mcp, a command of
+//   - A backticked name that looks like a tool (lowercase words joined by _) is a tool of lifelog-mcp, a command of
 //     commandWords, or a word of notTools.
 //   - A backticked command line is a line that the parse of the program takes, with a command of the table: a full
 //     line ("lifelog" or the program, then its words) or a short form (a lowercase word and more words, such as
@@ -192,7 +190,6 @@ func mcpServerOf(t *testing.T, dir, name string) (command string, args []string)
 func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	e, dir, exe := agenticFolder(t)
 	live := filepath.Join(dir, "life.db")
-	tools := mcpToolNames(t, e, []string{"mcp", "--agent", "test", "--db", live})
 	var stdout bytes.Buffer
 	e.stdout = &stdout
 	if err := runArgs(t.Context(), e, []string{"actions", "--db", live}); err != nil {
@@ -202,10 +199,14 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &actions); err != nil {
 		t.Fatal(err)
 	}
-	owners := map[string]bool{} // the tool names of the owner's actions: a hyphen of the action's name is a _
+	// The tools of lifelog-mcp are the actions that are not the owner's, and get. Step 2 of plan 135 moves this test into
+	// the agentic extension and runs the real lifelog-mcp for the list.
+	owners, tools := map[string]bool{}, map[string]bool{"get": true} // the tool names: a hyphen of the action's name is a _
 	for _, a := range actions {
 		if a.Owner {
 			owners[strings.ReplaceAll(a.Name, "-", "_")] = true
+		} else {
+			tools[strings.ReplaceAll(a.Name, "-", "_")] = true
 		}
 	}
 	// commandWords are the backticked words of the texts that look like a tool and are a command of the program:
@@ -280,11 +281,15 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 						t.Errorf("%s: `%s` is not a command of the program", name, span)
 					}
 				case !tools[span] && !notTools[span]:
-					t.Errorf("%s: `%s` is not a tool of lifelog mcp", name, span)
+					t.Errorf("%s: `%s` is not a tool of lifelog-mcp", name, span)
 				}
 			case len(w) > 1 && (w[0] == exe || lowercase.MatchString(w[0])):
 				if w[0] == "lifelog" || w[0] == exe {
 					w = w[1:] // a full line: the program, then its words
+				}
+				if w[0] == "mcp" { // the extension lifelog-mcp, no command of the table; step 2 of plan 135 checks it against the real one
+					last = command{name: "mcp", flags: []string{"--agent"}}
+					continue
 				}
 				cmd, err := commandOf(w)
 				if err != nil {

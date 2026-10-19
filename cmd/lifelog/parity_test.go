@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -16,25 +14,20 @@ import (
 	"testing"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/siren"
 	"lifelog/internal/client"
 	"lifelog/internal/core"
-	"lifelog/internal/mcp"
 	"lifelog/internal/photo/phototest"
 )
 
 // TestParityOfTheSurfaces is the parity table of the surfaces (AGENTS.md: client parity is a first-class contract). A
 // row is one scenario of the domain. It runs on each surface on a fresh file, and it holds the answer of the surface
 // and the state of the file after it, read back through the HTTP API. The surfaces are the client in process (http),
-// the client over a server (remote), the command lines of this program (cli), and the MCP server with the client in
-// process (mcp) and with the client over a server (mcp-remote). http, remote and cli run once as an owner and once as
-// an agent. The MCP server runs as an agent only, and an action of the owner is not one of its tools. Where a surface
+// the client over a server (remote) and the command lines of this program (cli). Each runs once as an owner and once as
+// an agent. The MCP server is the extension extensions/mcp: its own end-to-end test holds that surface. Where a surface
 // has a shortcut of an action, the row runs the shortcut there: the shortcut wraps the action, so its answer is the
-// action's. Each surface keeps the tests of what is its own: the schema, the hints, the arguments and the cancellation
-// of MCP; the flags, the output and snapshot --snapshots of the CLI; the transport of the client. The clock of every row is
+// action's. Each surface keeps the tests of what is its own: the flags, the output and snapshot --snapshots of the CLI; the transport of the client. The clock of every row is
 // fixed at parityToday, so no row depends on the date of the run.
 func TestParityOfTheSurfaces(t *testing.T) {
 	for _, row := range parityRows() {
@@ -42,7 +35,7 @@ func TestParityOfTheSurfaces(t *testing.T) {
 			t.Run(row.name+"/"+s.name+"/"+s.source, func(t *testing.T) {
 				t.Parallel()
 				read, h, store := apitest.FreshOn(t, "cli", parityToday)
-				x := &parityRun{t: t, mcp: strings.HasPrefix(s.name, "mcp"), owner: !strings.HasPrefix(s.source, "agent:"), read: read, store: store}
+				x := &parityRun{t: t, owner: !strings.HasPrefix(s.source, "agent:"), read: read, store: store}
 				x.call = s.open(t, h, store.DB.Path(), s.source)
 				row.run(x)
 			})
@@ -59,7 +52,6 @@ var paritySurfaces = []struct {
 	{"http", "api", openHTTP}, {"http", "agent:parity", openHTTP},
 	{"remote", "ui", openRemote}, {"remote", "agent:parity", openRemote},
 	{"cli", "cli", openCLI}, {"cli", "agent:parity", openCLI},
-	{"mcp", "agent:parity", openMCP}, {"mcp-remote", "agent:parity", openMCPRemote},
 }
 
 // parityToday is today on the clock of every row: the clock of the store of the API, and of the store that a command
@@ -69,9 +61,6 @@ const parityToday = "2031-05-20"
 // surfaceCall runs the catalog's action with the field values on one surface. It returns the entity of the answer
 // (the error entity of a refusal too) and the error of a refusal.
 type surfaceCall func(action string, args map[string]string) (*siren.Entity, error)
-
-// errNoTool is the answer of the MCP surface to an action that is not one of its tools.
-var errNoTool = errors.New("the MCP server has no tool of this action")
 
 func openHTTP(t *testing.T, h http.Handler, _, source string) surfaceCall {
 	return catalogCall(t, client.InProcess(h, source))
@@ -136,98 +125,6 @@ func cliLine(action string, args map[string]string) []string {
 	return line
 }
 
-func openMCP(t *testing.T, h http.Handler, _, source string) surfaceCall {
-	return mcpCall(t, client.InProcess(h, source))
-}
-
-func openMCPRemote(t *testing.T, h http.Handler, _, source string) surfaceCall {
-	return mcpCall(t, apitest.Remote(t, h, source))
-}
-
-// mcpCall serves the tools of the MCP server over an in-memory transport of the SDK, with the client as the source. A
-// call sends a field that the schema of the tool calls a number as a JSON number, as a model does. An error result of a
-// tool is an error; its text is the error entity of the API when the API answered.
-func mcpCall(t *testing.T, c *client.Client) surfaceCall {
-	srv, err := mcp.New(t.Context(), c, version)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st, ct := mcpsdk.NewInMemoryTransports()
-	ctx, cancel := context.WithCancel(context.Background()) // the life of the server; the cleanup of the test ends it
-	done := make(chan error, 1)
-	go func() { done <- srv.Run(ctx, st) }()
-	session, err := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "parity", Version: "0"}, nil).Connect(ctx, ct, nil)
-	if err != nil {
-		cancel()
-		<-done
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := session.Close(); err != nil {
-			t.Errorf("close the MCP session: %v", err)
-		}
-		cancel()
-		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
-			t.Errorf("the MCP server: %v", err)
-		}
-	})
-	listed, err := session.ListTools(t.Context(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	numbers := map[string]map[string]bool{} // a tool, and its fields that are numbers
-	for _, tool := range listed.Tools {
-		b, err := json.Marshal(tool.InputSchema)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var schema struct {
-			Properties map[string]struct{ Type string }
-		}
-		if err := json.Unmarshal(b, &schema); err != nil {
-			t.Fatalf("the schema of %s: %v", tool.Name, err)
-		}
-		numbers[tool.Name] = map[string]bool{}
-		for name, p := range schema.Properties {
-			numbers[tool.Name][name] = p.Type == "number"
-		}
-	}
-	return func(action string, args map[string]string) (*siren.Entity, error) {
-		t.Helper()
-		name := strings.ReplaceAll(action, "-", "_")
-		number, ok := numbers[name]
-		if !ok {
-			return nil, errNoTool
-		}
-		arguments := map[string]any{}
-		for k, v := range args {
-			if number[k] {
-				arguments[k] = json.Number(v)
-			} else {
-				arguments[k] = v
-			}
-		}
-		res, err := session.CallTool(t.Context(), &mcpsdk.CallToolParams{Name: name, Arguments: arguments})
-		if err != nil {
-			return nil, err
-		}
-		if len(res.Content) != 1 {
-			t.Fatalf("%s returned %d contents, want 1", name, len(res.Content))
-		}
-		text, ok := res.Content[0].(*mcpsdk.TextContent)
-		if !ok {
-			t.Fatalf("%s returned %T, want text", name, res.Content[0])
-		}
-		if !res.IsError {
-			return decodeEntity(t, []byte(text.Text)), nil
-		}
-		if !json.Valid([]byte(text.Text)) {
-			return nil, errors.New(text.Text) // the tool failed before the API answered
-		}
-		return decodeEntity(t, []byte(text.Text)), fmt.Errorf("the tool %s returned an error", name)
-	}
-}
-
 // decodeEntity reads the JSON of an entity with its numbers exact, as the client reads them.
 func decodeEntity(t *testing.T, b []byte) *siren.Entity {
 	t.Helper()
@@ -243,7 +140,6 @@ func decodeEntity(t *testing.T, b []byte) *siren.Entity {
 // parityRun is one row on one surface.
 type parityRun struct {
 	t     *testing.T
-	mcp   bool           // the surface is the MCP server (mcp or mcp-remote)
 	owner bool           // the source of the surface is an owner, not agent:*
 	call  surfaceCall    // the surface under test
 	read  *client.Client // the HTTP API in process, as the owner: the state of the file after a call
@@ -266,8 +162,8 @@ func (x *parityRun) ok(action string, args map[string]string) *siren.Entity {
 }
 
 // refused calls an action that must be refused with the status and the code of the error entity, and returns the
-// message of the entity. On each surface other than the MCP server, the error has the status too (main writes the
-// error of the CLI as "lifelog: 409: ..."). On the MCP server the error is a tool result: only its text has the status.
+// message of the entity. The error has the status too (main writes the
+// error of the CLI as "lifelog: 409: ...").
 func (x *parityRun) refused(action string, args map[string]string, status int, code string) string {
 	x.t.Helper()
 	e, err := x.call(action, args)
@@ -278,7 +174,7 @@ func (x *parityRun) refused(action string, args map[string]string, status int, c
 	if fmt.Sprint(p["status"]) != strconv.Itoa(status) || p["code"] != code {
 		x.t.Errorf("%s %v: %v %v (%v), want %d %s", action, args, p["status"], p["code"], p["message"], status, code)
 	}
-	if got := apitest.Status(err); !x.mcp && got != status {
+	if got := apitest.Status(err); got != status {
 		x.t.Errorf("%s %v: the error %q has the status %d, want %d (-1: it is not a *client.Error)", action, args, err, got, status)
 	}
 	return fmt.Sprint(p["message"])
@@ -432,7 +328,7 @@ func rowCaptureSentAgain(x *parityRun) {
 
 // set-cover with the title of a kept picture puts its embed first in the body, so it is the page's cover; the
 // page's picker lists it as the cover. A file page takes no cover, and a title that is no kept picture is refused.
-// A new photo is a file field, which an MCP tool does not carry (internal/mcp leaves out file fields).
+// A new photo is a file field, which an MCP tool does not carry.
 func rowSetCover(x *parityRun) {
 	ctx := x.t.Context()
 	k, err := x.store.AddFile(ctx, "cli", core.FileIn{Title: "Lake.jpg", SHA256: strings.Repeat("a", 64), MIME: "image/jpeg", Preview: phototest.JPEG(8, 8)})
@@ -934,15 +830,10 @@ func rowLargestVersion(x *parityRun) {
 	x.absent("Forbidden")
 }
 
-// register-metric is the owner's: an owner registers a metric, an agent gets a 403 and nothing is written, and the
-// MCP server has no tool for it.
+// register-metric is the owner's: an owner registers a metric, an agent gets a 403 and nothing is written.
 func rowRegisterMetric(x *parityRun) {
 	args := map[string]string{"name": "Weight", "unit": "kg"}
 	switch {
-	case x.mcp:
-		if _, err := x.call("register-metric", args); !errors.Is(err, errNoTool) {
-			x.t.Errorf("register-metric on MCP: %v, want no tool", err)
-		}
 	case x.owner:
 		if e := x.ok("register-metric", args); e.Title != "Weight" {
 			x.t.Errorf("register-metric Weight: %q", e.Title)
@@ -959,7 +850,7 @@ func rowRegisterMetric(x *parityRun) {
 
 // rebuild-search is the owner's repair of the full-text index: a surface of an owner repairs a drifted index and
 // answers the number of documents; a surface of an agent is refused with 403 forbidden and leaves the index as it
-// was; the MCP server has no such tool.
+// was.
 func rowRebuildSearch(x *parityRun) {
 	x.sql(`INSERT INTO entities_fts(rowid, preferred, all_names, body) VALUES (999, 'ghost', 'ghost', 'drifted')`)
 	indexOK := func() bool {
@@ -971,10 +862,6 @@ func rowRebuildSearch(x *parityRun) {
 		return r.FullTextIndexOK
 	}
 	switch {
-	case x.mcp:
-		if _, err := x.call("rebuild-search", nil); !errors.Is(err, errNoTool) {
-			x.t.Errorf("rebuild-search on MCP: %v, want no tool", err)
-		}
 	case x.owner:
 		if p := props(x.t, x.ok("rebuild-search", nil)); p["documents"] == nil {
 			x.t.Errorf("rebuild-search: %v, want a document count", p)
@@ -993,7 +880,7 @@ func rowRebuildSearch(x *parityRun) {
 
 // resync-links is the owner's repair of the links of the bodies: a surface of an owner rewrites the links of a page whose
 // link row is missing and lists the page; a surface of an agent is refused with 403 forbidden and leaves the link
-// missing; the MCP server has no such tool.
+// missing.
 func rowResyncLinks(x *parityRun) {
 	to, _, err := x.store.CreatePage(x.t.Context(), "cli", "Bridge", "", "")
 	if err != nil {
@@ -1013,10 +900,6 @@ func rowResyncLinks(x *parityRun) {
 		return len(r.LinkDrift)
 	}
 	switch {
-	case x.mcp:
-		if _, err := x.call("resync-links", nil); !errors.Is(err, errNoTool) {
-			x.t.Errorf("resync-links on MCP: %v, want no tool", err)
-		}
 	case x.owner:
 		if p := props(x.t, x.ok("resync-links", nil)); fmt.Sprint(p["pages"]) != fmt.Sprint([]any{json.Number(id(from))}) {
 			x.t.Errorf("resync-links lists %v; want the page %d", p["pages"], from)

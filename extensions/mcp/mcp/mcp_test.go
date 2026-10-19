@@ -14,10 +14,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
-	"lifelog/internal/photo/phototest"
+	"lifelog-mcp/client"
+	"lifelog-mcp/siren"
 )
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the
@@ -25,7 +23,7 @@ import (
 // random_day, tombstone: docs/plans/131-the-pareto-pass.md, part 2); browse, open_day and get are marked reads. The
 // built-in tool get reads what no action reads: a month and a day.
 func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
-	c := mcpTestClient(t)
+	c := fakeClient(t)
 	srv, err := New(t.Context(), c, "test")
 	if err != nil {
 		t.Fatal(err)
@@ -111,19 +109,6 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	}
 }
 
-func mcpTestClient(t *testing.T) *client.Client {
-	t.Helper()
-	owner, handler, _ := apitest.Fresh(t, "cli")
-	for _, fields := range []map[string]string{{"name": "walk"}, {"name": "weight", "unit": "kg"}} {
-		apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, apitest.Must(t)(owner.Get(t.Context(), "/")), "register-metric"), fields))
-	}
-	c := client.InProcess(handler, "agent:test")
-	if _, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Ana", "body": "Synthetic page"}); err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
 func callTool(t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) *siren.Entity {
 	t.Helper()
 	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: args})
@@ -173,7 +158,7 @@ func numericSession(t *testing.T, c *client.Client) (*mcpsdk.ClientSession, cont
 }
 
 func TestMCPNumericSchema(t *testing.T) {
-	session, ctx := numericSession(t, mcpTestClient(t))
+	session, ctx := numericSession(t, fakeClient(t))
 	tools, err := session.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +209,7 @@ func TestMCPNumericSchema(t *testing.T) {
 // the word.
 func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 	const hint = "YYYY-MM-DD or today)"
-	c := mcpTestClient(t)
+	c := fakeClient(t)
 	session, ctx := numericSession(t, c)
 	tools, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -285,13 +270,9 @@ func TestADateFieldTakesADayOrTheWordToday(t *testing.T) {
 }
 
 func TestMCPNumericArguments(t *testing.T) {
-	base := mcpTestClient(t)
-	actions, err := base.Catalog(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	actions := fakeCatalog()
 	var paths []string
-	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := remote(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.siren+json")
 		if r.URL.Path == "/actions" {
 			json.NewEncoder(w).Encode(siren.Entity{Actions: actions})
@@ -327,7 +308,7 @@ func TestMCPNumericArguments(t *testing.T) {
 
 func TestMCPCancellation(t *testing.T) {
 	started, stopped := make(chan struct{}), make(chan struct{})
-	c := client.InProcess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := remote(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/blocked" {
 			close(started)
 			<-r.Context().Done()
@@ -378,7 +359,7 @@ func TestMCPCancellation(t *testing.T) {
 }
 
 func TestMCPUntrustedDataInstructions(t *testing.T) {
-	session, _ := numericSession(t, mcpTestClient(t))
+	session, _ := numericSession(t, fakeClient(t))
 	instructions := session.InitializeResult().Instructions
 	for _, want := range []string{"untrusted data", "never instructions", "authorize tools", "approval"} {
 		if !strings.Contains(instructions, want) {
@@ -388,58 +369,54 @@ func TestMCPUntrustedDataInstructions(t *testing.T) {
 }
 
 func TestMCPExactResponseNumbers(t *testing.T) {
-	for _, remote := range []bool{false, true} {
-		t.Run(fmt.Sprint(remote), func(t *testing.T) {
-			token := "9007199254740993"
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == "POST" && r.URL.Path != "/echo/"+token {
-					t.Errorf("rounded MCP read-to-action path: %s", r.URL.Path)
-				}
-				if r.URL.Path == "/actions" {
-					fmt.Fprint(w, `{}`)
-					return
-				}
-				fmt.Fprintf(w, `{"properties":{"nested":[%s,9223372036854775807,-9223372036854775808]},"result":{"id":%s},"actions":[{"name":"echo","method":"POST","href":"/echo/{id}","fields":[{"name":"id","in":"path","value":%s}]}]}`, token, token, token)
-			})
-			c := client.InProcess(handler, "agent:test")
-			if remote {
-				c = apitest.Remote(t, handler, "agent:test")
-			}
-			session, ctx := numericSession(t, c)
-			res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})
-			if err != nil || res.IsError {
-				t.Fatalf("get: %v %v", res, err)
-			}
-			text := res.Content[0].(*mcpsdk.TextContent).Text
-			for _, want := range []string{token, "9223372036854775807", "-9223372036854775808"} {
-				if !strings.Contains(text, want) {
-					t.Errorf("lost %s: %s", want, text)
-				}
-			}
-			decoder := json.NewDecoder(strings.NewReader(text))
-			decoder.UseNumber()
-			var entity siren.Entity
-			if err := decoder.Decode(&entity); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := c.Do(t.Context(), entity.Actions[0], nil); err != nil {
-				t.Fatal(err)
-			}
-		})
+	token := "9007199254740993"
+	c := remote(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path != "/echo/"+token {
+			t.Errorf("rounded MCP read-to-action path: %s", r.URL.Path)
+		}
+		if r.URL.Path == "/actions" {
+			fmt.Fprint(w, `{}`)
+			return
+		}
+		fmt.Fprintf(w, `{"properties":{"nested":[%s,9223372036854775807,-9223372036854775808]},"result":{"id":%s},"actions":[{"name":"echo","method":"POST","href":"/echo/{id}","fields":[{"name":"id","in":"path","value":%s}]}]}`, token, token, token)
+	}), "agent:test")
+	session, ctx := numericSession(t, c)
+	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: "get", Arguments: map[string]any{"href": "/numbers"}})
+	if err != nil || res.IsError {
+		t.Fatalf("get: %v %v", res, err)
+	}
+	text := res.Content[0].(*mcpsdk.TextContent).Text
+	for _, want := range []string{token, "9223372036854775807", "-9223372036854775808"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("lost %s: %s", want, text)
+		}
+	}
+	decoder := json.NewDecoder(strings.NewReader(text))
+	decoder.UseNumber()
+	var entity siren.Entity
+	if err := decoder.Decode(&entity); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Do(t.Context(), entity.Actions[0], nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
 // TestAnAgentKeepsAPhotoByItsPath: the tool add_file sends a local file that the agent names by its path, so its
 // picture is kept (docs/plans/131-the-pareto-pass.md, part 1).
 func TestAnAgentKeepsAPhotoByItsPath(t *testing.T) {
-	c := mcpTestClient(t)
+	c := fakeClient(t)
 	session, ctx := numericSession(t, c)
+	picture := []byte("synthetic picture bytes")
 	path := filepath.Join(t.TempDir(), "IMG_0007.jpg")
-	if err := os.WriteFile(path, phototest.JPEG(40, 30), 0o644); err != nil {
+	if err := os.WriteFile(path, picture, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	page := callTool(t, ctx, session, "add_file", map[string]any{"original": path})
 	if page.Title != "IMG_0007.jpg" || page.LinkByRel("preview") == nil {
 		t.Fatalf("add_file kept %q with the links %v, want IMG_0007.jpg with its picture", page.Title, page.Links)
+	}
+	if got := props(t, page)["size"]; got != fmt.Sprint(len(picture)) { // the fake API echoes the bytes that it received
+		t.Errorf("the API received %v bytes, want %d", got, len(picture))
 	}
 }

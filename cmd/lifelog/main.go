@@ -24,7 +24,6 @@ import (
 	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
-	"lifelog/internal/mcp"
 )
 
 const version = "0.1.0"
@@ -32,12 +31,12 @@ const version = "0.1.0"
 // opts are the flags of a command line and its words. A flag may stand anywhere on the line; a command takes the
 // global flags and its own (command.flags), and refuses any other.
 type opts struct {
-	db, url, source, agent, mood, day, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
-	human, dbExplicit, force                            bool
-	args                                                []string // the words of the line that are no flag
-	given                                               []string // the flags the line named
-	serve                                               serveFlags
-	file                                                fileFlags
+	db, url, source, mood, day, snapshots, token string // token: $LIFELOG_TOKEN, of --url and serve --public
+	human, dbExplicit, force                     bool
+	args                                         []string // the words of the line that are no flag
+	given                                        []string // the flags the line named
+	serve                                        serveFlags
+	file                                         fileFlags
 }
 
 // serveFlags are the flags that only serve reads.
@@ -74,7 +73,7 @@ type env struct {
 	cmd        *command // the command of the line, set by runContext: its synopsis is the text of an error of use
 	c          *client.Client
 	store      *core.Store
-	stdin      io.ReadCloser // the requests of the MCP server
+	stdin      io.ReadCloser
 	stdout     io.Writer
 	stderr     io.Writer
 	getenv     func(string) string    // LIFELOG_DB and LIFELOG_TOKEN, read by parse
@@ -121,22 +120,6 @@ var commands = []command{
 			"                                      the API for other devices: every request needs the owner's token\n" +
 			"                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login",
 		prepare: prepareServe, run: serve},
-	{name: "mcp", flags: []string{"--agent"}, refuses: []string{"--human"},
-		usage: "  lifelog mcp [--agent NAME]          the MCP server on stdio (writes as agent:NAME)",
-		prepare: func(o opts) (opts, error) {
-			if slices.Contains(o.given, "--source") { // one way to name the writer of MCP: an agent's
-				return o, errors.New("mcp writes as agent:NAME: name the agent with --agent, not --source")
-			}
-			name := o.agent
-			if name == "" {
-				name = "mcp"
-			}
-			o.source = siren.AgentPrefix + name
-			return o, nil
-		},
-		run: func(ctx context.Context, e env, _ []string) error {
-			return mcp.Serve(ctx, e.c, version, e.stdin, e.stdout)
-		}},
 	{name: "get", gap: true,
 		usage: "  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)",
 		run: func(ctx context.Context, e env, args []string) error {
@@ -267,7 +250,7 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 	o := opts{db: getenv("LIFELOG_DB"), token: getenv("LIFELOG_TOKEN"), source: "cli"}
 	o.serve.addr = "127.0.0.1:7777"
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.serve.addr,
-		"--agent": &o.agent, "--mood": &o.mood, "--day": &o.day,
+		"--mood": &o.mood, "--day": &o.day,
 		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime,
 		"--token-file": &o.serve.tokenFile, "--tls-cert": &o.serve.tlsCert, "--tls-key": &o.serve.tlsKey, "--snapshots": &o.snapshots}
 	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public, "--force": &o.force}
