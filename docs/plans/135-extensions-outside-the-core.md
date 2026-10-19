@@ -197,10 +197,15 @@ And the existing rule that Go enforces: an extension never imports `lifelog/inte
 ### Step 4: the invariants, the rules and the site
 
 - `cmd/lifelog/boundary_test.go`: the two tests above.
-- `AGENTS.md`: the table of the repo gets the row `extensions/`; the rule "Every capability on every surface" names
-  the MCP server as the extension `lifelog-mcp`, generated from the catalog; the section on the live database says
-  that an extension's temporary server is the same writer. `README.md` line 6 and the site's install snippet name
-  the three builds. `deploy/README.md` installs the three binaries beside each other.
+- **The four rings in the rule books** (the owner's word, 2026-10-19). `AGENTS.md` gets, under "Go implementation",
+  the diagram of the rings and the test that decides the ring, with the two invariants as the rule a change
+  preserves, and the table of the repo gets the row `extensions/`. `README.md` gets, under "Decisions", the bullet
+  "The four rings" with the same diagram, what lives in each ring, and the links to this plan and
+  `extensions/README.md`. The diagram is drawn once in each file; the prose says only what it cannot.
+- `AGENTS.md`: the rule "Every capability on every surface" names the MCP server as the extension `lifelog-mcp`,
+  generated from the catalog; the section on the live database says that an extension's temporary server is the
+  same writer. `README.md` line 6 and the site's install snippet name the three builds. `deploy/README.md` installs
+  the three binaries beside each other.
 
 ## Costs the owner accepts
 
