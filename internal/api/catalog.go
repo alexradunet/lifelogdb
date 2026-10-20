@@ -181,7 +181,7 @@ var catalog = []spec{
 	},
 	{Name: "record", Title: "Add a reading",
 		Description: "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers every live metric by name.",
-		Hint:        "Add a reading of a metric for a day. The same key sent twice adds the reading once.",
+		Hint:        "Add a reading of a metric for a day: a number in the unit of the metric. For a habit, 1 is done and 0 is not done.",
 		Method:      "POST", Path: "/measurements",
 		Fields: []siren.Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("taken_at", "text", "Time taken, in UTC (2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Time zone (Europe/Bucharest)"), opt("import_key", "text", "Key")},
