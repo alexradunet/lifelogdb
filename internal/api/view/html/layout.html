@@ -44,7 +44,7 @@
      holds it, and on a narrow screen the head of Home and of today's day holds it too (today-inline in app.css, hidden
      on a wide screen, where the rail shows it). It takes the view. */}}
 {{define "today-strip"}}{{with .Strip}}<section class="rail-today" aria-label="Today"><div class="line"><b>Today</b><span class="n">{{.DoneCount}} of {{.Total}} done</span></div>
-<div class="chips"><a class="chip{{if .Written}} done{{end}}" href="/days/today#capture">{{if .Written}}✓ {{end}}entry</a><a class="chip{{if .Mood}} done{{end}}" href="/days/today#capture">{{if .Mood}}✓ {{end}}mood</a>{{range .Habits}}{{if eq .State "open"}}<a class="chip" href="{{.Href $.Here}}">{{.Name}}</a>{{else if eq .State "done"}}<span class="chip done">✓ {{.Name}}</span>{{else}}<span class="chip">{{.Name}} · no</span>{{end}}{{end}}</div>
+<div class="chips"><a class="chip{{if .Written}} done{{end}}" href="/days/today#capture">{{if .Written}}✓ {{end}}entry</a><a class="chip{{if .Mood}} done{{end}}" href="/days/today#capture">{{if .Mood}}✓ {{end}}mood</a>{{range .Habits}}{{if eq .State "open"}}<a class="chip" href="{{.Href $.ReturnHere}}">{{.Name}}</a>{{else if eq .State "done"}}<span class="chip done">✓ {{.Name}}</span>{{else}}<span class="chip">{{.Name}} · no</span>{{end}}{{end}}</div>
 {{if ge .Streak 2}}<div class="streak">{{.Streak}} days in a row</div>{{end}}</section>{{end}}{{end}}
 
 {{define "navlink"}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}>{{icon .Icon}}{{.Title}}</a>{{end}}

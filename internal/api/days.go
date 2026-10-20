@@ -103,10 +103,11 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	record, err := h.recordAction(ctx, "", today)
+	ms, err := h.s.Metrics(ctx)
 	if err != nil {
 		return nil, err
 	}
+	record := recordAction(ms, "", today)
 	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
@@ -321,14 +322,11 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	if err != nil {
 		return nil, err
 	}
-	record, err := h.recordAction(ctx, "", day)
+	ms, err := h.s.Metrics(ctx) // the registry, read once: the options of record and the units of the readings
 	if err != nil {
 		return nil, err
 	}
-	units, err := h.unitsOf(ctx, d.Readings)
-	if err != nil {
-		return nil, err
-	}
+	record, units := recordAction(ms, "", day), unitsOf(ms, d.Readings)
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
 		Class: []string{"day"}, Title: day,

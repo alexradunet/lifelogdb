@@ -437,7 +437,7 @@ picture of the page's cover, when it has one), `choose-cover` (the [pictures it 
 is not a file), `make-metric` (a live plain page that is not a day page: the address of the [New metric form](#metrics) with the name filled; registering the metric turns this page into it and keeps its text). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote`, `rename`, `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
+cannot empty a page), `promote`, `rename`, `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
 files a page and, with `from`, takes it out; a plain page, whose only kind would be `part-of`, offers neither), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and

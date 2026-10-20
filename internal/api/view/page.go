@@ -158,6 +158,18 @@ type view struct {
 // action's form, and ?category= fills a field.
 func (v *view) Asked(name string) string { return v.query.Get(name) }
 
+// ReturnHere is this page as a write returns to it: without the form that a ?new= link opened, the values that
+// filled it and its back. The answer then does not open the form again, and a back never holds another back.
+func (v *view) ReturnHere() string {
+	drop := []string{"new", "back"}
+	if a := v.Action(v.Asked("new")); a != nil {
+		for _, f := range a.Fields {
+			drop = append(drop, f.Name)
+		}
+	}
+	return v.hereWith(nil, drop...)
+}
+
 // hereOf is the address of the page the browser is on, without the one-use feedback receipt: a form that returns
 // here must not carry a receipt that was already taken.
 func hereOf(u *url.URL) string {

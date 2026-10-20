@@ -191,6 +191,22 @@ type TitleMatch struct {
 	Type   string `json:"entity_type"`
 }
 
+// Titles are the preferred titles of the pages of ids, in the order of ids. It reads the names only, for a sentence
+// that names a few pages. An id that no page has is an error.
+func (s *Store) Titles(ctx context.Context, ids []int64) ([]string, error) {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var title string
+		err := s.DB.R.QueryRowContext(ctx, `SELECT n.title FROM entities e
+			JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key WHERE e.id = ?`, id).Scan(&title)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, title)
+	}
+	return out, nil
+}
+
 // TitlesByPrefix are the names of live pages whose name key starts with the title key of prefix, in key order, and
 // at most limit of them (limit is 1 or more): what a search lists first. The read is a range on the unique index of
 // name_key: every key with the prefix is at or after it, and before it followed by the byte 0xFF, which no UTF-8

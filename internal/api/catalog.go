@@ -143,7 +143,7 @@ var catalog = []spec{
 			opt("birth_day", "date", "Born (a person)"), opt("death_day", "date", "Died (a person)")},
 	},
 	{Name: "edit-person", Title: "Edit name and dates",
-		Description: "Change the full name and the dates of a person (the handle, the page's title, changes with rename). A field left out stays as it is. An empty birth_day or death_day removes that date; an empty name is 422. A day is YYYY-MM-DD, or the word today. A bad day, or a death before the birth, is 422. A page that is not a person is 409.",
+		Description: "Change the full name and the dates of a person (the handle, the page's title, changes with rename). A field left out stays as it is, and an edit with no field is 422. An empty birth_day or death_day removes that date; an empty name is 422. A day is YYYY-MM-DD, or the word today. A bad day, or a death before the birth, is 422. A page that is not a person is 409.",
 		Hint:        "Change the name and the dates of this person. Leave a date empty to remove it. Rename changes the title.",
 		Method:      "POST", Path: "/pages/{id}/person",
 		Fields: []siren.Field{path("id", "number", "Page id"), opt("name", "text", "Full name"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")},

@@ -42,7 +42,7 @@
 {{define "browse-tree"}}{{$p := .Props}}
 <ul class="plain rows tree"><li><a class="entry" href="{{.Link "everything"}}"{{if not (or $p.in $p.unfiled $p.deleted)}} aria-current="page"{{end}}><span class="first">Everything</span><span class="meta"></span></a></li>
 {{template "tree-branches" .BrowseTree}}<li><a class="entry" href="{{.Link "unfiled"}}"{{if $p.unfiled}} aria-current="page"{{end}}><span class="first">Not filed</span><span class="meta"></span></a></li>
-<li><a class="entry" href="{{.Link "deleted"}}"{{if $p.deleted}} aria-current="page"{{end}}><span class="first">Deleted</span><span class="meta">{{num $p.counts.deleted}}</span></a></li>
+<li><a class="entry" href="{{.Link "deleted"}}"{{if $p.deleted}} aria-current="page"{{end}}><span class="first">Deleted, every kind</span><span class="meta">{{num $p.counts.deleted}}</span></a></li>
 <li class="tree-foot"><a href="{{.NewCategoryHref}}">New category</a></li></ul>{{end}}
 
 {{/* tree-branches are the rows of one level of the tree, and the folds of the levels under them */}}

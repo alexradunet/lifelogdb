@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-20, `39d37fc` (master).
 - **Priority:** P2. **Effort:** L. **Risk:** LOW to MEDIUM: links, labels, view changes and words; one new action
   (`edit-person`), two new fields on `promote`, and one new catalog field (`Hint`). No table, no column, no trigger.
-- **Status:** IN PROGRESS.
+- **Status:** IN REVIEW (owner). Built on 2026-10-20 and 21, on master; the deploy waits for the owner's word.
 - **Resolves:** the owner's request of 2026-10-20 (below), after `39d37fc` (New metric easy to find, a page made a
   metric).
 
@@ -133,6 +133,32 @@ Each part adds tests beside its packages (AGENTS.md, tests that earn confidence)
 or the field is drawn, the persisted state after the write, and the refusal with its status. `edit-person` gets the
 parity tests of a new action (CLI, HTTP, the MCP end-to-end test of `extensions/mcp`) and the owner-only check does
 not apply (it is not an owner action).
+
+## What was built, and what was not
+
+- Parts 1 to 7 are built, by Sonnet sub-agents in worktrees, reviewed and merged one part at a time.
+- **Not built:** the Restore link on the refusal "the category X is deleted" (Part 5). It needs a typed error; the
+  Deleted row of the Browse tree is the way back meanwhile.
+- **The Deleted row of the tree** counts the deleted things of every kind, as its list does, and says so ("Deleted,
+  every kind"); a count for each kind was not built.
+- **Autofocus:** the entry of a day has no autofocus on any screen. The app has no script, and a narrow-screen-only
+  autofocus needs one. The owner decides.
+- **Found on the way, not built:** New page with the title of a period (`2026-W43`) is refused by
+  `entities_period_page` (a period page has no day); a period page is made by a write to it (plan, save-body).
+
+## The adversarial review (Fable 5.1)
+
+No blocker. Fixed:
+
+| finding | fix |
+|---|---|
+| a habit chip kept the open form in its `back`, so the answer opened the form again and each hop nested a `back` | `view.ReturnHere`: the page without the asked form, its values and its back |
+| a metric named in `?new=record&metric=` that does not exist was dropped in silence | a query value that is not an option is added to the options, so `record` refuses it with its 404 |
+| the 409 of New person offered to promote a period page or a category, and their pages offered Make it a metric; the schema refuses both | `core.promotable` reads the stored columns (`is_journal`, `period`) and the part-of links; the page link uses the same test |
+| the Deleted row counted every kind under each kind | its words say "every kind" |
+| the day read the metric registry twice | read once, and given to the record action and the units |
+| the sentence of file-pages read whole pages for three titles | `Store.Titles` reads the names only |
+| `edit-person` with no field answered 200 | 422, as `schedule` with no date |
 
 ## Done when
 

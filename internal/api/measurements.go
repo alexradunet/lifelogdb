@@ -15,16 +15,13 @@ import (
 	"lifelog/internal/core"
 )
 
-// recordAction offers every live metric by name, and the metric the view is of (and, when given, selects it). The
-// action itself takes any registered metric, so the list is a help and not a rule.
-func (h *server) recordAction(ctx context.Context, metric, day string) (siren.Action, error) {
+// recordAction offers every live metric of ms by name, and the metric the view is of (and, when given, selects it).
+// The action itself takes any registered metric, so the list is a help and not a rule. ms is the registry
+// (Store.Metrics), which the caller reads once for the whole view.
+func recordAction(ms []core.Metric, metric, day string) siren.Action {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
 		a.Field("metric").Value = metric
-	}
-	ms, err := h.s.Metrics(ctx)
-	if err != nil {
-		return siren.Action{}, err
 	}
 	names := make([]string, len(ms)) // Metrics are in the order of their names
 	for i, m := range ms {
@@ -34,15 +31,11 @@ func (h *server) recordAction(ctx context.Context, metric, day string) (siren.Ac
 		names = append(names, metric)
 		slices.Sort(names)
 	}
-	return withOptions(a, "metric", names), nil
+	return withOptions(a, "metric", names)
 }
 
-// unitsOf is the unit of each metric that readings name, by metric name; a metric with no unit is left out.
-func (h *server) unitsOf(ctx context.Context, readings []core.Reading) (map[string]string, error) {
-	ms, err := h.s.Metrics(ctx)
-	if err != nil {
-		return nil, err
-	}
+// unitsOf is the unit of each metric of ms that readings name, by metric name; a metric with no unit is left out.
+func unitsOf(ms []core.Metric, readings []core.Reading) map[string]string {
 	read := map[string]bool{}
 	for _, r := range readings {
 		read[r.Metric] = true
@@ -53,7 +46,7 @@ func (h *server) unitsOf(ctx context.Context, readings []core.Reading) (map[stri
 			units[m.Name] = m.Unit
 		}
 	}
-	return units, nil
+	return units
 }
 
 // recentReadings is how many of a metric's newest readings /metrics reads for its card: the latest, and the line of
@@ -189,10 +182,11 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 		}
 		return siren.MetricHref(name) + "?" + v.Encode()
 	}
-	record, err := h.recordAction(ctx, name, today)
+	ms, err := h.s.Metrics(ctx)
 	if err != nil {
 		return nil, err
 	}
+	record := recordAction(ms, name, today)
 	props := map[string]any{"metric": name, "from": from, "to": to, "readings": rows}
 	e := &siren.Entity{Class: []string{"series"}, Title: name, Properties: props,
 		Links:   []siren.Link{link("self", href(from), name), link("up", "/metrics", "Metrics"), link("index", "/", "Home")},

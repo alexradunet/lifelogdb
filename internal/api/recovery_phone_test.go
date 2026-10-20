@@ -16,7 +16,7 @@ func TestBrowseCountsTheDeletedOnEveryKind(t *testing.T) {
 	e := apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "create-page"), map[string]string{"title": "Old idea"}))
 	id := idOfSelf(t, apitest.Href(e, "self"))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/browse")), "tombstone-pages"), map[string]string{"ids": id}))
-	want := `<li><a class="entry" href="/browse?deleted=1"><span class="first">Deleted</span><span class="meta">1</span></a></li>`
+	want := `<li><a class="entry" href="/browse?deleted=1"><span class="first">Deleted, every kind</span><span class="meta">1</span></a></li>`
 	for _, path := range []string{"/browse", "/browse?kind=person", "/browse?kind=media", "/browse?kind=metric", "/browse?unfiled=1"} {
 		if body := browse(t, h, path); !strings.Contains(body, want) {
 			t.Errorf("%s lacks %s", path, want)

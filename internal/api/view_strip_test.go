@@ -125,3 +125,19 @@ func TestOnThisDayStopsAtFiveYears(t *testing.T) {
 		t.Errorf("%d entries, want the five nearest years (2026 to 2030):\n%s", n, g)
 	}
 }
+
+// TestAHabitChipReturnsWithoutTheOpenForm: a chip on a page that a chip opened (the record form open and filled) goes
+// back to that page without the form, so the answer of the tick does not open the form again, and a back never holds
+// another back.
+func TestAHabitChipReturnsWithoutTheOpenForm(t *testing.T) {
+	h, do := lifeOf(t)
+	for _, n := range []string{"Walk", "Run"} {
+		do("/", "register-metric", map[string]string{"name": n})
+		do("/days/"+dayOf(-1), "record", map[string]string{"metric": n, "value": "1"})
+	}
+	body := browse(t, h, "/?back=%2F&metric=Walk&new=record&value=1")
+	strip := regexp.MustCompile(`(?s)<section class="rail-today".*?</section>`).FindString(body)
+	if want := `<a class="chip" href="/?back=%2F&amp;metric=Run&amp;new=record&amp;value=1#record">Run</a>`; !strings.Contains(strip, want) {
+		t.Errorf("the chip of Run does not go back to Home without the form, want %s:\n%s", want, strip)
+	}
+}

@@ -61,15 +61,7 @@ const fewPages = 3
 // page that cannot be read leaves the count: the sentence is a help, and the write has been done.
 func (h *server) pagesWords(ctx context.Context, ids []int64, n int) string {
 	if len(ids) > 0 && len(ids) <= fewPages && n == len(ids) {
-		titles := make([]string, 0, len(ids))
-		for _, id := range ids {
-			p, err := h.s.PageByID(ctx, id)
-			if err != nil {
-				titles = nil
-				break
-			}
-			titles = append(titles, p.Title)
-		}
+		titles, _ := h.s.Titles(ctx, ids) // with an error, no titles: the count says it
 		switch len(titles) {
 		case 0:
 		case 1:

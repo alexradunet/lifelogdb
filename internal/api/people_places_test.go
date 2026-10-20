@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
 )
 
 // TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt: the answer 409 keeps "open it" and adds a link to the
@@ -190,4 +191,26 @@ func section(page, label string) string {
 		return page[start:]
 	}
 	return page[start : start+end]
+}
+
+// TestAPeriodPageOrACategoryIsNotOfferedAsAPersonOrAMetric: the schema refuses to change the type of a period page
+// (entities_period_page) and of a category, whose part-of links need a plain page (entities_endpoint_types). So the
+// 409 of New person offers no promotion of them, and their pages offer no Make it a metric.
+func TestAPeriodPageOrACategoryIsNotOfferedAsAPersonOrAMetric(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "plan"), map[string]string{"page": "2026-W43", "text": "Synthetic plan"}))
+	week := apitest.Must(t)(c.Get(ctx, "/pages?title=2026-W43"))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Run", "category": "Body"}))
+	body := apitest.Must(t)(c.Get(ctx, "/pages?title=Body"))
+	for title, e := range map[string]*siren.Entity{"2026-W43": week, "Body": body} {
+		rec := submit(h, "/people", url.Values{"title": {title}}, "")
+		if rec.Code != http.StatusConflict || strings.Contains(rec.Body.String(), "make it a person") {
+			t.Errorf("New person %s: %d, and the answer offers a promotion the schema refuses:\n%.600s", title, rec.Code, rec.Body.String())
+		}
+		if got := apitest.Href(apitest.Must(t)(c.Get(ctx, apitest.Href(e, "self"))), "make-metric"); got != "" {
+			t.Errorf("the page %s offers make-metric %q", title, got)
+		}
+	}
 }

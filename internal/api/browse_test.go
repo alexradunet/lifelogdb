@@ -693,7 +693,7 @@ func TestBrowseWithNoCategory(t *testing.T) {
 	}
 	body := browse(t, h, "/browse?unfiled=1")
 	tree := regexp.MustCompile(`(?s)<nav aria-label="Categories">(.*?)</nav>`).FindStringSubmatch(body)
-	if tree == nil || strings.Count(tree[1], "<li") != 4 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") || !strings.Contains(tree[1], `<span class="first">Deleted</span><span class="meta">0</span>`) {
+	if tree == nil || strings.Count(tree[1], "<li") != 4 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") || !strings.Contains(tree[1], `<span class="first">Deleted, every kind</span><span class="meta">0</span>`) {
 		t.Errorf("an empty tree is not Everything and Not filed: %v", tree)
 	}
 	if !strings.Contains(body, `<p class="empty">Everything of this kind is in a category.</p>`) {

@@ -29,7 +29,8 @@ type shownAction struct {
 
 // shown is the action as this page draws it. The page's link can ask for one form (?new=<name>,
 // docs/plans/114-one-way-to-do-a-thing.md): it is open, and each field that the query names, but a path field or a
-// file, holds the query's value.
+// file, holds the query's value. A value that is not among the field's options is added to them, so the form sends
+// it and the action refuses it with its reason (a metric that does not exist): it is never dropped in silence.
 func (v *view) shown(a siren.Action) *shownAction {
 	c := &shownAction{Action: a}
 	if a.Name == "" || v.Asked("new") != a.Name {
@@ -40,6 +41,9 @@ func (v *view) shown(a siren.Action) *shownAction {
 	for i, f := range c.Fields {
 		if _, named := v.query[f.Name]; named && f.In != "path" && f.Type != "file" && f.Name != "new" {
 			c.Fields[i].Value = v.query.Get(f.Name)
+			if q := v.query.Get(f.Name); q != "" && len(f.Options) > 0 && !slices.Contains(f.Options, q) {
+				c.Fields[i].Options = append(slices.Clone(f.Options), q)
+			}
 		}
 	}
 	return c

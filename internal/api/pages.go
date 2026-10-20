@@ -82,7 +82,8 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 		e.Links = append(e.Links, link("series", siren.MetricHref(p.Title), "Readings"))
 	}
 	e.Links = append(e.Links, coverLinks(p)...)
-	if p.Type == "page" && !p.IsDayPage && p.DeletedAt == "" { // register-metric turns a plain page into the metric
+	// register-metric turns a plain page into the metric; not a period page or a category (core's promotable)
+	if p.Type == "page" && !p.IsDayPage && p.Period == "" && p.DeletedAt == "" && !slices.ContainsFunc(p.In, func(l core.Edge) bool { return l.Kind == "part-of" }) {
 		e.Links = append(e.Links, link("make-metric", siren.NewMetricHref(p.Title), "Make it a metric"))
 	}
 	for _, l := range p.Out {

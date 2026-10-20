@@ -24,10 +24,10 @@ func TestTheRecordFormAsksForAMetricWhenNoneIsNamed(t *testing.T) {
 	if sent := browserSends(t, body); sent.Get("metric") != "" {
 		t.Errorf("the browser sends metric %q before the owner chose", sent.Get("metric"))
 	}
-	// A link that names a metric selects it, and a name that no metric has selects nothing: the browser then
-	// refuses the empty prompt, and the server refuses the name (404), as before.
-	if got := browserSends(t, browse(t, h, "/?new=record&metric=Nothing&value=1")).Get("metric"); got != "" {
-		t.Errorf("an unknown metric in the link is replaced by %q", got)
+	// A link that names a metric selects it, and a name that no metric has is kept and selected: the browser sends
+	// it, and the server refuses it (404) with its reason. It is never dropped in silence.
+	if got := browserSends(t, browse(t, h, "/?new=record&metric=Nothing&value=1")).Get("metric"); got != "Nothing" {
+		t.Errorf("an unknown metric in the link is sent as %q, want Nothing", got)
 	}
 	rec := submit(h, "/measurements", url.Values{"metric": {"Nothing"}, "day": {fixedToday}, "value": {"1"}}, "")
 	if rec.Code != http.StatusNotFound {

@@ -87,13 +87,29 @@ func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) err
 		return 0, err
 	}
 	if p != nil {
-		return 0, &ExistsError{ID: p.ID, Title: title, Plain: p.Type == "page" && !p.Deleted && !text.IsDay(text.TitleKey(title))}
+		plain, err := t.promotable(p.ID)
+		if err != nil {
+			return 0, err
+		}
+		return 0, &ExistsError{ID: p.ID, Title: title, Plain: plain}
 	}
 	id, err := t.insertPage(typ, title, text.TitleKey(title), day, body)
 	if err != nil || extra == nil {
 		return id, err
 	}
 	return id, extra(id)
+}
+
+// promotable says whether a page may be offered to become a person, a place or a metric: a live plain page that is
+// not a day page or a period page (entities_day_page_plain, entities_period_page) and that nothing is filed in (a
+// category: its part-of links need a plain page, entities_endpoint_types). It reads the stored columns. It is an
+// offer, not a rule: a promotion that the schema refuses for another reason is still the schema's 422.
+func (t *Tx) promotable(id int64) (bool, error) {
+	var ok bool
+	err := t.tx.QueryRowContext(t.ctx, `SELECT e.entity_type = 'page' AND e.deleted_at IS NULL AND NOT e.is_journal AND e.period IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM links l WHERE l.to_id = e.id AND l.kind = 'part-of')
+		  FROM entities e WHERE e.id = ?`, id).Scan(&ok)
+	return ok, err
 }
 
 // promote is Store.Promote in t.
@@ -143,6 +159,9 @@ type PersonEdit struct{ Name, Birth, Death *string }
 
 // editPerson is Store.EditPerson in t.
 func (t *Tx) editPerson(id int64, e PersonEdit) error {
+	if e.Name == nil && e.Birth == nil && e.Death == nil {
+		return Invalid("send name, birth_day or death_day: an edit with no field changes nothing")
+	}
 	p, err := t.livePage(id)
 	if err != nil {
 		return err

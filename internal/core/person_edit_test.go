@@ -86,3 +86,20 @@ func TestEditPersonChangesWhatIsNamedAndKeepsTheRest(t *testing.T) {
 		t.Errorf("a deleted person: %v, want 409", err)
 	}
 }
+
+// TestEditPersonWithNoFieldIsRefused: an edit that names no field changes nothing, so it is refused (422) and
+// writes nothing, as a schedule with no date is.
+func TestEditPersonWithNoFieldIsRefused(t *testing.T) {
+	s := fresh(t)
+	id, err := s.CreatePerson(ctx, "cli", "Sam (barber)", "Samuel Ortiz", "1980-02-03", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := s.PageByID(ctx, id)
+	if err := s.EditPerson(ctx, "cli", id, PersonEdit{}); status(err) != 422 {
+		t.Errorf("an edit with no field: %v, want 422", err)
+	}
+	if after, _ := s.PageByID(ctx, id); after.Version != before.Version {
+		t.Errorf("a refused edit changed the version from %s to %s", before.Version, after.Version)
+	}
+}
