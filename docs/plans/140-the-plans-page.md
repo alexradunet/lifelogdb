@@ -6,8 +6,8 @@
 ## Status
 
 - **Date / baseline:** 2026-10-20, `78b086a` (master).
-- **Priority:** P2. **Effort:** M. **Risk:** LOW: one read of the lines that already exist, one GET action, one view.
-  No table, no column, no trigger.
+- **Priority:** P2. **Effort:** M. **Risk:** LOW: one read of the lines that already exist, one GET action, one view,
+  and one write action on one line (`schedule`). No table, no column, no trigger.
 - **Status:** TODO.
 - **Resolves:** the owner's request of 2026-10-20 (below). Builds on [plan 136](136-plan-lines-and-period-pages.md)
   (plan lines, D29) and the reopen of `78b086a`.
@@ -23,7 +23,8 @@ The owner's answers in the same session:
 |---|---|
 | which lines | **every open line, with or without a day**: the dated lines first, the lines with no `on:` or `due:` after them |
 | what a category is | **the page the line is in** (a project page, a week, a day). The grammar does not change |
-| what "manage" means | **the actions that exist**: Done, Dropped and Carry on each row, the Plan form in the head, Reopen through the Undo of the message after a tick. No new write action |
+| what "manage" means | **the actions that exist**: Done, Dropped and Carry on each row, the Plan form in the head, Reopen through the Undo of the message after a tick |
+| change the dates of a line | asked next: "If we were to also update the due, or when, would that bring too much complexity?" The agent proposed one action `schedule` that rewrites `on:` and `due:` of a line in place; the owner: "sounds good" (Part 5) |
 | the name | **Plans**: one word with Planned, the action `plan` and the docs |
 
 ## The shape
@@ -35,7 +36,7 @@ flowchart LR
   O -->|"order=page"| P["one group a page, by title"]
   D --> V["GET /plans: the catalog action plans"]
   P --> V
-  V --> R["each row: tick (Done, Dropped), carry"]
+  V --> R["each row: tick (Done, Dropped), carry, schedule"]
 ```
 
 ## The decisions taken in the plan
@@ -125,7 +126,53 @@ func (s *Store) OpenLines(ctx context.Context, byPage bool, limit, offset int) (
 - Screenshots on the review server (memory: `shoot.py`, the synthetic server on :7788): `/plans` by day and by page,
   at desk and phone width, light and dark. The owner looks before the deploy.
 
-## Part 5 — measure
+## Part 5 — `schedule`: change the dates of a line (a Sonnet sub-agent, after Part 3, tests first)
+
+```mermaid
+flowchart LR
+  F["schedule: id, line, text, on, due"] -->|"the line and its text match"| W["rewrite on: and due: of the line in place"]
+  F -->|"the line changed"| S["409 stale_version"]
+  W -->|"every: with no day left"| X["422"]
+  W --> B["the body, one write, no version token"]
+```
+
+| question | decision |
+|---|---|
+| the action | `schedule` "Schedule", `POST /pages/{id}/schedule`. Fields: path id, **line** (number), **text**, on (date), due (date). Both date fields are sent: an empty value removes that date, a value replaces it or adds it. A date goes through `dayNamed`, so the word today is a day |
+| which lines | an open line only (`[ ]`). A done, dropped or carried line, a malformed line, or a line that is not a plan line is 409 `stale_version`, as for `tick` and `carry` (the client read a line that is not there) |
+| what it keeps | the bullet and the indent before the box, the box, the words, `every:` and `from:done`. The line after the box is written again by `text.Line`, so the tokens go to the end in the key order of `Line`; the words keep their order |
+| the rules it can break | `every:` with neither `on:` nor `due:` left is refused by `text.Line` (422, the sentence of the contract). The writer adds no other rule |
+| a repeat | nothing more: the next date of a repeat counts from `due:`, else `on:`, at the tick. So it counts from the new date |
+| one way to do a thing | `carry` moves a line to another page; `save-body` edits the whole page with its version token. `schedule` is the one action that changes the dates of a line where it is. The README row says so |
+
+- `internal/text/plan.go`: `func Schedule(body string, line int, text, on, due string) (newBody string, err error)`
+  beside `Carry`, through `openLine` and `Line`. Vectors in [plan lines](../contract/plan-lines.md): a section
+  "Change the dates of a line" (one paragraph: what `schedule` keeps and what it refuses) and a third JSON block after
+  a marker `<!-- schedule-vectors -->`, read by `plan_test.go` and by the `plan-lines` suite of `tests/` as the other
+  two blocks are: at least 12 vectors (add on, add due, replace each, remove each, remove both, remove both with
+  every refused, a nested item keeps its indent, a `*` bullet, tokens in the middle of the words move to the end,
+  a done line refused, a changed text refused). Count the new vectors in `tests/README.md` if it counts them.
+- `internal/core/plans.go`: `Store.Schedule(ctx, source, id, line, words, on, due) (ScheduleResult, error)`, as
+  `Carry` is: `livePage`, `text.Schedule`, the `UPDATE` of the body, `syncWikilinks`, in one `alone` write;
+  `planError` for the answers. `ScheduleResult` has the line number and the new line.
+- `internal/api`: the catalog row after `carry`; the handler in `plans.go`; `lineActions()` returns `tick`, `carry`
+  and `schedule`, so every view that draws plan rows (a day, a week, a month, a year, a page, `/plans`) offers it.
+  `API.md`: the action in `### plan line` and a `### result of schedule`; the lines that list "`tick` and `carry`"
+  in the classes say "`tick`, `carry` and `schedule`". `README.md`: the row of the action in the table of the
+  surfaces, and the sentence that names the actions of a line (`README.md:140`) names the four.
+  [D23](../decisions/D23-no-tasks.md) and [D29](../decisions/D29-plan-lines.md): where they name the actions of a
+  line, add `schedule` ("`schedule` changes its dates").
+- The view: on an open row of `planrow` (`plan.html`), a boxed form "Dates" beside Carry, with `on` and `due`
+  prefilled with the line's values and hidden `line`, `text` and `back`. The message after the write names the new
+  dates. No Undo form: the old dates are in the message, and a second `schedule` puts them back.
+- Tests: `plan_test.go` (the vectors); `core/plans_test.go` (409 on a changed line; 422 for every with no day, and
+  the body unchanged after it; a tombstoned page 409; a line inside a quote refused); `api/plans_test.go` (the 303
+  back to `/plans`; an empty `due` removes the token); parity (`do schedule`, then `do plans` shows the new day); the
+  MCP tool `schedule` is present in `extensions/mcp/e2e_test.go`; `view_forms_test` (the form posts to the action).
+- The Description of the catalog row says "the day it is planned for" and "the day it must be done by", as `plan`
+  does.
+
+## Part 6 — measure
 
 `internal/scaletest/scale.go`: `exercise` records `open_plans` (`OpenLines(ctx, false, 200, 0)`) beside
 `planned_day`; `scale_test.go` expects 13 operations. Run `go run ./tools/lifescale -profile lifetime -seed 2075
@@ -139,13 +186,16 @@ func (s *Store) OpenLines(ctx context.Context, byPage bool, limit, offset int) (
   `staticcheck ./...`, `govulncheck ./...`.
 - By hand on the review server: plan "Call the bank" on a project page with no day, "Pay rent due:" yesterday, and
   one line on today; `/plans` shows Past its day, Today, No day in that order; By page groups them under their pages;
-  Done on a row answers back to `/plans` with the Undo message, and Undo puts the row back.
-- Skills: Part 2 and 3 `a-philosophy-of-software-design` + `code-complete`; Part 4 `refactoring` +
+  Done on a row answers back to `/plans` with the Undo message, and Undo puts the row back; Dates on a row with
+  due set to next week moves it from Past its day to Later, and an empty due on a repeating line with no on is
+  refused with its sentence.
+- Skills: Parts 2, 3 and 5 `a-philosophy-of-software-design` + `code-complete`; Part 4 `refactoring` +
   `a-philosophy-of-software-design`. Every report ends with the Skills line.
 
 ## Done when
 
 `/plans` lists every open line by day and by page on the four surfaces (`do plans`, the MCP tool `plans`, the
-browser, `GET /plans`); the contract sentence is rewritten in its three homes; the baseline, the static checks, the
+browser, `GET /plans`); `schedule` changes the dates of an open line on the four surfaces, with its vectors on the
+contract page; the contract sentence is rewritten in its three homes; the baseline, the static checks, the
 MCP tests and the shuffled run are green; `open_plans` is recorded; the owner has seen the screenshots. The deploy
 waits for the owner's word.
