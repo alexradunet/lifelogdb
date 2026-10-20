@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **141**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **142**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [141](141-the-access-pass.md) | The access pass: every task has a way in, every mistake has a way out | P2 | L | owner word 2026-10-20; `39d37fc` | IN PROGRESS |
 | [140](140-the-plans-page.md) | The Plans page: every open plan line in one list, by day or by page | P2 | M | owner word 2026-10-20; `78b086a` | IN REVIEW (owner) |
 | [139](139-pixel-icons.md) | Pixel icons: the icons of the rail, the New menu and the kinds as 10 by 10 glyphs | P3 | S | owner word 2026-10-19; `5dce8b1` | IN REVIEW (owner) |
 | [138](138-pixel-art-elsewhere.md) | Pixel art elsewhere: the ground, the seal, the mood faces and the empty states | P3 | S | owner word 2026-10-19; `284e955` | IN REVIEW (owner) |
