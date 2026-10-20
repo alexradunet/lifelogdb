@@ -51,7 +51,7 @@ func TestTheTodayStripReadsTheLife(t *testing.T) {
 	for _, want := range []string{
 		"3 of 5 done", "3 days in a row",
 		`<a class="chip done" href="/days/today#capture">✓ entry</a>`, `<a class="chip done" href="/days/today#capture">✓ mood</a>`,
-		`<span class="chip done">✓ Walk</span>`, `<a class="chip" href="/?new=record&amp;metric=Stretch&amp;value=1#record">Stretch</a>`,
+		`<span class="chip done">✓ Walk</span>`, `<a class="chip" href="/?back=%2Fdays%2F2031-05-14&amp;metric=Stretch&amp;new=record&amp;value=1#record">Stretch</a>`,
 		`<span class="chip">Smoke · no</span>`,
 	} {
 		if !strings.Contains(strip, want) {

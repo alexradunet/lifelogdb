@@ -105,9 +105,9 @@ func TestTheRailDrawsTheTodayStrip(t *testing.T) {
 	for _, want := range []string{
 		`<a class="chip done" href="/days/today#capture">✓ entry</a>`,
 		`<a class="chip" href="/days/today#capture">mood</a>`,
-		`<a class="chip" href="/?new=record&amp;metric=Walk&amp;value=1#record">Walk</a>`,
+		`<a class="chip" href="/?back=%2Fanything&amp;metric=Walk&amp;new=record&amp;value=1#record">Walk</a>`,
 		`<span class="chip done">✓ No phone</span>`,
-		`<a class="chip" href="/?new=record&amp;metric=Run&#43;%26&#43;jump&amp;value=1#record">Run &amp; jump</a>`,
+		`<a class="chip" href="/?back=%2Fanything&amp;metric=Run&#43;%26&#43;jump&amp;new=record&amp;value=1#record">Run &amp; jump</a>`,
 		`<span class="chip">Stretch · no</span>`,
 		`12 days in a row`,
 	} {

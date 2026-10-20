@@ -56,11 +56,11 @@
 {{- if or $d.readings (.Action "record")}}
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-{{with $.ReadingTiles}}<div class="readings">{{range .}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
-{{template "reading-link" (dict "id" .ID "value" .Value)}}
-{{with .More}}<span class="meta">and {{.}} more this day</span>{{end}}</div>{{end}}</div>{{end}}
+{{with $.ReadingTiles}}<div class="readings">{{range .}}{{$metric := .Metric}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
+{{template "reading-link" (dict "id" .ID "value" .Value "unit" (unitWords .Unit))}}
+{{with .More}}<a class="meta" href="/metrics/{{pathesc $metric}}">and {{.}} more this day</a>{{end}}</div>{{end}}</div>{{end}}
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
-<div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
+<div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz" "import_key" newKey "back" (or ($.Asked "back") ($.Link "self")) "placeholder" "metric=Pick a metric")}}</div>
 </section>{{end}}
 {{- with $p.Places}}
 <section class="group" aria-label="Where"><h2>Where</h2>

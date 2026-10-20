@@ -308,6 +308,7 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `today` | day | this machine's local day |
 | `planned[]` | list | the plan lines of the day, each a [plan line](#plan-line), in the order of their day, title and line. From today on: the open lines planned (`on` or `due`) on or before the day, at most 200. Before today: the lines planned on that day, and the lines done on it |
 | `planned_more` | integer | the open lines that `planned` leaves out; 0 when none |
+| `units` | object | the unit of each metric that the day reads, by metric name; a metric with no unit is absent, and so is the property when none is left |
 | `recent[]` | list | on the day of today only: the 5 newest live day pages up to today, as `recent[]` of [the root](#root); absent on any other day, and when there is none |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |
@@ -553,8 +554,10 @@ is its cover), a deleted page 409.
 ### measurement
 
 `GET /measurements/{id}`: one reading, current or not. Links: `day`, `series`, `supersedes` (what it corrects),
-`superseded-by` (what corrected it), `captured-with`. Actions on the current reading: `correct`, with a new value,
-and `retract`: to remove a reading, retract it. The properties are the reading's (above) and:
+`superseded-by` (what corrected it), `captured-with`, and `record` on a current reading that is not a retraction
+(Home with the form of `record` open and the metric, the day and the value of this reading filled in: the way to add
+it again). Actions on the current reading that is not a retraction: `correct`, with a new value (the field `value`
+holds the current one), and `retract`: to remove a reading, retract it. A retraction offers neither. The properties are the reading's (above) and:
 
 | property | type | meaning |
 |---|---|---|
@@ -594,10 +597,11 @@ page, D27). Embedded: `reading` links. Actions: `record` (this metric).
 | `readings[].value` | number | |
 | `readings[].captured_with_id` | integer | |
 | `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent when the name is no live metric |
+| `habit_days` | integer | only when `unit` is `''`: after its last reading, the days a habit stays in Today |
 
 ### metrics
 
-`GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with the metrics as options,
+`GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with every live metric as an option,
 [`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner). A
 browser draws each metric as a card: its latest reading and the line of its recent readings
 ([plan 112](docs/plans/112-metrics-as-cards.md)). The answer of `register-metric` is the metric's [series](#series),

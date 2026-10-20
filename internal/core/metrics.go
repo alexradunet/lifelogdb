@@ -274,20 +274,6 @@ func (s *Store) RecentReadings(ctx context.Context, n int) (map[int64][]Recent, 
 	return out, nil
 }
 
-// InUse names the metrics with a current reading in the n days up to day, so a view offers the series the
-// owner keeps rather than the whole registry (a lab marker read twice a year stays at /metrics).
-func (s *Store) InUse(ctx context.Context, day string, n int) ([]string, error) {
-	if err := checkDay("day", day); err != nil {
-		return nil, err
-	}
-	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m_name.title FROM entities m JOIN entity_names m_name ON m_name.entity_id = m.id AND m_name.name_key = m.preferred_name_key AND m.deleted_at IS NULL
-		 WHERE m.entity_type = 'metric' AND EXISTS (SELECT 1 FROM measurement_values v
-		                WHERE v.metric_id = m.id AND v.day > date(?, '-' || ? || ' day') AND v.day <= ?)
-		 ORDER BY m.preferred_name_key`, day, n, day)
-	return list(rows, err, func(name *string) []any { return []any{name} })
-}
-
 // Series is cookbook/metric-series.md: the current readings of one metric in (from, to]. An empty from is no lower
 // bound: every reading through to.
 func (s *Store) Series(ctx context.Context, metric, from, to string) ([]Reading, error) {

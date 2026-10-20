@@ -119,7 +119,7 @@ type metricCard struct {
 	Short       string // the first words of When: "2 days ago", or the day when it is not near today
 	Count       int    // how many recent readings the line holds
 	Line        template.HTML
-	Stale       bool // the latest reading is older than InUseDays
+	Stale       bool // the latest reading is older than staleDays
 	Note        string
 }
 
@@ -164,7 +164,7 @@ func (v *view) MetricSections() []metricSection {
 	}
 	c := v.clock()
 	limit, _ := text.ParseDay(c.today)
-	limit = limit.AddDate(0, 0, -InUseDays)
+	limit = limit.AddDate(0, 0, -staleDays)
 	card := func(x any) metricCard {
 		g, _ := x.(map[string]any)
 		id := Num(g["id"])
@@ -247,15 +247,16 @@ func (v *view) MetricSections() []metricSection {
 // readingTile is a metric read on the day: its last reading of the day (the one to correct), and how many more
 // readings of the day it stands for.
 type readingTile struct {
-	Metric, Value string
-	ID            string
-	More          int
+	Metric, Value, Unit string
+	ID                  string
+	More                int
 }
 
 // ReadingTiles are the tiles of the day's readings, one for each metric, in the order of its first reading.
 func (v *view) ReadingTiles() []readingTile {
 	props, _ := v.Props.(map[string]any)
 	readings, _ := props["readings"].([]any)
+	units, _ := props["units"].(map[string]any)
 	var out []readingTile
 	at := map[string]int{}
 	for _, r := range readings {
@@ -264,7 +265,8 @@ func (v *view) ReadingTiles() []readingTile {
 		i, seen := at[metric]
 		if !seen {
 			i, at[metric] = len(out), len(out)
-			out = append(out, readingTile{Metric: metric})
+			unit, _ := units[metric].(string)
+			out = append(out, readingTile{Metric: metric, Unit: unit})
 		} else {
 			out[i].More++
 		}
@@ -283,6 +285,6 @@ func unitWords(unit string) string {
 	return unit
 }
 
-// InUseDays is how far back a view looks for the metrics it offers to record: a series read at least monthly
-// stays offered, a lab marker read twice a year is recorded from its own page (/metrics/{name}).
-const InUseDays = 60
+// staleDays is the age of the latest reading after which a metric's card is muted: a series read at least monthly
+// stays plain, a lab marker read twice a year is muted.
+const staleDays = 60

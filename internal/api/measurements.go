@@ -15,22 +15,45 @@ import (
 	"lifelog/internal/core"
 )
 
-// recordAction offers the metrics in use on day (and metric, when the view is that metric's), not the whole
-// registry; the record action itself takes any registered metric.
+// recordAction offers every live metric by name, and the metric the view is of (and, when given, selects it). The
+// action itself takes any registered metric, so the list is a help and not a rule.
 func (h *server) recordAction(ctx context.Context, metric, day string) (siren.Action, error) {
 	a := action("record", nil, map[string]any{"day": day})
 	if metric != "" {
 		a.Field("metric").Value = metric
 	}
-	names, err := h.s.InUse(ctx, day, view.InUseDays)
+	ms, err := h.s.Metrics(ctx)
 	if err != nil {
 		return siren.Action{}, err
+	}
+	names := make([]string, len(ms)) // Metrics are in the order of their names
+	for i, m := range ms {
+		names[i] = m.Name
 	}
 	if metric != "" && !slices.Contains(names, metric) {
 		names = append(names, metric)
 		slices.Sort(names)
 	}
 	return withOptions(a, "metric", names), nil
+}
+
+// unitsOf is the unit of each metric that readings name, by metric name; a metric with no unit is left out.
+func (h *server) unitsOf(ctx context.Context, readings []core.Reading) (map[string]string, error) {
+	ms, err := h.s.Metrics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	read := map[string]bool{}
+	for _, r := range readings {
+		read[r.Metric] = true
+	}
+	units := map[string]string{}
+	for _, m := range ms {
+		if read[m.Name] && m.Unit != "" {
+			units[m.Name] = m.Unit
+		}
+	}
+	return units, nil
 }
 
 // recentReadings is how many of a metric's newest readings /metrics reads for its card: the latest, and the line of
@@ -179,6 +202,9 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	}
 	if m != nil {
 		props["unit"] = m.Unit
+		if m.Unit == "" {
+			props["habit_days"] = core.HabitDays // a metric with no unit is a habit (D24) once it is read
+		}
 		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 	}
 	for _, m := range rows {
@@ -228,10 +254,10 @@ func (h *server) measurementEntity(ctx context.Context, id int64) (*siren.Entity
 	if m.SupersededBy != 0 {
 		e.Links = append(e.Links, link("superseded-by", siren.MeasurementHref(m.SupersededBy), "Corrected by"))
 	} else {
-		ids := idParam(id)
-		e.Actions = []siren.Action{action("correct", ids, nil)}
-		if !m.Retraction {
-			e.Actions = append(e.Actions, action("retract", ids, nil))
+		if !m.Retraction { // a retraction has no value to correct, and nothing left to retract
+			ids := idParam(id)
+			e.Actions = []siren.Action{action("correct", ids, map[string]any{"value": m.Value}), action("retract", ids, nil)}
+			e.Links = append(e.Links, link("record", siren.NewReadingHref(m.Metric, m.Day, m.Value, ""), "Add it again"))
 		}
 	}
 	if m.CapturedWith != 0 {
