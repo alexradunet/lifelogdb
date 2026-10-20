@@ -136,7 +136,11 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if slices.ContainsFunc(p.In, func(l core.Edge) bool { return l.Kind == "part-of" }) {
 		out = append(out, action("create-page", nil, map[string]any{"category": p.Title}))
 	}
-	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), planAction(p.Title), action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
+	plan := planAction(p.Title)
+	if p.IsDayPage {
+		plan = planActionOnDay(p.Title)
+	}
+	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), plan, action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
 	if !p.IsDayPage {
 		if p.Type == "page" {
 			out = append(out, action("promote", ids, nil))

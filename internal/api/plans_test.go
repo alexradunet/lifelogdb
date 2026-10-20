@@ -125,6 +125,32 @@ func TestAPeriodPageShowsItsLinesAndAPlanIsRefusedWithReasons(t *testing.T) {
 	}
 }
 
+// A repeat with no day is refused in plain words, and the plan form of a day has its on filled with that day.
+func TestARepeatNeedsADayAndTheFormOfADayFillsOn(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	_, err := c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": "Garden", "text": "Water", "every": "week"})
+	if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "A repeat needs a Planned for or a Must be done by day.") {
+		t.Errorf("a repeat with no day: %v, want 422 with the plain words", err)
+	}
+	day := apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-14"))
+	plan := apitest.Action(t, day, "plan")
+	for _, f := range plan.Fields {
+		if f.Name == "on" && f.Value != "2031-05-14" {
+			t.Errorf("the plan form of a day has on = %v, want 2031-05-14", f.Value)
+		}
+	}
+	if _, err := c.Do(t.Context(), apitest.Action(t, day, "plan"), map[string]string{"text": "Water", "every": "week"}); err != nil {
+		t.Errorf("a repeat from the form of a day: %v", err)
+	}
+	page := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": "Garden", "text": "Water"}))
+	for _, f := range apitest.Action(t, page, "plan").Fields {
+		if f.Name == "on" && f.Value != nil {
+			t.Errorf("the plan form of a plain page has on = %v, want none", f.Value)
+		}
+	}
+}
+
 // plansFor plans the lines of the TestPlans* tests: two on a project page and one on today. Today is fixedToday.
 func plansFor(t *testing.T) (*client.Client, http.Handler, *siren.Entity) {
 	t.Helper()

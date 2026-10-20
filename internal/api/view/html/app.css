@@ -578,7 +578,6 @@ form.tick-line{display:inline-flex; flex-direction:row; align-items:center; gap:
 .box.open{color:var(--text-link)}
 button.box{inline-size:var(--space-5); block-size:var(--space-5); padding:0; border:0; background:none; box-shadow:none; font-size:18px; line-height:1; vertical-align:text-bottom;
   &:active{transform:none}}
-.token{font:400 12px/16px var(--mono); color:var(--muted)}
 @container column (max-width:867px){.sheet-margin{grid-template-columns:minmax(0,1fr)}}
 @container column (max-width:867px){
   .day-head{align-items:flex-start;

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+
+	"lifelog/internal/text"
 )
 
 // The result of a write in sentences (docs/plans/093-words-phone-and-today.md), by the result shapes of API.md.
@@ -170,8 +172,13 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 				out[len(out)-1].Form = f
 			}
 			if next, ok := take("appended_line"); ok {
-				delete(left, "appended")
-				say("The next one is line %s.", Num(next))
+				appended, _ := take("appended")
+				// The new line is read back with the one parser of the grammar. Its days are the words; with none, the line number.
+				if ps := text.Plans(fmt.Sprint(appended)); len(ps) == 1 && (ps[0].On != "" || ps[0].Due != "") {
+					say("The next one is %s.", esc(c.datesWords(ps[0].On, ps[0].Due)))
+				} else {
+					say("The next one is line %s.", Num(next))
+				}
 			}
 		}
 	} else if to, ok := take("to_id"); ok {

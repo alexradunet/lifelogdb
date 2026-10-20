@@ -121,12 +121,27 @@ func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
 		}
 		spans := []span{{p.BoxAt, p.BoxAt + 3, box}}
 		for _, t := range p.Tokens {
-			spans = append(spans, span{t[0], t[1], `<small class="token">` + esc(string(source[t[0]:t[1]])) + `</small>`})
+			spans = append(spans, span{t[0], t[1], tokenChip(string(source[t[0]:t[1]]))})
 		}
 		replaceSpans(block, spans)
 		return ast.WalkSkipChildren, nil
 	})
 	return forms.String()
+}
+
+// tokenChip draws a token of a well-formed plan line (on:, due:, done:, every:, from:done) as the badge that the plan
+// rows use (planrow in plan.html): "on Tue 20 Oct", "every week". The days are in the words of shortDay, which needs no
+// clock. The grammar has been checked already, so the key and the value are known.
+func tokenChip(token string) string {
+	key, value, _ := strings.Cut(token, ":")
+	words := key + " " + value
+	switch key {
+	case "on", "due", "done":
+		words = key + " " + shortDay(value)
+	case "from":
+		words = "from " + value
+	}
+	return `<span class="badge">` + template.HTMLEscapeString(words) + `</span>`
 }
 
 // replaceSpans draws the spans of the source as html in the text nodes of a block. A span may cover parts of several

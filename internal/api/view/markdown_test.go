@@ -187,7 +187,7 @@ func TestPlanBoxesInABody(t *testing.T) {
 	got := string(markdownCover(body, "", "/pages/7/tick", "/days/today"))
 	for _, want := range []string{
 		`<button class="box open" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
-		`<small class="token">on:2026-10-22</small>`, `<small class="token">done:2026-10-01</small>`,
+		`<span class="badge">on Thu 22 Oct</span>`, `<span class="badge">done Thu 1 Oct</span>`,
 		`<button class="box done" form="tick-3" name="outcome" value="reopen" aria-label="Reopen: Paid">☑</button> Paid`,
 		`<button class="box dropped" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skipped">☒</button> Skipped`,
 		`<span class="box carried" role="img" aria-label="carried">`, `<span class="box done" role="img" aria-label="done">`,
@@ -197,6 +197,15 @@ func TestPlanBoxesInABody(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("the body does not carry %s:\n%s", want, got)
 		}
+	}
+	// The tokens are chips and not raw text. A malformed line stays as written.
+	for _, raw := range []string{"on:2026-10-22", "done:2026-10-01"} {
+		if strings.Contains(got, raw) {
+			t.Errorf("the raw token %s is drawn:\n%s", raw, got)
+		}
+	}
+	if !strings.Contains(got, "Bad done:2026-13-45") {
+		t.Errorf("a malformed line is not left as text:\n%s", got)
 	}
 	// The open line and the two closed lines tick; the carried line and the malformed one do not.
 	if n := strings.Count(got, "<form"); n != 3 {

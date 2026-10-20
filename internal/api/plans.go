@@ -114,6 +114,13 @@ func planAction(page string) siren.Action {
 	return action("plan", nil, map[string]any{"page": page})
 }
 
+// planActionOnDay is planAction for the view of one day (the day and its page). It fills in on with that day too: a
+// line there is planned for that day, and a repeat then has the date that it needs. Home and the Plans page keep
+// planAction, so that a line with no on stays a line with no on.
+func planActionOnDay(day string) siren.Action {
+	return action("plan", nil, map[string]any{"page": day, "on": day})
+}
+
 // lineActions are the tick, the carry and the schedule of a view that lists lines of any page (the day, a week, a month, a year). They
 // stay templated: the line names its page, and the browser fills the address (view.LineAction).
 func lineActions() []siren.Action {

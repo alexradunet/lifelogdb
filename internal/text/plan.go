@@ -431,7 +431,8 @@ func Line(text, on, due, every string, fromDone bool) (string, error) {
 			return "", fmt.Errorf("%q is not a repeat", every)
 		}
 		if on == "" && due == "" {
-			return "", errors.New("an every token needs an on or a due token")
+			//lint:ignore ST1005 the owner reads this sentence in the form; it names the labels of the form
+			return "", errors.New("A repeat needs a Planned for or a Must be done by day.")
 		}
 	}
 	if fromDone && every == "" {

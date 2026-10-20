@@ -49,7 +49,7 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 		}},
 		{"a day page", core.Page{ID: 2, Type: "page", Title: "2026-10-16", Day: "2026-10-16", IsDayPage: true, Version: "1"}, []string{"at"}, []string{
 			"save-body /pages/2/body version:1",
-			"plan /pages/plan page:2026-10-16 from_done=0|1",
+			"plan /pages/plan page:2026-10-16 on:2026-10-16 from_done=0|1",
 			"tick /pages/2/tick outcome=done|dropped|reopen",
 			"carry /pages/2/carry",
 			"schedule /pages/2/schedule",

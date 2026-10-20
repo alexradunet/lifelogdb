@@ -51,7 +51,7 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 		t.Fatalf("tick: %d %s", rec.Code, rec.Body.String())
 	}
 	body := browse(t, h, "/pages/"+bank)
-	if !strings.Contains(body, `<button class="box done" form="tick-`+line+`" name="outcome" value="reopen" aria-label="Reopen: Call the bank">`) || !strings.Contains(body, `<small class="token">done:2031-05-14</small>`) {
+	if !strings.Contains(body, `<button class="box done" form="tick-`+line+`" name="outcome" value="reopen" aria-label="Reopen: Call the bank">`) || !strings.Contains(body, `<span class="badge">done Wed 14 May</span>`) {
 		t.Errorf("the ticked line is not drawn as done:\n%s", mainOf(body))
 	}
 	if strings.Contains(body, `form="tick-`+line+`" name="outcome" value="done"`) {
@@ -93,7 +93,7 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 		`<button class="box open" form="tick-3" name="outcome" value="done" aria-label="Done: Buy &lt;b&gt;stamps&lt;/b&gt;">`,
 		`<form id="tick-3" method="post" action="/pages/` + id + `/tick"><input type="hidden" name="back" value="/pages/` + id + `">` +
 			`<input type="hidden" name="line" value="3"><input type="hidden" name="text" value="Buy &lt;b&gt;stamps&lt;/b&gt;"></form>`,
-		`<small class="token">on:2031-05-15</small>`, `<small class="token">every:week</small>`,
+		`<span class="badge">on Thu 15 May</span>`, `<span class="badge">every week</span>`,
 		`class="box done"`, `class="box dropped"`, `class="box carried"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -115,7 +115,7 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 	after := browse(t, h, "/pages/"+id)
 	// The ticked line keeps its form (it reopens). The next line has a form of a new number.
 	if !regexp.MustCompile(`<button class="box open" form="tick-(\d+)"`).MatchString(after) || strings.Contains(after, `<button class="box open" form="tick-3"`) || !strings.Contains(after, `value="Buy &lt;b&gt;stamps&lt;/b&gt;"`) ||
-		!strings.Contains(after, `<small class="token">on:2031-05-22</small>`) {
+		!strings.Contains(after, `<span class="badge">on Thu 22 May</span>`) {
 		t.Errorf("the next line of an every: line has no tick form with a new line number:\n%s", mainOf(after))
 	}
 
