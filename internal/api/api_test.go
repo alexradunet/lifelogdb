@@ -524,7 +524,7 @@ func hasOption(a siren.Action, field, opt string) bool {
 	return false
 }
 
-func TestViewsOfferTheMetricsInUse(t *testing.T) {
+func TestViewsOfferEveryLiveMetric(t *testing.T) {
 	c, _, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for _, m := range []map[string]string{{"name": "weight", "unit": "kg"}, {"name": "ldl", "unit": "mg/dL"}} {
@@ -539,8 +539,8 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 	}
 	dayView := apitest.Must(t)(c.Get(t.Context(), "/days/"+day))
 	rec := apitest.Action(t, dayView, "record")
-	if !hasOption(rec, "metric", "weight") || hasOption(rec, "metric", "ldl") || hasOption(rec, "metric", "Mood") {
-		t.Errorf("the day view offers %v: only what was read in its last 60 days", rec.Fields[0].Options)
+	if !hasOption(rec, "metric", "weight") || !hasOption(rec, "metric", "ldl") || !hasOption(rec, "metric", "Mood") {
+		t.Errorf("the day view offers %v: every live metric, read lately or not", rec.Fields[0].Options)
 	}
 	if apitest.Href(dayView, "metrics") != "/metrics" {
 		t.Error("the day view does not link the whole registry")
@@ -550,10 +550,6 @@ func TestViewsOfferTheMetricsInUse(t *testing.T) {
 	}
 	if ldl := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/metrics/ldl")), "record"); !hasOption(ldl, "metric", "ldl") || ldl.Fields[0].Value != "ldl" {
 		t.Errorf("a series offers %v with %v: its own metric, selected", ldl.Fields[0].Options, ldl.Fields[0].Value)
-	}
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, dayView, "record"), map[string]string{"metric": "ldl", "day": day, "value": "92"}))
-	if !hasOption(apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+day)), "record"), "metric", "ldl") {
-		t.Error("a metric read on the day is not offered")
 	}
 }
 

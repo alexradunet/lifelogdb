@@ -36,7 +36,7 @@
 <div class="rail-more" id="sections" popover>
 <div class="rail-more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button></div>
 {{with .Strip}}<section class="rail-today" aria-label="Today"><div class="line"><b>Today</b><span class="n">{{.DoneCount}} of {{.Total}} done</span></div>
-<div class="chips"><a class="chip{{if .Written}} done{{end}}" href="/days/today#capture">{{if .Written}}✓ {{end}}entry</a><a class="chip{{if .Mood}} done{{end}}" href="/days/today#capture">{{if .Mood}}✓ {{end}}mood</a>{{range .Habits}}{{if eq .State "open"}}<a class="chip" href="{{.Href}}">{{.Name}}</a>{{else if eq .State "done"}}<span class="chip done">✓ {{.Name}}</span>{{else}}<span class="chip">{{.Name}} · no</span>{{end}}{{end}}</div>
+<div class="chips"><a class="chip{{if .Written}} done{{end}}" href="/days/today#capture">{{if .Written}}✓ {{end}}entry</a><a class="chip{{if .Mood}} done{{end}}" href="/days/today#capture">{{if .Mood}}✓ {{end}}mood</a>{{range .Habits}}{{if eq .State "open"}}<a class="chip" href="{{.Href $.Here}}">{{.Name}}</a>{{else if eq .State "done"}}<span class="chip done">✓ {{.Name}}</span>{{else}}<span class="chip">{{.Name}} · no</span>{{end}}{{end}}</div>
 {{if ge .Streak 2}}<div class="streak">{{.Streak}} days in a row</div>{{end}}</section>{{end}}
 <p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/actions?new=snapshot">Snapshot</a></p>
 </div>
@@ -161,14 +161,15 @@
      options as a row of radio buttons (the options of the field mood also carry their words: a small word in the slab, which the sheet shows on the chosen slab), other options as a
      select, a textarea, or an input of the field's type. A field of page titles with options is an input with a datalist of them (List), so the reader picks a title or
      types a new one. A select of an optional field starts empty, so the form sends no value that the reader did not
-     pick. A required radio, textarea or input is marked required, so the browser does not send it empty, and an
+     pick; a select of a required field with a placeholder starts with that prompt (an empty option), and the
+     browser refuses it until the reader picks. A required radio, textarea or input is marked required, so the browser does not send it empty, and an
      input with a pattern (formOf) only when its value matches. The word "required" marks a field among others: a form
      of one field does not say it (Sole), and the browser still refuses an empty box. A form with a text area offers Preview
      (formView.Preview, drawn by form), which sends the form to /render in a new tab, so the words stay in the form. */}}
 {{define "field"}}{{if checkbox .Field}}<label><input type="checkbox" name="{{.Name}}" value="1"{{if eq (num .Value) "1"}} checked{{end}}{{if .Focus}} autofocus{{end}}><span>{{or .Title .Name}}</span></label>
 {{else if segmented .Field}}<fieldset class="segmented{{if eq .Name "mood"}} faces{{end}}"><legend>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{range .Options}}{{$o := .}}{{$w := ""}}{{if eq $n "mood"}}{{$w = moodWord $o}}{{end}}<label{{with $w}} title="{{.}}"{{end}}><input type="radio" name="{{$n}}" value="{{$o}}"{{if eq $o $v}} checked{{end}}{{if $req}} required{{end}}><span>{{$o}}{{with $w}} <small>{{.}}</small>{{end}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
-{{if and .Options (not .List)}}<select name="{{.Name}}"{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
+{{if and .Options (not .List)}}<select name="{{.Name}}"{{if and .Required .Placeholder}} required{{end}}{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and .Required .Placeholder}}<option value="">{{.Placeholder}}</option>{{else if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
 {{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}

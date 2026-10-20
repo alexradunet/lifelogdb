@@ -2,7 +2,6 @@ package view
 
 import (
 	"html/template"
-	"net/url"
 	"strings"
 	"time"
 
@@ -47,9 +46,10 @@ func (h Habit) State() string {
 }
 
 // Href is the page that records the habit as done: the form of the reading on Home, with the habit and the value 1
-// filled in from the query (shown). A chip leads to the one form; it is not a second way to record.
-func (h Habit) Href() string {
-	return "/?new=record&metric=" + url.QueryEscape(h.Name) + "&value=1#record"
+// filled in from the query (shown). A chip leads to the one form; it is not a second way to record. The write then
+// returns to here, the page the chip was on.
+func (h Habit) Href(here string) string {
+	return siren.NewReadingHref(h.Name, "", 1, here)
 }
 
 // Total is how many things the strip counts: the entry, the mood and each habit.

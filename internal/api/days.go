@@ -284,6 +284,8 @@ type dayView struct {
 	Earlier []recentDay `json:"earlier,omitempty"`
 	// Cover is the cover of the day page, which the journal draws above it; absent when it has none.
 	Cover *core.Cover `json:"cover,omitempty"`
+	// Units are the units of the metrics read on the day, by metric name; a metric with no unit is absent.
+	Units map[string]string `json:"units,omitempty"`
 }
 
 func (h *server) day(r *http.Request) (*siren.Entity, error) {
@@ -323,10 +325,14 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	if err != nil {
 		return nil, err
 	}
+	units, err := h.unitsOf(ctx, d.Readings)
+	if err != nil {
+		return nil, err
+	}
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
 		Class: []string{"day"}, Title: day,
-		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent, Earlier: earlier},
+		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent, Earlier: earlier, Units: units},
 		Links:      []siren.Link{link("self", siren.DayHref(day), day)},
 		Actions:    append([]siren.Action{action("capture", map[string]string{"day": day}, nil), record, planAction(day)}, lineActions()...),
 	}
