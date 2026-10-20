@@ -83,7 +83,7 @@
 <h1>{{if $p.page.is_day_page}}{{$.Date $p.page.title}}{{else}}{{$p.page.title}}{{end}}</h1>
 <p class="sub"><a href="{{$back}}">Back to the page</a></p></div></header>
 <div class="sheet list cover-choice">
-<section aria-label="A new photo"><h2>A new photo</h2>{{template "form" (form $set "more" "title,preview" "back" $back "button" "Send and set as cover")}}</section>
+<section aria-label="A new photo"><h2>A new photo</h2>{{template "form" (form $set "more" "title,preview" "back" $back "label" "original=Choose a photo" "button" "Send and set as cover")}}</section>
 <section aria-label="Kept pictures"><h2>A kept picture</h2>
 {{if $p.rows}}<ul class="plain tiles">{{range $p.rows}}<li class="tile{{if .current}} current{{end}}"><form method="post" action="{{$set.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="title" value="{{.title}}">
 <button class="tile-link" type="submit"><img src="{{.picture}}" alt="" loading="lazy"><span class="first">{{.title}}</span><span class="meta">{{if .current}}the cover now{{else}}{{with .day}}{{$.Date .}}{{else}}no day{{end}}{{end}}</span></button></form></li>{{end}}</ul>

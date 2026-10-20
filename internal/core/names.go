@@ -77,7 +77,7 @@ func (t *Tx) livePage(id int64) (*pageRef, error) {
 	case p == nil:
 		return nil, NotFound("no page %d", id)
 	case p.Deleted:
-		return nil, Conflict("page %d %q is deleted: revive it first", id, p.Title)
+		return nil, Conflict("page %d %q is deleted: restore it first (Restore, revive)", id, p.Title)
 	}
 	return p, nil
 }

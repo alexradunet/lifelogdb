@@ -412,7 +412,7 @@ func (h *server) coverChoice(r *http.Request) (*siren.Entity, error) {
 	case p.Type == "file":
 		return nil, core.NotFound("%q is a file: its own picture is its cover", p.Title)
 	case p.DeletedAt != "":
-		return nil, core.Conflict("page %d %q is deleted: revive it first", id, p.Title)
+		return nil, core.Conflict("page %d %q is deleted: restore it first (Restore, revive)", id, p.Title)
 	}
 	limit, offset, err := pageOf(r, 48)
 	if err != nil {

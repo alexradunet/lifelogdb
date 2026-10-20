@@ -501,7 +501,7 @@ func TestTheMetricsPageDrawsCards(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/metrics") {
 		t.Fatalf("the form: %d %q %.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
-	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put 2 in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
+	if after := browse(t, h, rec.Header().Get("Location")); !strings.Contains(after, "Put Mood and Steps in Daily (a new category).") || !strings.Contains(after, `<a href="#c-`) || strings.Contains(after, `id="not-filed"`) {
 		t.Errorf("/metrics after the filing: %.600s", after)
 	}
 	// A refused form answers with the error page, which leads back to the board.

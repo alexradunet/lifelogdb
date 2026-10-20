@@ -670,7 +670,7 @@ func rowUnfilePages(x *parityRun) {
 		x.t.Fatal(err)
 	}
 	e := x.ok("file-pages", map[string]string{"ids": id(ids[0]) + "," + id(ids[1]), "from": "Bloodwork"})
-	if p := props(x.t, e); p["removed"] != json.Number("2") || e.Result != "Removed 2 from Bloodwork." {
+	if p := props(x.t, e); p["removed"] != json.Number("2") || e.Result != "Removed Ferritin and LDL from Bloodwork." {
 		x.t.Errorf("file-pages from: %v %q, want 2 removed", p, e.Result)
 	}
 	for _, p := range ids {

@@ -314,7 +314,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 	p := props(done)
 	cat := p["category"].(map[string]any)
 	if done.Class[0] != "filed" || cat["title"] != "Bloodwork" || p["created"] != true || p["added"] != json.Number("2") || p["count"] != json.Number("2") ||
-		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put 2 in Bloodwork (a new category)." {
+		len(done.Entities) != 2 || done.Entities[0].Href != "/pages/"+ids["Ferritin"] || done.Result != "Put Ferritin and Steps in Bloodwork (a new category)." {
 		t.Fatalf("the answer: %v %v %v", done.Class, p, done.Result)
 	}
 	if got, want := apitest.Href(done, "self"), "/pages/"+fmt.Sprint(cat["id"]); got != want {
@@ -326,12 +326,12 @@ func TestFileMetricsAtOnce(t *testing.T) {
 
 	// An agent may file: a part-of link is open to it, as link is.
 	agent := client.InProcess(h, "agent:test")
-	if again := apitest.Must(t)(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Put 1 in Body (a new category)." {
+	if again := apitest.Must(t)(agent.Do(ctx, file, map[string]string{"ids": ids["Weight"], "category": "Body"})); again.Result != "Put Weight in Body (a new category)." {
 		t.Errorf("an agent's filing: %v", again.Result)
 	}
 	// Move takes Steps out of Bloodwork, and Ferritin stays in it.
 	moved := apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Steps"], "category": "Body", "move": "1"}))
-	if props(moved)["moved"] != json.Number("1") || moved.Result != "Moved 1 in Body." {
+	if props(moved)["moved"] != json.Number("1") || moved.Result != "Moved Steps in Body." {
 		t.Errorf("the move: %v %v", props(moved), moved.Result)
 	}
 	if got, want := groupsOf(t, c), "Bloodwork:Ferritin Body:Steps,Weight Not filed:Mood,Walk"; got != want {
@@ -340,7 +340,7 @@ func TestFileMetricsAtOnce(t *testing.T) {
 
 	// From takes Steps out of Body: only that link is removed, and the pages stay.
 	out := apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": ids["Steps"], "from": "Body"}))
-	if props(out)["removed"] != json.Number("1") || out.Result != "Removed 1 from Body." {
+	if props(out)["removed"] != json.Number("1") || out.Result != "Removed Steps from Body." {
 		t.Errorf("the removal: %v %v", props(out), out.Result)
 	}
 	if got, want := groupsOf(t, c), "Bloodwork:Ferritin Body:Weight Not filed:Mood,Steps,Walk"; got != want {
