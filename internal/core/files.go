@@ -155,7 +155,7 @@ func (t *Tx) keepNew(f FileIn, d fileDay) (k Kept, err error) {
 			return k, err
 		}
 	case p.Type == "file": // another original under a title in use: the schema cannot see it, and the 409 names the page
-		return k, &ExistsError{p.ID, p.Title}
+		return k, &ExistsError{ID: p.ID, Title: p.Title}
 	default: // a day page, a person, a place or a metric is never a file: the schema refuses the update
 		if body, err = t.promoteToFile(&k, p, f, d); err != nil {
 			return k, err

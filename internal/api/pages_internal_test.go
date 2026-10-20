@@ -58,13 +58,14 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 			"unlink /pages/2/unlink kind=at",
 			"tombstone-pages /pages/tombstone ids:2",
 		}},
-		{"a person", core.Page{ID: 5, Type: "person", Title: "Ana", Version: "2", Person: &core.Person{Name: "Ana Popescu"}}, []string{"part-of"}, []string{
+		{"a person", core.Page{ID: 5, Type: "person", Title: "Ana", Version: "2", Person: &core.Person{Name: "Ana Popescu", Birth: "1980-02-03"}}, []string{"part-of"}, []string{
 			"save-body /pages/5/body version:2",
 			"plan /pages/plan page:Ana from_done=0|1",
 			"tick /pages/5/tick outcome=done|dropped|reopen",
 			"carry /pages/5/carry",
 			"schedule /pages/5/schedule",
 			"rename /pages/5/rename",
+			"edit-person /pages/5/person name:Ana Popescu birth_day:1980-02-03 death_day:",
 			"set-cover /pages/5/cover",
 			"file-pages /pages/file ids:5 category=Health|Writing move=0|1 move:0",
 			"tombstone-pages /pages/tombstone ids:5",

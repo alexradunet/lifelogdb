@@ -364,3 +364,14 @@ func (s *Store) RandomThing(ctx context.Context, kind string) (int64, error) {
 	}
 	return id, err
 }
+
+// PlaceTitles are the titles of the live places, in the order of their title keys: the options of a form that asks
+// for a place (the link `at` from a day page).
+func (s *Store) PlaceTitles(ctx context.Context) ([]string, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `
+		SELECT n.title
+		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
+		 WHERE e.entity_type = 'place' AND e.deleted_at IS NULL
+		 ORDER BY e.preferred_name_key`)
+	return list(rows, err, func(t *string) []any { return []any{t} })
+}

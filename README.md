@@ -454,10 +454,11 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
 | `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person or a place |
+| `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | a person, More: Edit name and dates |
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
 | `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
-| `link` | `POST /pages/{id}/links` | `do link` | `link` | a day page, More: Add a typed link |
-| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a day page, More: Remove a typed link |
+| `link` | `POST /pages/{id}/links` | `do link` | `link` | a day: Where, I was at a place; a page, More: Add a typed link |
+| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a day: the x of a place in Where; a page, More: Remove a typed link |
 | `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add and the x of a category badge; a Browse list: Move on a row, and the pick bar (Move to, Add to, Remove from here); the Metrics board: the pick bar |
 | `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
 | `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |

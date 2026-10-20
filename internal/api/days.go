@@ -351,7 +351,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 		}
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 		e.Links = append(e.Links, coverLinks(p)...)
-		e.Actions = append(e.Actions, action("set-cover", idParam(d.PageID), nil))
+		e.Actions = append(e.Actions, action("set-cover", idParam(d.PageID), nil), action("unlink", idParam(d.PageID), map[string]any{"kind": "at"}))
 		dv := e.Properties.(dayView)
 		dv.Cover = p.Cover
 		e.Properties = dv

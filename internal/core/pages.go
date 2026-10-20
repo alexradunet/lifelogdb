@@ -87,7 +87,7 @@ func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) err
 		return 0, err
 	}
 	if p != nil {
-		return 0, &ExistsError{p.ID, title}
+		return 0, &ExistsError{ID: p.ID, Title: title, Plain: p.Type == "page" && !p.Deleted && !text.IsDay(text.TitleKey(title))}
 	}
 	id, err := t.insertPage(typ, title, text.TitleKey(title), day, body)
 	if err != nil || extra == nil {
@@ -97,9 +97,13 @@ func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) err
 }
 
 // promote is Store.Promote in t.
-func (t *Tx) promote(id int64, typ, name string) error {
+func (t *Tx) promote(id int64, typ, name, birth, death string) error {
 	if typ != "person" && typ != "place" {
 		return Invalid("promote to person or place, not %q", typ)
+	}
+	// A place has no name apart from its title and no dates. The schema cannot see a field that it has no column for.
+	if typ == "place" && (name != "" || birth != "" || death != "") {
+		return Invalid("a place takes no full name and no birth_day or death_day: they are for a person")
 	}
 	var have string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&have)
@@ -127,8 +131,40 @@ func (t *Tx) promote(id int64, typ, name string) error {
 			}
 			name = p.Title
 		}
-		_, err = t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name) VALUES (?, ?)`, id, name)
+		_, err = t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
+			id, name, nullIfEmpty(birth), nullIfEmpty(death))
 	}
+	return err
+}
+
+// PersonEdit is the change that EditPerson makes. A nil field stays as it is. An empty Birth or Death removes the
+// date. An empty Name is written as it is: the constraint people_name refuses it.
+type PersonEdit struct{ Name, Birth, Death *string }
+
+// editPerson is Store.EditPerson in t.
+func (t *Tx) editPerson(id int64, e PersonEdit) error {
+	p, err := t.livePage(id)
+	if err != nil {
+		return err
+	}
+	if p.Type != "person" {
+		return Conflict("page %d is a %s, not a person", id, p.Type)
+	}
+	var name string
+	var birth, death sql.NullString
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT name, birth_day, death_day FROM people WHERE id = ?`, id).Scan(&name, &birth, &death); err != nil {
+		return err
+	}
+	if e.Name != nil {
+		name = *e.Name
+	}
+	if e.Birth != nil {
+		birth = sql.NullString{String: *e.Birth, Valid: *e.Birth != ""}
+	}
+	if e.Death != nil {
+		death = sql.NullString{String: *e.Death, Valid: *e.Death != ""}
+	}
+	_, err = t.tx.ExecContext(t.ctx, `UPDATE people SET name = ?, birth_day = ?, death_day = ? WHERE id = ?`, name, birth, death, id)
 	return err
 }
 
@@ -203,8 +239,18 @@ func (t *Tx) fileNew(id int64, category string) error {
 // Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
 // tombstoned page is revived. A missing id is 404; a page of another type is the schema's 422
 // (entities_promote_from_page), and a promotion to the type that the entity has already is a 409.
-func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name) })
+//
+// name, birth and death are for a person; for a place any of them is a 422. They are empty when not given.
+func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name, birth, death string) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name, birth, death) })
+}
+
+// EditPerson changes the full name and the dates of a live person (cookbook/person-or-place.md). The handle, which
+// is the page's title, changes with rename. A page of another type is a 409, a missing page a 404, a tombstoned one a
+// 409; a bad date, an empty name or a death before the birth is the 422 of the schema (people_name,
+// people_birth_day, people_death_day, people_death_day_order).
+func (s *Store) EditPerson(ctx context.Context, source string, id int64, e PersonEdit) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.editPerson(id, e) })
 }
 
 // Revive clears entities.deleted_at (D11). A missing id is 404; the same state again changes nothing.

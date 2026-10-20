@@ -310,6 +310,7 @@ func parityRows() []parityRow {
 		parityRow{"rebuild-search", rowRebuildSearch},
 		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
+		parityRow{"edit-person", rowEditPerson},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 		parityRow{"set-cover by a kept title", rowSetCover},
 		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
@@ -966,6 +967,40 @@ func rowPromoteAPlace(x *parityRun) {
 	}
 	if after := same(x.pageByID(p)); !reflect.DeepEqual(after, before) || before["type"] != "place" {
 		x.t.Errorf("the place after the refusals: %v, want %v, a place", after, before)
+	}
+}
+
+// edit-person sets the name and the dates of a person, on every surface: a field left out stays, an empty date removes
+// it, the schema's CHECKs refuse an empty name and a death before the birth (422), and a plain page is a 409. A
+// refused call writes nothing.
+func rowEditPerson(x *parityRun) {
+	ctx := x.t.Context()
+	p, err := x.store.CreatePerson(ctx, "cli", "Sam (barber)", "Samuel Ortiz", "1980-02-03", "2020-01-01")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	plain, _, err := x.store.CreatePage(ctx, "cli", "Plain page", "", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	person := func() map[string]any {
+		m, _ := x.pageByID(p)["person"].(map[string]any)
+		return m
+	}
+	x.ok("edit-person", map[string]string{"id": id(p), "death_day": ""})
+	if got := person(); got["name"] != "Samuel Ortiz" || got["birth_day"] != "1980-02-03" || got["death_day"] != nil {
+		x.t.Errorf("after removing the death day: %v", got)
+	}
+	x.ok("edit-person", map[string]string{"id": id(p), "name": "Samuel A. Ortiz", "birth_day": "1981-04-05"})
+	want := person()
+	if want["name"] != "Samuel A. Ortiz" || want["birth_day"] != "1981-04-05" || want["death_day"] != nil {
+		x.t.Errorf("after a new name and birth day: %v", want)
+	}
+	x.refused("edit-person", map[string]string{"id": id(p), "name": ""}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("edit-person", map[string]string{"id": id(p), "death_day": "1900-01-01"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("edit-person", map[string]string{"id": id(plain), "name": "X"}, http.StatusConflict, "conflict")
+	if got := person(); !reflect.DeepEqual(got, want) {
+		x.t.Errorf("after refused edits: %v, want %v", got, want)
 	}
 }
 

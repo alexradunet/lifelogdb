@@ -106,6 +106,7 @@ func (t *Tx) findPage(body bool, cond string, arg any) (*pageRef, error) {
 type ExistsError struct {
 	ID    int64
 	Title string
+	Plain bool // the page is a live plain page, so promote can make it a person or a place
 }
 
 func (e *ExistsError) Error() string { return "a page titled " + e.Title + " already exists" }
@@ -143,7 +144,7 @@ func (t *Tx) rename(id int64, newTitle string) (int64, error) {
 		return 0, err
 	}
 	if target != nil && target.ID != id {
-		return 0, &ExistsError{target.ID, target.Title}
+		return 0, &ExistsError{ID: target.ID, Title: target.Title}
 	}
 	// Only the day page of a date holds the date's key (entity_names_day_insert, entities_day_identity): here id is
 	// that day page.

@@ -107,7 +107,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	for _, tool := range listed.Tools {
 		tools[tool.Name] = true
 	}
-	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans"} {
+	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans", "edit_person"} {
 		if !tools[name] {
 			t.Errorf("no tool %q", name)
 		}
@@ -156,6 +156,13 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	text2 := callError(t, ctx, session, "save_body", map[string]any{"id": id, "body": "three", "version": version})
 	if !strings.Contains(text2, "stale_version") {
 		t.Errorf("a stale save answered %s, want stale_version", text2)
+	}
+
+	// edit_person sets the name of a person and removes a date; a field left out stays.
+	person, _ := call(t, ctx, session, "create_person", map[string]any{"title": "Synthetic Sam", "name": "Sam One", "birth_day": "1980-02-03", "death_day": "2020-01-01"})
+	edited, _ := call(t, ctx, session, "edit_person", map[string]any{"id": fmt.Sprint(props(t, person)["id"]), "name": "Sam Two", "death_day": ""})
+	if got, _ := props(t, edited)["person"].(map[string]any); got["name"] != "Sam Two" || got["birth_day"] != "1980-02-03" || got["death_day"] != nil {
+		t.Errorf("edit_person left the person %v, want Sam Two born 1980-02-03 with no death day", got)
 	}
 
 	// add_file sends a local file by its path.

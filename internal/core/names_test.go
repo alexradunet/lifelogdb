@@ -339,7 +339,7 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 	execRefused(ordinary, `UPDATE entity_names SET entity_id=? WHERE name_key='dated note'`, day)
 	execRefused(ordinary, `UPDATE entity_names SET name_key='reassigned' WHERE entity_id=?`, ordinary)
 	execRefused(ordinary, `DELETE FROM entity_names WHERE entity_id=?`, ordinary)
-	if err := s.Promote(ctx, "cli", day, "place", ""); err == nil {
+	if err := s.Promote(ctx, "cli", day, "place", "", "", ""); err == nil {
 		t.Fatal("day promoted")
 	}
 	if _, err := s.Rename(ctx, "cli", ordinary, "New dated note"); err != nil {
@@ -712,7 +712,7 @@ func TestReferenceNameContractProductionPipeline(t *testing.T) {
 			if _, err := s.Rename(ctx, "cli", id, v.Name); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Promote(ctx, "cli", id, "place", ""); err != nil {
+			if err := s.Promote(ctx, "cli", id, "place", "", "", ""); err != nil {
 				t.Fatal(err)
 			}
 			p, err := s.PageByID(ctx, source)
