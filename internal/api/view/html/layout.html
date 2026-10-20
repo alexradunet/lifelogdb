@@ -175,7 +175,7 @@
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a
      closed <details>. An owner-only action carries the owner mark. */}}
-{{define "boxed"}}{{with .}}<details class="action"{{if .Asked}} open{{end}}><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
+{{define "boxed"}}{{with .}}<details class="action"{{if .Asked}} open{{end}}><summary class="button{{if .Lead}} primary{{end}}">{{if .Lead}}{{icon "new"}}{{end}}{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
      An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}

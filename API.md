@@ -166,7 +166,7 @@ first, then by title; ghosts oldest first; the deleted the newest deletion first
 
 A category is a page that something is `part-of` (D26). Each row is an embedded `item` link (class: the row's
 `type`), and each category of the tree an embedded `category` link to Browse in that category (it keeps a `kind` the
-query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, a `kind` link for each chip (class:
+query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, `new-metric` (with `kind=metric` only: the address of the [New metric form](#metrics)), a `kind` link for each chip (class:
 its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, `deleted`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
 `create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
@@ -433,7 +433,7 @@ link to each month. Actions: `plan` with `page` this year, `tick`, `carry` and `
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `series` (a metric's readings), `preview` (a
 file's picture), `cover` (the
 picture of the page's cover, when it has one), `choose-cover` (the [pictures it may take](#cover-choice): a live page that
-is not a file). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
+is not a file), `make-metric` (a live plain page that is not a day page: the address of the [New metric form](#metrics) with the name filled; registering the metric turns this page into it and keeps its text). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
 cannot empty a page), `promote`, `rename`, `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`

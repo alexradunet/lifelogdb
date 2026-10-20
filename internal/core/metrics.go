@@ -92,7 +92,7 @@ func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
 	err := t.tx.QueryRowContext(t.ctx, metricLookup, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, NotFound("no metric %q: the owner registers metrics", name)
+		return 0, NotFound("no metric %q: register it first (register-metric)", name)
 	}
 	return id, err
 }

@@ -81,6 +81,9 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 		e.Links = append(e.Links, link("series", siren.MetricHref(p.Title), "Readings"))
 	}
 	e.Links = append(e.Links, coverLinks(p)...)
+	if p.Type == "page" && !p.IsDayPage && p.DeletedAt == "" { // register-metric turns a plain page into the metric
+		e.Links = append(e.Links, link("make-metric", siren.NewMetricHref(p.Title), "Make it a metric"))
+	}
 	for _, l := range p.Out {
 		e.Entities = append(e.Entities, siren.Link{Rel: []string{l.Kind}, Href: siren.PageHref(l.ID), Title: l.Title, Class: []string{l.Type}})
 	}

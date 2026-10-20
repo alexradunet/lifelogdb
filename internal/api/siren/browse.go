@@ -19,6 +19,15 @@ func BrowseNewHref(kind string) string {
 	return BrowseHref(url.Values{"kind": {kind}, "new": {NewActionOf(kind)}})
 }
 
+// NewMetricHref is the address of the Metrics board with the form of register-metric open. A name fills the field name.
+func NewMetricHref(name string) string {
+	v := url.Values{"new": {"register-metric"}}
+	if name != "" {
+		v.Set("name", name)
+	}
+	return "/metrics?" + v.Encode()
+}
+
 // BrowseKindHref is the address of the Browse list of a kind.
 func BrowseKindHref(kind string) string { return BrowseHref(url.Values{"kind": {kind}}) }
 

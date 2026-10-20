@@ -126,6 +126,9 @@ func newPageHref(href string) string {
 // NewCategoryHref is the address of the form that makes a category: a category is a page.
 func (v *view) NewCategoryHref() string { return siren.BrowseNewHref("page") }
 
+// NewMetricHref is the address of the New metric form on the Metrics board.
+func (v *view) NewMetricHref() string { return siren.NewMetricHref("") }
+
 // crumb is a step of the way to the list: a link, or the place the list is at now (Href empty).
 type crumb struct{ Title, Href string }
 

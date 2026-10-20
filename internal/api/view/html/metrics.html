@@ -4,7 +4,7 @@
      docs/plans/119-the-finish.md, rule 3). */}}
 {{define "metrics"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Metrics</h1></div>
-<div class="tools">{{with .Action "register-metric"}}{{template "boxed" (form . "placeholder" "name=Weight, Mood, Walk" "placeholder" "unit=kg, or 1-5 for a score, or empty for done or not done" "placeholder" "note=What it measures, and how")}}{{end}}</div></header>
+<div class="tools">{{with .Action "register-metric"}}{{template "boxed" (form . "lead" "1" "placeholder" "name=Weight, Mood, Walk" "placeholder" "unit=kg, or 1-5 for a score, or empty for done or not done" "placeholder" "note=What it measures, and how")}}{{end}}</div></header>
 {{$file := .Action "file-pages"}}{{$sections := .MetricSections}}
 <div class="pick-list board">
 {{if gt (len $sections) 1}}<div class="board-nav"><nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
@@ -15,7 +15,7 @@
 {{with .Cards}}{{template "metric-cards" (dict "v" $ "cards" . "file" $file)}}{{end}}
 <div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a></div></details>
 {{end}}</details>
-{{else}}<p class="empty">No metric yet. Make the first one with New metric.</p>{{end}}
+{{else}}<p class="empty">No metric yet. Make the first one with <a href="{{.NewMetricHref}}">New metric</a>.</p>{{end}}
 {{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "button" "Add to" "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
 {{template "foot" .}}{{end}}
 

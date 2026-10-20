@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -368,6 +369,9 @@ func TestTheMetricsPageMakesAMetric(t *testing.T) {
 	if !strings.Contains(page, `<form method="POST" action="/metrics"`) || strings.Contains(page, "new-kind") || strings.Contains(page, "New category") {
 		t.Errorf("/metrics does not draw one New metric form, or draws the kinds or New category")
 	}
+	if !strings.Contains(page, `<summary class="button primary">`) || !strings.Contains(page, `New metric <span class="owner">owner</span></summary>`) {
+		t.Error("/metrics does not draw New metric as the primary button")
+	}
 	if home := browse(t, h, "/days/"+fixedToday); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home, the page of today, draws the New metric form")
 	}
@@ -601,5 +605,70 @@ func TestAReadingSentAgainLinksTheDayOfTheStoredReading(t *testing.T) {
 	}
 	if body := browse(t, h, again.Header().Get("Location")); !strings.Contains(body, "Already added. Nothing changed.") {
 		t.Errorf("the second send does not say Already added:\n%.400s", body)
+	}
+}
+
+// TestAPlainPageLeadsToTheNewMetricForm: the owner who made a page where a metric was wanted finds "Make it a metric"
+// on it, and the link opens the one New metric form with the name filled. Registering turns the page into the metric
+// with the same id and the same text. A day page, a person and a metric have no such link. The browse list of the
+// metrics links to the same form; the list of another kind does not.
+func TestAPlainPageLeadsToTheNewMetricForm(t *testing.T) {
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	pg := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Steps", "body": "Counted by the watch."}))
+	pgHref := apitest.Href(pg, "self")
+	const want = "/metrics?name=Steps&new=register-metric"
+	if got := apitest.Href(apitest.Must(t)(c.Get(ctx, pgHref)), "make-metric"); got != want {
+		t.Errorf("make-metric of a plain page: %q, want %q", got, want)
+	}
+	page := browse(t, h, pgHref)
+	if !strings.Contains(page, `<a class="button" href="`+strings.ReplaceAll(want, "&", "&amp;")+`">Make it a metric</a>`) {
+		t.Errorf("the page of a plain page has no Make it a metric link")
+	}
+
+	person := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ada"}))
+	day := apitest.Must(t)(c.Get(ctx, "/days/"+fixedToday))
+	for name, e := range map[string]*siren.Entity{"person": person, "day page": apitest.Must(t)(c.Get(ctx, apitest.Href(day, "page")))} {
+		if got := apitest.Href(apitest.Must(t)(c.Get(ctx, apitest.Href(e, "self"))), "make-metric"); got != "" {
+			t.Errorf("a %s has make-metric %q", name, got)
+		}
+	}
+
+	form := browse(t, h, want)
+	if !regexp.MustCompile(`<input type="text" name="name" value="Steps" required`).MatchString(form) {
+		t.Errorf("the link does not open New metric with the name Steps")
+	}
+	rec := submit(h, "/metrics", formSends(t, form, `action="/metrics"`, url.Values{"unit": {"steps"}}), "")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("New metric over a plain page: %d %.300s", rec.Code, rec.Body.String())
+	}
+	after := apitest.Must(t)(c.Get(ctx, pgHref))
+	if !slices.Contains(after.Class, "metric") {
+		t.Errorf("the page is not a metric: class %v", after.Class)
+	}
+	if body := after.Properties.(map[string]any)["body"]; body != "Counted by the watch." {
+		t.Errorf("the metric keeps the text? body %q", body)
+	}
+	if got := apitest.Href(after, "make-metric"); got != "" {
+		t.Errorf("a metric has make-metric %q", got)
+	}
+
+	if p := browse(t, h, "/browse?kind=metric"); !strings.Contains(p, `<a class="button" href="/metrics?new=register-metric">New metric</a>`) {
+		t.Error("Browse of the metrics has no New metric link")
+	}
+	if p := browse(t, h, "/browse?kind=page"); strings.Contains(p, ">New metric</a>") && strings.Contains(p, `class="button" href="/metrics`) {
+		t.Error("Browse of the pages links to New metric")
+	}
+}
+
+// TestARecordOfAnUnknownMetricSaysHowToRegisterIt: the refusal names the action that makes the metric.
+func TestARecordOfAnUnknownMetricSaysHowToRegisterIt(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	_, err := c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "Nothing", "day": fixedToday, "value": "1"})
+	var ce *client.Error
+	if !errors.As(err, &ce) || ce.Status != http.StatusNotFound || !strings.Contains(ce.Error(), "register-metric") {
+		t.Errorf("record of an unknown metric: %v, want 404 naming register-metric", err)
 	}
 }

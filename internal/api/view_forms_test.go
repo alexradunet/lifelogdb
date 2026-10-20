@@ -249,7 +249,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 				t.Errorf("%s does not open the form of %s", kind.href, kind.action)
 			}
 		case kind.title == "Metric":
-			if !strings.Contains(page, `<details class="action" open><summary class="button">New metric <span class="owner">owner</span></summary>`) {
+			if !strings.Contains(page, `<details class="action" open><summary class="button primary">`) || !strings.Contains(page, `New metric <span class="owner">owner</span></summary>`) {
 				t.Errorf("%s does not open New metric", kind.href)
 			}
 		}

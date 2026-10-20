@@ -19,3 +19,14 @@ func TestBrowseHrefs(t *testing.T) {
 		t.Errorf("a metric is not made on its Browse list, but NewActionOf says %q", got)
 	}
 }
+
+func TestNewMetricHref(t *testing.T) {
+	for _, c := range []struct{ name, got, want string }{
+		{"no name", NewMetricHref(""), "/metrics?new=register-metric"},
+		{"a name", NewMetricHref("Steps"), "/metrics?name=Steps&new=register-metric"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, c.got, c.want)
+		}
+	}
+}

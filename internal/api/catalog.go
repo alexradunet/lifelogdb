@@ -180,7 +180,7 @@ var catalog = []spec{
 		Fields: []siren.Field{path("id", "number", "Page id"), req("title", "text", "New title")},
 	},
 	{Name: "register-metric", Title: "New metric",
-		Description: "Register a metric with a preferred reference name; its unit never changes ('' for a count or a 0/1 habit; a scale names its range, '1-5'); the note is the page's text. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty.",
+		Description: "Make a new metric: a thing you measure again and again, such as Weight, Sleep or Mood. Each reading is a number. The unit never changes: kg or h; a range such as 1-5 for a score; empty for a count, or for a habit that is done or not done. The note is the text of its page. A plain page with this name becomes the metric and keeps its text. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty.",
 		Method:      "POST", Path: "/metrics",
 		Fields: []siren.Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note")},
 		Owner:  true,

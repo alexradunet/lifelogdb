@@ -59,6 +59,7 @@
 {{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "more" "on,due,every,from_done" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
+{{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}</div></section>{{end}}
 </div>
 </div>

@@ -406,7 +406,8 @@ details.action{border:0; padding:0; background:none; position:relative;
     &::-webkit-details-marker{display:none}
     &::marker{content:""}
     &::before{content:none}}
-  &[open]>summary{margin:0; border-color:var(--accent-ink); color:var(--accent-ink)}}
+  &[open]>summary{margin:0; border-color:var(--accent-ink); color:var(--accent-ink)}
+  &[open]>summary.primary{color:var(--on-accent)}}
 .action-form{display:flex; flex-direction:column; gap:var(--space-3); margin-block-start:var(--space-2); padding:var(--space-4); box-shadow:var(--parch-bevel)}
 .tools details.action>.action-form{position:absolute; z-index:10; inset-block-start:100%; inset-inline-end:0; inline-size:min(34rem, calc(100vw - 2rem)); box-shadow:var(--parch-bevel),var(--shadow-float)}
 .actions{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2);

@@ -13,6 +13,7 @@
 {{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "create-place"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime" "more" "preview,dry_run")}}{{end}}
+{{with .Link "new-metric"}}<a class="button" href="{{.}}">New metric</a>{{end}}
 {{template "random" (dict "a" (.Action "random-page") "label" "A random one")}}
 </div></header>
 <div class="browse">
@@ -28,7 +29,7 @@
 {{if eq $p.kind "media"}}<ul class="plain tiles">{{range $p.rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" (dict "v" $ "id" .id "title" .title)}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}{{template "other-categories" (dict "v" $ "categories" .categories)}}</span></a>{{if $file}}<a class="row-move" href="{{$.MoveHref .id}}">Move</a>{{end}}</li>{{end}}</ul>
 {{else}}<ul class="plain rows">{{range $p.rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick "file" $file)}}{{end}}</ul>{{end}}
 {{if $pick}}{{$from := ""}}{{with $p.in}}{{$from = .title}}{{end}}{{template "pick-bar" (dict "file" $file "del" $del "back" $.ListHere "button" (or (and $p.in "Move to") "Add to") "from" $from "paths" $.CategoryPaths "words" (or (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
-{{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. The Metrics board makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}
+{{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. New metric, above, makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}
 {{template "pager" .}}
 </div></div>
 {{template "foot" .}}{{end}}

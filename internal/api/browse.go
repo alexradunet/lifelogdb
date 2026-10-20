@@ -232,6 +232,9 @@ func (h *server) browse(r *http.Request, act spec, _ string) (*siren.Entity, err
 	self := siren.BrowseHref(b.values(""))
 	e := &siren.Entity{Class: []string{"browse"}, Title: "Browse",
 		Links: []siren.Link{link("self", self, "Browse"), link("index", "/", "Home"), link("metrics", "/metrics", "Metrics")}}
+	if b.kind == "metric" { // a metric is made on the Metrics board: the list links to its form
+		e.Links = append(e.Links, link("new-metric", siren.NewMetricHref(""), "New metric"))
+	}
 	chips := core.BrowseKinds()
 	if in != nil { // inside a category All is the default, and its chip comes first
 		chips = append([]string{"all"}, chips...)

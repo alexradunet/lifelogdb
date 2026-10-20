@@ -49,7 +49,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 // button, "class" styles the form, "id" names it (the controls outside it name it), "hide" lists fields kept with their
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
-// "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "back" is the
+// "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
 // page the browser returns to after the write (no field of the action: the server reads it, see backOf), "label"
 // ("field=words") gives a field a title in this form only (the score form calls its unit Range), "placeholder"
 // ("field=words") and "key" ("field=letter") give a field its prompt and its access key, "required" lists fields
@@ -63,6 +63,7 @@ type formView struct {
 	Back          string
 	Asked         bool          // the form the page's link asked for (?new=<name>): open
 	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
+	Lead          bool          // boxed draws the button as the primary one with the new icon
 	Primary       bool          // the button is the primary one: a form with fields to fill
 	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
 	Shown         []siren.Field // the fields most writes need
@@ -158,6 +159,7 @@ func (f *formView) MoreOpen() bool {
 // template cannot build a struct, so the pairs stay its syntax; this is the one place that knows the names.
 type formOptions struct {
 	button, class, id, back string
+	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
 	hasButton               bool // "button" was given, also as ""
 	autofocus               string
 	hasAutofocus            bool // "autofocus" was given, also as "": the options name the field of the focus, or none
@@ -190,6 +192,8 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.button, o.hasButton = v, true
 		case "class":
 			o.class = v
+		case "lead":
+			o.lead = v != ""
 		case "id":
 			o.id = v
 		case "back":
@@ -233,7 +237,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, Focus: o.autofocus,
+	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, Lead: o.lead, Focus: o.autofocus,
 		prompts: o.placeholders, keys: o.keys, patterns: o.patterns}
 	if o.hasButton {
 		f.Button = o.button
