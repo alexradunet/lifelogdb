@@ -71,13 +71,15 @@ type Link struct {
 }
 
 // Action is a Siren action. Description (what the action does, for an agent), Owner (the owner's alone) and
-// Danger (it hides or retracts what is there) are extensions.
+// Danger (it hides or retracts what is there) are extensions. Hint is the browser's short text for the form: it
+// is not on the wire, so a client, the CLI and the MCP tools keep reading Description.
 type Action struct {
 	Name        string  `json:"name"`
 	Owner       bool    `json:"owner,omitempty"`
 	Danger      bool    `json:"danger,omitempty"`
 	Title       string  `json:"title,omitempty"`
 	Description string  `json:"description,omitempty"`
+	Hint        string  `json:"-"`
 	Method      string  `json:"method"`
 	Href        string  `json:"href"`
 	Type        string  `json:"type,omitempty"`

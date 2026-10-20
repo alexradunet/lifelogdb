@@ -84,7 +84,7 @@ func TestReferenceGrammarRejectsUnaddressableNamesAtomically(t *testing.T) {
 
 // TestAWriteToAPageThatIsNotLive: every write that needs a live page gives one answer for a page that does not exist,
 // a 404 "no page N", and one for a tombstoned page, a 409 that names its id and its title: page N "Title" is deleted:
-// revive it first (livePage). The owner thus reads which page, also when the write named it by its title (a category).
+// restore it first (livePage). The owner thus reads which page, also when the write named it by its title (a category).
 func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 	s := fresh(t)
 	live, _, err := s.CreatePage(ctx, "cli", "Live", "", "")
@@ -102,7 +102,7 @@ func TestAWriteToAPageThatIsNotLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	const missing = 9999
-	want := fmt.Sprintf(`page %d "Old Group" is deleted: revive it first`, gone)
+	want := fmt.Sprintf(`page %d "Old Group" is deleted: restore it first (Restore, revive)`, gone)
 	writes := []struct {
 		name  string
 		write func(id int64) error

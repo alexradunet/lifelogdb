@@ -123,7 +123,7 @@ var newKinds = []struct{ Title, Href, Icon string }{
 	{"Person", siren.BrowseNewHref("person"), "people"},
 	{"Place", siren.BrowseNewHref("place"), "places"},
 	{"Metric", siren.NewMetricHref(""), "metrics"},
-	{"Reading", "/?new=record#record", "metrics"},
+	{"Reading", "/?new=record#record", "today"},
 	{"File", siren.BrowseNewHref("media"), "files"},
 }
 

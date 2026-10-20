@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"lifelog/internal/db"
@@ -70,7 +71,8 @@ type Error struct {
 	Status int
 	Msg    string
 	Code   string
-	Err    error // the cause, when one is kept for errors.Is: a context that ran out, a driver's refusal
+	Err    error  // the cause, when one is kept for errors.Is: a context that ran out, a driver's refusal
+	Metric string // for a 404: the name of the metric that does not exist, so a surface can offer to add it
 }
 
 func (e *Error) Error() string { return e.Msg }
@@ -111,6 +113,16 @@ const (
 	CodeBusy = "busy"
 )
 
+// driverRefusal matches the words that the driver adds round the text of SQLite: a "constraint failed: " prefix and
+// the extended result code in brackets at the end ("(275)").
+var driverRefusal = regexp.MustCompile(`(?s)^(?:constraint failed: )?(.*?)(?: \(\d+\))?$`)
+
+// plainRefusal is the text of a refusal without the driver's words. What stays is the text of SQLite: the name of a
+// failed constraint ("CHECK constraint failed: people_death_day_order"), or the message of a trigger.
+func plainRefusal(msg string) string {
+	return driverRefusal.ReplaceAllString(msg, "$1")
+}
+
 // refused turns a constraint or trigger failure of the DDL into a 422 with SQLite's own message. A write that found the
 // file locked (SQLITE_BUSY, with its extended codes) is a 503 with CodeBusy: its transaction rolled back, so nothing was
 // applied and a retry is safe. A write whose
@@ -130,7 +142,7 @@ func refused(err error) error {
 	}
 	var se *sqlite.Error
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_CONSTRAINT { // CHECKs, FKs, UNIQUE and RAISE(ABORT)
-		return &Error{Status: http.StatusUnprocessableEntity, Msg: se.Error()}
+		return &Error{Status: http.StatusUnprocessableEntity, Msg: plainRefusal(se.Error())}
 	}
 	if errors.As(err, &se) && se.Code()&0xff == sqlite3.SQLITE_BUSY {
 		return &Error{Status: http.StatusServiceUnavailable, Msg: "the database file is busy: another writer holds it; nothing was written, so a retry is safe", Code: CodeBusy, Err: err}

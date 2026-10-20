@@ -335,6 +335,9 @@ func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
 		}
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
+		if ce.Metric != "" {
+			e.Links = append(e.Links, siren.Link{Rel: []string{"register"}, Href: siren.NewMetricHref(ce.Metric), Title: "Add the metric " + ce.Metric})
+		}
 	default:
 		msg = "internal error"
 		if !errors.Is(err, context.Canceled) {
@@ -535,6 +538,9 @@ func (h *server) actions(r *http.Request) (*siren.Entity, error) {
 			continue
 		}
 		e.Actions = append(e.Actions, templated(s))
+	}
+	for i := range e.Actions { // this page lists every action with the API text, not the short text of a form
+		e.Actions[i].Hint = ""
 	}
 	return e, nil
 }

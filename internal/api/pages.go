@@ -438,7 +438,7 @@ func (h *server) linkEnds(r *http.Request, act spec) (from, to int64, v url.Valu
 		return
 	}
 	if to, err = h.s.PageID(r.Context(), v.Get("to")); err == nil && to == 0 {
-		err = core.NotFound("no page titled %s: create it first", v.Get("to"))
+		err = core.NotFound("no page titled %s: make it first (New page, create-page)", v.Get("to"))
 	}
 	return
 }

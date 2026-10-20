@@ -166,7 +166,7 @@ func (t *Tx) setCoverOf(id int64, title string) (Sync, error) {
 		}
 	}
 	if !preview {
-		return Sync{}, Invalid("%q is not a kept picture: keep it first (add-file)", title)
+		return Sync{}, Invalid("%q is not a kept picture: keep it first (New file, add-file)", title)
 	}
 	sync, err := t.showFirst(id, p.ID, p.Title)
 	if err != nil || sync == nil {

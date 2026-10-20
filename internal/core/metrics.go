@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -45,7 +46,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 			return false, err
 		}
 		if have != unit && !(isScale(have) && unit == "") {
-			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; register a new metric", p.Title, have, unit)
+			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; add a new metric (New metric, register-metric)", p.Title, have, unit)
 		}
 		return false, nil
 	}
@@ -92,7 +93,8 @@ func (t *Tx) metricID(name string) (int64, error) {
 	var id int64
 	err := t.tx.QueryRowContext(t.ctx, metricLookup, text.TitleKey(name)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, NotFound("no metric %q: register it first (register-metric)", name)
+		return 0, &Error{Status: http.StatusNotFound, Metric: name,
+			Msg: fmt.Sprintf("no metric %q: add it first (New metric, register-metric)", name)}
 	}
 	return id, err
 }

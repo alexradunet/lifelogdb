@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"lifelog/internal/api/siren"
 )
@@ -37,17 +39,47 @@ func (h *server) filePages(r *http.Request, act spec, src string) (*siren.Entity
 		e.Entities = append(e.Entities, link("item", siren.PageHref(id), strconv.FormatInt(id, 10)))
 	}
 	if from != "" {
-		e.Result = "Removed " + strconv.Itoa(f.Removed) + " from " + f.Category.Title + "."
+		e.Result = "Removed " + h.pagesWords(r.Context(), ids, f.Removed) + " from " + f.Category.Title + "."
 		return e, nil
 	}
 	verb := "Put"
 	if move {
 		verb = "Moved"
 	}
-	result := verb + " " + strconv.Itoa(len(ids)) + " in " + f.Category.Title
+	result := verb + " " + h.pagesWords(r.Context(), ids, len(ids)) + " in " + f.Category.Title
 	if f.Created {
 		result += " (a new category)"
 	}
 	e.Result = result + "."
 	return e, nil
+}
+
+// fewPages is how many pages a sentence names by their titles. More pages are counted.
+const fewPages = 3
+
+// pagesWords names the pages of ids for a sentence: their titles when there are few, else n of them ("5 pages"). A
+// page that cannot be read leaves the count: the sentence is a help, and the write has been done.
+func (h *server) pagesWords(ctx context.Context, ids []int64, n int) string {
+	if len(ids) > 0 && len(ids) <= fewPages && n == len(ids) {
+		titles := make([]string, 0, len(ids))
+		for _, id := range ids {
+			p, err := h.s.PageByID(ctx, id)
+			if err != nil {
+				titles = nil
+				break
+			}
+			titles = append(titles, p.Title)
+		}
+		switch len(titles) {
+		case 0:
+		case 1:
+			return titles[0]
+		default:
+			return strings.Join(titles[:len(titles)-1], ", ") + " and " + titles[len(titles)-1]
+		}
+	}
+	if n == 1 {
+		return "1 page"
+	}
+	return strconv.Itoa(n) + " pages"
 }
