@@ -130,7 +130,7 @@ func TestARepeatNeedsADayAndTheFormOfADayFillsOn(t *testing.T) {
 	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	_, err := c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": "Garden", "text": "Water", "every": "week"})
-	if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "A repeat needs a Planned for or a Must be done by day.") {
+	if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "a repeat needs a day: on (Planned for) or due (Must be done by)") {
 		t.Errorf("a repeat with no day: %v, want 422 with the plain words", err)
 	}
 	day := apitest.Must(t)(c.Get(t.Context(), "/days/2031-05-14"))

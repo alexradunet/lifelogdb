@@ -90,7 +90,7 @@ flowchart LR
 2. **The result of a tick of a repeating line** names the day of the next one ("The next one is on Tue 27 Oct."), not
    its line number.
 3. **A repeat with no date**: the plan form on a day fills `on` with that day. The refusal of a repeat with neither
-   date says "A repeat needs a Planned for or a Must be done by day."
+   date says "a repeat needs a day: on (Planned for) or due (Must be done by)" (the words of the form and the names of the fields, for every surface)
 
 ## Part 4 — Words and errors
 
