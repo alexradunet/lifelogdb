@@ -30,7 +30,7 @@
 <header class="page-head"><div class="what"><span class="date">{{num $e.status}}{{with $e.code}} · {{nameWords .}}{{end}}</span>
 <h1>{{if .Submitted}}Not saved{{else if eq (num $e.status) "404"}}Not found{{else}}Refused{{end}}</h1></div></header>
 <div class="alert{{if $a.Danger}} danger{{end}}" role="alert"><p>{{with $a.Words}}<strong>{{.}}</strong> {{end}}{{$e.message}}</p></div>
-{{with .Link "existing"}}<aside><p>A page with that title exists: <a href="{{.}}">open it</a>.</p></aside>{{end}}
+{{with .Link "existing"}}<aside><p>A page with that title exists: <a href="{{.}}">open it</a>.{{with $.LinkByRel "promote"}} Or <a href="{{.Href}}">{{.Title}}</a>.{{end}}</p></aside>{{end}}
 {{with .Submitted}}<section class="section" aria-label="What you sent"><h2>What you sent</h2><small class="desc">Nothing was saved. Copy it from here.</small><textarea rows="14" readonly>{{.}}</textarea></section>{{end}}
 <p class="sub">{{with .Back}}<a href="{{.}}">Back</a>{{end}}<a href="/">Home</a></p>
 {{template "foot" .}}{{end}}

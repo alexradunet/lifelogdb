@@ -108,7 +108,7 @@ func newServer(s *core.Store) *server {
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{
 		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "plan": h.plan, "tick": h.tick, "carry": h.carry, "schedule": h.schedule, "create-person": h.createPerson,
-		"create-place": h.createPlace, "add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote,
+		"create-place": h.createPlace, "add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote, "edit-person": h.editPerson,
 		"revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
 		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
@@ -323,12 +323,16 @@ func errorEntity(r *http.Request, err error) (*siren.Entity, int) {
 	e := &siren.Entity{Class: []string{"error"}, Title: "Error", Links: []siren.Link{{Rel: []string{"index"}, Href: "/", Title: "Home"}}}
 	var ce *core.Error
 	var ex *core.ExistsError
+	var offer *existsOffer
 	switch {
 	case errors.Is(err, context.DeadlineExceeded): // before the typed errors: a refusal that wraps a timeout is a timeout
 		status = http.StatusGatewayTimeout
 	case errors.As(err, &ex):
 		status, code = http.StatusConflict, siren.CodeExists
 		e.Links = append(e.Links, siren.Link{Rel: []string{"existing"}, Href: siren.PageHref(ex.ID), Title: ex.Title})
+		if errors.As(err, &offer) {
+			e.Links = append(e.Links, siren.Link{Rel: []string{"promote"}, Href: offer.promote, Title: offer.title})
+		}
 	case errors.As(err, &ce):
 		status, code = ce.Status, ce.Code
 	default:

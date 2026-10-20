@@ -17,13 +17,13 @@ func TestPeoplePlacesAndPromotion(t *testing.T) {
 	day, _, _ := s.Capture(ctx, "cli", "2026-07-31", "At [[Lakeside]] with [[Ana]]", nil)
 	ana, _ := s.PageID(ctx, "Ana")
 	lake, _ := s.PageID(ctx, "lakeside")
-	if err := s.Promote(ctx, "cli", ana, "person", "Ana Example"); err != nil {
+	if err := s.Promote(ctx, "cli", ana, "person", "Ana Example", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Promote(ctx, "cli", lake, "place", ""); err != nil {
+	if err := s.Promote(ctx, "cli", lake, "place", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Promote(ctx, "cli", day, "place", ""); status(err) != 422 {
+	if err := s.Promote(ctx, "cli", day, "place", "", "", ""); status(err) != 422 {
 		t.Errorf("promoting a day page: %v", err)
 	}
 	if err := s.Link(ctx, "cli", day, lake, "at", "evening"); err != nil {
@@ -70,7 +70,7 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 			if !incoming {
 				kind = "at"
 				from, to = category, other
-				if err := s.Promote(ctx, "cli", other, "place", ""); err != nil {
+				if err := s.Promote(ctx, "cli", other, "place", "", "", ""); err != nil {
 					t.Fatal(err)
 				}
 				// an at link starts at a day page (links_endpoint_types): written with that trigger dropped, so the
@@ -83,7 +83,7 @@ func TestPromotionRefusesRetainedTypedEdges(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Promote(ctx, "cli", category, "person", "Changed"); err == nil {
+			if err := s.Promote(ctx, "cli", category, "person", "Changed", "", ""); err == nil {
 				t.Fatal("promotion accepted invalid retained edge")
 			}
 			after, err := s.PageByID(ctx, category)
@@ -121,7 +121,7 @@ func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	if err := s.Revive(ctx, "cli", 999999); status(err) != 404 {
 		t.Errorf("revive of a missing id: %v, want 404", err)
 	}
-	if err := s.Promote(ctx, "cli", 999999, "place", ""); status(err) != 404 {
+	if err := s.Promote(ctx, "cli", 999999, "place", "", "", ""); status(err) != 404 {
 		t.Errorf("promote of a missing id: %v, want 404", err)
 	}
 	if err := s.Revive(ctx, "cli", id); err != nil {
@@ -137,7 +137,7 @@ func TestEntityLifecycleStatusesAreTheCommonOnes(t *testing.T) {
 	if err != nil || p.DeletedAt == "" {
 		t.Fatalf("the page is tombstoned once: %+v %v", p, err)
 	}
-	if err := s.Promote(ctx, "cli", id, "place", ""); err != nil {
+	if err := s.Promote(ctx, "cli", id, "place", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -193,7 +193,7 @@ func TestPromoteOfATypedEntity(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)
-			err := s.Promote(ctx, "cli", c.id, c.to, "")
+			err := s.Promote(ctx, "cli", c.id, c.to, "", "", "")
 			if status(err) != c.want || c.want == 422 && !strings.Contains(fmt.Sprint(err), trigger) {
 				t.Fatalf("status %d (%v), want %d", status(err), err, c.want)
 			}

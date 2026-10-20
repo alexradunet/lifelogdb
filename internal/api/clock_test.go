@@ -213,6 +213,30 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 			return do("schedule", map[string]string{"id": fmt.Sprint(res["page_id"]), "line": fmt.Sprint(res["line"]), "text": "Call", field: w})
 		}
 	}
+	// promote and edit-person send a day of a person to a page that exists already.
+	idOf := func(e *siren.Entity, err error) (string, error) {
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprint(props(e)["id"]), nil
+	}
+	for _, field := range []string{"birth_day", "death_day"} {
+		refusal := "CHECK constraint failed: people_" + field
+		cases["promote "+field] = caseOf(func(w string) (*siren.Entity, error) {
+			id, err := idOf(do("create-page", map[string]string{"title": title("Page")}))
+			if err != nil {
+				return nil, err
+			}
+			return do("promote", map[string]string{"id": id, "to": "person", field: w})
+		}, refusal)
+		cases["edit-person "+field] = caseOf(func(w string) (*siren.Entity, error) {
+			id, err := idOf(do("create-person", map[string]string{"title": title("Person")}))
+			if err != nil {
+				return nil, err
+			}
+			return do("edit-person", map[string]string{"id": id, field: w})
+		}, refusal)
+	}
 	cases["schedule on"] = caseOf(scheduled("on"), "is not a day")
 	reads["schedule on"] = dayIn("on")
 	cases["schedule due"] = caseOf(scheduled("due"), "is not a day")

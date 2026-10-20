@@ -62,9 +62,11 @@
 {{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz,import_key")}}</div>
 </section>{{end}}
-{{- with $p.Places}}
+{{- $unlink := form (.Action "unlink") "hide" "kind"}}
 <section class="group" aria-label="Where"><h2>Where</h2>
-<ul class="plain">{{range .}}<li><a href="{{titleHref .}}">{{.}}</a></li>{{end}}</ul></section>{{end}}
+{{with $p.Places}}<ul class="plain">{{range .}}{{$t := .}}<li><a href="{{titleHref .}}">{{.}}</a>{{with $unlink}} <form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$.Here}}"><input type="hidden" name="kind" value="at"><input type="hidden" name="to" value="{{$t}}"><button class="remove" aria-label="Remove {{$t}}">×</button></form>{{end}}</li>{{end}}</ul>
+{{else}}<p class="empty">No place on this day.</p>{{end}}
+{{with .Link "page"}}<p class="sub"><a href="{{.}}?new=link&amp;kind=at">I was at a place</a></p>{{else}}<p class="empty">A place goes on the day page. Write something in the journal first.</p>{{end}}</section>
 {{- with $d.recent}}
 <section class="group" aria-label="Last entries">
 <div class="panel-head"><h2>Last entries</h2><a href="/days">Every day</a></div>

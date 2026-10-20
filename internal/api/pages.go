@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -112,6 +113,17 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 		return nil, err
 	}
 	e.Actions = pageActions(p, kinds, cats)
+	if p.IsDayPage && p.DeletedAt == "" { // a day page links to a place: the form offers the places there are
+		places, err := h.s.PlaceTitles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for i, a := range e.Actions {
+			if a.Name == "link" {
+				e.Actions[i] = withOptions(a, "to", places)
+			}
+		}
+	}
 	if p.Period != "" && p.DeletedAt == "" { // the lines planned in the period (docs/contract/plan-lines.md)
 		if from, through, ok := periodWindow(p.Period, p.Title); ok {
 			lines, err := h.linesIn(ctx, from, through)
@@ -142,6 +154,9 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 			out = append(out, action("promote", ids, nil))
 		}
 		out = append(out, action("rename", ids, nil))
+		if p.Person != nil {
+			out = append(out, action("edit-person", ids, map[string]any{"name": p.Person.Name, "birth_day": p.Person.Birth, "death_day": p.Person.Death}))
+		}
 	}
 	if p.Type != "file" {
 		out = append(out, action("set-cover", ids, nil))
@@ -325,7 +340,7 @@ func (h *server) createPerson(r *http.Request, act spec, src string) (*siren.Ent
 	}
 	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day")))
 	if err != nil {
-		return nil, err
+		return nil, offerPromote(err, "person", v)
 	}
 	return h.pageEntity(r.Context(), id)
 }
@@ -337,7 +352,7 @@ func (h *server) createPlace(r *http.Request, act spec, src string) (*siren.Enti
 	}
 	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"))
 	if err != nil {
-		return nil, err
+		return nil, offerPromote(err, "place", v)
 	}
 	return h.pageEntity(r.Context(), id)
 }
@@ -347,10 +362,59 @@ func (h *server) promote(r *http.Request, act spec, src string) (*siren.Entity, 
 	if err != nil {
 		return nil, err
 	}
-	if err := h.s.Promote(r.Context(), src, id, v.Get("to"), v.Get("name")); err != nil {
+	if err := h.s.Promote(r.Context(), src, id, v.Get("to"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day"))); err != nil {
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), id)
+}
+
+// editPerson sets the fields that the request names. A field left out stays; core.PersonEdit says what an empty one does.
+func (h *server) editPerson(r *http.Request, act spec, src string) (*siren.Entity, error) {
+	id, v, err := idForm(r, act)
+	if err != nil {
+		return nil, err
+	}
+	named := func(field string, read func(string) string) *string {
+		if !v.Has(field) {
+			return nil
+		}
+		s := read(v.Get(field))
+		return &s
+	}
+	same := func(s string) string { return s }
+	e := core.PersonEdit{Name: named("name", same), Birth: named("birth_day", h.dayNamed), Death: named("death_day", h.dayNamed)}
+	if err := h.s.EditPerson(r.Context(), src, id, e); err != nil {
+		return nil, err
+	}
+	return h.pageEntity(r.Context(), id)
+}
+
+// existsOffer is an ExistsError of create-person or create-place that the owner can mend in one step: the page that
+// holds the title is a plain page, and promote makes it the person or the place, with the fields typed.
+type existsOffer struct {
+	*core.ExistsError
+	promote string // the address of the promote form
+	title   string // the words of the link to it
+}
+
+func (o *existsOffer) Unwrap() error { return o.ExistsError }
+
+// offerPromote wraps err as an existsOffer when err says that a plain page holds the title of the new person or
+// place. The fields are the ones of the request; a value that is empty is left out.
+func offerPromote(err error, to string, v url.Values) error {
+	var ex *core.ExistsError
+	if !errors.As(err, &ex) || !ex.Plain {
+		return err
+	}
+	q := url.Values{"new": {"promote"}, "to": {to}}
+	if to == "person" {
+		for _, field := range []string{"name", "birth_day", "death_day"} {
+			if x := v.Get(field); x != "" {
+				q.Set(field, x)
+			}
+		}
+	}
+	return &existsOffer{ex, siren.PageHref(ex.ID) + "?" + q.Encode(), "make it a " + to + ", with what you typed"}
 }
 
 func (h *server) revive(r *http.Request, _ spec, src string) (*siren.Entity, error) {
