@@ -123,8 +123,24 @@ func newPageHref(href string) string {
 	return u.String()
 }
 
-// NewCategoryHref is the address of the form that makes a category: a category is a page.
-func (v *view) NewCategoryHref() string { return siren.BrowseNewHref("page") }
+// NewCategoryHref is the address of the list of pages with its Select bar open. A page becomes a category when
+// something is filed in it (file-pages), so a new category is made by that bar, not by the New page form.
+func (v *view) NewCategoryHref() string {
+	return siren.BrowseHref(url.Values{"kind": {"page"}, "new": {"file-pages"}})
+}
+
+// NewPageTitledHref is the address of the New page form with the title q filled, for a search that found nothing. It is
+// empty when q cannot be a title as it stands: nothing typed, or search syntax (a * or a quote).
+func (v *view) NewPageTitledHref(query any) string {
+	q := strings.TrimSpace(Num(query))
+	if q == "" || strings.ContainsAny(q, `*"`) {
+		return ""
+	}
+	return siren.BrowseHref(url.Values{"kind": {"page"}, "new": {siren.NewActionOf("page")}, "title": {q}})
+}
+
+// MakingCategory is true when the page asked for the Select bar to make a new category (NewCategoryHref).
+func (v *view) MakingCategory() bool { return v.Asked("new") == "file-pages" }
 
 // NewMetricHref is the address of the New metric form on the Metrics board.
 func (v *view) NewMetricHref() string { return siren.NewMetricHref("") }

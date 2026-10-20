@@ -21,14 +21,14 @@
 <div class="browse-main">
 <nav class="kinds chips" aria-label="Kind">{{range .LinksOf "kind"}}{{$k := index .Class 0}}<a href="{{.Href}}"{{if eq $k $p.kind}} aria-current="page"{{end}}>{{.Title}} <small>{{num (index $c $k)}}</small></a>{{end}}</nav>
 {{if eq $p.kind "media"}}<nav class="kinds" aria-label="Media kind">{{range .LinksOf "kind"}}{{if eq (index .Class 0) "media"}}<a href="{{.Href}}"{{if not $p.media}} aria-current="page"{{end}}>All media</a>{{end}}{{end}}<a href="{{.Link "pictures"}}"{{if eq $p.media "image"}} aria-current="page"{{end}}>Pictures</a><a href="{{.Link "videos"}}"{{if eq $p.media "video"}} aria-current="page"{{end}}>Videos</a><a href="{{.Link "recordings"}}"{{if eq $p.media "audio"}} aria-current="page"{{end}}>Recordings</a></nav>{{end}}
-{{if and (eq $p.kind "page") (not $p.ghosts) (not $p.deleted) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a><a href="{{.Link "deleted"}}">Deleted {{num $c.deleted}}</a></p>{{end}}
+{{if and (eq $p.kind "page") (not $p.ghosts) (not $p.deleted) (not $p.in) (not $p.unfiled)}}<p class="sub"><a href="{{.Link "ghosts"}}">Ghost pages {{num $c.ghosts}}</a></p>{{end}}
 {{$file := .Action "file-pages"}}{{$del := .Action "tombstone-pages"}}{{$pick := or $file $del}}
 {{if $p.deleted}}{{with $p.rows}}<div class="sheet list"><ul class="plain rows">{{range .}}<li><a class="entry named" href="/pages/{{num .id}}"><span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.type}}</span> deleted {{$.When .deleted_at}}</span></a></li>{{end}}</ul></div>
 {{else}}<p class="empty">Nothing is deleted.</p>{{end}}
 {{else if $p.rows}}<div class="sheet list{{if $pick}} pick-list{{end}}">
 {{if eq $p.kind "media"}}<ul class="plain tiles">{{range $p.rows}}<li class="tile{{if $pick}} pick{{end}}">{{if $pick}}{{template "pick-box" (dict "v" $ "id" .id "title" .title)}}{{end}}<a class="tile-link" href="/pages/{{num .id}}">{{with .picture}}<img src="{{.}}" alt="" loading="lazy">{{else}}<span class="tile-blank" aria-hidden="true">{{icon .file_kind}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$.FileWords .file_kind .mime .day}}{{template "other-categories" (dict "v" $ "categories" .categories)}}</span></a>{{if $file}}<a class="row-move" href="{{$.MoveHref .id}}">Move</a>{{end}}</li>{{end}}</ul>
 {{else}}<ul class="plain rows">{{range $p.rows}}{{template "browse-row" (dict "v" $ "r" . "pick" $pick "file" $file)}}{{end}}</ul>{{end}}
-{{if $pick}}{{$from := ""}}{{with $p.in}}{{$from = .title}}{{end}}{{template "pick-bar" (dict "file" $file "del" $del "back" $.ListHere "button" (or (and $p.in "Move to") "Add to") "from" $from "paths" $.CategoryPaths "words" (or (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
+{{if $pick}}{{$from := ""}}{{with $p.in}}{{$from = .title}}{{end}}{{template "pick-bar" (dict "file" $file "del" $del "back" $.ListHere "button" (or (and $p.in "Move to") "Add to") "from" $from "paths" $.CategoryPaths "words" (or (and $.MakingCategory "Check what goes in it, then type its name. A new name makes a new category.") (and $del "Check the rows, then type a category or delete them. A new name makes a new category.") "Check the rows, then type a category. A new name makes a new category."))}}{{end}}</div>
 {{else}}<p class="empty">{{if $p.ghosts}}No ghost page: every page has text or a link.{{else if $p.unfiled}}Everything of this kind is in a category.{{else if $p.in}}Nothing of this kind is filed in {{$p.in.title}}.{{else if eq $p.kind "metric"}}No metric yet. New metric, above, makes the first one.{{else}}Nothing of this kind yet. New, above, makes the first one.{{end}}</p>{{end}}
 {{template "pager" .}}
 </div></div>
@@ -40,8 +40,9 @@
      row is the link and the fold is its own control. The branch the list is on is marked: the ghost list looks at
      everything, so it marks Everything. */}}
 {{define "browse-tree"}}{{$p := .Props}}
-<ul class="plain rows tree"><li><a class="entry" href="{{.Link "everything"}}"{{if not (or $p.in $p.unfiled)}} aria-current="page"{{end}}><span class="first">Everything</span><span class="meta"></span></a></li>
+<ul class="plain rows tree"><li><a class="entry" href="{{.Link "everything"}}"{{if not (or $p.in $p.unfiled $p.deleted)}} aria-current="page"{{end}}><span class="first">Everything</span><span class="meta"></span></a></li>
 {{template "tree-branches" .BrowseTree}}<li><a class="entry" href="{{.Link "unfiled"}}"{{if $p.unfiled}} aria-current="page"{{end}}><span class="first">Not filed</span><span class="meta"></span></a></li>
+<li><a class="entry" href="{{.Link "deleted"}}"{{if $p.deleted}} aria-current="page"{{end}}><span class="first">Deleted</span><span class="meta">{{num $p.counts.deleted}}</span></a></li>
 <li class="tree-foot"><a href="{{.NewCategoryHref}}">New category</a></li></ul>{{end}}
 
 {{/* tree-branches are the rows of one level of the tree, and the folds of the levels under them */}}

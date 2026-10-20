@@ -731,8 +731,8 @@ by the code of a body save, in one write. A page whose links are right is not wr
 `POST /pages/tombstone` (`tombstone-pages`, the one delete of the catalog): the one field `ids` names
 the pages, one or several, separated by spaces or commas, or sent once per id as a browser form does; 500 at most. Every
 id is tombstoned in one write, or none is: an id no row has is 404, and a row tombstoned already is left as it is. The
-answer embeds an `item` link to each; `result` says the count in words, which a browser form shows on the list it
-returns to (`back`), or home. `self` is `/`.
+answer embeds an `item` link to each; `result` is the [result of tombstone-pages](#result-of-tombstone-pages), which a browser form shows in words on the list it
+returns to (`back`), or home, with an Undo (`revive`) for one page or a link to the deleted list for several. `self` is `/`.
 
 | property | type | meaning |
 |---|---|---|
@@ -836,6 +836,13 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `removed` | string | after a `reopen`: the next line that was removed; absent when none was |
 | `removed_line` | integer | the number that line had before the reopen; absent when none was removed |
 | `next_kept` | boolean | after a `reopen` of a line with `every:`: `true` when the next line was not found, so it stays; absent otherwise |
+
+### result of tombstone-pages
+
+| property | type | meaning |
+|---|---|---|
+| `tombstoned` | list | the ids deleted, as `ids` |
+| `count` | integer | how many |
 
 ### result of carry
 

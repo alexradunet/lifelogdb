@@ -348,7 +348,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   to that category's list, the last one plain; Everything draws none) and an `h1` that says Everything, the
   category's title, Not filed, Ghost pages or Deleted. A category adds the link Open its page. Each category row of
   the tree has a quiet + (New page in that category, a link to the Pages list with New page open), shown on hover or
-  focus and always on a touch screen, and the foot of the tree has New category (a category is a page). Each row
+  focus and always on a touch screen, and the foot of the tree has New category (it opens the Select bar of the pages: a page becomes a category when something is filed in it), beside Not filed and Deleted with its count. Each row
   shows the categories it is filed in as small muted badges (inside a category, the other categories), and has a
   quiet Move link, shown on hover or focus and always on touch, that opens the list with Select on and that row
   checked: a link to the one pick bar, not a second form. Each kind keeps its row and its order: a person

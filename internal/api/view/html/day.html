@@ -18,7 +18,7 @@
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next day, %s" $next) "text" $next)}}{{end}}
 </div>
 </header>
-
+{{if $today}}<div class="today-inline">{{template "today-strip" .}}</div>{{end}}
 <div class="sheet-margin">
 <div class="sheet">
 <section class="journal" aria-label="Journal">
@@ -38,7 +38,7 @@
 
 {{with .Action "capture"}}<section class="capture" id="capture" aria-label="Capture">
 <h2>{{if $today}}Add to today{{else}}Add to {{shortDay $.Title}}{{end}}</h2>
-{{template "form" (form . "autofocus" "text" "button" "Add" "back" $.Here "label" "text=Entry" "placeholder" "text=What happened? Who was there?" "key" "text=c" "import_key" newKey)}}
+{{template "form" (form . "button" "Add" "back" $.Here "label" "text=Entry" "placeholder" "text=What happened? Who was there?" "key" "text=c" "import_key" newKey)}}
 </section>{{end}}
 
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit the day page")}}

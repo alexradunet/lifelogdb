@@ -91,6 +91,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
     &[aria-current=page]{background:var(--accent-tint); color:var(--rail-accent); font-weight:700; box-shadow:inset 3px 0 0 var(--rail-accent)}}}
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
 .rail-more{display:contents}
+.today-inline{display:none}
 .rail-more-link,.rail-more-head,.rail .rail-search-link{display:none}
 /* The Today strip: a carved well under the sections (in the More sheet on a phone, before the owner's links). A chip
    is a link to the form that does the thing; a done one is gold with a check. */
@@ -148,11 +149,12 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
       &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}}
   .rail-more-link{display:block}
+  .today-inline{display:block; margin-block-end:var(--space-4)}
   .rail-more{display:none}
   /* The sheet is a popover: the browser puts it in the top layer, with its own size, margin, border and colours,
      which this rule sets to the sheet's. */
   .rail-more:popover-open{display:flex; flex-direction:column; gap:var(--space-4); position:fixed; z-index:30; inset-inline:0; inset-block-start:0;
-    inset-block-end:calc(58px + env(safe-area-inset-bottom, 0px)); inline-size:auto; block-size:auto; margin:0; border:0; overflow-y:auto; box-shadow:var(--shadow-float);
+    inset-block-end:calc(58px + env(safe-area-inset-bottom, 0px)); background-color:var(--rail); inline-size:auto; block-size:auto; margin:0; border:0; overflow-y:auto; box-shadow:var(--shadow-float);
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .rail-more-head{display:flex; align-items:center; justify-content:space-between;
     & .label{color:var(--rail-accent)}}

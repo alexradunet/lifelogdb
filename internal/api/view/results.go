@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
 )
 
@@ -186,6 +187,22 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 		say(`Carried to <a href="/pages/%s">its page</a>, line %s.`, Num(to), Num(toLine))
 	} else if hasLine {
 		left["line"] = line
+	}
+
+	// tombstone-pages. One page offers its Undo (a revive that returns to where the owner is); several offer the
+	// list of the deleted, where each is restored from its page.
+	if ids, ok := take("tombstoned"); ok {
+		n, _ := take("count")
+		say("Deleted %s.", Count(n, "page", "pages"))
+		if list, _ := ids.([]any); len(list) == 1 {
+			f := &resultForm{Href: "/pages/" + Num(list[0]) + "/revive", Label: "Undo"}
+			if here != "" {
+				f.Hidden = [][2]string{{"back", here}}
+			}
+			out[len(out)-1].Form = f
+		} else {
+			say(`<a href="%s">See the deleted pages</a>.`, siren.BrowseHref(url.Values{"deleted": {"1"}}))
+		}
 	}
 
 	// capture sent again (D28).

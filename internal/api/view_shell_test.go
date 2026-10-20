@@ -124,7 +124,7 @@ func TestTheKeysAreInThePage(t *testing.T) {
 		`<button type="button" class="rail-search button" commandfor="palette" command="show-modal" accesskey="k">`,
 		`<button type="button" class="button primary rail-new" popovertarget="new-menu" accesskey="n">`,
 		`<a href="/days/today" aria-current="page" accesskey="t">`,
-		`placeholder="What happened? Who was there?" accesskey="c" autofocus>`,
+		`placeholder="What happened? Who was there?" accesskey="c">`,
 		`<a class="button step" accesskey="[" href="/days/2031-05-13" rel="prev"`, `<a class="button step" accesskey="]" href="/days/2031-05-15" rel="next"`,
 		`<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>`,
 	} {

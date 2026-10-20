@@ -377,7 +377,7 @@ func TestBrowseGhostsAreOldestFirstAndOfferDelete(t *testing.T) {
 		ids = append(ids, fmt.Sprint(r.(map[string]any)["id"]))
 	}
 	done := apitest.Must(t)(c.Do(ctx, apitest.Action(t, e, "tombstone-pages"), map[string]string{"ids": strings.Join(ids, " ")}))
-	if done.Result != "Deleted 2 pages." {
+	if deletedCount(done.Result) != "2" {
 		t.Errorf("the delete: %v", done.Result)
 	}
 	if rows := props(apitest.Must(t)(c.Get(ctx, "/browse?ghosts=1")))["rows"].([]any); len(rows) != 0 {
@@ -522,7 +522,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		// The tree folds (docs/plans/118-fold-and-find.md, rule 1): Cousins is in the fold of Family, open, since the
 		// list is on Family.
 		`<li class="branch"><a class="entry" href="/browse?in=Family" aria-current="page"><span class="first">Family</span><span class="meta">5</span></a><a class="tree-new" href="/browse?in=Family&amp;kind=page&amp;new=create-page" aria-label="New page in Family">+</a><details open><summary><span class="sr">Categories in Family</span></summary><ul class="plain rows tree"><li><a class="entry" href="/browse?in=Cousins"><span class="first">Cousins</span><span class="meta">2</span></a><a class="tree-new" href="/browse?in=Cousins&amp;kind=page&amp;new=create-page" aria-label="New page in Cousins">+</a></li>`,
-		`<li class="tree-foot"><a href="/browse?kind=page&amp;new=create-page">New category</a></li>`,
+		`<li class="tree-foot"><a href="/browse?kind=page&amp;new=file-pages">New category</a></li>`,
 		`<a class="entry" href="/browse?unfiled=1"><span class="first">Not filed</span>`,
 		`<nav class="kinds chips" aria-label="Kind"><a href="/browse?in=Family&amp;kind=all" aria-current="page">All <small>5</small></a><a href="/browse?in=Family&amp;kind=page">Pages <small>2</small></a>`,
 		// The category under Family is a row with its badge.
@@ -693,7 +693,7 @@ func TestBrowseWithNoCategory(t *testing.T) {
 	}
 	body := browse(t, h, "/browse?unfiled=1")
 	tree := regexp.MustCompile(`(?s)<nav aria-label="Categories">(.*?)</nav>`).FindStringSubmatch(body)
-	if tree == nil || strings.Count(tree[1], "<li") != 3 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") {
+	if tree == nil || strings.Count(tree[1], "<li") != 4 || !strings.Contains(tree[1], "Everything") || !strings.Contains(tree[1], "Not filed") || !strings.Contains(tree[1], `<span class="first">Deleted</span><span class="meta">0</span>`) {
 		t.Errorf("an empty tree is not Everything and Not filed: %v", tree)
 	}
 	if !strings.Contains(body, `<p class="empty">Everything of this kind is in a category.</p>`) {
@@ -812,7 +812,7 @@ func TestBrowseMovesAndFilesFromTheList(t *testing.T) {
 	}
 	unfiled := browse(t, h, "/browse?unfiled=1")
 	for _, want := range []string{`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Not filed</span></nav><h1>Not filed</h1>`,
-		`<li class="tree-foot"><a href="/browse?kind=page&amp;new=create-page">New category</a></li>`} {
+		`<li class="tree-foot"><a href="/browse?kind=page&amp;new=file-pages">New category</a></li>`} {
 		if !strings.Contains(unfiled, want) {
 			t.Errorf("/browse?unfiled=1 lacks %s", want)
 		}

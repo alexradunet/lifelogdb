@@ -49,7 +49,7 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	// Commas and spaces separate the ids; an id named twice counts once.
 	done := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0] + ", " + ids[1] + " " + ids[0]}))
 	if done.Class[0] != "tombstoned" || props(done)["count"] != json.Number("2") || len(done.Entities) != 2 ||
-		done.Entities[0].Href != "/pages/"+ids[0] || done.Entities[1].Href != "/pages/"+ids[1] || done.Result != "Deleted 2 pages." {
+		done.Entities[0].Href != "/pages/"+ids[0] || done.Entities[1].Href != "/pages/"+ids[1] || deletedCount(done.Result) != "2" {
 		t.Fatalf("the answer: %+v %v %v", done.Class, props(done), done.Result)
 	}
 	if !deleted(ids[0]) || !deleted(ids[1]) || deleted(ids[2]) {
@@ -72,7 +72,7 @@ func TestDeletePagesAtOnce(t *testing.T) {
 	}
 
 	// A page tombstoned already is left as it is; one page is said in the singular.
-	if again := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0]})); again.Result != "Deleted 1 page." {
+	if again := apitest.Must(t)(c.Do(ctx, del, map[string]string{"ids": ids[0]})); deletedCount(again.Result) != "1" {
 		t.Errorf("a second delete: %v", again.Result)
 	}
 	// Every writer may run it: it is a danger, not the owner's alone.
@@ -138,7 +138,37 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 		t.Fatalf("the form returned to %q", loc)
 	}
 	after := browse(t, h, loc)
-	if !strings.Contains(after, "Deleted 2 pages.") || strings.Contains(after, `href="/pages/`+files[0]+`"`) || strings.Contains(after, `href="/pages/`+files[1]+`"`) {
+	if !strings.Contains(after, "Deleted 2 pages.") || !strings.Contains(after, `<a href="/browse?deleted=1">See the deleted pages</a>`) || strings.Contains(after, ">Undo<") || strings.Contains(after, `href="/pages/`+files[0]+`"`) || strings.Contains(after, `href="/pages/`+files[1]+`"`) {
 		t.Errorf("the list after the delete: %.600s", after)
+	}
+}
+
+// deletedCount is the count of the result of a tombstone-pages, as the client decodes it.
+func deletedCount(result any) string {
+	m, _ := result.(map[string]any)
+	return fmt.Sprint(m["count"])
+}
+
+// TestDeletingOnePageOffersItsUndo: the toast of a delete of one page carries a form that restores that page and
+// returns to where the owner is; the page is live again after the form is sent.
+func TestDeletingOnePageOffersItsUndo(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	ctx := t.Context()
+	e := apitest.Must(t)(c.Do(ctx, apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/")), "create-page"), map[string]string{"title": "Old idea"}))
+	pageID := idOfSelf(t, apitest.Href(e, "self"))
+	rec := submit(h, "/pages/tombstone", url.Values{"ids": {pageID}, "back": {"/browse"}}, "")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("the delete: %d %.300s", rec.Code, rec.Body.String())
+	}
+	toast := browse(t, h, rec.Header().Get("Location"))
+	want := `<form class="undo" method="post" action="/pages/` + pageID + `/revive">`
+	if !strings.Contains(toast, "Deleted 1 page.") || !strings.Contains(toast, want) || !strings.Contains(toast, ">Undo<") || strings.Contains(toast, "See the deleted pages") {
+		t.Fatalf("the toast: %.900s", toast)
+	}
+	if rec = submit(h, "/pages/"+pageID+"/revive", url.Values{"back": {"/browse"}}, ""); rec.Code != http.StatusSeeOther {
+		t.Fatalf("the undo: %d %.300s", rec.Code, rec.Body.String())
+	}
+	if slices.Contains(apitest.Must(t)(c.Get(ctx, "/pages/"+pageID)).Class, "deleted") {
+		t.Error("the page is still deleted after the Undo")
 	}
 }

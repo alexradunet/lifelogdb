@@ -16,7 +16,7 @@
 {{else}}{{range $.HitGroups}}<section class="result-group" aria-label="{{.Title}}"><div class="panel-head"><h2>{{.Title}}</h2><a class="meta" href="{{.Href}}">Show only these</a></div>
 <ul class="plain rows">{{range .Hits}}{{template "hit" (dict "v" $ "h" .)}}{{end}}</ul></section>
 {{end}}{{with $.LinkByRel "order"}}<p class="sub"><a href="{{.Href}}">{{.Title}}</a></p>{{end}}{{end}}{{end}}</div>
-{{else}}<p class="empty">No page matches. Try fewer words, or a prefix*.</p>{{end}}{{end}}
+{{else}}<p class="empty">No page matches. Try fewer words, or a prefix*.{{with $.NewPageTitledHref $p.q}} <a href="{{.}}">Make a page titled ‘{{$p.q}}’</a>{{end}}</p>{{end}}{{end}}
 {{template "pager" .}}
 {{template "foot" .}}{{end}}
 
