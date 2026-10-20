@@ -35,7 +35,7 @@ func TestTheRecordFormAsksForAMetricWhenNoneIsNamed(t *testing.T) {
 	}
 }
 
-// TestARecordGoesBackToTheDayItWasMadeOn: the form of Home and of a day returns to that day with the answer; the
+// TestARecordGoesBackToTheDayItWasMadeOn: the form of Home and of a day returns to that page with the answer; the
 // key is filled, so a form sent twice is one reading.
 func TestARecordGoesBackToTheDayItWasMadeOn(t *testing.T) {
 	h, do := lifeOf(t)
@@ -47,12 +47,8 @@ func TestARecordGoesBackToTheDayItWasMadeOn(t *testing.T) {
 			t.Fatalf("%s: no key filled: %v", page, sent)
 		}
 		rec := submit(h, "/measurements", sent, "")
-		want := "/days/" + fixedToday
-		if page != "/" {
-			want = page
-		}
-		if rec.Code != http.StatusSeeOther || returnedTo(t, rec.Header().Get("Location")) != want {
-			t.Errorf("%s: %d, returned to %q, want %q", page, rec.Code, rec.Header().Get("Location"), want)
+		if rec.Code != http.StatusSeeOther || returnedTo(t, rec.Header().Get("Location")) != page {
+			t.Errorf("%s: %d, returned to %q, want %q", page, rec.Code, rec.Header().Get("Location"), page)
 		}
 		if again := submit(h, "/measurements", sent, ""); again.Code != http.StatusSeeOther {
 			t.Errorf("%s: the same form sent twice: %d", page, again.Code)
@@ -137,12 +133,12 @@ func TestHabitsAndUnitsAreSaid(t *testing.T) {
 	do("/days/"+fixedToday, "record", map[string]string{"metric": "Stretch", "value": "1"})
 
 	habit := browse(t, h, "/metrics/Stretch")
-	for _, want := range []string{"shows in Today after its first reading, and leaves it 14 days after its last", `placeholder="1 done, 0 not done"`} {
+	for _, want := range []string{"shows in Today as a habit after its first reading, and leaves Today 14 days after its last", `placeholder="a count, or 1 done and 0 not done"`} {
 		if !strings.Contains(habit, want) {
 			t.Errorf("the page of a habit lacks %q", want)
 		}
 	}
-	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "days after its last") || strings.Contains(weight, "1 done, 0 not done") {
+	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "days after its last") || strings.Contains(weight, "1 done and 0 not done") {
 		t.Error("the page of a metric with a unit speaks of habits")
 	}
 

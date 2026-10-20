@@ -203,7 +203,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if m != nil {
 		props["unit"] = m.Unit
 		if m.Unit == "" {
-			props["habit_days"] = core.HabitDays // a metric with no unit is a habit (D24) once it is read
+			props["habit_days"] = core.HabitDays // a metric with no unit is a count or a habit (D24): Today shows it once it is read
 		}
 		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 	}
