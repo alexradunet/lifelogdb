@@ -203,6 +203,20 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 		return do("tick", map[string]string{"id": fmt.Sprint(res["page_id"]), "line": fmt.Sprint(res["line"]), "text": "Call", "outcome": "done", "done": w})
 	}, "is not a day")
 	reads["tick done"] = dayIn("done")
+	scheduled := func(field string) func(string) (*siren.Entity, error) {
+		return func(w string) (*siren.Entity, error) {
+			planned, err := do("plan", map[string]string{"page": title("Schedule"), "text": "Call"})
+			if err != nil {
+				return nil, err
+			}
+			res, _ := planned.Result.(map[string]any)
+			return do("schedule", map[string]string{"id": fmt.Sprint(res["page_id"]), "line": fmt.Sprint(res["line"]), "text": "Call", field: w})
+		}
+	}
+	cases["schedule on"] = caseOf(scheduled("on"), "is not a day")
+	reads["schedule on"] = dayIn("on")
+	cases["schedule due"] = caseOf(scheduled("due"), "is not a day")
+	reads["schedule due"] = dayIn("due")
 	var fields []string
 	for _, a := range catalog.Actions {
 		for _, f := range a.Fields {

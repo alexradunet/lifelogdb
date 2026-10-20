@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -408,4 +409,196 @@ func TestAPlanWriteAdvancesTheRevision(t *testing.T) {
 func setBody(t *testing.T, s *Store, id int64, body string) error {
 	t.Helper()
 	return s.Do(ctx, "cli", func(tx *Tx) error { _, err := tx.SetBody(id, body); return err })
+}
+
+// openStore holds the pages of the OpenLines tests. Today is 2026-10-19. The open lines are, by title key:
+// 2026-10-19 d-today; alpha a-early, a-same, a-same2, a-none; Beta b-late, b-none; Mixed kept. Every other line of
+// the pages is one that the list leaves out.
+func openStore(t *testing.T) *Store {
+	t.Helper()
+	s := planStore(t)
+	mustPlan(t, s, "Beta", "b-late", "2026-10-25", "", "", false)
+	mustPlan(t, s, "Beta", "b-none", "", "", "", false)
+	mustPlan(t, s, "alpha", "a-early", "2026-10-18", "", "", false)
+	mustPlan(t, s, "alpha", "a-same", "2026-10-25", "", "", false)
+	mustPlan(t, s, "alpha", "a-none", "", "", "", false)
+	mustPlan(t, s, "alpha", "a-same2", "", "2026-10-25", "", false)
+	mustPlan(t, s, "2026-10-19", "d-today", "", "2026-10-19", "", false)
+	m := mustPlan(t, s, "Mixed", "kept", "2026-10-20", "", "", false)
+	if err := setBody(t, s, m.PageID, "- [x] done1 done:2026-10-01\n\n- [-] dropped1\n\n- [>] carried1\n\n- [ ] bad on:2026-10-18 on:2026-10-19\n\n> - [ ] quoted\n\n- [ ] kept on:2026-10-20"); err != nil {
+		t.Fatal(err)
+	}
+	g := mustPlan(t, s, "Gone", "gone", "2026-10-18", "", "", false)
+	if err := s.Tombstone(ctx, "cli", g.PageID); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func openNames(t *testing.T, s *Store, byPage bool, limit, offset int) (string, int) {
+	t.Helper()
+	items, total, err := s.OpenLines(ctx, byPage, limit, offset)
+	if err != nil {
+		t.Fatalf("OpenLines(%v, %d, %d): %v", byPage, limit, offset, err)
+	}
+	var got []string
+	for _, it := range items {
+		got = append(got, it.Title+":"+it.Text)
+	}
+	return strings.Join(got, ","), total
+}
+
+func TestOpenLinesByDayPutsLinesWithNoDayLast(t *testing.T) {
+	s := openStore(t)
+	// 10-18 alpha; 10-19 the day page; 10-20 Mixed; 10-25 alpha (line 5 before line 7), then Beta; then no day.
+	want := "alpha:a-early,2026-10-19:d-today,Mixed:kept,alpha:a-same,alpha:a-same2,Beta:b-late,alpha:a-none,Beta:b-none"
+	if got, total := openNames(t, s, false, 500, 0); got != want || total != 8 {
+		t.Errorf("by day: got %s (total %d), want %s (total 8)", got, total, want)
+	}
+}
+
+func TestOpenLinesByPageGroupsTheLinesOfAPage(t *testing.T) {
+	s := openStore(t)
+	// The titles go by their keys, in any case: a day page, alpha, Beta, Mixed. A page keeps its lines in line order.
+	want := "2026-10-19:d-today,alpha:a-early,alpha:a-same,alpha:a-none,alpha:a-same2,Beta:b-late,Beta:b-none,Mixed:kept"
+	if got, total := openNames(t, s, true, 500, 0); got != want || total != 8 {
+		t.Errorf("by page: got %s (total %d), want %s (total 8)", got, total, want)
+	}
+}
+
+func TestOpenLinesLeavesOutWhatCannotBeTicked(t *testing.T) {
+	s := openStore(t)
+	got, _ := openNames(t, s, true, 500, 0)
+	for _, no := range []string{"done1", "dropped1", "carried1", "bad", "quoted", "gone"} {
+		if strings.Contains(got, ":"+no) {
+			t.Errorf("the list holds %q: %s", no, got)
+		}
+	}
+}
+
+func TestOpenLinesLimitAndOffsetSelectRows(t *testing.T) {
+	s := openStore(t)
+	for _, c := range []struct {
+		limit, offset int
+		want          string
+	}{
+		{2, 3, "alpha:a-same,alpha:a-same2"},
+		{5, 7, "Beta:b-none"},
+		{5, 8, ""},
+		{1, 0, "alpha:a-early"},
+	} {
+		if got, total := openNames(t, s, false, c.limit, c.offset); got != c.want || total != 8 {
+			t.Errorf("limit %d offset %d: got %q (total %d), want %q (total 8)", c.limit, c.offset, got, total, c.want)
+		}
+	}
+}
+
+func TestOpenLinesRefusesBadBounds(t *testing.T) {
+	s := openStore(t)
+	for _, c := range [][2]int{{0, 0}, {501, 0}, {-1, 0}, {10, -1}} {
+		if _, _, err := s.OpenLines(ctx, false, c[0], c[1]); status(err) != 422 {
+			t.Errorf("limit %d offset %d: %v", c[0], c[1], err)
+		}
+	}
+	if _, _, err := s.OpenLines(ctx, false, 500, 0); err != nil {
+		t.Errorf("limit 500: %v", err)
+	}
+}
+
+func TestOpenLinesOfAnEmptyStoreIsEmpty(t *testing.T) {
+	items, total, err := planStore(t).OpenLines(ctx, false, 10, 0)
+	if err != nil || len(items) != 0 || total != 0 {
+		t.Errorf("got %v, %d, %v", items, total, err)
+	}
+}
+
+func TestScheduleRewritesTheDatesInPlace(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Project", "Call the bank", "2026-10-20", "", "", false)
+	mustPlan(t, s, "Project", "Other", "", "", "", false)
+	got, err := s.Schedule(ctx, "cli", r.PageID, r.Line, "Call the bank", str(""), str("2026-10-30"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PageID != r.PageID || got.Line != 1 || got.Written != "- [ ] Call the bank due:2026-10-30" {
+		t.Errorf("result %+v", got)
+	}
+	if b := bodyOf(t, s, r.PageID); b != "- [ ] Call the bank due:2026-10-30\n\n- [ ] Other" {
+		t.Errorf("body %q", b)
+	}
+	// Both dates removed: the line has no day, and the list shows it after the lines with a day.
+	if _, err := s.Schedule(ctx, "cli", r.PageID, 1, "Call the bank", str(""), str("")); err != nil {
+		t.Fatal(err)
+	}
+	if b := bodyOf(t, s, r.PageID); b != "- [ ] Call the bank\n\n- [ ] Other" {
+		t.Errorf("body %q", b)
+	}
+}
+
+// str is a date sent to Schedule: a value, where nil keeps the date of the line.
+func str(s string) *string { return &s }
+
+func TestScheduleKeepsTheDateTheClientLeavesOut(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Project", "Call the bank", "2026-10-20", "2026-10-24", "", false)
+	if _, err := s.Schedule(ctx, "cli", r.PageID, r.Line, "Call the bank", nil, str("2026-10-30")); err != nil {
+		t.Fatal(err)
+	}
+	if b := bodyOf(t, s, r.PageID); b != "- [ ] Call the bank on:2026-10-20 due:2026-10-30" {
+		t.Errorf("a due alone: body %q", b)
+	}
+	if _, err := s.Schedule(ctx, "cli", r.PageID, r.Line, "Call the bank", str("2026-10-21"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if b := bodyOf(t, s, r.PageID); b != "- [ ] Call the bank on:2026-10-21 due:2026-10-30" {
+		t.Errorf("an on alone: body %q", b)
+	}
+	if _, err := s.Schedule(ctx, "cli", r.PageID, r.Line, "Call the bank", nil, nil); status(err) != http.StatusUnprocessableEntity {
+		t.Errorf("no date: %v, want 422", err)
+	}
+	if b := bodyOf(t, s, r.PageID); b != "- [ ] Call the bank on:2026-10-21 due:2026-10-30" {
+		t.Errorf("no date changed the body: %q", b)
+	}
+}
+
+func TestScheduleRefusals(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Project", "Water plants", "2026-10-20", "", "week", false)
+	done := mustPlan(t, s, "Project", "Finished", "", "", "", false)
+	if _, err := s.Tick(ctx, "cli", r.PageID, done.Line, "Finished", "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	quote := mustPlan(t, s, "Quoted", "Call", "", "", "", false)
+	if err := setBody(t, s, quote.PageID, "> - [ ] Call"); err != nil {
+		t.Fatal(err)
+	}
+	gone := mustPlan(t, s, "Gone", "Call", "", "", "", false)
+	if err := s.Tombstone(ctx, "cli", gone.PageID); err != nil {
+		t.Fatal(err)
+	}
+	before := bodyOf(t, s, r.PageID)
+	for name, c := range map[string]struct {
+		id         int64
+		line       int
+		text       string
+		on, due    string
+		wantStatus int
+	}{
+		"text changed":   {r.PageID, 1, "Water", "2026-10-21", "", 409},
+		"line not there": {r.PageID, 9, "Water plants", "2026-10-21", "", 409},
+		"done line":      {r.PageID, done.Line, "Finished", "2026-10-21", "", 409},
+		"in a quote":     {quote.PageID, 1, "Call", "2026-10-21", "", 409},
+		"tombstone":      {gone.PageID, 1, "Call", "2026-10-21", "", 409},
+		"every no day":   {r.PageID, 1, "Water plants", "", "", 422},
+		"bad day":        {r.PageID, 1, "Water plants", "2026-2-3", "", 422},
+		"empty text":     {r.PageID, 1, "", "2026-10-21", "", 422},
+	} {
+		_, err := s.Schedule(ctx, "cli", c.id, c.line, c.text, str(c.on), str(c.due))
+		if status(err) != c.wantStatus {
+			t.Errorf("%s: status %d, want %d (%v)", name, status(err), c.wantStatus, err)
+		}
+	}
+	if bodyOf(t, s, r.PageID) != before {
+		t.Error("a refused schedule changed the body")
+	}
 }

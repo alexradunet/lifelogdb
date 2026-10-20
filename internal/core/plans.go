@@ -31,37 +31,44 @@ const maxWindowDays = 366
 // boxes on the lifetime fixture, 1,600 ms). The filter is a superset, so the parser still reads the bodies. The title
 // is the preferred name.
 const pagesWithBoxes = `
-	SELECT e.id, n.title, e.is_journal, coalesce(e.period, ''), e.body
+	SELECT e.id, n.title, e.is_journal, coalesce(e.period, ''), e.body, e.preferred_name_key
 	  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
 	 WHERE e.has_box AND e.deleted_at IS NULL`
 
 // planItems lists the lines that keep accepts, with the day to sort them by, in the order of that day, title and line.
-// A malformed line has no day, so keep sees it with Bad set and refuses it.
+// An empty day sorts after every day. The titles go by their keys (the order of Browse): in any case, and a day page
+// among the others by its date. A malformed line has no day, so keep sees it with Bad set and refuses it.
 func (s *Store) planItems(ctx context.Context, keep func(text.Plan) (day string, ok bool)) ([]PlanItem, error) {
 	type found struct {
 		PlanItem
-		day string
+		day, key string
 	}
 	var all []found
 	var it PlanItem
-	var body string
+	var body, key string
 	rows, err := s.DB.R.QueryContext(ctx, pagesWithBoxes)
-	if err := each(rows, err, []any{&it.PageID, &it.Title, &it.IsDayPage, &it.Period, &body}, func() {
+	if err := each(rows, err, []any{&it.PageID, &it.Title, &it.IsDayPage, &it.Period, &body, &key}, func() {
 		for _, p := range text.Plans(body) {
 			if day, ok := keep(p); ok {
 				item := it
 				item.Plan = p
-				all = append(all, found{item, day})
+				all = append(all, found{item, day, key})
 			}
 		}
 	}); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(all, func(a, b found) int {
-		if c := strings.Compare(a.day, b.day); c != 0 {
-			return c
+		switch {
+		case a.day == b.day:
+		case a.day == "":
+			return 1
+		case b.day == "":
+			return -1
+		default:
+			return strings.Compare(a.day, b.day)
 		}
-		if c := strings.Compare(a.Title, b.Title); c != 0 {
+		if c := strings.Compare(a.key, b.key); c != 0 {
 			return c
 		}
 		return a.Line - b.Line
@@ -130,6 +137,28 @@ func (s *Store) PlanLines(ctx context.Context, from, through string) ([]PlanItem
 		}
 		return "", false
 	})
+}
+
+// MaxListLimit is the most rows that a list gives at once.
+const MaxListLimit = 500
+
+// OpenLines lists the open, well-formed lines of every live page, in the order byPage asks (false: by planned day,
+// the lines with no day last; true: by title, then line). total counts them all; at most limit come back from offset.
+func (s *Store) OpenLines(ctx context.Context, byPage bool, limit, offset int) (items []PlanItem, total int, err error) {
+	if limit < 1 || limit > MaxListLimit || offset < 0 {
+		return nil, 0, Invalid("limit must be 1 to %d and offset 0 or more", MaxListLimit)
+	}
+	items, err = s.planItems(ctx, func(p text.Plan) (string, bool) {
+		if byPage {
+			return "", p.Box == ' ' && p.Bad == ""
+		}
+		return plannedDay(p), p.Box == ' ' && p.Bad == ""
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	total = len(items)
+	return items[min(offset, total):min(offset+limit, total)], total, nil
 }
 
 // planError turns an error of the plan parser into the answer of a surface: a line that changed since the client
@@ -333,5 +362,61 @@ func (s *Store) Carry(ctx context.Context, source string, id int64, line int, wo
 		}
 		toLine, err := t.appendPlan(toID, copied)
 		return CarryResult{id, line, toID, toLine}, err
+	})
+}
+
+// ScheduleResult is what Schedule did: the page, the number and the new text of the line, and its dates now ("" for
+// none).
+type ScheduleResult struct {
+	PageID  int64
+	Line    int
+	Written string
+	On, Due string
+}
+
+// Schedule changes the dates of the open line at line of the page id when its words match text. A nil on or due keeps
+// that date of the line, an empty one removes it, and a day replaces or adds it: a client that sends one date does not
+// lose the other. It is one write of the body, with no version token, as a tick is.
+func (s *Store) Schedule(ctx context.Context, source string, id int64, line int, words string, on, due *string) (ScheduleResult, error) {
+	return alone(s, ctx, source, func(t *Tx) (ScheduleResult, error) {
+		if words == "" {
+			return ScheduleResult{}, Invalid("the text of the line is empty")
+		}
+		if on == nil && due == nil {
+			return ScheduleResult{}, Invalid("a schedule needs on, due or both")
+		}
+		if _, err := t.livePage(id); err != nil {
+			return ScheduleResult{}, err
+		}
+		body, err := t.bodyOf(id)
+		if err != nil {
+			return ScheduleResult{}, err
+		}
+		newOn, newDue := "", ""
+		for _, p := range text.Plans(body) {
+			if p.Line == line {
+				newOn, newDue = p.On, p.Due
+			}
+		}
+		if on != nil {
+			newOn = *on
+		}
+		if due != nil {
+			newDue = *due
+		}
+		body, err = text.Schedule(body, line, words, newOn, newDue)
+		if err != nil {
+			return ScheduleResult{}, planError(err)
+		}
+		if _, err := t.SetBody(id, body); err != nil {
+			return ScheduleResult{}, err
+		}
+		r := ScheduleResult{PageID: id, Line: line, On: newOn, Due: newDue}
+		for _, p := range text.Plans(body) {
+			if p.Line == line {
+				r.Written = p.Raw
+			}
+		}
+		return r, nil
 	})
 }

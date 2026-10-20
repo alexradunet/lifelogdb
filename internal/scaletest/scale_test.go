@@ -29,7 +29,7 @@ func TestSmallWorkloadKnownAnswersAndReproducibility(t *testing.T) {
 	if first.Manifest != second.Manifest {
 		t.Fatalf("same seed changed logical fixture: %+v / %+v", first.Manifest, second.Manifest)
 	}
-	if len(first.Operations) != 12 {
+	if len(first.Operations) != 13 {
 		t.Fatalf("workflow measurements: %+v", first.Operations)
 	}
 }

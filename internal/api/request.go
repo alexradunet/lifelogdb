@@ -166,7 +166,7 @@ func flag(v url.Values, name string) (bool, error) {
 
 // The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
 // links the next one when a further row exists, the previous one when offset > 0.
-const maxPageLimit = 500
+const maxPageLimit = core.MaxListLimit
 
 // pageOf reads limit (1–maxPageLimit, def when absent) and offset (≥ 0) from the query.
 func pageOf(r *http.Request, def int) (limit, offset int, err error) {
@@ -210,6 +210,12 @@ func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, o
 	if more {
 		rows = rows[:limit]
 	}
+	return rows, pageLinks(e, more, path, q, limit, offset)
+}
+
+// pageLinks adds the next link (when more says a further row exists) and the prev link (when offset > 0) to e. A list
+// that knows its total, and so reads no extra row, calls it directly.
+func pageLinks(e *siren.Entity, more bool, path string, q url.Values, limit, offset int) pageProps {
 	href := func(offset int) string {
 		v := url.Values{}
 		for k, vs := range q {
@@ -225,5 +231,5 @@ func paged[T any](e *siren.Entity, rows []T, path string, q url.Values, limit, o
 	if more {
 		e.Links = append(e.Links, link("next", href(offset+limit), "Next page"))
 	}
-	return rows, pageProps{Limit: limit, Offset: offset}
+	return pageProps{Limit: limit, Offset: offset}
 }

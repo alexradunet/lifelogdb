@@ -57,6 +57,12 @@ func planLines(s *S) {
 		Line                              int
 	}
 	block("<!-- reopen-vectors -->", &reopens)
+	var schedules []struct {
+		Body, Text, On, Due, After, Error string
+		Line                              int
+	}
+	block("<!-- schedule-vectors -->", &schedules)
+	s.K("the schedule vectors are complete", len(schedules) >= 12, len(schedules))
 	s.K("the reopen vectors are complete", len(reopens) >= 14, len(reopens))
 	s.K("the plan-line vectors are complete", len(lines) >= 40, len(lines))
 	s.K("the next-day vectors are complete", len(days) >= 25, len(days))
@@ -87,6 +93,21 @@ func planLines(s *S) {
 			ok = errors.Is(err, errs[v.Error])
 		}
 		s.K("every printed reopen vector reproduces", ok, fmt.Sprintf("%+v: got %+v, %v", v, got, err))
+	}
+	for _, v := range schedules {
+		got, err := text.Schedule(v.Body, v.Line, v.Text, v.On, v.Due)
+		var ok bool
+		switch v.Error {
+		case "":
+			ok = err == nil && got == v.After
+		case "changed":
+			ok = errors.Is(err, text.ErrLineChanged)
+		case "malformed":
+			ok = errors.Is(err, text.ErrMalformed)
+		default:
+			ok = err != nil && !errors.Is(err, text.ErrLineChanged) && !errors.Is(err, text.ErrMalformed)
+		}
+		s.K("every printed schedule vector reproduces", ok, fmt.Sprintf("%+v: got %q, %v", v, got, err))
 	}
 }
 

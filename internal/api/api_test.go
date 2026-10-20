@@ -270,7 +270,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Fatal(err)
 	}
 	dayPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page")))
-	if got := names(dayPage); got != "save-body,plan,tick,carry,set-cover,link,unlink,tombstone-pages" {
+	if got := names(dayPage); got != "save-body,plan,tick,carry,schedule,set-cover,link,unlink,tombstone-pages" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
 	if !hasOption(apitest.Action(t, dayPage, "link"), "kind", "at") {
@@ -282,7 +282,7 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
 	// A plain page may start part-of only, which file-pages writes, so it offers no link (D16: at is from a day
 	// page only); with from it takes it out of one.
-	if got := names(ana); got != "save-body,plan,tick,carry,promote,rename,set-cover,file-pages,tombstone-pages" {
+	if got := names(ana); got != "save-body,plan,tick,carry,schedule,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Errorf("a plain page offers %s", got)
 	}
 	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
@@ -677,7 +677,7 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Other", "body": "[[Typo]]"}))
 	current := apitest.Must(t)(c.Get(t.Context(), oldHref))
-	if current.Title != "Correct" || names(current) != "save-body,plan,tick,carry,promote,rename,set-cover,file-pages,tombstone-pages" {
+	if current.Title != "Correct" || names(current) != "save-body,plan,tick,carry,schedule,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Fatalf("renamed actions: %+v", current)
 	}
 	version := current.Properties.(map[string]any)["version"].(string)

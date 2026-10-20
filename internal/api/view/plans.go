@@ -182,3 +182,49 @@ func (v *view) PeriodViews() []siren.Link {
 	}
 	return nil
 }
+
+// plansGroup is the rows of the Plans page under one head. In a list by day the head is Title; in a list by page it is
+// the page of the rows (Page, a line of the group), and Title is empty.
+type plansGroup struct {
+	Title string
+	Page  map[string]any
+	Lines []any
+}
+
+// PlansGroups groups the rows of the Plans page. By day (order "day") there are four groups, in this order, each only
+// when it has rows: past its day, today, later, and no day. By page each page is a group, in the order of the rows,
+// which the API sorts by title. A group that the row limit cuts is drawn again, with its head, on the next page.
+func (v *view) PlansGroups() []plansGroup {
+	props, _ := v.Props.(map[string]any)
+	lines, _ := props["lines"].([]any)
+	if props["order"] == "page" {
+		var out []plansGroup
+		for _, l := range lines {
+			m, _ := l.(map[string]any)
+			if n := len(out); n > 0 && Num(out[n-1].Page["page_id"]) == Num(m["page_id"]) {
+				out[n-1].Lines = append(out[n-1].Lines, l)
+			} else {
+				out = append(out, plansGroup{Page: m, Lines: []any{l}})
+			}
+		}
+		return out
+	}
+	today, _ := props["today"].(string)
+	groups := []plansGroup{{Title: "Past its day"}, {Title: "Today"}, {Title: "Later"}, {Title: "No day"}}
+	for _, l := range lines {
+		m, _ := l.(map[string]any)
+		day := plannedDay(m)
+		i := 3
+		switch {
+		case day == "":
+		case day < today:
+			i = 0
+		case day == today:
+			i = 1
+		default:
+			i = 2
+		}
+		groups[i].Lines = append(groups[i].Lines, l)
+	}
+	return slices.DeleteFunc(groups, func(g plansGroup) bool { return len(g.Lines) == 0 })
+}

@@ -137,8 +137,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   else the icon of a person.
 - **Plan lines** ([plan 136](docs/plans/136-plan-lines-and-period-pages.md), [D29](docs/decisions/D29-plan-lines.md)).
   A plan is a list item of a page body whose text starts with a box, with tokens at its end:
-  `- [ ] Pay rent due:2026-11-01 every:month`. The file has no table for it. The actions `plan`, `tick` and `carry` write
-  the line, and a day, a month, a year and a period page (`2026-W43`, `2026-Q4`) list the lines they hold
+  `- [ ] Pay rent due:2026-11-01 every:month`. The file has no table for it. The actions `plan`, `tick`, `carry` and `schedule`
+  write the line, and a day, a month, a year and a period page (`2026-W43`, `2026-Q4`) list the lines they hold.
+  Plans (`GET /plans`, [plan 140](docs/plans/140-the-plans-page.md)) lists every open line, by its day or by its page
   ([the grammar](docs/contract/plan-lines.md)).
 - **A cover for every page** ([plan 127](docs/plans/127-a-cover-for-every-page.md)). A page's cover is the first live
   file with a preview that its body embeds (`![[Ana.jpg]]`); a day page's first photo is its cover with no action. A
@@ -447,6 +448,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
 | `tick` | `POST /pages/{id}/tick` | `do tick` | `tick` | a plan line where it is drawn: Done, Dropped, Reopen |
 | `carry` | `POST /pages/{id}/carry` | `do carry` | `carry` | a plan line where it is drawn: Carry |
+| `schedule` | `POST /pages/{id}/schedule` | `do schedule` | `schedule` | a plan line where it is drawn: Schedule. The one action that changes the `on:` and `due:` of a line in place |
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
 | `create-place` | `POST /places` | `do create-place` | `create_place` | Browse, Places: New place |
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
@@ -465,6 +467,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
 | `search` | `GET /search` | `do search`, `search` | `search` | the sidebar: Search (the search dialog) |
 | `browse` | `GET /browse` | `do browse` | `browse` | the sidebar: Browse |
+| `plans` | `GET /plans` | `do plans` | `plans` | the sidebar: Plans |
 | `find` | `GET /pages` | `do find`, `page` | `find` | a `[[wikilink]]` |
 | `open-day` | `GET /days/go` | `do open-day`, `day` | `open_day` | Calendar: Go to a day |
 | `random-page` | `GET /pages/random` | `do random-page` | `random_page` | Calendar: A random day; a Browse list: A random one |

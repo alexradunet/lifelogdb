@@ -1,0 +1,18 @@
+{{/* Plans (docs/plans/140-the-plans-page.md): every open plan line of every page in one list, by day or by page. By
+     day there are four groups, each only when it has rows: past its day, today, later, and no day. By page each page
+     is a group, its head a link to the page, and the row does not repeat its page. The rows are those of a day (Done,
+     Dropped, Carry, Dates). The plan form in the head makes a new line on any page. */}}
+{{define "plans"}}{{template "head" .}}{{$p := .Props}}{{$byPage := eq $p.order "page"}}
+<header class="page-head"><div class="what"><h1>Plans</h1>
+<p class="sub">{{count $p.total "open plan" "open plans"}}</p>
+<nav class="kinds chips" aria-label="Order"><a href="/plans"{{if not $byPage}} aria-current="page"{{end}}>By day</a><a href="/plans?order=page"{{if $byPage}} aria-current="page"{{end}}>By page</a></nav></div>
+<div class="tools">{{template "boxed" (form (.Action "plan") "autofocus" "text" "more" "on,due,every,from_done" "back" $.Here)}}</div></header>
+<div class="sheet">
+<section class="group plan plans" aria-label="Open plans">
+{{range .PlansGroups}}{{with .Page}}<h3><a href="/pages/{{num .page_id}}">{{if .is_day_page}}{{$.Date .title}}{{else}}{{.title}}{{end}}</a></h3>{{else}}<h3>{{.Title}}</h3>{{end}}
+{{template "planlist" (dict "v" $ "lines" .Lines "own" (or .Page.title "") "to" (addDays $.Today 1))}}
+{{else}}<p class="empty">Nothing is planned.</p>{{end}}
+</section>
+</div>
+{{template "pager" .}}
+{{template "foot" .}}{{end}}

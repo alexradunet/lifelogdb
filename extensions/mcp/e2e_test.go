@@ -107,7 +107,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	for _, tool := range listed.Tools {
 		tools[tool.Name] = true
 	}
-	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry"} {
+	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans"} {
 		if !tools[name] {
 			t.Errorf("no tool %q", name)
 		}
@@ -133,6 +133,20 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	ticked, _ := call(t, ctx, session, "tick", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 3, "text": "Pay rent", "outcome": "done", "done": "2031-05-20"})
 	if res, _ := ticked.Result.(map[string]any); res["appended"] != "- [ ] Pay rent due:2031-06-20 every:month from:done" {
 		t.Errorf("tick answered the result %v, want the next line", ticked.Result)
+	}
+
+	// schedule changes the dates of the next line that the tick added (line 5), and plans lists it with the new day.
+	call(t, ctx, session, "schedule", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 5, "text": "Pay rent", "on": "2031-06-01", "due": "2031-06-03"})
+	list, _ := call(t, ctx, session, "plans", map[string]any{})
+	lines, _ := props(t, list)["lines"].([]any)
+	found := false
+	for _, l := range lines {
+		if l, _ := l.(map[string]any); l["title"] == "2031-05-20" && l["text"] == "Pay rent" && l["on"] == "2031-06-01" && l["due"] == "2031-06-03" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("plans lists %v, want the scheduled line Pay rent", lines)
 	}
 
 	// save_body with a stale version is the error entity stale_version.

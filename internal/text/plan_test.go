@@ -145,6 +145,40 @@ func TestReopenVectors(t *testing.T) {
 	}
 }
 
+type scheduleVector struct {
+	Body, Text, On, Due, After, Error string
+	Line                              int
+}
+
+func TestScheduleVectors(t *testing.T) {
+	var vs []scheduleVector
+	vectorsAfter(t, "<!-- schedule-vectors -->", &vs)
+	if len(vs) < 12 {
+		t.Fatalf("only %d schedule vectors, want at least 12", len(vs))
+	}
+	for _, v := range vs {
+		got, err := Schedule(v.Body, v.Line, v.Text, v.On, v.Due)
+		switch v.Error {
+		case "":
+			if err != nil || got != v.After {
+				t.Errorf("Schedule(%q, %d, on %q, due %q) = %q, %v, want %q", v.Body, v.Line, v.On, v.Due, got, err, v.After)
+			}
+		case "changed":
+			if !errors.Is(err, ErrLineChanged) {
+				t.Errorf("Schedule(%q, %d) error = %v, want changed", v.Body, v.Line, err)
+			}
+		case "malformed":
+			if !errors.Is(err, ErrMalformed) {
+				t.Errorf("Schedule(%q, %d) error = %v, want malformed", v.Body, v.Line, err)
+			}
+		default: // invalid: any other refusal
+			if err == nil || errors.Is(err, ErrLineChanged) || errors.Is(err, ErrMalformed) || got != "" {
+				t.Errorf("Schedule(%q, %d, on %q, due %q) = %q, %v, want an invalid refusal", v.Body, v.Line, v.On, v.Due, got, err)
+			}
+		}
+	}
+}
+
 // A tick, then a reopen, gives back the body for every open line of the plan-line vectors, with the next line of
 // a repeat appended as the writer does.
 func TestReopenUndoesTick(t *testing.T) {

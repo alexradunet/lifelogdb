@@ -721,6 +721,14 @@ func exercise(ctx context.Context, s *core.Store, f *fixture, samples int, repor
 		if want := min(f.manifest.OpenOnLastDay, 200); len(planned) != want {
 			return fmt.Errorf("planned day got %d lines want %d", len(planned), want)
 		}
+		var open []core.PlanItem
+		var openTotal int
+		if err := record(report, "open_plans", func() error { var e error; open, openTotal, e = s.OpenLines(ctx, false, 200, 0); return e }); err != nil {
+			return err
+		}
+		if openTotal != f.manifest.PlanLines || len(open) != min(f.manifest.PlanLines, 200) {
+			return fmt.Errorf("open plans got %d of %d want %d", len(open), openTotal, f.manifest.PlanLines)
+		}
 		if err := record(report, "plan_lines_week", func() error { var e error; week, e = s.PlanLines(ctx, monday, lastDay); return e }); err != nil {
 			return err
 		}

@@ -535,6 +535,23 @@ func Carry(body string, line int, text, on string) (newBody, copy string, err er
 	return body[:p.BoxAt+1] + ">" + body[p.BoxAt+2:], copy, nil
 }
 
+// Schedule changes the dates of an open line where it is. on and due are the new values of on: and due:; an empty
+// value removes that token. The bullet, the blanks and the box stay. The line after the box is written again by Line,
+// so the tokens go after the words, in its key order. Line refuses what a new line cannot be (every: with no day).
+func Schedule(body string, line int, text, on, due string) (newBody string, err error) {
+	p, err := openLine(body, line, text)
+	if err != nil {
+		return "", err
+	}
+	rest, err := Line(p.Text, on, due, p.Every, p.FromDone)
+	if err != nil {
+		return "", err
+	}
+	// Line starts "- [ ] ": its tail is what follows the box of any bullet.
+	start := lineStarts([]byte(body))[p.Line-1]
+	return body[:p.BoxAt] + "[ ] " + rest[len("- [ ] "):] + body[start+len(p.Raw):], nil
+}
+
 // Reopened is the result of Reopen.
 type Reopened struct {
 	Body        string // the new body

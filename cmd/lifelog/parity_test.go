@@ -297,6 +297,8 @@ func parityRows() []parityRow {
 		{"tick of a changed line", rowTickStale},
 		{"carry to a day plans the copy on it", rowCarryToADay},
 		{"plan on a week the year does not have", rowPlanWeek53},
+		{"plans lists a line with no day", rowPlansListsALine},
+		{"schedule changes the dates of a line", rowScheduleChangesDates},
 	}
 	for _, kind := range []string{"page", "person", "place", "metric", "file"} {
 		rows = append(rows, parityRow{"rename a " + kind, func(x *parityRun) { rowRename(x, kind) }})
@@ -1125,6 +1127,45 @@ func rowCarryToADay(x *parityRun) {
 	if x.body("Errands") != "- [>] Buy bread due:2031-05-30" || x.body("2031-05-22") != "- [ ] Buy bread on:2031-05-22 due:2031-05-30" {
 		x.t.Errorf("after the carry: %q and %q", x.body("Errands"), x.body("2031-05-22"))
 	}
+}
+
+// plansLine is the open line of the list plans whose page is title and whose text is words, or nil.
+func (x *parityRun) plansLine(title, words string) map[string]any {
+	x.t.Helper()
+	lines, _ := props(x.t, x.ok("plans", map[string]string{"limit": "500"}))["lines"].([]any)
+	for _, l := range lines {
+		if l, _ := l.(map[string]any); l["title"] == title && l["text"] == words {
+			return l
+		}
+	}
+	return nil
+}
+
+// plans lists an open line that has no day, with the title of its page.
+func rowPlansListsALine(x *parityRun) {
+	x.planned(map[string]string{"page": "Project", "text": "Call"})
+	l := x.plansLine("Project", "Call")
+	if l == nil || l["on"] != nil || l["due"] != nil || l["box"] != " " {
+		x.t.Errorf("plans lists %v for the line Call of Project", l)
+	}
+	x.refused("plans", map[string]string{"order": "week"}, http.StatusUnprocessableEntity, "invalid")
+}
+
+// schedule puts a day on a line and plans lists it with that day; an empty value removes a date; a changed line is 409.
+func rowScheduleChangesDates(x *parityRun) {
+	page, line := x.planned(map[string]string{"page": "Project", "text": "Call"})
+	e := x.ok("schedule", map[string]string{"id": page, "line": line, "text": "Call", "on": "2031-06-02", "due": "2031-06-05"})
+	if res, _ := e.Result.(map[string]any); fmt.Sprint(res["line"]) != line || res["written"] != "- [ ] Call on:2031-06-02 due:2031-06-05" {
+		x.t.Errorf("the result of schedule: %v", res)
+	}
+	if l := x.plansLine("Project", "Call"); l == nil || l["on"] != "2031-06-02" || l["due"] != "2031-06-05" {
+		x.t.Errorf("plans lists %v after the schedule", l)
+	}
+	x.ok("schedule", map[string]string{"id": page, "line": line, "text": "Call", "on": "", "due": "2031-06-09"})
+	if x.body("Project") != "- [ ] Call due:2031-06-09" {
+		x.t.Errorf("Project after the second schedule: %q", x.body("Project"))
+	}
+	x.refused("schedule", map[string]string{"id": page, "line": line, "text": "Cal", "on": "2031-06-02"}, http.StatusConflict, "stale_version")
 }
 
 // 2031 has 52 ISO weeks: the file refuses week 53, by the name of its constraint (D30), and writes nothing.

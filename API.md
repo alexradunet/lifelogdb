@@ -78,7 +78,7 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 ### root
 
 `GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered with the
-[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse` (`/browse`), `people`
+[day](#day) of today instead, the page of today. Links: `today`, `days`, `browse` (`/browse`), `plans` (`/plans`), `people`
 (`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
 `year` (this year). Actions: `capture` (for today), `search`,
@@ -225,6 +225,30 @@ offer no action.
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
 
+### plans
+
+`GET /plans`, the catalog action `plans` ([plan 140](docs/plans/140-the-plans-page.md)): the open plan lines of every
+live page, with or without a day. A done, dropped or carried line, a malformed line and a line in a tombstoned page are
+not listed. The query, all optional:
+
+- `order`: `day` (the default) or `page`. By `day`, the lines go by the day they are planned for (`on`, else `due`),
+  then by the title of the page and the line, and the lines with no day come last. By `page`, they go by the title of
+  the page, in any case, then by the line.
+- `limit` and `offset`: as every list; 200 and 0 by default.
+
+Any other value of `order` is 422. Links: `self` (with `order` when it is `page`), `index`, and `next` and `prev` as in
+[pages of a list](#pages-of-a-list). Actions: `plan` (with `page` today), and `tick`, `carry` and `schedule` for the
+lines (the `{id}` of their href is the `page_id` of the line).
+
+| property | type | meaning |
+|---|---|---|
+| `today` | day | this machine's local day |
+| `order` | string | `day` or `page` |
+| `total` | integer | how many open lines there are, whatever `limit` and `offset` select |
+| `limit` | integer | the rows asked for |
+| `offset` | integer | the rows skipped |
+| `lines[]` | list | the open lines of this page of rows, each as in [plan line](#plan-line) |
+
 ### search
 
 `GET /search?q=&order=&kind=&limit=&offset=` (FTS5 syntax over titles and bodies; an empty `q` is the search page). Hits are also embedded as `item` links. Action: `search`.
@@ -265,7 +289,7 @@ action `search` and no properties: a browser draws it as the page to search from
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar), `week` (its week),
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `plan` (with `page` this day), `tick` and `carry` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover` and `save-body`
+`record`, `plan` (with `page` this day), `tick`, `carry` and `schedule` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover` and `save-body`
 of it (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
@@ -319,7 +343,7 @@ The **reading** shape (`readings[]` here and in a series; a measurement's own pr
 `GET /months/{YYYY-MM}` (a value that is not a month is 422): the calendar of a month. Links: `prev`, `next` (the
 months before and after; 0000-01 has no `prev` and 9999-12 no `next`), the zoom (as `/days` has it): `days`
 (`/days`), `week`, `month` and `year` (of today when today is in the month, else of its first day; a period that has no page
-is absent), `page` (the page of the month, titled `YYYY-MM`, once it exists), `index`. Embedded: a `day` link to each day of the month. The day view holds the rest of a day. Actions: `plan` with `page` this month (`YYYY-MM`), `tick` and `carry` as on [a week](#week), and `save-body` once the page of the month exists.
+is absent), `page` (the page of the month, titled `YYYY-MM`, once it exists), `index`. Embedded: a `day` link to each day of the month. The day view holds the rest of a day. Actions: `plan` with `page` this month (`YYYY-MM`), `tick`, `carry` and `schedule` as on [a week](#week), and `save-body` once the page of the month exists.
 
 | property | type | meaning |
 |---|---|---|
@@ -346,7 +370,7 @@ is absent), `page` (the page of the month, titled `YYYY-MM`, once it exists), `i
 `GET /weeks/{YYYY-Www}` (`/weeks/today` redirects; a value that is not an ISO 8601 week, or a week its year does not
 have, is 422): the seven days of a week, Monday first, and its plan lines. Links: `prev`, `next` (the weeks before
 and after), the zoom (as `/days` has it, with `week`), `page` (the page of the week, titled `2026-W43`, once it
-exists), `index`. Embedded: a `day` link to each day. Actions: `plan` with `page` this week, `tick` and `carry` for
+exists), `index`. Embedded: a `day` link to each day. Actions: `plan` with `page` this week, `tick`, `carry` and `schedule` for
 the lines of any page (the `{id}` of their href is the `page_id` of the line), and `save-body` once the page of the
 week exists.
 
@@ -377,7 +401,7 @@ week exists.
 `GET /years/{YYYY}` (a value that is not a year, 0001 to 9999, is 422): the twelve months of a year. Links: `prev`,
 `next` (the years before and after; 0001 has no `prev` and 9999 no `next`), the zoom (as `/days` has it): `days`
 (`/days`), `week`, `month` and `year` (of today when today is in the year, else of 1 January), `page` (the page of the year, once it exists), `index`. Embedded: a `month`
-link to each month. Actions: `plan` with `page` this year, `tick` and `carry` as on [a week](#week), and `save-body` once the page of the year exists.
+link to each month. Actions: `plan` with `page` this year, `tick`, `carry` and `schedule` as on [a week](#week), and `save-body` once the page of the year exists.
 
 | property | type | meaning |
 |---|---|---|
@@ -417,7 +441,7 @@ files a page and, with `from`, takes it out; a plain page, whose only kind would
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-cover` (a live page that is not a file), `tombstone-pages` with `ids` this page, or
-`revive` alone on a deleted page. A live page offers `plan` (with `page` its title), `tick` and `carry` (see [plan line](#plan-line)). The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
+`revive` alone on a deleted page. A live page offers `plan` (with `page` its title), `tick`, `carry` and `schedule` (see [plan line](#plan-line)). The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. A page's cover is the first live file with a preview that its body embeds; a file page has none, its own
 picture stands for it. A browser draws the cover as a square at the head of the margin, with one link to the
 [picker](#cover-choice), and leaves that embed out of the body.
@@ -472,14 +496,17 @@ that is not a kept picture, or a file page, is refused (422).
 ### plan line
 
 A plan is a line of a page body ([plan lines](docs/contract/plan-lines.md)). A list that holds lines (`planned[]` of a
-day, `lines[]` of a month, a year and a period page) has this shape. Three actions write a line, each with a
+day, `lines[]` of a month, a year and a period page) has this shape. Four actions write a line, each with a
 [result](#result-of-plan). `plan` (`POST /pages/plan`) adds an open line to the end of the page titled `page`, made on
 the first write: a page, a day (`YYYY-MM-DD` or `today`), or a period (`2026-W43`, `2026-10`, `2026-Q4`, `2026`). `tick`
 (`POST /pages/{id}/tick`) closes the open line `line` of a page as `done` or `dropped`, or, with the outcome `reopen`,
 opens a done or dropped line again: it removes the `done:` token, and the next line of a repeat that the tick added, when
 that line is still there. A `reopen` takes no `done` field (422), and a carried line is refused (422): drop its copy. `carry`
-(`POST /pages/{id}/carry`) moves it to the page titled `to`. `tick` and `carry` send the `text` of the line as the
-client read it: a line that changed since is 409 `stale_version`. A file refuses a period that does not exist, such as
+(`POST /pages/{id}/carry`) moves it to the page titled `to`. `schedule`
+(`POST /pages/{id}/schedule`) changes the dates of an open line where it is: a date it leaves out stays, an empty `on` or
+`due` removes that date, and a day replaces it or adds it. A schedule with neither field is 422. It keeps the words, `every` and `from_done`, and a line left with `every` and no day is 422.
+`tick`, `carry` and `schedule` send the `text` of the line as the client read it: a line that changed since is 409
+`stale_version`. A file refuses a period that does not exist, such as
 `2027-W53`, with 422 and the name of the constraint.
 
 | property | type | meaning |
@@ -813,3 +840,13 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `line` | integer | the line that was carried, in the page of the path |
 | `to_id` | integer | the page that took the copy |
 | `to_line` | integer | the number of the copy in its body |
+
+### result of schedule
+
+| property | type | meaning |
+|---|---|---|
+| `line` | integer | the line that was changed |
+| `page_id` | integer | the page of the line |
+| `written` | string | the line as it is now |
+| `on` | string | its `on` day now; `""` when it has none |
+| `due` | string | its `due` day now; `""` when it has none |

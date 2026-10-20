@@ -1,6 +1,6 @@
 package api
 
-// The plan lines (docs/contract/plan-lines.md, D29): the three actions that write one, and the lines that a day, a
+// The plan lines (docs/contract/plan-lines.md, D29): the four actions that write one, and the lines that a day, a
 // period and a period page show. The file does not know a plan; core reads it from the bodies.
 
 import (
@@ -9,7 +9,9 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"lifelog/internal/api/siren"
@@ -112,10 +114,10 @@ func planAction(page string) siren.Action {
 	return action("plan", nil, map[string]any{"page": page})
 }
 
-// lineActions are the tick and the carry of a view that lists lines of any page (the day, a week, a month, a year). They
+// lineActions are the tick, the carry and the schedule of a view that lists lines of any page (the day, a week, a month, a year). They
 // stay templated: the line names its page, and the browser fills the address (view.LineAction).
 func lineActions() []siren.Action {
-	return []siren.Action{templated(specOf("tick")), templated(specOf("carry"))}
+	return []siren.Action{templated(specOf("tick")), templated(specOf("carry")), templated(specOf("schedule"))}
 }
 
 // lineNumber is the field line: a whole number of 1 or more.
@@ -184,4 +186,75 @@ func (h *server) carry(r *http.Request, act spec, src string) (*siren.Entity, er
 		return nil, err
 	}
 	return withResult(h.pageEntity(r.Context(), id))(map[string]any{"line": res.Line, "to_id": res.ToID, "to_line": res.ToLine})
+}
+
+func (h *server) schedule(r *http.Request, act spec, src string) (*siren.Entity, error) {
+	id, v, err := idForm(r, act)
+	if err != nil {
+		return nil, err
+	}
+	line, err := lineNumber(v)
+	if err != nil {
+		return nil, err
+	}
+	// A date the client leaves out stays; an empty one is removed (core.Store.Schedule).
+	day := func(name string) *string {
+		if !v.Has(name) {
+			return nil
+		}
+		d := h.dayNamed(v.Get(name))
+		return &d
+	}
+	res, err := h.s.Schedule(r.Context(), src, id, line, v.Get("text"), day("on"), day("due"))
+	if err != nil {
+		return nil, err
+	}
+	return withResult(h.pageEntity(r.Context(), id))(map[string]any{"line": res.Line, "page_id": id, "written": res.Written, "on": res.On, "due": res.Due})
+}
+
+// planOrders are the values of the field order of plans: by day, or by page.
+var planOrders = []string{"day", "page"}
+
+// plansProps are the properties of the plans answer. Total counts every open line, whatever the page of rows.
+type plansProps struct {
+	pageProps
+	Today string     `json:"today"`
+	Order string     `json:"order"`
+	Total int        `json:"total"`
+	Lines []planLine `json:"lines"`
+}
+
+// plans is GET /plans and the action plans: the open lines of every live page, by day or by page.
+func (h *server) plans(r *http.Request, act spec, _ string) (*siren.Entity, error) {
+	v, err := fieldsOf(r, act)
+	if err != nil {
+		return nil, err
+	}
+	order := v.Get("order")
+	if order == "" {
+		order = planOrders[0]
+	}
+	if !slices.Contains(planOrders, order) {
+		return nil, core.Invalid("order must be one of %s", strings.Join(planOrders, ", "))
+	}
+	limit, offset, err := pageOf(r, plannedLimit)
+	if err != nil {
+		return nil, err
+	}
+	items, total, err := h.s.OpenLines(r.Context(), order == "page", limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	self := "/plans"
+	if order != planOrders[0] {
+		q.Set("order", order)
+		self += "?" + q.Encode()
+	}
+	e := &siren.Entity{Class: []string{"plans"}, Title: "Plans",
+		Links:   []siren.Link{link("self", self, "Plans"), link("index", "/", "Home")},
+		Actions: append([]siren.Action{planAction(h.s.Today())}, lineActions()...)}
+	props := pageLinks(e, offset+len(items) < total, "/plans", q, limit, offset)
+	e.Properties = plansProps{pageProps: props, Today: h.s.Today(), Order: order, Total: total, Lines: planLinesOf(items)}
+	return e, nil
 }

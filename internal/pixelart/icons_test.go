@@ -12,7 +12,7 @@ func TestIconsAreDeterministicAndHaveTheirSize(t *testing.T) {
 	if !bytes.Equal(a.Pix, b.Pix) {
 		t.Error("two calls of Icons draw different pixels")
 	}
-	if got, want := a.Bounds(), image.Rect(0, 0, 224, 16); got != want {
+	if got, want := a.Bounds(), image.Rect(0, 0, 240, 16); got != want {
 		t.Errorf("bounds %v, want %v", got, want)
 	}
 }
@@ -53,7 +53,7 @@ func TestEachIconIsATenByTenGlyphInOneColour(t *testing.T) {
 
 func TestIconCellIsTheIndexOfTheName(t *testing.T) {
 	for want, name := range []string{"today", "calendar", "browse", "people", "places", "files", "metrics", "search",
-		"new", "more", "image", "video", "audio", "week"} {
+		"new", "more", "image", "video", "audio", "week", "plans"} {
 		if got, ok := IconCell(name); !ok || got != want {
 			t.Errorf("IconCell(%q) = %d, %v; want %d", name, got, ok, want)
 		}
@@ -70,5 +70,10 @@ func TestIconCellIsTheIndexOfTheName(t *testing.T) {
 	}
 	if img.NRGBAAt(more*CellSize+9, 5) != iconInk || img.NRGBAAt(more*CellSize+2, 5).A != 0 {
 		t.Error("the dots of more are not where their drawing puts them")
+	}
+	// The tick of plans: its lowest point is at (3,4), and (3,3) is empty.
+	plans, _ := IconCell("plans")
+	if img.NRGBAAt(plans*CellSize+3, 4) != iconInk || img.NRGBAAt(plans*CellSize+3, 3).A != 0 {
+		t.Error("the tick of plans is not where its drawing puts it")
 	}
 }

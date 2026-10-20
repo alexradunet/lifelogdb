@@ -138,7 +138,13 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 	line, hasLine := take("line")
 	if _, ok := take("written"); ok {
 		pageID, _ := take("page_id")
-		say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
+		if on, scheduled := take("on"); scheduled {
+			// schedule has no Undo: the new dates are in the sentence, and a second schedule puts the old ones back.
+			due, _ := take("due")
+			say(`Scheduled line %s of <a href="/pages/%s">its page</a>: %s.`, Num(line), Num(pageID), esc(c.datesWords(fmt.Sprint(on), fmt.Sprint(due))))
+		} else {
+			say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
+		}
 	} else if outcome, ok := take("outcome"); ok {
 		pageID, _ := take("page_id")
 		words, hasWords := take("text")
@@ -194,6 +200,22 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 		out = append(out, resultLine{HTML: template.HTML(sb.String())})
 	}
 	return out
+}
+
+// datesWords says the dates of a plan line in plain words: "on Tue 21 Oct, due Fri 24 Oct", or "no dates". An empty
+// day is none.
+func (c clock) datesWords(on, due string) string {
+	var parts []string
+	if on != "" {
+		parts = append(parts, "on "+c.day(on))
+	}
+	if due != "" {
+		parts = append(parts, "due "+c.day(due))
+	}
+	if len(parts) == 0 {
+		return "no dates"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // stringList are the strings of a JSON list, in order.

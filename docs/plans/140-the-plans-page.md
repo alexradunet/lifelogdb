@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-20, `78b086a` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW: one read of the lines that already exist, one GET action, one view,
   and one write action on one line (`schedule`). No table, no column, no trigger.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Built and reviewed on 2026-10-20, on master; the deploy waits for the owner's word.
 - **Resolves:** the owner's request of 2026-10-20 (below). Builds on [plan 136](136-plan-lines-and-period-pages.md)
   (plan lines, D29) and the reopen of `78b086a`.
 
@@ -55,7 +55,7 @@ flowchart LR
 
 ## Part 1 — the contract and the record (main session)
 
-- `docs/issues/0088-every-open-plan-in-one-list.md` from the template: the owner's words of 2026-10-20 are the
+- `docs/issues/0088-open-plans-are-scattered-over-their-pages.md` from the template: the owner's words of 2026-10-20 are the
   incident; a line with no day is visible on its own page only, so the owner cannot see what is open across the
   pages.
 - Rewrite the three sentences above in place. Add no other rule.
@@ -139,7 +139,7 @@ flowchart LR
 | question | decision |
 |---|---|
 | the action | `schedule` "Schedule", `POST /pages/{id}/schedule`. Fields: path id, **line** (number), **text**, on (date), due (date). Both date fields are sent: an empty value removes that date, a value replaces it or adds it. A date goes through `dayNamed`, so the word today is a day |
-| which lines | an open line only (`[ ]`). A done, dropped or carried line, a malformed line, or a line that is not a plan line is 409 `stale_version`, as for `tick` and `carry` (the client read a line that is not there) |
+| which lines | an open line only (`[ ]`). A done, dropped or carried line, or a line that is not a plan line, is 409 `stale_version`, as for `tick` and `carry` (the client read a line that is not there); a malformed line is 422, as for `tick` |
 | what it keeps | the bullet and the indent before the box, the box, the words, `every:` and `from:done`. The line after the box is written again by `text.Line`, so the tokens go to the end in the key order of `Line`; the words keep their order |
 | the rules it can break | `every:` with neither `on:` nor `due:` left is refused by `text.Line` (422, the sentence of the contract). The writer adds no other rule |
 | a repeat | nothing more: the next date of a repeat counts from `due:`, else `on:`, at the tick. So it counts from the new date |
@@ -199,3 +199,39 @@ browser, `GET /plans`); `schedule` changes the dates of an open line on the four
 contract page; the contract sentence is rewritten in its three homes; the baseline, the static checks, the
 MCP tests and the shuffled run are green; `open_plans` is recorded; the owner has seen the screenshots. The deploy
 waits for the owner's word.
+
+## Results
+
+Run on 2026-10-20 on Linux (amd64, AMD EPYC 9645, 4 logical CPUs, go1.27.3, SQLite 3.53.4):
+`go run ./tools/lifescale -profile lifetime -seed 2075 -samples 5`. The fixture has 18,262 day pages and 3,009 open
+plan lines. The first `open_plans` call reads 200 rows of `OpenLines(ctx, false, 200, 0)` and checks `total` = 3,009.
+
+| read | median of 5 | range | allocations |
+|---|---|---|---|
+| `open_plans` | 50.5 ms | 47.7 to 57.2 ms | 257,041 |
+| `planned_day` (for comparison) | 49.2 ms | 48.1 to 55.6 ms | 257,042 |
+| `plan_lines_week` (for comparison) | 47.0 ms | 43.3 to 54.4 ms | 257,028 |
+| `day_view` (for comparison) | 0.53 ms | 0.50 to 0.63 ms | 318 |
+
+`open_plans` costs the same as `planned_day`, as the plan said: the scan of the 3,009 pages that hold a box is the
+cost, and the extra sort is below the noise. The page is not cut. The reopen trigger of a derived table
+([non-goals](../architecture/non-goals.md)) is not met by a read that takes 50 ms once for each opening of the page.
+
+### The build and the review
+
+Parts 2, 3 and 5, then Parts 4 and 6, were built by two Sonnet sub-agents in sequence; the main session wrote Part 1
+and reviewed each diff. One change came from that review: a date that a client leaves out stays, and only an empty
+value removes it, so `do schedule … due=D` through the CLI or an MCP tool does not remove `on:`. An adversarial review
+(a Fable sub-agent, with the real binary on a temporary file) found no blocker. The fixes of its findings:
+
+| finding | fix |
+|---|---|
+| the message after a schedule said "no dates" for a line nested two levels deep: the view read the written line alone, and alone it is an indented code block | the result of `schedule` carries `on` and `due`, and the view reads them; the result no longer repeats `text` |
+| a schedule with neither `on` nor `due` was written and answered as a change | 422 "a schedule needs on, due or both" in core, with its test |
+| the catalog said a malformed line is 409 | it says 422, as the code and the contract do |
+| the button said "Dates", the action "Schedule" | the button says "Schedule" |
+| the API test did not prove that a left-out date stays | it schedules a due alone, then an on alone, and reads the body after each |
+| this record named the issue file wrongly and kept TODO | corrected |
+
+Kept as they are: `prev` past the end of a list (as `/browse` has it), the bounds checked in the API and in core
+(the plan asked for both), and three parses of one body in `Schedule` (correct, and one body).

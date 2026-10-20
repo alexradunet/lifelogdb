@@ -2,7 +2,9 @@ package api_test
 
 import (
 	"fmt"
+	"lifelog/internal/client"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -120,5 +122,129 @@ func TestAPeriodPageShowsItsLinesAndAPlanIsRefusedWithReasons(t *testing.T) {
 	_, err := c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": "2027-W53", "text": "Never"})
 	if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "entities_period_exists") {
 		t.Errorf("plan on 2027-W53: %v, want 422 naming entities_period_exists", err)
+	}
+}
+
+// plansFor plans the lines of the TestPlans* tests: two on a project page and one on today. Today is fixedToday.
+func plansFor(t *testing.T) (*client.Client, http.Handler, *siren.Entity) {
+	t.Helper()
+	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	for _, l := range []map[string]string{
+		{"page": "Project", "text": "Call the bank"},
+		{"page": "Project", "text": "Pay rent", "due": "2031-05-10"},
+		{"page": "today", "text": "Walk", "on": "today"},
+	} {
+		apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "plan"), l))
+	}
+	return c, h, root
+}
+
+func TestPlansListsEveryOpenLineByDayAndByPage(t *testing.T) {
+	c, _, root := plansFor(t)
+	if apitest.Href(root, "plans") != "/plans" {
+		t.Errorf("the root links plans to %q", apitest.Href(root, "plans"))
+	}
+	byDay := apitest.Must(t)(c.Get(t.Context(), "/plans"))
+	if len(byDay.Class) != 1 || byDay.Class[0] != "plans" || apitest.Href(byDay, "self") != "/plans" {
+		t.Errorf("class %v, self %q", byDay.Class, apitest.Href(byDay, "self"))
+	}
+	p := props(byDay)
+	if p["order"] != "day" || p["today"] != fixedToday || fmt.Sprint(p["total"]) != "3" {
+		t.Errorf("properties %v", p)
+	}
+	// Past its day (10 May), today (14 May), then the line with no day.
+	if got, want := plannedTitles(t, byDay, "lines"), `Project:3:"Pay rent",`+fixedToday+`:1:"Walk",Project:1:"Call the bank"`; got != want {
+		t.Errorf("by day: %s, want %s", got, want)
+	}
+	for _, name := range []string{"plan", "tick", "carry", "schedule"} {
+		apitest.Action(t, byDay, name)
+	}
+	if got := apitest.Action(t, byDay, "plan"); fmt.Sprint(got.Fields[0].Value) != fixedToday {
+		t.Errorf("plan is filled with page %v, want today", got.Fields[0].Value)
+	}
+
+	byPage := apitest.Must(t)(c.Get(t.Context(), "/plans?order=page"))
+	if props(byPage)["order"] != "page" || apitest.Href(byPage, "self") != "/plans?order=page" {
+		t.Errorf("order %v, self %q", props(byPage)["order"], apitest.Href(byPage, "self"))
+	}
+	if got, want := plannedTitles(t, byPage, "lines"), fixedToday+`:1:"Walk",Project:1:"Call the bank",Project:3:"Pay rent"`; got != want {
+		t.Errorf("by page: %s, want %s", got, want)
+	}
+}
+
+func TestPlansRefusesWhatItDoesNotTake(t *testing.T) {
+	c, _, _ := plansFor(t)
+	for _, path := range []string{"/plans?order=week", "/plans?limit=0", "/plans?limit=501", "/plans?offset=-1"} {
+		if _, err := c.Get(t.Context(), path); apitest.Status(err) != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %v, want 422", path, err)
+		}
+	}
+}
+
+func TestPlansPagesLinkNextAndPrev(t *testing.T) {
+	c, _, _ := plansFor(t)
+	first := apitest.Must(t)(c.Get(t.Context(), "/plans?limit=1"))
+	if fmt.Sprint(props(first)["total"]) != "3" || len(props(first)["lines"].([]any)) != 1 || apitest.Href(first, "prev") != "" || apitest.Href(first, "next") != "/plans?limit=1&offset=1" {
+		t.Errorf("first page: props %v, prev %q, next %q", props(first), apitest.Href(first, "prev"), apitest.Href(first, "next"))
+	}
+	last := apitest.Must(t)(c.Get(t.Context(), "/plans?limit=1&offset=2&order=page"))
+	if apitest.Href(last, "next") != "" || apitest.Href(last, "prev") != "/plans?limit=1&offset=1&order=page" {
+		t.Errorf("last page: prev %q, next %q", apitest.Href(last, "prev"), apitest.Href(last, "next"))
+	}
+}
+
+func TestScheduleChangesTheDatesAndAnswersBackToABrowser(t *testing.T) {
+	c, h, _ := plansFor(t)
+	plans := apitest.Must(t)(c.Get(t.Context(), "/plans"))
+	lines := props(plans)["lines"].([]any)
+	rent := lines[0].(map[string]any) // Pay rent, due 10 May
+	id := fmt.Sprint(rent["page_id"])
+	e, err := c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/pages/"+id)), "schedule"),
+		map[string]string{"line": "3", "text": "Pay rent", "on": "today", "due": ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := e.Result.(map[string]any); res["written"] != "- [ ] Pay rent on:"+fixedToday || res["on"] != fixedToday || res["due"] != "" {
+		t.Errorf("result %v", res)
+	}
+	// A date the client leaves out stays: a due alone keeps the on, then an on alone keeps the due.
+	for _, step := range []struct {
+		fields map[string]string
+		body   string
+	}{
+		{map[string]string{"due": "2031-06-05"}, "- [ ] Call the bank\n\n- [ ] Pay rent on:" + fixedToday + " due:2031-06-05"},
+		{map[string]string{"on": "2031-06-01"}, "- [ ] Call the bank\n\n- [ ] Pay rent on:2031-06-01 due:2031-06-05"},
+	} {
+		step.fields["line"], step.fields["text"] = "3", "Pay rent"
+		if _, err := c.Do(t.Context(), apitest.Action(t, e, "schedule"), step.fields); err != nil {
+			t.Fatalf("%v: %v", step.fields, err)
+		}
+		if body := props(apitest.Must(t)(c.Get(t.Context(), "/pages/"+id)))["body"]; body != step.body {
+			t.Errorf("after %v: body %q, want %q", step.fields, body, step.body)
+		}
+	}
+	if _, err := c.Do(t.Context(), apitest.Action(t, e, "schedule"), map[string]string{"line": "3", "text": "Pay rent"}); apitest.Status(err) != http.StatusUnprocessableEntity {
+		t.Errorf("no date: %v, want 422", err)
+	}
+	if _, err := c.Do(t.Context(), apitest.Action(t, e, "schedule"), map[string]string{"line": "3", "text": "Pay rent x", "on": "2031-06-02"}); apitest.Status(err) != http.StatusConflict {
+		t.Errorf("a changed line: %v, want 409", err)
+	}
+	// A browser form answers with a redirect to the page it came from, as tick and carry do.
+	for _, form := range []struct {
+		path  string
+		extra url.Values
+	}{{"/pages/" + id + "/schedule", url.Values{"on": {"2031-06-03"}}}, {"/pages/" + id + "/tick", url.Values{"outcome": {"dropped"}}}} {
+		v := url.Values{"line": {"3"}, "text": {"Pay rent"}, "back": {"/plans"}}
+		for k, vs := range form.extra {
+			v[k] = vs
+		}
+		if rec := submit(h, form.path, v, ""); rec.Code != http.StatusSeeOther || !feedbackLocation(rec.Header().Get("Location"), "/plans") {
+			t.Errorf("%s with back=/plans: %d, Location %q", form.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	// Both forms were written, not refused: the line has the new on and is dropped.
+	if body := props(apitest.Must(t)(c.Get(t.Context(), "/pages/"+id)))["body"]; body != "- [ ] Call the bank\n\n- [-] Pay rent on:2031-06-03 due:2031-06-05" {
+		t.Errorf("after the forms: body %q", body)
 	}
 }

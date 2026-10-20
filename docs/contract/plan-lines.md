@@ -74,7 +74,7 @@ A day is a `lifelog_meta.days` value: `YYYY-MM-DD` with `date(x) IS x` ([exact t
 `2026-02-30` are not days.
 
 A line is **planned** on its `on:` day. If it has no `on:`, it is planned on its `due:` day. A line with neither
-is planned on no day. A reader lists it only on its own page. An imported vault keeps its lines where they are
+is planned on no day. A reader lists it on its own page and in the list of every open line, never under a day. An imported vault keeps its lines where they are
 ([imports](imports.md)).
 
 ## A malformed line
@@ -177,6 +177,23 @@ text the client sends.
 
 The writer reads the new body of the target back and finds the copy as a plan line. If it cannot (the body ended
 inside an open fence or an HTML block), it refuses the write and changes nothing.
+
+## The change of the dates of a line
+
+A schedule changes the dates of an open line where it is. The line must be open and not malformed, with a non-empty
+text equal to the text the client sends. A date the client leaves out stays as it is, an empty value removes that date,
+and any other value replaces it or adds it. A schedule that sends no date is refused. The vectors send both dates.
+
+1. The bullet or the number, the blanks before the box, and the box stay as they are.
+2. The words of the line stay in their order. `every:` and `from:done` stay. The tokens go after the words, in the
+   order of a new line: `on:`, `due:`, `every:`, `from:done`. The rest of the body stays.
+3. A new line has the rules of a new line. A schedule that leaves `every:` with neither `on:` nor `due:` is refused,
+   and the body stays as it was.
+
+A done, dropped or carried line, a line that is not a plan line and a line inside a quote are the stale answer, as in
+a tick. A malformed line is refused as in a tick. The vectors give the `body`, the `line` and the `text`, the `on` and
+the `due` sent, and the `after` body. `error` is empty, or `changed` (the stale answer), `malformed` or `invalid`
+(a date that is not a day, or an `every:` with no day left). After an error, `after` is empty.
 
 ## What enforces it
 
@@ -365,5 +382,38 @@ The reopen of a closed line. `after` is the whole body after the reopen. Each on
   {"body": "- [x] Call the bank done:2026-13-45", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "malformed"},
   {"body": "- [-] Call the bank done:2026-10-22", "line": 1, "text": "Call the bank", "after": "", "removed": "", "error": "malformed"},
   {"body": "- [x] on:2026-10-22", "line": 1, "text": "", "after": "", "removed": "", "error": "malformed"}
+]
+```
+
+The change of the dates of a line. Each one is checked by hand.
+
+<!-- schedule-vectors -->
+
+```json
+[
+  {"body": "- [ ] Call the bank", "line": 1, "text": "Call the bank", "on": "2026-10-22", "due": "", "after": "- [ ] Call the bank on:2026-10-22", "error": ""},
+  {"body": "- [ ] Call the bank", "line": 1, "text": "Call the bank", "on": "", "due": "2026-10-22", "after": "- [ ] Call the bank due:2026-10-22", "error": ""},
+  {"body": "- [ ] Call the bank on:2026-10-22", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "- [ ] Call the bank on:2026-10-25", "error": ""},
+  {"body": "- [ ] Call the bank due:2026-10-22", "line": 1, "text": "Call the bank", "on": "", "due": "2026-11-01", "after": "- [ ] Call the bank due:2026-11-01", "error": ""},
+  {"body": "- [ ] Call the bank on:2026-10-22 due:2026-10-30", "line": 1, "text": "Call the bank", "on": "", "due": "2026-10-30", "after": "- [ ] Call the bank due:2026-10-30", "error": ""},
+  {"body": "- [ ] Call the bank on:2026-10-22 due:2026-10-30", "line": 1, "text": "Call the bank", "on": "2026-10-22", "due": "", "after": "- [ ] Call the bank on:2026-10-22", "error": ""},
+  {"body": "- [ ] Call the bank on:2026-10-22 due:2026-10-30", "line": 1, "text": "Call the bank", "on": "", "due": "", "after": "- [ ] Call the bank", "error": ""},
+  {"body": "- [ ] Water plants on:2026-10-22 every:week", "line": 1, "text": "Water plants", "on": "", "due": "", "after": "", "error": "invalid"},
+  {"body": "- one\n  - [ ] nested on:2026-10-22", "line": 2, "text": "nested", "on": "2026-10-23", "due": "", "after": "- one\n  - [ ] nested on:2026-10-23", "error": ""},
+  {"body": "* [ ] A star bullet", "line": 1, "text": "A star bullet", "on": "2026-10-22", "due": "", "after": "* [ ] A star bullet on:2026-10-22", "error": ""},
+  {"body": "1. [ ] first", "line": 1, "text": "first", "on": "2026-10-22", "due": "", "after": "1. [ ] first on:2026-10-22", "error": ""},
+  {"body": "- [ ] Call on:2026-10-22 the bank", "line": 1, "text": "Call the bank", "on": "2026-10-22", "due": "", "after": "- [ ] Call the bank on:2026-10-22", "error": ""},
+  {"body": "- [ ] Water plants due:2026-10-22 every:week from:done", "line": 1, "text": "Water plants", "on": "", "due": "2026-11-05", "after": "- [ ] Water plants due:2026-11-05 every:week from:done", "error": ""},
+  {"body": "- [ ] Rent every:month due:2026-11-01 on:2026-10-28", "line": 1, "text": "Rent", "on": "2026-10-29", "due": "2026-11-02", "after": "- [ ] Rent on:2026-10-29 due:2026-11-02 every:month", "error": ""},
+  {"body": "Week\r\n\r\n- [ ] Call the bank\r\n- [ ] Other\r\n", "line": 3, "text": "Call the bank", "on": "2026-10-22", "due": "", "after": "Week\r\n\r\n- [ ] Call the bank on:2026-10-22\r\n- [ ] Other\r\n", "error": ""},
+  {"body": "- [x] Call the bank done:2026-10-22", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "- [-] Call the bank", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "- [>] Call the bank on:2026-10-22", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "- [ ] Call the bank", "line": 1, "text": "Call the bakn", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "Call the bank", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "> - [ ] Call the bank", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"},
+  {"body": "- [ ] Call the bank on:2026-13-45", "line": 1, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "malformed"},
+  {"body": "- [ ] Call the bank", "line": 1, "text": "Call the bank", "on": "2026-2-3", "due": "", "after": "", "error": "invalid"},
+  {"body": "- [ ] Call the bank", "line": 2, "text": "Call the bank", "on": "2026-10-25", "due": "", "after": "", "error": "changed"}
 ]
 ```

@@ -115,7 +115,7 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
-			link("browse", siren.BrowseHref(nil), "Browse"), link("people", siren.BrowseKindHref("person"), "People"),
+			link("browse", siren.BrowseHref(nil), "Browse"), link("plans", "/plans", "Plans"), link("people", siren.BrowseKindHref("person"), "People"),
 			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", siren.GhostsHref(), "Ghost pages"), link("actions", "/actions", "All actions"),
 			link("calendar", siren.MonthHref(now), "Calendar"),

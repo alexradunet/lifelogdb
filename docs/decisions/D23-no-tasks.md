@@ -5,8 +5,9 @@
 - **Decision.** `life.db` keeps no `tasks` table, no occurrences and no reminders. A plan, a thing to do, a
   deadline or a repeating duty is a plan line: a list item of a page body that starts with a box. The grammar is
   the page [plan lines](../contract/plan-lines.md) and the reason is [D29](D29-plan-lines.md). The actions `plan`,
-  `tick` and `carry` belong to the writer, not to the file. An imported checkbox is a plan line like any other; with
-  no `on:` or `due:` it is listed only on its own page ([imports](../contract/imports.md)).
+  `tick`, `carry` and `schedule` belong to the writer, not to the file. An imported checkbox is a plan line like any
+  other; with no `on:` or `due:` it is listed on its own page and in the list of every open line, never under a day
+  ([imports](../contract/imports.md)).
 - **Why.** A table of tasks gives a plan two homes: the words of the page and the row. The answer to "what is
   planned" is read from the text, and it is stored once
   ([RFC 0022](../rfcs/0022-plan-lines-and-period-pages.md)). The history of the tasks and their removal is in

@@ -1,16 +1,17 @@
 {{/* planrow is a plan line in a list (docs/contract/plan-lines.md): its words, the page it is in (a day in words; left
      out when it is the page of the view itself), small badges for the days and the repeat, and for an open line the
-     tick (Done and Dropped, one button each, as outcome) and the carry in a box. A done or dropped line has one quiet
+     tick (Done and Dropped, one button each, as outcome), the carry in a box and the schedule in a box. A done or dropped line has one quiet
      button, Reopen, which undoes a tick made by mistake. A carried line shows its box as a glyph. The tick and the carry post to the line's page, with the line and its words as the view read them:
      a line that changed since is a 409. It takes v (the view), l (the line), own (the title of the page of the view)
      and to (the day the carry offers). */}}
 {{define "planrow"}}{{$v := .v}}{{$own := .own}}{{$to := .to}}{{with .l}}{{$open := eq .box " "}}<li class="plan-row{{if not $open}} closed{{end}}">
 <span class="text">{{if not $open}}{{box .box}} {{end}}{{if .text}}{{inline .text}}{{else}}(no words){{end}}</span>
-<span class="meta">{{if not (and .is_day_page (eq .title $own))}}<a href="/pages/{{num .page_id}}">{{if .is_day_page}}{{$v.Date .title}}{{else}}{{.title}}{{end}}</a>{{end}}
-{{- with .on}} <span class="badge">on {{shortDay .}}</span>{{end}}{{with .due}} <span class="badge">due {{shortDay .}}</span>{{end}}{{with .done}} <span class="badge">done {{shortDay .}}</span>{{end}}{{with .every}} <span class="badge">every {{.}}</span>{{end}}</span>
+<span class="meta">{{if ne .title $own}}<a href="/pages/{{num .page_id}}">{{if .is_day_page}}{{$v.Date .title}}{{else}}{{.title}}{{end}}</a>{{end}}
+{{- with .on}} <span class="badge">on {{shortDay .}}</span>{{end}}{{with .due}} <span class="badge{{if and $open (lt . $v.Today)}} danger{{end}}">due {{shortDay .}}</span>{{end}}{{with .done}} <span class="badge">done {{shortDay .}}</span>{{end}}{{with .every}} <span class="badge">every {{.}}</span>{{end}}</span>
 {{- if $open}}{{with $v.LineAction "tick" .}}
 <div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>
-{{template "boxed" (form ($v.LineAction "carry" $.l "to" $to) "hide" "line,text" "back" $v.Here)}}</div>{{end}}
+{{template "boxed" (form ($v.LineAction "carry" $.l "to" $to) "hide" "line,text" "back" $v.Here)}}
+{{template "boxed" (form ($v.LineAction "schedule" $.l "on" (or $.l.on "") "due" (or $.l.due "")) "button" "Schedule" "hide" "line,text" "back" $v.Here)}}</div>{{end}}
 {{- else if and .text (or (eq .box "x") (eq .box "-"))}}{{with $v.LineAction "tick" .}}
 <div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="reopen" class="small quiet">Reopen</button></form></div>{{end}}{{end}}</li>{{end}}{{end}}
 

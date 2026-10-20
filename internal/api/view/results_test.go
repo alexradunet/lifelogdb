@@ -39,6 +39,12 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
 		{"plan", map[string]any{"page_id": 4.0, "line": 3.0, "written": "- [ ] Call"}, `Planned on line 3 of <a href="/pages/4">its page</a>.`},
+		// A line nested two levels deep is an indented code block when it is read alone: the message reads the dates of
+		// the result, not the written line.
+		{"schedule of a nested line", map[string]any{"page_id": 4.0, "line": 3.0, "written": "    - [ ] deep on:2026-10-13", "on": "2026-10-13", "due": ""},
+			`Scheduled line 3 of <a href="/pages/4">its page</a>: on Tue 13 Oct.`},
+		{"schedule with no date left", map[string]any{"page_id": 4.0, "line": 3.0, "written": "- [ ] Call", "on": "", "due": ""},
+			`Scheduled line 3 of <a href="/pages/4">its page</a>: no dates.`},
 		{"tick done", map[string]any{"line": 2.0, "outcome": "done"}, "Done."},
 		{"tick dropped", map[string]any{"line": 2.0, "outcome": "dropped"}, "Dropped."},
 		{"tick with the next line", map[string]any{"line": 2.0, "outcome": "done", "appended": "- [ ] Pay due:2026-12-01", "appended_line": 5.0}, "Done. | The next one is line 5."},

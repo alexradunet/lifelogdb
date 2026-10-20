@@ -132,7 +132,7 @@ func Num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
-	"days": "stream", "search": "search", "browse": "browse",
+	"days": "stream", "search": "search", "browse": "browse", "plans": "plans",
 
 	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "year": "year", "week": "week",
