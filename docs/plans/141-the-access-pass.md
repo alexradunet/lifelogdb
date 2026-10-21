@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-20, `39d37fc` (master).
 - **Priority:** P2. **Effort:** L. **Risk:** LOW to MEDIUM: links, labels, view changes and words; one new action
   (`edit-person`), two new fields on `promote`, and one new catalog field (`Hint`). No table, no column, no trigger.
-- **Status:** IN REVIEW (owner). Built on 2026-10-20 and 21, on master; the deploy waits for the owner's word.
+- **Status:** IN REVIEW (owner). Built on 2026-10-20 and 21, on master; live since 2026-10-21 on the owner's word.
 - **Resolves:** the owner's request of 2026-10-20 (below), after `39d37fc` (New metric easy to find, a page made a
   metric).
 
@@ -142,7 +142,7 @@ not apply (it is not an owner action).
 - **The Deleted row of the tree** counts the deleted things of every kind, as its list does, and says so ("Deleted,
   every kind"); a count for each kind was not built.
 - **Autofocus:** the entry of a day has no autofocus on any screen. The app has no script, and a narrow-screen-only
-  autofocus needs one. The owner decides.
+  autofocus needs one. The owner's word (2026-10-21): keep it so, with no script; the access key c reaches the entry.
 - **Found on the way, not built:** New page with the title of a period (`2026-W43`) is refused by
   `entities_period_page` (a period page has no day); a period page is made by a write to it (plan, save-body).
 
