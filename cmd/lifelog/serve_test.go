@@ -132,6 +132,7 @@ func TestPublicOptionsRefusals(t *testing.T) {
 		{"missing token file", opts{serve: serveFlags{public: true, tokenFile: filepath.Join(t.TempDir(), "none")}}, "token file"},
 		{"one tls flag", opts{serve: serveFlags{public: true, tokenFile: good, tlsCert: "c"}}, "go together"},
 		{"bad origin", opts{serve: serveFlags{public: true, tokenFile: good, allowOrigins: []string{"a.example"}}}, "origin"},
+		{"origin in upper case", opts{serve: serveFlags{public: true, tokenFile: good, allowOrigins: []string{"http://App.Example"}}}, "lower case"},
 		{"non-loopback address without --public", opts{serve: serveFlags{addr: "0.0.0.0:0"}}, "serve address"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -274,3 +274,23 @@ func TestScheduleChangesTheDatesAndAnswersBackToABrowser(t *testing.T) {
 		t.Errorf("after the forms: body %q", body)
 	}
 }
+
+// TestATickOfACRLFBodyKeepsItsLineEnds: the body goes through the form fields and the JSON of the page, and a tick
+// edits its line only. The body that GET /pages/{id} gives back keeps every "\r\n".
+func TestATickOfACRLFBodyKeepsItsLineEnds(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	made := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"),
+		map[string]string{"title": "Week", "body": "Week\r\n\r\n- [ ] a on:2026-10-20\r\n- [ ] b\r\n"}))
+	ticked := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, made, "tick"),
+		map[string]string{"line": "3", "text": "a", "outcome": "done", "done": "2026-10-21"}))
+	want := "Week\r\n\r\n- [x] a on:2026-10-20 done:2026-10-21\r\n- [ ] b\r\n"
+	if got := props(ticked)["body"]; got != want {
+		t.Errorf("the body after the tick: %q, want %q", got, want)
+	}
+	page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(ticked, "self")))
+	got, _ := props(page)["body"].(string)
+	if got != want || !strings.Contains(got, "\r\n") || !strings.Contains(got, "done:") {
+		t.Errorf("the page read back: %q, want %q", got, want)
+	}
+}

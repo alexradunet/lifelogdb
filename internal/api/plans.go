@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -90,13 +89,11 @@ func periodWindow(period, key string) (from, through string, ok bool) {
 		first = time.Date(year, time.Month(3*n-2), 1, 0, 0, 0, 0, time.UTC)
 		last = first.AddDate(0, 3, -1)
 	case "week":
-		if _, err := fmt.Sscanf(key, "%d-W%d", &year, &n); err != nil {
+		monday, ok := weekOf(key)
+		if !ok {
 			return "", "", false
 		}
-		// Week 1 is the week of January 4 (ISO 8601); a week starts on a Monday.
-		jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
-		first = jan4.AddDate(0, 0, -((int(jan4.Weekday())+6)%7)+(n-1)*7)
-		last = first.AddDate(0, 0, 6)
+		first, last = monday, monday.AddDate(0, 0, 6)
 	default:
 		return "", "", false
 	}
@@ -129,7 +126,7 @@ func lineActions() []siren.Action {
 
 // lineNumber is the field line: a whole number of 1 or more.
 func lineNumber(v url.Values) (int, error) {
-	f, err := strconv.ParseFloat(v.Get("line"), 64)
+	f, err := parseDecimal(v.Get("line"))
 	if err != nil || f != math.Trunc(f) || f < 1 || f > math.MaxInt32 {
 		return 0, core.Invalid("line %q is not a line number: 1 or more", v.Get("line"))
 	}

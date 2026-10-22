@@ -1,12 +1,16 @@
 package api
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api/siren"
+	"lifelog/internal/core"
 )
 
 // TestPaged: paged trims a read of limit+1 rows to the page, gives back limit and offset as properties, and adds the
@@ -78,5 +82,83 @@ func TestReadPage(t *testing.T) {
 	failed := func(int, int) ([]int, error) { return nil, fmt.Errorf("no read") }
 	if _, _, err := readPage(e, "/days", nil, 2, 4, failed); err == nil || len(e.Links) != 0 {
 		t.Errorf("a failed read: err %v, links %v", err, e.Links)
+	}
+}
+
+// TestNumberReadsADecimalNumberOnly: a field is a number in decimal: a sign, digits with one point, an exponent. The
+// float syntax of Go also takes hexadecimal numbers, underscores, NaN and Inf. A client never means these.
+func TestNumberReadsADecimalNumberOnly(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want float64
+	}{{"70", 70}, {"-0.5", -0.5}, {"+2", 2}, {".5", 0.5}, {"4.", 4}, {"1e3", 1000}, {"1.5E-2", 0.015}, {"0", 0}} {
+		got, err := number(url.Values{"v": {tc.in}}, "v")
+		if err != nil || got == nil || *got != tc.want {
+			t.Errorf("number(%q)=%v,%v want %v", tc.in, got, err, tc.want)
+		}
+	}
+	for _, in := range []string{"NaN", "nan", "Inf", "-Inf", "+Inf", "Infinity", "0x1p-2", "0x10", "1_000", " 4", "4 ", "4,5", "\u0664\u0665", "1.8e308", ".", "e3", "1e", "1e+", "--1", "1.2.3", "-", "+"} {
+		got, err := number(url.Values{"v": {in}}, "v")
+		if err == nil || got != nil || err.Error() != fmt.Sprintf("v %q is not a number", in) {
+			t.Errorf("number(%q)=%v,%v want the refusal", in, got, err)
+		}
+	}
+	if got, err := number(url.Values{}, "v"); got != nil || err != nil {
+		t.Errorf("an empty field: %v,%v want nil,nil", got, err)
+	}
+}
+
+// TestLineNumberIsAWholeNumberOfOneOrMore: the field line takes the decimal numbers of number, and refuses what is not
+// a whole line.
+func TestLineNumberIsAWholeNumberOfOneOrMore(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want int
+	}{{"1", 1}, {"1.0", 1}, {"1e0", 1}, {"12", 12}, {"2147483647", 2147483647}} {
+		if got, err := lineNumber(url.Values{"line": {tc.in}}); err != nil || got != tc.want {
+			t.Errorf("lineNumber(%q)=%d,%v want %d", tc.in, got, err, tc.want)
+		}
+	}
+	for _, in := range []string{"", "0", "-1", "1.5", "NaN", "Inf", "2147483648", "x", "1_0", "0x1", " 1"} {
+		if got, err := lineNumber(url.Values{"line": {in}}); err == nil {
+			t.Errorf("lineNumber(%q)=%d accepted", in, got)
+		}
+	}
+}
+
+// TestFormReadsAJSONBodyAsFormFields: a JSON body becomes the fields of a form. A string is itself, a number, a
+// boolean, an array and an object are their JSON text, null is absent, the last value of a duplicate key is kept,
+// and only one object is a body.
+func TestFormReadsAJSONBodyAsFormFields(t *testing.T) {
+	read := func(body string) (url.Values, error) {
+		r := httptest.NewRequest("POST", "/x", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		return form(r)
+	}
+	for _, tc := range []struct{ body, key, want string }{
+		{`{"a":1}`, "a", "1"}, {`{"a":1e21}`, "a", "1e+21"}, {`{"a":true}`, "a", "true"}, {`{"a":[1,2]}`, "a", "[1,2]"},
+		{`{"a":{"b":1}}`, "a", `{"b":1}`}, {`{"a":"x","a":"y"}`, "a", "y"},
+	} {
+		v, err := read(tc.body)
+		if err != nil || v.Get(tc.key) != tc.want {
+			t.Errorf("%s: %q,%v want %q", tc.body, v.Get(tc.key), err, tc.want)
+		}
+	}
+	if v, err := read(`{"a":null}`); err != nil || v.Has("a") {
+		t.Errorf("null: %v,%v want no field", v, err)
+	}
+	v, _ := read(`{"a":true}`)
+	if _, err := flag(v, "a"); err == nil || !strings.Contains(err.Error(), "must be 0 or 1") {
+		t.Errorf("flag of true: %v want a refusal", err)
+	}
+	if _, err := read(`{"a":"x"}{"b":"y"}`); err == nil || !strings.Contains(err.Error(), "expected one JSON object") {
+		t.Errorf("two objects: %v", err)
+	}
+	for _, body := range []string{`[1]`, `"s"`, `null`} {
+		_, err := read(body)
+		var e *core.Error
+		if !errors.As(err, &e) || e.Status != http.StatusBadRequest {
+			t.Errorf("%s: %v want status 400", body, err)
+		}
 	}
 }

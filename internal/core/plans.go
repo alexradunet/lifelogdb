@@ -149,10 +149,12 @@ func (s *Store) OpenLines(ctx context.Context, byPage bool, limit, offset int) (
 		return nil, 0, Invalid("limit must be 1 to %d and offset 0 or more", MaxListLimit)
 	}
 	items, err = s.planItems(ctx, func(p text.Plan) (string, bool) {
+		// A tick of an empty text is refused (plan lines contract), so the list of what can be ticked leaves it out.
+		open := p.Box == ' ' && p.Bad == "" && p.Text != ""
 		if byPage {
-			return "", p.Box == ' ' && p.Bad == ""
+			return "", open
 		}
-		return plannedDay(p), p.Box == ' ' && p.Bad == ""
+		return plannedDay(p), open
 	})
 	if err != nil {
 		return nil, 0, err

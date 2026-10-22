@@ -59,6 +59,11 @@ func PublicAddress(authority string) (string, error) {
 
 // CheckOrigin admits an exact browser origin: a scheme, a host, an optional port and nothing else.
 func CheckOrigin(origin string) error {
+	// A browser sends its origin in lower case, and the guard compares the text as it is: an origin with an upper-case
+	// letter in its scheme or its host would never match, so it is refused first, with the reason.
+	if origin != strings.ToLower(origin) {
+		return fmt.Errorf("origin %q: a browser sends its origin in lower case, so write the scheme and the host in lower case", origin)
+	}
 	u, err := url.Parse(origin)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Opaque != "" || u.User != nil ||
 		u.Path != "" || u.RawQuery != "" || u.Fragment != "" || origin != u.Scheme+"://"+u.Host {

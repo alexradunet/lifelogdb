@@ -21,7 +21,7 @@ func TestPeriodWindowIsTheFirstAndTheLastDayOfAPeriod(t *testing.T) {
 			t.Errorf("%s %s: %s to %s (%v), want %s to %s", tc.period, tc.key, from, through, ok, tc.from, tc.through)
 		}
 	}
-	for _, tc := range []struct{ period, key string }{{"", "2026"}, {"week", "x"}, {"month", "2026"}, {"day", "2026-10-19"}} {
+	for _, tc := range []struct{ period, key string }{{"", "2026"}, {"week", "x"}, {"week", "2026-W54"}, {"week", "2027-W53"}, {"week", "2026-W00"}, {"month", "2026"}, {"day", "2026-10-19"}} {
 		if from, through, ok := periodWindow(tc.period, tc.key); ok {
 			t.Errorf("%s %s: %s to %s, want no window", tc.period, tc.key, from, through)
 		}

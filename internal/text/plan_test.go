@@ -3,6 +3,8 @@ package text
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -345,6 +347,9 @@ func FuzzPlans(f *testing.F) {
 	} {
 		f.Add(s)
 	}
+	for _, c := range edgeCases {
+		f.Add(c.body)
+	}
 	f.Fuzz(func(t *testing.T, body string) {
 		for _, p := range Plans(body) {
 			if p.Bad != "" || p.Text == "" {
@@ -371,5 +376,223 @@ func TestPlansOfALongBody(t *testing.T) {
 	body := strings.Repeat("- [ ] a\n", n)
 	if got := len(Plans(body)); got != n {
 		t.Fatalf("got %d plans, want %d", got, n)
+	}
+}
+
+// edgeCase is one body of the edges of the grammar. An empty tick, next or schedule is not checked.
+type edgeCase struct {
+	name     string
+	body     string
+	plans    int    // the number of plan lines
+	text, on string // of the first plan line
+	bad      string
+	tick     string // the body after Tick of line 1 as done on 2026-03-15
+	next     string // the line that the tick appends
+	schedule string // the body after Schedule of line 1 to on:2026-05-05
+	rangeErr bool   // Tick is refused by range and Schedule is accepted
+}
+
+const (
+	edgeDone = "2026-03-15"
+	edgeOn   = "2026-05-05"
+)
+
+var edgeCases = []edgeCase{
+	{name: "ordered item", body: "1. [ ] ordered", plans: 1, text: "ordered",
+		tick: "1. [x] ordered done:2026-03-15", schedule: "1. [ ] ordered on:2026-05-05"},
+	{name: "tab after the bullet", body: "- [ ]\ttabbed", plans: 0},
+	{name: "two blanks before the box", body: "-  [ ] two spaces", plans: 1, text: "two spaces",
+		tick: "-  [x] two spaces done:2026-03-15"},
+	{name: "two blanks after the box", body: "- [ ]  two spaces after", plans: 1, text: "two spaces after",
+		tick: "- [x]  two spaces after done:2026-03-15", schedule: "- [ ] two spaces after on:2026-05-05"},
+	{name: "no-break space joins its word", body: "- [ ] a\u00a0on:2026-01-01", plans: 1, text: "a\u00a0on:2026-01-01"},
+	{name: "blank at the end", body: "- [ ] a on:2026-01-01 ", plans: 1, text: "a", on: "2026-01-01",
+		tick: "- [x] a on:2026-01-01 done:2026-03-15 ", schedule: "- [ ] a on:2026-05-05"},
+	{name: "lazy continuation", body: "- [ ] a\n  continuation on:2026-01-01", plans: 1, text: "a",
+		tick: "- [x] a done:2026-03-15\n  continuation on:2026-01-01"},
+	{name: "month end", body: "- [ ] a on:2026-01-31 every:month", plans: 1, text: "a", on: "2026-01-31",
+		tick: "- [x] a on:2026-01-31 every:month done:2026-03-15", next: "- [ ] a on:2026-02-28 every:month-31"},
+	{name: "distance of on from due", body: "- [ ] a due:2026-01-10 on:2026-01-12 every:week", plans: 1, text: "a",
+		on: "2026-01-12", tick: "- [x] a due:2026-01-10 on:2026-01-12 every:week done:2026-03-15",
+		next: "- [ ] a on:2026-01-19 due:2026-01-17 every:week"},
+	{name: "count out of range", body: "- [ ] a on:2026-01-01 every:9999999999-days", plans: 1, text: "a",
+		on: "2026-01-01", rangeErr: true},
+	{name: "date out of range", body: "- [ ] a on:9999-12-31 every:day", plans: 1, text: "a",
+		on: "9999-12-31", rangeErr: true},
+	{name: "upper case key", body: "- [ ] a ON:2026-01-01", plans: 1, text: "a ON:2026-01-01"},
+	{name: "on twice", body: "- [ ] a on:2026-01-01 on:2026-01-02", plans: 1, text: "a", bad: "on:2026-01-02"},
+	{name: "from twice", body: "- [ ] a on:2026-01-01 every:day from:done from:done", plans: 1, text: "a", bad: "from:done"},
+	{name: "every without a day", body: "- [ ] a every:day", plans: 1, text: "a", bad: "every:day"},
+}
+
+func TestPlansAtTheEdgesOfTheGrammar(t *testing.T) {
+	for _, c := range edgeCases {
+		t.Run(c.name, func(t *testing.T) {
+			ps := Plans(c.body)
+			if len(ps) != c.plans {
+				t.Fatalf("%d plan lines, want %d", len(ps), c.plans)
+			}
+			if c.plans == 0 {
+				return
+			}
+			p := ps[0]
+			if p.Box != ' ' || p.Line != 1 || p.Text != c.text || p.On != c.on || p.Bad != c.bad {
+				t.Fatalf("got box %q line %d text %q on %q bad %q, want text %q on %q bad %q",
+					p.Box, p.Line, p.Text, p.On, p.Bad, c.text, c.on, c.bad)
+			}
+			if c.bad != "" {
+				return
+			}
+			ticked, next, err := Tick(c.body, 1, p.Text, 'x', edgeDone)
+			if c.rangeErr {
+				if err == nil || !strings.Contains(err.Error(), "the next date is outside 0000-01-01 to 9999-12-31") {
+					t.Errorf("Tick error = %v, want the range error", err)
+				}
+				if _, err := Schedule(c.body, 1, p.Text, edgeOn, ""); err != nil {
+					t.Errorf("Schedule refused: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Tick: %v", err)
+			}
+			if c.tick != "" && ticked != c.tick {
+				t.Errorf("Tick body = %q, want %q", ticked, c.tick)
+			}
+			if next != c.next {
+				t.Errorf("Tick appended = %q, want %q", next, c.next)
+			}
+			if c.schedule != "" {
+				got, err := Schedule(c.body, 1, p.Text, edgeOn, "")
+				if err != nil || got != c.schedule {
+					t.Errorf("Schedule = %q, %v, want %q", got, err, c.schedule)
+				}
+			}
+			if c.tick == "" {
+				return
+			}
+			if next != "" {
+				ticked += "\n\n" + next
+			}
+			back, err := Reopen(ticked, 1, p.Text)
+			if err != nil || back.Body != c.body || back.Removed != next {
+				t.Errorf("Reopen = %q removed %q, %v, want %q removed %q", back.Body, back.Removed, err, c.body, next)
+			}
+		})
+	}
+}
+
+func TestAnUpperCaseKeyIsAWordForLine(t *testing.T) {
+	line, err := Line("a ON:2026-01-01", "", "", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := Plans(line)
+	if len(ps) != 1 || ps[0].Text != "a ON:2026-01-01" || ps[0].Bad != "" {
+		t.Fatalf("Line %q reads back as %+v", line, ps)
+	}
+}
+
+// bodyLines are the lines of the generator. A multi-line entry is one unit with its own breaks.
+var bodyLines = []string{
+	"- [ ] a", "- [ ] b on:2026-03-01", "- [ ] c due:2026-03-10", "- [ ] d on:2026-03-01 due:2026-03-04",
+	"- [ ] e on:2026-03-01 every:day", "- [ ] f on:2026-01-31 every:month", "- [ ] g on:2026-03-02 every:week from:done",
+	"- [ ] h due:2026-03-10 on:2026-03-12 every:week", "  - [ ] nested on:2026-03-05", "1. [ ] ordered",
+	"- [x] done a done:2026-02-01", "- [-] dropped", "- [>] carried", "plain text", "> - [ ] quoted",
+	"```\n- [ ] fenced\n```", "", "", "- [ ] bad on:2026-03-01 on:2026-03-02", "- [ ]",
+}
+
+var lineEnds = []string{"\n", "\r\n", "\r"}
+
+func randomBody(rng *rand.Rand) string {
+	var b strings.Builder
+	for n := 1 + rng.Intn(6); n > 0; n-- {
+		b.WriteString(bodyLines[rng.Intn(len(bodyLines))])
+		if n > 1 || rng.Intn(2) == 0 {
+			b.WriteString(lineEnds[rng.Intn(len(lineEnds))])
+		}
+	}
+	return b.String()
+}
+
+// splitLines cuts a body at lineStarts, so that LF, CRLF and CR each end a line once.
+func splitLines(body string) []string {
+	starts := lineStarts([]byte(body))
+	out := make([]string, len(starts))
+	for i, s := range starts {
+		end := len(body)
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		}
+		out[i] = body[s:end]
+	}
+	return out
+}
+
+// checkEveryWrite checks Tick with Reopen, Schedule and Carry on one open line. It returns the problem, or "".
+func checkEveryWrite(body string, p Plan) string {
+	ticked, next, err := Tick(body, p.Line, p.Text, 'x', "2026-03-15")
+	if err != nil {
+		return fmt.Sprintf("Tick: %v", err)
+	}
+	if next != "" {
+		ticked += "\n\n" + next
+	}
+	back, err := Reopen(ticked, p.Line, p.Text)
+	if err != nil || back.Body != body {
+		return fmt.Sprintf("Reopen of %q gave %q, %v", ticked, back.Body, err)
+	}
+
+	scheduled, err := Schedule(body, p.Line, p.Text, "2026-05-05", "")
+	if err != nil {
+		return fmt.Sprintf("Schedule: %v", err)
+	}
+	before, after := splitLines(body), splitLines(scheduled)
+	if len(before) != len(after) {
+		return fmt.Sprintf("Schedule gave %q: %d lines, want %d", scheduled, len(after), len(before))
+	}
+	for i := range before {
+		if i != p.Line-1 && before[i] != after[i] {
+			return fmt.Sprintf("Schedule changed line %d: %q to %q", i+1, before[i], after[i])
+		}
+	}
+
+	carried, _, err := Carry(body, p.Line, p.Text, "")
+	if err != nil {
+		return fmt.Sprintf("Carry: %v", err)
+	}
+	changed := 0
+	if len(carried) != len(body) {
+		return fmt.Sprintf("Carry gave %q: another length", carried)
+	}
+	for i := range body {
+		if body[i] != carried[i] {
+			changed++
+		}
+	}
+	if changed != 1 {
+		return fmt.Sprintf("Carry changed %d bytes: %q", changed, carried)
+	}
+	return ""
+}
+
+func TestEveryWriteOnARandomBodyChangesItsLineOnly(t *testing.T) {
+	const seed = 142
+	rng := rand.New(rand.NewSource(seed))
+	checked := 0
+	for i := 0; i < 400; i++ {
+		body := randomBody(rng)
+		for _, p := range Plans(body) {
+			if p.Box != ' ' || p.Bad != "" || p.Text == "" {
+				continue
+			}
+			if problem := checkEveryWrite(body, p); problem != "" {
+				t.Errorf("seed %d, body %q, line %d: %s", seed, body, p.Line, problem)
+			}
+			checked++
+		}
+	}
+	if checked < 200 {
+		t.Fatalf("only %d open lines checked", checked)
 	}
 }

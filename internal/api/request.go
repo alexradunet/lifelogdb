@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 
 	"lifelog/internal/api/siren"
@@ -140,17 +141,29 @@ func idForm(r *http.Request, act spec) (int64, url.Values, error) {
 // idParam is the path parameter of an action on the resource with this id.
 func idParam(id int64) map[string]string { return map[string]string{"id": strconv.FormatInt(id, 10)} }
 
-// number is a field's value as a number, nil when the field is empty.
+// decimal is a number in decimal: a sign, digits with at most one point, an exponent. The float syntax of Go also
+// takes hexadecimal numbers (0x1p-2), underscores (1_000), NaN and Inf. A client never means these, so they are refused.
+var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
+
+// number is a field's value as a decimal number, nil when the field is empty.
 func number(v url.Values, name string) (*float64, error) {
 	s := v.Get(name)
 	if s == "" {
 		return nil, nil
 	}
-	f, err := strconv.ParseFloat(s, 64)
+	f, err := parseDecimal(s)
 	if err != nil {
 		return nil, core.Invalid("%s %q is not a number", name, s)
 	}
 	return &f, nil
+}
+
+// parseDecimal reads s as a float64. It refuses what is not a decimal number, and a value that does not fit.
+func parseDecimal(s string) (float64, error) {
+	if !decimal.MatchString(s) {
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.ParseFloat(s, 64)
 }
 
 // flag is a 0/1 field: false when it is empty.

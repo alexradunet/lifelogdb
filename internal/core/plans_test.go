@@ -3,9 +3,12 @@ package core
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"lifelog/internal/text"
 )
 
 // planStore is a store whose today is 2026-10-19.
@@ -428,6 +431,11 @@ func openStore(t *testing.T) *Store {
 	if err := setBody(t, s, m.PageID, "- [x] done1 done:2026-10-01\n\n- [-] dropped1\n\n- [>] carried1\n\n- [ ] bad on:2026-10-18 on:2026-10-19\n\n> - [ ] quoted\n\n- [ ] kept on:2026-10-20"); err != nil {
 		t.Fatal(err)
 	}
+	// A box with no words, and a box with a token and no words: a tick of an empty text is refused.
+	b := mustPlan(t, s, "Boxes", "temp", "", "", "", false)
+	if err := setBody(t, s, b.PageID, "- [ ]\n\n- [ ] on:2026-10-21"); err != nil {
+		t.Fatal(err)
+	}
 	g := mustPlan(t, s, "Gone", "gone", "2026-10-18", "", "", false)
 	if err := s.Tombstone(ctx, "cli", g.PageID); err != nil {
 		t.Fatal(err)
@@ -472,6 +480,20 @@ func TestOpenLinesLeavesOutWhatCannotBeTicked(t *testing.T) {
 	for _, no := range []string{"done1", "dropped1", "carried1", "bad", "quoted", "gone"} {
 		if strings.Contains(got, ":"+no) {
 			t.Errorf("the list holds %q: %s", no, got)
+		}
+	}
+	for _, byPage := range []bool{false, true} {
+		items, total, err := s.OpenLines(ctx, byPage, 500, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != 8 || len(items) != 8 {
+			t.Errorf("byPage %v: total %d, %d items, want 8", byPage, total, len(items))
+		}
+		for _, it := range items {
+			if it.Text == "" {
+				t.Errorf("byPage %v: the list holds a line with no text: %+v", byPage, it)
+			}
 		}
 	}
 }
@@ -600,5 +622,74 @@ func TestScheduleRefusals(t *testing.T) {
 	}
 	if bodyOf(t, s, r.PageID) != before {
 		t.Error("a refused schedule changed the body")
+	}
+}
+
+// TestPlanWritesKeepTheLineEndsOfABody: a tick, a schedule and a carry change the bytes of their line only, so the
+// CRLF ends of every other line stay. A new line is added with "\n\n". Each write advances the revision by one. The
+// expected bodies are written by hand.
+func TestPlanWritesKeepTheLineEndsOfABody(t *testing.T) {
+	s := planStore(t)
+	r := mustPlan(t, s, "Week", "seed", "", "", "", false)
+	body := "Week\r\n\r\n- [ ] a on:2026-10-20\r\n- [ ] b\r\n"
+	if err := setBody(t, s, r.PageID, body); err != nil {
+		t.Fatal(err)
+	}
+	version := func() int {
+		t.Helper()
+		p, err := s.PageByID(ctx, r.PageID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err := strconv.Atoi(p.Version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	check := func(step, want string, before int) {
+		t.Helper()
+		if got := bodyOf(t, s, r.PageID); got != want {
+			t.Errorf("%s: body %q, want %q", step, got, want)
+		}
+		if got := version(); got != before+1 {
+			t.Errorf("%s: revision %d, want %d", step, got, before+1)
+		}
+	}
+
+	v := version()
+	if _, err := s.Tick(ctx, "cli", r.PageID, 3, "a", "done", "2026-10-21"); err != nil {
+		t.Fatal(err)
+	}
+	body = "Week\r\n\r\n- [x] a on:2026-10-20 done:2026-10-21\r\n- [ ] b\r\n"
+	check("tick", body, v)
+
+	v = version()
+	on := "2026-10-22"
+	if _, err := s.Schedule(ctx, "cli", r.PageID, 4, "b", &on, nil); err != nil {
+		t.Fatal(err)
+	}
+	body = "Week\r\n\r\n- [x] a on:2026-10-20 done:2026-10-21\r\n- [ ] b on:2026-10-22\r\n"
+	check("schedule", body, v)
+
+	v = version()
+	c, err := s.Carry(ctx, "cli", r.PageID, 4, "b", "2026-10-23")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = "Week\r\n\r\n- [x] a on:2026-10-20 done:2026-10-21\r\n- [>] b on:2026-10-22\r\n"
+	check("carry", body, v)
+	if got := bodyOf(t, s, c.ToID); got != "- [ ] b on:2026-10-23" {
+		t.Errorf("the day page after the carry: %q", got)
+	}
+
+	v = version()
+	if _, err := s.Plan(ctx, "cli", "Week", "c", "", "", "", false); err != nil {
+		t.Fatal(err)
+	}
+	body += "\n\n- [ ] c"
+	check("plan", body, v)
+	if n := len(text.Plans(body)); n != 3 {
+		t.Errorf("the body holds %d plan lines, want 3 (a, b and c)", n)
 	}
 }

@@ -246,7 +246,7 @@ func TestPublicOptionsValidation(t *testing.T) {
 			t.Errorf("token %q accepted", token)
 		}
 	}
-	for _, origin := range []string{"", "app.example", "https://app.example/", "https://app.example/path", "https://user@app.example", "ftp://app.example", "https://app.example?x=1", "https://"} {
+	for _, origin := range []string{"", "app.example", "https://app.example/", "https://app.example/path", "https://user@app.example", "ftp://app.example", "https://app.example?x=1", "https://", "http://App.Example", "HTTP://app.example"} {
 		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err == nil {
 			t.Errorf("origin %q accepted", origin)
 		}
@@ -255,6 +255,14 @@ func TestPublicOptionsValidation(t *testing.T) {
 		if _, err := api.Public(s, api.PublicOptions{Token: testToken, Origins: []string{origin}}); err != nil {
 			t.Errorf("origin %q refused: %v", origin, err)
 		}
+	}
+	for _, origin := range []string{"http://App.Example", "HTTP://app.example"} {
+		if err := api.CheckOrigin(origin); err == nil || !strings.Contains(err.Error(), "lower case") {
+			t.Errorf("origin %q: %v, want the words lower case", origin, err)
+		}
+	}
+	if err := api.CheckOrigin("http://app.example:7777"); err != nil {
+		t.Errorf("origin with a port refused: %v", err)
 	}
 	for _, tc := range []struct{ in, want string }{
 		{"0.0.0.0:7777", "0.0.0.0:7777"}, {"[::]:7777", "[::]:7777"}, {"192.0.2.1:0", "192.0.2.1:0"}, {"localhost:7777", "127.0.0.1:7777"}, {"127.0.0.1:7777", "127.0.0.1:7777"},
