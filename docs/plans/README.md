@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **144**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **145**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [144](144-one-view-for-a-metric.md) | One view for a metric: the readings and the page in one place, at /metrics/{name} | P1 | M | owner word 2026-10-23; `07380db` | IN PROGRESS |
 | [143](143-daily-metrics.md) | Daily metrics: a mark on a metric, and its box on every day page | P1 | M | owner word 2026-10-23; `543ba89` | IN REVIEW (owner) |
 | [142](142-the-fall-back-pass.md) | The fall-back pass: the parsers at their edges, and what a refusal must not write | P2 | M | owner word 2026-10-22; `1b3d78e` | IN REVIEW (owner) |
 | [141](141-the-access-pass.md) | The access pass: every task has a way in, every mistake has a way out | P2 | L | owner word 2026-10-20; `39d37fc` | IN REVIEW (owner) |
