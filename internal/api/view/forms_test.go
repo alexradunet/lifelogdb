@@ -252,6 +252,22 @@ func TestALabelGivesAFieldATitleOfItsForm(t *testing.T) {
 	}
 }
 
+// TestOptionsSetTheOptionsOfAField: the form option options gives a field its options in the order given, and a
+// required field with 1 and 0 is a row of two radios with the words Done and Not done. A name that is no field of the
+// action is ignored, as with hide.
+func TestOptionsSetTheOptionsOfAField(t *testing.T) {
+	a := registerMetric()
+	got := markup(drawForm(t, a, "options", "unit=1,0", "options", "nothing=a,b"))
+	for _, want := range []string{`<input type="radio" name="unit" value="1"`, `<input type="radio" name="unit" value="0"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the options option lacks %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "nothing") {
+		t.Errorf("an unknown field name reached the form:\n%s", got)
+	}
+}
+
 // TestAFormOfOneFieldDoesNotSayRequired: the word "required" is a mark for the field that a form needs among others.
 // In a form of one field, the field is the whole form, so the mark says nothing. The browser still refuses an empty
 // box (the attribute required stays). A form of two fields, or of one shown field and one folded, keeps the mark.

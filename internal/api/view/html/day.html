@@ -53,13 +53,15 @@
 <section class="group" aria-label="On this day">
 <div class="panel-head"><h2>On this day</h2></div>
 <ul class="plain">{{range .}}<li>{{template "dayentry" (dict "v" $ "e" .)}}</li>{{end}}</ul></section>{{end}}
-{{- if or $d.readings (.Action "record")}}
+{{- $tiles := $.ReadingTiles}}
+{{- if or $tiles (.Action "record")}}
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-{{with $.ReadingTiles}}<div class="readings">{{range .}}{{$metric := .Metric}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
-{{template "reading-link" (dict "id" .ID "value" .Value "unit" (unitWords .Unit))}}
-{{with .More}}<a class="meta" href="/metrics/{{pathesc $metric}}">and {{.}} more this day</a>{{end}}</div>{{end}}</div>{{end}}
-{{if not $d.readings}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
+{{with $tiles}}<div class="readings">{{range .}}{{$metric := .Metric}}{{$unit := .Unit}}<div class="reading-tile{{if .Daily}} daily{{end}}"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
+{{if .ID}}{{template "reading-link" (dict "id" .ID "value" .Value "unit" (unitWords .Unit))}}
+{{with .More}}<a class="meta" href="/metrics/{{pathesc $metric}}">and {{.}} more this day</a>{{end}}
+{{else}}{{with $.Action "record"}}{{if $unit}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "placeholder" (printf "value=%s" $unit))}}{{else}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "options" "value=1,0")}}{{end}}{{end}}{{end}}</div>{{end}}</div>{{end}}
+{{if not $tiles}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
 <div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz" "import_key" newKey "back" (or ($.Asked "back") $.Path) "placeholder" "metric=Pick a metric")}}</div>
 </section>{{end}}
 {{- $unlink := form (.Action "unlink") "hide" "kind"}}

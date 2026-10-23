@@ -308,7 +308,8 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `today` | day | this machine's local day |
 | `planned[]` | list | the plan lines of the day, each a [plan line](#plan-line), in the order of their day, title and line. From today on: the open lines planned (`on` or `due`) on or before the day, at most 200. Before today: the lines planned on that day, and the lines done on it |
 | `planned_more` | integer | the open lines that `planned` leaves out; 0 when none |
-| `units` | object | the unit of each metric that the day reads, by metric name; a metric with no unit is absent, and so is the property when none is left |
+| `daily` | list | the names of the live daily metrics, in name order: the day asks for a reading of each; empty when none |
+| `units` | object | the unit of each metric that the day reads or asks for, by metric name; a metric with no unit is absent, and so is the property when none is left |
 | `recent[]` | list | on the day of today only: the 5 newest live day pages up to today, as `recent[]` of [the root](#root); absent on any other day, and when there is none |
 | `recent[].day` | day | the day |
 | `recent[].page_id` | integer | the day page's id |

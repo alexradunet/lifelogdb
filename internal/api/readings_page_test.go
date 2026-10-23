@@ -215,3 +215,79 @@ func TestAMetricsPageDrawsTheDailyFormUnderMore(t *testing.T) {
 		t.Error("the page of a person draws the daily form")
 	}
 }
+
+// TestADailyMetricAsksInItsTileOnEveryDay: a day draws one tile for each daily metric, in name order, then the other
+// metrics read that day. A daily metric with no reading draws the record form fixed to it; a save returns to the day,
+// and the tile then shows the reading once.
+func TestADailyMetricAsksInItsTileOnEveryDay(t *testing.T) {
+	h, do := lifeOf(t)
+	do("/", "register-metric", map[string]string{"name": "Sleep", "unit": "h", "daily": "1"})
+	do("/", "register-metric", map[string]string{"name": "Meditate", "daily": "1"})
+	do("/", "register-metric", map[string]string{"name": "Weight", "unit": "kg"})
+	page := "/days/" + fixedToday
+	do(page, "record", map[string]string{"metric": "Weight", "value": "70", "day": fixedToday})
+
+	body := browse(t, h, page)
+	names := regexp.MustCompile(`<a class="name" href="/metrics/[^"]*">([^<]+)</a>`).FindAllStringSubmatch(body, -1)
+	var got []string
+	for _, n := range names {
+		got = append(got, n[1])
+	}
+	if want := "Meditate Sleep Weight"; strings.Join(got, " ") != want {
+		t.Errorf("tiles %v, want %s", got, want)
+	}
+	sleep := regexp.MustCompile(`(?s)<form\b[^>]*id="tile-Sleep".*?</form>`).FindString(body)
+	for _, want := range []string{`name="metric" value="Sleep"`, `name="day" value="` + fixedToday + `"`, `type="number"`, `placeholder="h"`, `>Save</button>`} {
+		if !strings.Contains(sleep, want) {
+			t.Errorf("the Sleep form lacks %s:\n%s", want, sleep)
+		}
+	}
+	meditate := regexp.MustCompile(`(?s)<form\b[^>]*id="tile-Meditate".*?</form>`).FindString(body)
+	if strings.Contains(meditate, `type="number"`) {
+		t.Errorf("a metric with no unit has a number box:\n%s", meditate)
+	}
+	for _, want := range []string{`type="radio" name="value" value="1"`, `type="radio" name="value" value="0"`, `Done`, `Not done`} {
+		if !strings.Contains(meditate, want) {
+			t.Errorf("the Meditate form lacks %s:\n%s", want, meditate)
+		}
+	}
+	if strings.Index(meditate, `value="1"`) > strings.Index(meditate, `value="0"`) {
+		t.Errorf("Done is not the first radio:\n%s", meditate)
+	}
+	if strings.Contains(body, "No readings on this day") || strings.Contains(body, `id="tile-Weight"`) {
+		t.Errorf("a day with tiles shows the empty state, or the read Weight asks again")
+	}
+
+	sent := formSends(t, body, `id="tile-Sleep"`, url.Values{"value": {"7.5"}})
+	rec := submit(h, "/measurements", sent, "")
+	if rec.Code != http.StatusSeeOther || returnedTo(t, rec.Header().Get("Location")) != page {
+		t.Fatalf("save: %d, returned to %q, want %q", rec.Code, rec.Header().Get("Location"), page)
+	}
+	after := browse(t, h, page)
+	if strings.Contains(after, `id="tile-Sleep"`) || !strings.Contains(after, "7.5") {
+		t.Errorf("after the save the Sleep tile still asks, or lacks 7.5")
+	}
+	if n := strings.Count(after, `class="name" href="/metrics/Sleep"`); n != 1 {
+		t.Errorf("Sleep has %d tiles, want 1", n)
+	}
+
+	// a past day asks the same
+	past := browse(t, h, "/days/"+dayOf(-1))
+	if !strings.Contains(past, `id="tile-Sleep"`) || !strings.Contains(past, `id="tile-Meditate"`) {
+		t.Errorf("a past day lacks the daily tiles")
+	}
+}
+
+// TestTheEmptyStateOfReadingsNeedsNoTile: with no daily metric and no reading a day says so; with a daily metric it
+// does not, as the tile asks.
+func TestTheEmptyStateOfReadingsNeedsNoTile(t *testing.T) {
+	h, do := lifeOf(t)
+	page := "/days/" + fixedToday
+	if !strings.Contains(browse(t, h, page), "No readings on this day") {
+		t.Error("an empty day lacks the empty state")
+	}
+	do("/", "register-metric", map[string]string{"name": "Meditate", "daily": "1"})
+	if strings.Contains(browse(t, h, page), "No readings on this day") {
+		t.Error("a day with a daily metric shows the empty state")
+	}
+}

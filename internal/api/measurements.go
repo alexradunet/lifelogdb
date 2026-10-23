@@ -34,15 +34,27 @@ func recordAction(ms []core.Metric, metric, day string) siren.Action {
 	return withOptions(a, "metric", names)
 }
 
-// unitsOf is the unit of each metric of ms that readings name, by metric name; a metric with no unit is left out.
-func unitsOf(ms []core.Metric, readings []core.Reading) map[string]string {
+// dailyOf are the names of the daily metrics of ms, in name order; never nil, so the property is an array.
+func dailyOf(ms []core.Metric) []string {
+	names := []string{}
+	for _, m := range ms {
+		if m.Daily {
+			names = append(names, m.Name)
+		}
+	}
+	return names
+}
+
+// unitsOf is the unit of each metric of ms that readings name or that is in daily, by metric name; a metric with no
+// unit is left out.
+func unitsOf(ms []core.Metric, readings []core.Reading, daily []string) map[string]string {
 	read := map[string]bool{}
 	for _, r := range readings {
 		read[r.Metric] = true
 	}
 	units := map[string]string{}
 	for _, m := range ms {
-		if read[m.Name] && m.Unit != "" {
+		if (read[m.Name] || slices.Contains(daily, m.Name)) && m.Unit != "" {
 			units[m.Name] = m.Unit
 		}
 	}

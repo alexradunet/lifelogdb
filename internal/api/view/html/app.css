@@ -482,6 +482,12 @@ details.readings-year{
   & a.reading{font:400 32px/32px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
   & .unit{font:400 13px/16px var(--mono); color:var(--muted)}}
 
+/* A daily metric with no reading asks in its tile: the name, the box or the radios, then Save, in one row; the row wraps on a
+   narrow screen. The tile takes the full width of the grid. */
+.reading-tile:has(form){grid-column:1/-1;
+  & form{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2)}
+  & form label{margin:0}}
+
 /* In a narrow column an action's form opens in place, full width, not over the page. */
 @container column (max-width:867px){
   .tools details.action[open]{flex:1 1 100%}

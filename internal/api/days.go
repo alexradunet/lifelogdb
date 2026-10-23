@@ -287,6 +287,8 @@ type dayView struct {
 	Cover *core.Cover `json:"cover,omitempty"`
 	// Units are the units of the metrics read on the day, by metric name; a metric with no unit is absent.
 	Units map[string]string `json:"units,omitempty"`
+	// Daily are the names of the daily metrics, in name order: the day asks for a reading of each.
+	Daily []string `json:"daily"`
 }
 
 func (h *server) day(r *http.Request) (*siren.Entity, error) {
@@ -326,11 +328,12 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	if err != nil {
 		return nil, err
 	}
-	record, units := recordAction(ms, "", day), unitsOf(ms, d.Readings)
+	record, daily := recordAction(ms, "", day), dailyOf(ms)
+	units := unitsOf(ms, d.Readings, daily)
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
 		Class: []string{"day"}, Title: day,
-		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent, Earlier: earlier, Units: units},
+		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent, Earlier: earlier, Units: units, Daily: daily},
 		Links:      []siren.Link{link("self", siren.DayHref(day), day)},
 		Actions:    append([]siren.Action{action("capture", map[string]string{"day": day}, nil), record, planActionOnDay(day)}, lineActions()...),
 	}

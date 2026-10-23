@@ -149,6 +149,26 @@ func (f *formView) Fields(folded bool) []fieldView {
 	return out
 }
 
+// Spoken reports a field of the two words Done and Not done: the value of a daily metric that has no unit, with the
+// options 1 and 0 (the form option "options"). The radios then show the words and not the numbers.
+func (f fieldView) Spoken() bool {
+	return f.Name == "value" && (slices.Equal(f.Options, []string{"1", "0"}) || slices.Equal(f.Options, []string{"0", "1"}))
+}
+
+// Word is the small word of an option of a radio: the words of a mood, or of a Spoken field; else "".
+func (f fieldView) Word(option string) string {
+	switch {
+	case f.Name == "mood":
+		return moodWord(option)
+	case f.Spoken():
+		if option == "1" {
+			return "Done"
+		}
+		return "Not done"
+	}
+	return ""
+}
+
 // MoreOpen reports folded fields of which one has a value: they are drawn open, so no value is out of sight.
 func (f *formView) MoreOpen() bool {
 	for _, fd := range f.More {
@@ -169,9 +189,10 @@ type formOptions struct {
 	hasAutofocus            bool // "autofocus" was given, also as "": the options name the field of the focus, or none
 	hide, outside           nameSet
 	more, required          nameSet
-	labels, placeholders    map[string]string // field name to words
-	keys, patterns          map[string]string // field name to letter, field name to regexp
-	fixed                   map[string]string // any other option: field name to its fixed value
+	labels, placeholders    map[string]string   // field name to words
+	keys, patterns          map[string]string   // field name to letter, field name to regexp
+	options                 map[string][]string // field name to the options that replace the action's own
+	fixed                   map[string]string   // any other option: field name to its fixed value
 }
 
 // nameSet is a set of field names.
@@ -179,14 +200,15 @@ type nameSet map[string]bool
 
 // parseFormOptions reads the pairs of a form call. A list option ("hide": "ids,move") and a "field=words" option
 // ("placeholder": "text=What happened?") add to the earlier ones of the same name when it is repeated. A "field=words"
-// option with no "=" is ignored.
+// option with no "=" is ignored. The option "options" is of that shape: "value=1,0" gives the field value the options
+// 1 and 0, in that order.
 func parseFormOptions(pairs []string) (formOptions, error) {
 	if len(pairs)%2 != 0 {
 		return formOptions{}, fmt.Errorf("options come in name/value pairs")
 	}
 	o := formOptions{hide: nameSet{}, outside: nameSet{}, more: nameSet{}, required: nameSet{},
 		labels: map[string]string{}, placeholders: map[string]string{}, keys: map[string]string{}, patterns: map[string]string{},
-		fixed: map[string]string{}}
+		options: map[string][]string{}, fixed: map[string]string{}}
 	lists := map[string]nameSet{"hide": o.hide, "outside": o.outside, "more": o.more, "required": o.required}
 	perField := map[string]map[string]string{"label": o.labels, "placeholder": o.placeholders, "key": o.keys, "pattern": o.patterns}
 	for i := 0; i < len(pairs); i += 2 {
@@ -211,6 +233,10 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 		case "label", "placeholder", "key", "pattern":
 			if field, words, ok := strings.Cut(v, "="); ok {
 				perField[name][field] = words
+			}
+		case "options":
+			if field, list, ok := strings.Cut(v, "="); ok {
+				o.options[field] = strings.Split(list, ",")
 			}
 		default:
 			o.fixed[name] = v
@@ -251,6 +277,9 @@ func formOf(x any, opts ...string) (*formView, error) {
 	for _, fd := range a.Fields {
 		if v, ok := o.fixed[fd.Name]; ok { // a fixed field keeps its value (the habit's empty unit)
 			fd.Value, fd.Type = v, "hidden"
+		}
+		if list, ok := o.options[fd.Name]; ok {
+			fd.Options = list
 		}
 		if o.required[fd.Name] {
 			fd.Required = true

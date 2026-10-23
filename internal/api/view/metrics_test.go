@@ -150,6 +150,25 @@ func TestTheTilesOfADay(t *testing.T) {
 	}
 }
 
+// TestTheDailyTilesComeFirst: the daily metrics are the first tiles, in the order given, with the reading of the day
+// when there is one; the metrics read that day follow. A daily metric read twice is one tile with More 1.
+func TestTheDailyTilesComeFirst(t *testing.T) {
+	r := func(id float64, metric string, value float64) any {
+		return map[string]any{"id": id, "metric": metric, "value": value}
+	}
+	v := &view{Props: map[string]any{"day": "2026-10-16", "daily": []any{"Meditate", "Sleep"},
+		"units":    map[string]any{"Sleep": "h"},
+		"readings": []any{r(5, "weight", 70), r(6, "Sleep", 7), r(7, "Sleep", 8)}}}
+	want := []readingTile{
+		{Metric: "Meditate", Daily: true},
+		{Metric: "Sleep", Unit: "h", Value: "8", ID: "7", More: 1, Daily: true},
+		{Metric: "weight", Value: "70", ID: "5"},
+	}
+	if got := v.ReadingTiles(); !reflect.DeepEqual(got, want) {
+		t.Errorf("the tiles:\n %+v\nwant\n %+v", got, want)
+	}
+}
+
 // TestTheSectionsOfMetrics: a section a top-level group, in the order of the groups, with the categories under it as
 // its subs. A section counts each of its metrics one time, in a sub too; its newest day is the newest of its cards and
 // of its subs' cards. A card takes the metric's row of the property metrics (its note and its recent readings) by
