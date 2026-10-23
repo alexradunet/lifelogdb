@@ -571,10 +571,10 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	}
 	file("/pages?title=Thyroid", "Biomarkers")
 	tsh := apitest.Must(t)(c.Get(t.Context(), "/metrics/tsh"))
-	if apitest.Href(tsh, "page") == "" || names(tsh) != "record" {
-		t.Fatalf("a series links its metric's page and offers only record: %v", names(tsh))
+	if pageOf(tsh) == "" || !hasAction(tsh, "record") || !hasAction(tsh, "save-body") {
+		t.Fatalf("a series carries its metric's page and offers record: %v", names(tsh))
 	}
-	file(apitest.Href(tsh, "page"), "Thyroid")
+	file(pageOf(tsh), "Thyroid")
 	file("/pages?title=Weight", "Body")
 	file("/pages?title=Walk", "Body")
 
@@ -597,16 +597,13 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 			t.Errorf("/metrics lacks %q", s)
 		}
 	}
-	// The metric's page holds its note and its categories, each a badge with its x; its readings link the page.
-	s := browse(t, h, apitest.Href(tsh, "page"))
+	// The metric's view holds its note and its categories, each a badge with its x.
+	s := browse(t, h, "/metrics/TSH")
 	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/file"><input type="hidden" name="back" value="[^"]*"><input type="hidden" name="ids" value="\d+"><input type="hidden" name="from" value="Thyroid"`).MatchString(s) {
 		t.Error("a metric's page does not show its category as a badge with its x")
 	}
-	if !strings.Contains(s, "thyroid-stimulating hormone") || !strings.Contains(s, `href="/metrics/TSH"`) {
-		t.Error("a metric's page does not hold its note, or does not link its readings")
-	}
-	if !strings.Contains(browse(t, h, "/metrics/TSH"), `href="`+apitest.Href(tsh, "page")+`"`) {
-		t.Error("the readings of a metric do not link its page")
+	if !strings.Contains(s, "thyroid-stimulating hormone") {
+		t.Error("a metric's view does not hold its note")
 	}
 }
 
@@ -635,8 +632,8 @@ func TestMetricCanonicalActions(t *testing.T) {
 			if names(stored) != names(equivalent) {
 				t.Errorf("actions: stored %s, equivalent %s", names(stored), names(equivalent))
 			}
-			if apitest.Href(stored, "page") != apitest.Href(equivalent, "page") {
-				t.Errorf("page identity differs: %q vs %q", apitest.Href(stored, "page"), apitest.Href(equivalent, "page"))
+			if pageOf(stored) != pageOf(equivalent) {
+				t.Errorf("page identity differs: %q vs %q", pageOf(stored), pageOf(equivalent))
 			}
 			for _, e := range []*siren.Entity{stored, equivalent} {
 				if apitest.Href(e, "self") == "" {
@@ -645,7 +642,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 					t.Error("self link changes actions")
 				}
 				restricted := tc.state == "unknown" || tc.state == "deleted"
-				if restricted && (apitest.Href(e, "page") != "" || hasAction(e, "link")) {
+				if restricted && (pageOf(e) != "" || hasAction(e, "link")) {
 					t.Errorf("restricted metric offers actions: %s", names(e))
 				}
 			}
@@ -653,7 +650,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, equivalent, "record"), map[string]string{"day": "2026-01-01", "value": "1"}))
 			}
 			if tc.state != "unknown" && tc.state != "deleted" {
-				page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(equivalent, "page")))
+				page := apitest.Must(t)(c.Get(t.Context(), pageOf(equivalent)))
 				if page.Title != tc.stored {
 					t.Errorf("stored spelling changed: %q", page.Title)
 				}

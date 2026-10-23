@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -82,8 +83,8 @@ func TestAMetricIsOnePage(t *testing.T) {
 		}
 	}
 	all := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
-	if !strings.Contains(body, `href="`+apitest.Href(all, "page")+`"`) || names(all) != "record" {
-		t.Errorf("the readings do not link the metric's page, or offer more than record: %s", names(all))
+	if pageOf(all) == "" || apitest.Href(all, "page") != "" || !hasAction(all, "record") || !hasAction(all, "save-body") {
+		t.Errorf("the series does not carry its page (and no link to it), or offers no record: %s", names(all))
 	}
 	if n := len(all.Properties.(map[string]any)["readings"].([]any)); n != 3 {
 		t.Errorf("the series reads %d readings with no from, want every one (3)", n)
@@ -116,58 +117,122 @@ func TestAMetricIsOnePage(t *testing.T) {
 	}
 }
 
-// TestAMetricsPageIsAPage: the page of a metric (D27) is a page in a browser too: its text, the pages that mention
-// it, its actions and a link to its readings (docs/plans/131-the-pareto-pass.md, part 3). A save returns to it with
-// its toast. A deleted metric's page offers Restore.
-func TestAMetricsPageIsAPage(t *testing.T) {
+// pageOf is the address of the page that a series carries (plan 144): its id is the series' own property. Empty for an
+// entity with no page.
+func pageOf(e *siren.Entity) string {
+	n, ok := e.Properties.(map[string]any)["id"].(json.Number)
+	if !ok {
+		return ""
+	}
+	return "/pages/" + n.String()
+}
+
+// getAs is one request as a browser (html) or the JSON client sends it; the query rides in path.
+func getAs(h http.Handler, method, path string, html bool) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	if html {
+		req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestTheBrowserSendsAMetricsPageToItsSeries: a metric has one view in a browser (plan 144). The page of a live
+// metric is a redirect to its series with the query kept; the JSON answer is still the page; the page of a deleted
+// metric stays, with Restore.
+func TestTheBrowserSendsAMetricsPageToItsSeries(t *testing.T) {
 	c, h, _ := metricFixture(t)
-	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
-	self := apitest.Href(series, "page")
+	self := pageOf(apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight")))
+	for _, tc := range []struct{ path, to string }{
+		{self, "/metrics/Weight"},
+		{self + "?new=edit-metric", "/metrics/Weight?new=edit-metric"},
+	} {
+		rec := getAs(h, "GET", tc.path, true)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != tc.to {
+			t.Errorf("GET %s in a browser: %d to %q, want 303 to %q", tc.path, rec.Code, rec.Header().Get("Location"), tc.to)
+		}
+	}
 	page := apitest.Must(t)(c.Get(t.Context(), self))
 	if page.Class[0] != "metric" || page.Properties.(map[string]any)["body"] != "Before breakfast." || apitest.Href(page, "series") != "/metrics/Weight" {
-		t.Errorf("the metric's page: %v %v, readings %q", page.Class, page.Properties, apitest.Href(page, "series"))
+		t.Errorf("the metric's page for JSON: %v %v", page.Class, page.Properties)
 	}
-	day := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
-	body := browse(t, h, self)
-	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(day, "self") + `"`, `<a href="/metrics/Weight">Its readings</a>`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the metric's page does not show %s", want)
-		}
-	}
-	for _, name := range []string{"save-body", "rename", "file-pages", "tombstone-pages"} {
-		if a := apitest.Action(t, page, name); !strings.Contains(body, `action="`+a.Href+`"`) {
-			t.Errorf("the metric's page has no form of %s: %+v", name, a)
-		}
-	}
-
-	save := apitest.Action(t, page, "save-body")
-	rec := submit(h, save.Href, url.Values{"body": {"Before breakfast. See [[Scales]]."}, "version": {fieldOf(save, "version")}}, "")
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
-	}
-	to, err := url.Parse(rec.Header().Get("Location"))
-	if err != nil || to.Path != self {
-		t.Fatalf("the save sends the browser to %q, want the page", rec.Header().Get("Location"))
-	}
-	if body := browse(t, h, to.String()); !strings.Contains(body, "<h2>Result</h2>") || !strings.Contains(body, `Created <a href="/pages?title=Scales">Scales</a>.`) {
-		t.Error("the toast of the save is lost")
+	if rec := getAs(h, "GET", self, false); rec.Code != http.StatusOK {
+		t.Errorf("GET %s as JSON: %d, want 200", self, rec.Code)
 	}
 
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "tombstone-pages"), nil))
-	body = browse(t, h, self)
-	if !strings.Contains(body, "Deleted") || !strings.Contains(body, `action="`+self+`/revive"`) || strings.Contains(body, "<h2>Properties</h2>") {
-		t.Error("a deleted metric's page is not the page view with Revive")
+	body := browse(t, h, self)
+	if !strings.Contains(body, "Deleted") || !strings.Contains(body, `action="`+self+`/revive"`) {
+		t.Error("a deleted metric's page is not the page view with Restore")
 	}
 }
 
-func TestTheSeriesLinksItsPage(t *testing.T) {
+// TestAMetricsViewHoldsItsPage: /metrics/{name} draws the whole page of its metric (plan 144): its note, its editor,
+// its categories, the pages that mention it, and each form of the page's actions once; the one open form of the mark
+// is there. A save of the mark and a save of the body return to the series.
+func TestAMetricsViewHoldsItsPage(t *testing.T) {
+	c, h, _ := metricFixture(t)
+	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
+	page := apitest.Must(t)(c.Get(t.Context(), pageOf(series)))
+	day := apitest.Must(t)(c.Get(t.Context(), "/pages?title=2026-10-13"))
+	body := browse(t, h, "/metrics/Weight")
+	for _, want := range []string{"Before breakfast.", `href="` + apitest.Href(day, "self") + `"`, `aria-label="Backlinks"`, `aria-label="Categories"`, `<summary>Edit</summary>`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the view of a metric lacks %s", want)
+		}
+	}
+	for _, bad := range []string{">The page: ", "Not asked for on every day", "Asked for on every day:"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("the view of a metric still says %q", bad)
+		}
+	}
+	// Each action that a page draws as a form is drawn once, but file-pages (a badge has its own) and the lines' tick,
+	// carry and schedule (a line draws those) and set-cover (a link draws it).
+	for _, a := range page.Actions {
+		switch a.Name {
+		case "tick", "carry", "schedule", "set-cover", "promote", "file-pages":
+			continue
+		}
+		if n := strings.Count(body, `action="`+a.Href+`"`); n != 1 {
+			t.Errorf("the view of a metric draws the form of %s %d times, want once (%s)", a.Name, n, a.Href)
+		}
+	}
+	if !strings.Contains(body, `action="`+apitest.Action(t, page, "file-pages").Href+`"`) {
+		t.Error("the view of a metric has no form of file-pages")
+	}
+	mark := apitest.Action(t, page, "edit-metric")
+	form := regexp.MustCompile(`(?s)<form[^>]*action="` + regexp.QuoteMeta(mark.Href) + `".*?</form>`).FindString(body)
+	if !strings.Contains(form, `name="daily"`) || strings.Contains(form, "<details") || strings.Contains(strings.SplitN(body, form, 2)[0], `<details class="action"><summary class="button">Save`) {
+		t.Errorf("the mark is not one open form with its box: %s", form)
+	}
+
+	save := formSends(t, body, `action="`+apitest.Action(t, page, "save-body").Href+`"`, url.Values{"body": {"Before breakfast. See [[Scales]]."}})
+	rec := submit(h, apitest.Action(t, page, "save-body").Href, save, "/metrics/Weight")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/metrics/Weight") {
+		t.Fatalf("the save of the body from the view: %d to %q, want 303 back to the series", rec.Code, rec.Header().Get("Location"))
+	}
+	if body := browse(t, h, rec.Header().Get("Location")); !strings.Contains(body, "<h2>Result</h2>") || !strings.Contains(body, `Created <a href="/pages?title=Scales">Scales</a>.`) {
+		t.Error("the toast of the save is lost")
+	}
+	body = browse(t, h, "/metrics/Weight") // the save changed the version
+	rec = submit(h, mark.Href, formSends(t, body, `action="`+mark.Href+`"`, url.Values{"daily": {"1"}}), "/metrics/Weight")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/metrics/Weight") {
+		t.Fatalf("the mark from the view: %d to %q, want 303 back to the series", rec.Code, rec.Header().Get("Location"))
+	}
+	if after := browse(t, h, "/metrics/Weight"); !regexp.MustCompile(`name="daily" value="1" checked`).MatchString(after) {
+		t.Error("the mark is not set after the save")
+	}
+}
+
+func TestTheSeriesCarriesItsPage(t *testing.T) {
 	c, _, _ := metricFixture(t)
 	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/weight"))
 	p := series.Properties.(map[string]any)
-	if series.Title != "Weight" || p["unit"] != "kg" || apitest.Href(series, "page") == "" || p["body"] != nil {
-		t.Errorf("the series: title %q, %v, page %q", series.Title, p, apitest.Href(series, "page"))
+	if series.Title != "Weight" || p["unit"] != "kg" || pageOf(series) == "" || p["body"] != "Before breakfast." {
+		t.Errorf("the series: title %q, %v", series.Title, p)
 	}
-	page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(series, "page")))
+	page := apitest.Must(t)(c.Get(t.Context(), pageOf(series)))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "rename"), map[string]string{"title": "Body weight"}))
 	for _, path := range []string{"/metrics/Body%20weight", "/metrics/Weight"} {
 		s := apitest.Must(t)(c.Get(t.Context(), path))
@@ -269,7 +334,7 @@ func TestAllReadingsIncludesEntireAdmittedCalendar(t *testing.T) {
 		values[id] = fmt.Sprint(10 + i)
 		plain = append(plain, id)
 	}
-	metricPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(metric, "page")))
+	metricPage := apitest.Must(t)(c.Get(t.Context(), pageOf(metric)))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, metricPage, "rename"), map[string]string{"title": "Stride count"}))
 	assertRows := func(t *testing.T, e *siren.Entity, want []string) {
 		t.Helper()

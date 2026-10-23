@@ -91,7 +91,7 @@ func TestTheMoreOfAPageAndOfAMetricIsAQuietRow(t *testing.T) {
 	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Garden project", "body": "Seeds."}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	more := regexp.MustCompile(`<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">`)
-	for _, path := range []string{apitest.Href(p, "self"), apitest.Href(apitest.Must(t)(c.Get(t.Context(), "/metrics/weight")), "page")} {
+	for _, path := range []string{apitest.Href(p, "self"), "/metrics/weight"} {
 		if body := browse(t, h, path); !more.MatchString(body) {
 			t.Errorf("%s does not draw its More as a quiet row", path)
 		}

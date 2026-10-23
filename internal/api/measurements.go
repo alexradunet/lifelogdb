@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -159,8 +160,8 @@ func (h *server) series(r *http.Request) (*siren.Entity, error) {
 }
 
 // seriesEntity is the resource /metrics/{name} serves: a metric's readings and the write of a reading. The metric
-// is a page (D27): its text, edges and other actions are the page's, which the link page names. q is its query
-// (from, to), nil for the defaults.
+// is a page (D27), and the series carries the page: its properties, links, embedded links and actions (plan 144),
+// so one view draws both. q is its query (from, to), nil for the defaults.
 func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*siren.Entity, error) {
 	today := h.s.Today()
 	to := q.Get("to")
@@ -209,12 +210,49 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	if m != nil {
 		props["unit"] = m.Unit
 		props["daily"] = m.Daily
-		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 	}
 	for _, m := range rows {
 		e.Entities = append(e.Entities, link("reading", siren.MeasurementHref(m.ID), m.Day+" "+view.Num(m.Value)))
 	}
+	if m != nil {
+		if err := h.carryPage(ctx, e, m.ID); err != nil {
+			return nil, err
+		}
+	}
 	return e, nil
+}
+
+// carryPage adds the page of a metric to its series e. The series keeps what it sets (its class, its title, its
+// properties, its self and index links); the page's `metric` object is left out, since the series holds the unit and
+// the mark. The page's link to its own series is left out too. Every other property, link, embedded link and action
+// of the page is added once.
+func (h *server) carryPage(ctx context.Context, e *siren.Entity, id int64) error {
+	pe, err := h.pageEntity(ctx, id)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(pe.Properties)
+	if err != nil {
+		return err
+	}
+	var page map[string]any
+	if err := json.Unmarshal(b, &page); err != nil {
+		return err
+	}
+	props := e.Properties.(map[string]any)
+	for k, v := range page {
+		if _, set := props[k]; !set && k != "metric" {
+			props[k] = v
+		}
+	}
+	for _, l := range pe.Links {
+		if !slices.Contains(l.Rel, "self") && !slices.Contains(l.Rel, "series") && !slices.Contains(l.Rel, "index") {
+			e.Links = append(e.Links, l)
+		}
+	}
+	e.Entities = append(e.Entities, pe.Entities...)
+	e.Actions = append(e.Actions, pe.Actions...)
+	return nil
 }
 
 // metricOf is the live metric that name names, by its name or by an alias its renames kept (D27, as a series is

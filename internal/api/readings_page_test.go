@@ -119,8 +119,7 @@ func TestACorrectionStartsFromTheValueAndARetractionHasNone(t *testing.T) {
 }
 
 // TestHabitsAndUnitsAreSaid: a metric with no unit says what a reading is, and its value box shows what to type; a
-// metric with a unit says neither. A daily metric says that its box is on every day page; one that is not daily says
-// nothing of it. The tiles of a day show the unit, and a metric read again on the day links to its page.
+// metric with a unit says neither. The mark of a daily metric is one open form on its view, ticked or not. The tiles of a day show the unit, and a metric read again on the day links to its page.
 func TestHabitsAndUnitsAreSaid(t *testing.T) {
 	h, do := lifeOf(t)
 	do("/", "register-metric", map[string]string{"name": "Stretch"})
@@ -139,29 +138,19 @@ func TestHabitsAndUnitsAreSaid(t *testing.T) {
 			t.Errorf("the page of a habit lacks %q", want)
 		}
 	}
-	if strings.Contains(habit, "Asked for on every day:") || strings.Contains(habit, "days after its last") {
-		t.Error("the readings of a metric that is not daily say it is asked for, or speak of 14 days")
+	if strings.Contains(habit, "Not asked for on every day") || strings.Contains(habit, "days after its last") {
+		t.Error("the view of a metric says the old sentences of the mark, or speaks of 14 days")
 	}
-	// The mark is set on the metric's page: the readings link that form, open, in both states.
-	pageLink := regexp.MustCompile(`<a href="(/pages/\d+)">The page: `)
-	formOf := func(readings string) string { // the link of the page, from the head of the readings
-		m := pageLink.FindStringSubmatch(readings)
-		if m == nil {
-			t.Fatalf("the readings do not link the page:\n%s", readings)
-		}
-		return `<a href="` + m[1] + `?new=edit-metric">`
+	// The mark is one open form on the metric's view, in both states: the box is ticked for a daily metric.
+	mark := regexp.MustCompile(`(?s)<section class="daily-mark".*?</section>`)
+	if form := mark.FindString(habit); !strings.Contains(form, `name="daily"`) || strings.Contains(form, "checked") || strings.Contains(form, "<details") {
+		t.Errorf("the view of a metric that is not daily lacks the open form with an unticked box:\n%s", form)
 	}
-	if !strings.Contains(habit, "Not asked for on every day. "+formOf(habit)+"Ask for it every day</a>") {
-		t.Errorf("the readings of a metric that is not daily do not link the form that asks for it:\n%s", habit)
+	if form := mark.FindString(browse(t, h, "/metrics/Meditate")); !strings.Contains(form, `name="daily" value="1" checked`) || strings.Contains(form, "<details") {
+		t.Errorf("the view of a daily metric lacks the open form with a ticked box:\n%s", form)
 	}
-	if daily := browse(t, h, "/metrics/Meditate"); !strings.Contains(daily, "Asked for on every day: its box is on every day page. "+formOf(daily)+"Stop asking</a>") {
-		t.Errorf("the readings of a daily metric do not say so and link the form:\n%s", daily)
-	}
-	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "1 done and 0 not done") || strings.Contains(weight, "Asked for on every day:") {
-		t.Error("the readings of a metric with a unit speak of habits")
-	}
-	if opened := browse(t, h, strings.TrimSuffix(strings.TrimPrefix(formOf(habit), `<a href="`), `">`)); !strings.Contains(opened, `<details class="action" open>`) || !strings.Contains(opened, `action="/pages/`) || !strings.Contains(opened, `name="daily"`) {
-		t.Errorf("the link does not open the edit-metric form on the page:\n%s", opened)
+	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "1 done and 0 not done") || !mark.MatchString(weight) {
+		t.Error("the view of a metric with a unit speaks of habits, or lacks the form of the mark")
 	}
 
 	day := browse(t, h, "/days/"+fixedToday)
@@ -200,30 +189,31 @@ func returnedTo(t *testing.T, location string) string {
 	return u.String()
 }
 
-// TestAMetricsPageDrawsTheDailyFormUnderMore: the page of a metric offers edit-metric with the current mark, and the
-// form of the browser sets it. An unticked box sends nothing, which is 0. The page of a person has no such form.
-func TestAMetricsPageDrawsTheDailyFormUnderMore(t *testing.T) {
+// TestTheViewOfAMetricDrawsTheDailyForm: the view of a metric offers edit-metric with the current mark, once and not
+// under More, and the form of the browser sets it. An unticked box sends nothing, which is 0. The page of a person has
+// no such form.
+func TestTheViewOfAMetricDrawsTheDailyForm(t *testing.T) {
 	h, do := lifeOf(t)
 	do("/", "register-metric", map[string]string{"name": "Meditate"})
 	do("/", "create-person", map[string]string{"title": "Sam (barber)", "name": "Samuel Ortiz"})
-	page := regexp.MustCompile(`href="(/pages/\d+)"`).FindStringSubmatch(browse(t, h, "/metrics/Meditate"))[1]
+	view := "/metrics/Meditate"
+	page := regexp.MustCompile(`action="(/pages/\d+)/metric"`).FindStringSubmatch(browse(t, h, view))[1]
 
-	more := func(body string) string { return regexp.MustCompile(`(?s)aria-label="More".*`).FindString(body) }
-	form := more(browse(t, h, page))
-	if !strings.Contains(form, "Ask for it every day") || strings.Contains(form, `name="daily" value="1" checked`) {
-		t.Errorf("the page of a metric that is not daily lacks an unticked box under More:\n%s", form)
+	body := browse(t, h, view)
+	if n := strings.Count(body, `action="`+page+`/metric"`); n != 1 || strings.Contains(body, `name="daily" value="1" checked`) {
+		t.Errorf("the view of a metric that is not daily has %d forms of the mark, or a ticked box", n)
 	}
-	if rec := submit(h, page+"/metric", url.Values{"daily": {"1"}}, page); rec.Code != http.StatusSeeOther {
-		t.Fatalf("the form answered %d: %.300s", rec.Code, rec.Body.String())
+	if rec := submit(h, page+"/metric", url.Values{"daily": {"1"}, "back": {view}}, view); rec.Code != http.StatusSeeOther || returnedTo(t, rec.Header().Get("Location")) != view {
+		t.Fatalf("the form answered %d to %q, want 303 to the view", rec.Code, rec.Header().Get("Location"))
 	}
-	if form := more(browse(t, h, page)); !strings.Contains(form, `name="daily" value="1" checked`) {
-		t.Errorf("after the form, the box is not ticked:\n%s", form)
+	if !strings.Contains(browse(t, h, view), `name="daily" value="1" checked`) {
+		t.Error("after the form, the box is not ticked")
 	}
-	if rec := submit(h, page+"/metric", url.Values{}, page); rec.Code != http.StatusSeeOther {
+	if rec := submit(h, page+"/metric", url.Values{"back": {view}}, view); rec.Code != http.StatusSeeOther {
 		t.Fatalf("the form with an empty box answered %d", rec.Code)
 	}
-	if form := more(browse(t, h, page)); strings.Contains(form, `name="daily" value="1" checked`) {
-		t.Errorf("after an empty box, the mark is still set:\n%s", form)
+	if strings.Contains(browse(t, h, view), `name="daily" value="1" checked`) {
+		t.Error("after an empty box, the mark is still set")
 	}
 	person := regexp.MustCompile(`href="(/pages/\d+)"`).FindStringSubmatch(browse(t, h, "/browse?kind=person"))[1]
 	if strings.Contains(browse(t, h, person), "Ask for it every day") {

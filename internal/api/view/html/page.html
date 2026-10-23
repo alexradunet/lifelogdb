@@ -4,7 +4,9 @@
      first, with New page here and a link to the category in Browse; docs/plans/115-categories-to-browse.md,
      docs/plans/117-one-browse-view.md); the margin with its facts, its typed
      links, its other backlinks and its other actions. A day page's title is a day in words wherever a page is
-     listed. The cover heads the margin, and the body does not draw it again (docs/plans/127-a-cover-for-every-page.md). */}}
+     listed. The cover heads the margin, and the body does not draw it again (docs/plans/127-a-cover-for-every-page.md).
+     The sheet and the margin are the two parts below: the view of a metric draws them too
+     (docs/plans/144-one-view-for-a-metric.md). */}}
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
 <header class="page-head"><div class="what">
@@ -21,6 +23,16 @@
 
 <div class="sheet-margin">
 <div class="sheet">
+{{template "page-sheet" .}}
+</div>
+<div class="margin">
+{{template "page-margin" .}}
+</div>
+</div>
+{{template "foot" .}}{{end}}
+
+{{/* page-sheet is the sheet of a page: the picture of a file, the empty state, the editor, the body, the lines planned in a period and Filed here. */}}
+{{define "page-sheet"}}{{$p := .Props}}
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 {{if not $p.body}}<p class="empty">Nothing written here yet.</p>{{end}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
@@ -36,9 +48,10 @@
 <div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2><a href="/browse?in={{$.Title}}">Open in Browse</a>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
 <ul class="plain rows">{{range .Subs}}<li><a class="entry" href="{{.Href}}"><span class="first">{{.Title}}</span><span class="meta"><span class="badge">category</span></span></a></li>{{end}}{{range .Items}}<li><a class="entry" href="{{.Href}}"><span class="first">{{$.Date .Title}}</span><span class="meta">{{range .Class}}{{if ne . "page"}}<span class="badge">{{.}}</span>{{end}}{{end}}</span></a></li>{{end}}</ul>
 </section>{{end}}
-</div>
+{{end}}
 
-<div class="margin">
+{{/* page-margin is the margin of a page: the cover, the facts, the typed links, the backlinks and More. On the view of a metric (a series) its mark is the form "Ask for it every day" of the sheet, so More does not draw it again. */}}
+{{define "page-margin"}}{{$p := .Props}}
 {{template "cover" .}}
 <section class="group" aria-label="Facts"><h2>Facts</h2>
 <dl class="facts">
@@ -59,13 +72,11 @@
 {{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "more" "on,due,every,from_done" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "edit-person") "placeholder" "name=Samuel Ortiz")}}
-{{template "boxed" (form (.Action "edit-metric") "button" "Save")}}
+{{if ne (index .Class 0) "series"}}{{template "boxed" (form (.Action "edit-metric") "button" "Save")}}{{end}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}</div></section>{{end}}
-</div>
-</div>
-{{template "foot" .}}{{end}}
+{{end}}
 
 {{/* cover is the cover of a page or a day at the head of its margin: the picture as a square, and the one link to the
      picker of every kept picture and of a new photo (choose-cover; docs/plans/131-the-pareto-pass.md, part 2). The

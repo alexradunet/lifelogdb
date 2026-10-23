@@ -260,11 +260,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **Provenance per surface.** `source` is `cli`, `api`, `ui` (a browser form) or `agent:<name>` (MCP);
   the `Lifelog-Source` header sets it.
 - **Optimistic saves.** A body save sends the `version` (the decimal `entities.revision` token) it read; a newer one is a 409.
-- **The readings of a metric** ([plan 100](docs/plans/100-one-page-a-metric.md), [plan 131](docs/plans/131-the-pareto-pass.md)).
-  `/metrics/{name}` is a metric's readings: Record first, then its readings newest first in a fold a year. Its
-  readings are `(from, to]`; with no `from`, every admitted day through `to`, on every surface. The All readings link
-  leads a window back to the whole. A metric is a page (D27): its text, links, backlinks, categories and other
-  actions are on its page (`/pages/{id}`), and each of the two links the other.
+- **The readings of a metric** ([plan 100](docs/plans/100-one-page-a-metric.md), [plan 131](docs/plans/131-the-pareto-pass.md), [plan 144](docs/plans/144-one-view-for-a-metric.md)).
+  A metric has one view in the browser, `/metrics/{name}`: its page (the note, categories, links, backlinks and
+  other actions; a metric is a page, D27) and its readings (Add a reading, Ask for it every day, then the readings
+  newest first in a fold a year). The readings are `(from, to]`; with no `from`, every admitted day through `to`, on
+  every surface. The All readings link leads a window back to the whole. The series carries the page, so the API, the
+  CLI and the MCP tools read both in one answer. A browser request of a live metric's page (`/pages/{id}`) is
+  redirected to the series with its query; JSON is not, and the page of a deleted metric stays.
 - **Connections** ([connection setup](docs/contract/connections.md)): one writing connection with the pragmas
   set by DSN and read back by a connection hook (a wrong value refuses the connection), `SQLITE_DBCONFIG_DEFENSIVE`,
   `BEGIN IMMEDIATE` via `_txlock=immediate`, the 3.51.3 floor checked; readers use `mode=ro` with `trusted_schema=OFF`, read back the same way.
@@ -388,7 +390,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the count and a button for each action the list offers.
 - **New metric** ([plan 113](docs/plans/113-new-metric-on-metrics.md)). New metric is one form in the header of
   `/metrics`, not on the page of today: a name, a unit (kg; a range such as 1-5 for a score; nothing for done or not
-  done), a note, and Ask for it every day (a box for it on every day page; a metric's page changes it under More). The pick bar of the board files metrics in a category, made when it is new.
+  done), a note, and Ask for it every day (a box for it on every day page; the metric's view changes it). The pick bar of the board files metrics in a category, made when it is new.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1280 px, turned upright by EXIF,
@@ -455,7 +457,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
 | `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person or a place |
 | `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | a person, More: Edit name and dates |
-| `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric's page, More: Ask for it every day |
+| `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric: Ask for it every day |
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
 | `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
 | `link` | `POST /pages/{id}/links` | `do link` | `link` | a day: Where, I was at a place; a page, More: Add a typed link |

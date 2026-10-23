@@ -19,22 +19,27 @@
 {{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "button" "Add to" "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
 {{template "foot" .}}{{end}}
 
-{{/* The readings of a metric (/metrics/{name}): the head with its latest reading, then Add a reading, the chart and
-     every reading in one fold a year, newest first. The metric is a page (D27): its text, its categories, its links
-     and its other actions are on the page, which the head links (docs/plans/131-the-pareto-pass.md, part 3). */}}
+{{/* The view of a metric (/metrics/{name}): its page and its readings in one place (docs/plans/144-one-view-for-a-metric.md).
+     The head has the categories and the latest reading. The sheet has the note, the body, Add a reading, the one open
+     form of the daily mark, the chart and every reading in one fold a year, newest first. The margin is the margin of
+     a page (page-margin). A browser request of the page of a live metric is a redirect here. */}}
 {{define "metric"}}{{template "head" .}}
 {{$s := .Props}}{{$r := .MetricReadings}}
 {{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
 <header class="page-head"><div class="what"><span class="kind">metric</span><h1>{{.Title}}</h1>
-<p class="sub">{{with .Link "page"}}<a href="{{.}}">The page: its text, categories and links</a>{{end}}{{with .Link "all-readings"}}<a href="{{.}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
+{{template "categories" (dict "v" $ "back" $.Here)}}
+<p class="sub">{{with .Link "all-readings"}}<a href="{{.}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
 {{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
 {{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div></div>{{end}}
 </header>
 
+<div class="sheet-margin">
 <div class="sheet">
+{{template "page-sheet" .}}
 {{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
-{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}
-{{with $.Link "page"}}<p class="desc">{{if $s.daily}}Asked for on every day: its box is on every day page. <a href="{{.}}?new=edit-metric">Stop asking</a>{{else}}Not asked for on every day. <a href="{{.}}?new=edit-metric">Ask for it every day</a>{{end}}</p>{{end}}</section>{{end}}
+{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
+{{with .Action "edit-metric"}}<section class="daily-mark" aria-label="Every day"><h2>Every day</h2>
+{{template "form" (form . "button" "Save" "back" $.Here)}}</section>{{end}}
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>
@@ -46,6 +51,10 @@
 {{template "readings" (dict "v" $ "r" $r "rows" .)}}</details>{{end}}</details>
 {{else}}<p class="empty">{{if $s.from}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{else}}No reading yet. Add the first one above.{{end}}</p>{{end}}
 </section>
+</div>
+<div class="margin">
+{{template "page-margin" .}}
+</div>
 </div>
 {{template "foot" .}}{{end}}
 

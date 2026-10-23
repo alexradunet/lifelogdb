@@ -431,7 +431,7 @@ link to each month. Actions: `plan` with `page` this year, `tick`, `carry` and `
 
 ### page, person, place, file
 
-`GET /pages/{id}`; `GET /pages?title=` redirects to it. The class is the page's type; a day page adds `day-page`, a
+`GET /pages/{id}`; `GET /pages?title=` redirects to it. A browser's `GET` of the page of a live metric is a 303 to its [series](#series), with the query kept: the series carries the page, so a metric has one view. JSON, and the page of a deleted metric, are answered as here. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `series` (a metric's readings), `preview` (a
 file's picture), `cover` (the
 picture of the page's cover, when it has one), `choose-cover` (the [pictures it may take](#cover-choice): a live page that
@@ -583,8 +583,11 @@ holds the current one), and `retract`: to remove a reading, retract it. A retrac
 `GET /metrics/{name}?from=&to=`: the readings of a metric over `(from, to]`, or with no `from` every reading through
 `to` (`to` is today by default). An alias names the metric too. Links: `self` (with the query that is not a
 default; `/metrics/{name}` when there is none), `all-readings` (with a `from` only: the same with no `from`), `up`
-(metrics), `page` (the metric's page, which holds its text, its links and its other actions: a live metric is a
-page, D27). Embedded: `reading` links. Actions: `record` (this metric).
+(metrics). A live metric is a page (D27), and the answer carries that page: its properties (the rows below that follow `daily`), its
+links but `self` and `series` (so `preview`, `cover`, `choose-cover`, `make-metric`), its embedded links (every
+outgoing link under its kind, every incoming one under `backlink`) and its actions, all as in [a page](#page-person-place-file).
+The `metric` object of the page is not repeated: `unit` and `daily` are here. Embedded: `reading` links, and the page's.
+Actions: `record` (this metric), and the page's.
 
 | property | type | meaning |
 |---|---|---|
@@ -602,6 +605,31 @@ page, D27). Embedded: `reading` links. Actions: `record` (this metric).
 | `readings[].captured_with_id` | integer | |
 | `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent when the name is no live metric |
 | `daily` | boolean | only for a live metric: whether the owner asks for a reading of it on every day (D31) |
+| `id` | integer | only for a live metric: its page's id, and then the rows of the page that follow |
+| `entity_type` | string | `metric` |
+| `title` | string | its preferred title |
+| `body` | string | the body, as the page has it |
+| `created_at` | instant | when the page was created |
+| `version` | string | the version token a `save-body` must send back |
+| `is_day_page` | boolean | always false |
+| `cover` | object | the page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
+| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-place-file) |
+| `links[].kind` | string | |
+| `links[].id` | integer | |
+| `links[].title` | string | |
+| `links[].entity_type` | string | |
+| `links[].note` | string | |
+| `links[].context` | string | |
+| `backlinks[]` | list | the links that end at the page, the same shape |
+| `backlinks[].kind` | string | |
+| `backlinks[].id` | integer | |
+| `backlinks[].title` | string | |
+| `backlinks[].entity_type` | string | |
+| `backlinks[].note` | string | |
+| `backlinks[].context` | string | |
 
 ### metrics
 
