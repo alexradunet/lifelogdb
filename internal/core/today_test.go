@@ -61,11 +61,16 @@ func TestStreakCountsTheRunThatEndsTodayOrYesterday(t *testing.T) {
 	}
 }
 
-func TestHabitsAreTheUnitlessMetricsInUse(t *testing.T) {
+// TestHabitsAreTheDailyMetricsWithNoUnit: a chip is a daily metric with no unit (D31). The days since its last reading
+// do not matter. A metric that is not daily is no chip, and nor is a daily metric with a unit.
+func TestHabitsAreTheDailyMetricsWithNoUnit(t *testing.T) {
 	s := fresh(t)
 	today := "2026-10-19"
-	for _, m := range []struct{ name, unit string }{{"Walk", ""}, {"No phone", ""}, {"Old habit", ""}, {"Stretch", ""}, {"Weight", "kg"}} {
-		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit}); err != nil {
+	for _, m := range []struct {
+		name, unit string
+		daily      bool
+	}{{"Walk", "", true}, {"No phone", "", true}, {"Stretch", "", true}, {"Read", "", false}, {"Sleep", "h", true}, {"Weight", "kg", false}} {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit, Daily: m.daily}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -76,11 +81,13 @@ func TestHabitsAreTheUnitlessMetricsInUse(t *testing.T) {
 		}
 	}
 	rec("Walk", today, 1)
+	rec("Walk", today, 0) // the last reading of the day decides
+	rec("Walk", today, 3)
 	rec("No phone", today, 0)
-	rec("Old habit", "2026-10-05", 1) // 14 days ago: out of use
-	rec("Stretch", "2026-10-10", 1)   // in use, nothing today
-	rec("Weight", today, 70)          // has a unit: not a habit
-	rec("Mood", today, 4)             // a scale: not a habit
+	rec("Stretch", "2026-08-20", 1) // 60 days ago: still a chip, with nothing today
+	rec("Read", "2026-10-18", 1)    // read yesterday, but not daily: no chip
+	rec("Sleep", today, 7)          // daily with a unit: a box on the day page, no chip
+	rec("Weight", today, 70)
 	got, err := s.Habits(ctx, today)
 	if err != nil {
 		t.Fatal(err)

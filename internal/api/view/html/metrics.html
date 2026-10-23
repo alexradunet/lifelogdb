@@ -33,7 +33,8 @@
 
 <div class="sheet">
 {{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
-{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{with $s.habit_days}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done. Such a metric shows in Today as a habit after its first reading, and leaves Today {{.}} days after its last.</p>{{end}}</section>{{end}}
+{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}
+{{if $s.daily}}<p class="desc">Asked for on every day: its box is on every day page.{{with $.Link "page"}} <a href="{{.}}">Change it on the page, under More.</a>{{end}}</p>{{end}}</section>{{end}}
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>

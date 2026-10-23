@@ -162,6 +162,13 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 		if p.Person != nil {
 			out = append(out, action("edit-person", ids, map[string]any{"name": p.Person.Name, "birth_day": p.Person.Birth, "death_day": p.Person.Death}))
 		}
+		if p.Metric != nil {
+			daily := "0"
+			if p.Metric.Daily {
+				daily = "1"
+			}
+			out = append(out, action("edit-metric", ids, map[string]any{"daily": daily}))
+		}
 	}
 	if p.Type != "file" {
 		out = append(out, action("set-cover", ids, nil))
@@ -392,6 +399,30 @@ func (h *server) editPerson(r *http.Request, act spec, src string) (*siren.Entit
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), id)
+}
+
+// editMetric sets the daily mark of a metric. An unticked checkbox sends nothing, so a missing daily is 0.
+func (h *server) editMetric(r *http.Request, act spec, src string) (*siren.Entity, error) {
+	id, v, err := idForm(r, act)
+	if err != nil {
+		return nil, err
+	}
+	daily, err := flag(v, "daily")
+	if err != nil {
+		return nil, err
+	}
+	if err := h.s.EditMetric(r.Context(), src, id, daily); err != nil {
+		return nil, err
+	}
+	e, err := h.pageEntity(r.Context(), id)
+	if err != nil {
+		return nil, err
+	}
+	e.Result = "No longer asked for every day."
+	if daily {
+		e.Result = "Asked for on every day."
+	}
+	return e, nil
 }
 
 // existsOffer is an ExistsError of create-person or create-place that the owner can mend in one step: the page that

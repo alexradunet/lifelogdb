@@ -10,7 +10,7 @@ import (
 // code and no code style, which are the words of the API text (Description).
 func TestTheFormsHintsAreInPlainWords(t *testing.T) {
 	names := strings.Fields(`plan tick carry schedule record correct retract tombstone-pages rename add-file capture link
-		unlink file-pages set-cover promote edit-person create-person create-place create-page register-metric`)
+		unlink file-pages set-cover promote edit-person edit-metric create-person create-place create-page register-metric`)
 	status := regexp.MustCompile(`\b[1-5][0-9][0-9]\b`)
 	for _, n := range names {
 		h := specOf(n).Hint

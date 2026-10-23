@@ -53,12 +53,13 @@
 <ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
 <div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
 
-{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
+{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
 {{template "boxed" (form (.Action "unlink") "button" "Remove a typed link")}}
 {{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "more" "on,due,every,from_done" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename"))}}
 {{template "boxed" (form (.Action "edit-person") "placeholder" "name=Samuel Ortiz")}}
+{{template "boxed" (form (.Action "edit-metric"))}}
 {{template "boxed" (form (.Action "promote") "button" "Make it a person or a place")}}
 {{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}</div></section>{{end}}

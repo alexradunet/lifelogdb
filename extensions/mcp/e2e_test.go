@@ -107,7 +107,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	for _, tool := range listed.Tools {
 		tools[tool.Name] = true
 	}
-	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans", "edit_person"} {
+	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans", "edit_person", "edit_metric"} {
 		if !tools[name] {
 			t.Errorf("no tool %q", name)
 		}

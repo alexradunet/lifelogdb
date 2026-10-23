@@ -65,7 +65,7 @@ func TestARecordGoesBackToTheDayItWasMadeOn(t *testing.T) {
 // TestTheChipOfAHabitReturnsToThePageItWasOn: the write returns to the page whose rail drew the chip.
 func TestTheChipOfAHabitReturnsToThePageItWasOn(t *testing.T) {
 	h, do := lifeOf(t)
-	do("/", "register-metric", map[string]string{"name": "Stretch"})
+	do("/", "register-metric", map[string]string{"name": "Stretch", "daily": "1"})
 	do("/days/"+dayOf(-3), "record", map[string]string{"metric": "Stretch", "value": "1"})
 	page := "/days/" + dayOf(-1)
 	chip := regexp.MustCompile(`<a class="chip" href="([^"]+)">Stretch</a>`).FindStringSubmatch(browse(t, h, page))
@@ -118,12 +118,13 @@ func TestACorrectionStartsFromTheValueAndARetractionHasNone(t *testing.T) {
 	}
 }
 
-// TestHabitsAndUnitsAreSaid: a metric with no unit says how a habit comes and goes, with the days of the core, and
-// its value box shows what to type; a metric with a unit says neither. The tiles of a day show the unit, and a
-// metric read again on the day links to its page.
+// TestHabitsAndUnitsAreSaid: a metric with no unit says what a reading is, and its value box shows what to type; a
+// metric with a unit says neither. A daily metric says that its box is on every day page; one that is not daily says
+// nothing of it. The tiles of a day show the unit, and a metric read again on the day links to its page.
 func TestHabitsAndUnitsAreSaid(t *testing.T) {
 	h, do := lifeOf(t)
 	do("/", "register-metric", map[string]string{"name": "Stretch"})
+	do("/", "register-metric", map[string]string{"name": "Meditate", "daily": "1"})
 	do("/", "register-metric", map[string]string{"name": "Weight", "unit": "kg"})
 	do("/", "register-metric", map[string]string{"name": "Mood score", "unit": "1-5"})
 	for _, v := range []string{"70", "71"} {
@@ -133,12 +134,18 @@ func TestHabitsAndUnitsAreSaid(t *testing.T) {
 	do("/days/"+fixedToday, "record", map[string]string{"metric": "Stretch", "value": "1"})
 
 	habit := browse(t, h, "/metrics/Stretch")
-	for _, want := range []string{"shows in Today as a habit after its first reading, and leaves Today 14 days after its last", `placeholder="a count, or 1 done and 0 not done"`} {
+	for _, want := range []string{"With no unit, a reading is a count, or 1 for done and 0 for not done.", `placeholder="a count, or 1 done and 0 not done"`} {
 		if !strings.Contains(habit, want) {
 			t.Errorf("the page of a habit lacks %q", want)
 		}
 	}
-	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "days after its last") || strings.Contains(weight, "1 done and 0 not done") {
+	if strings.Contains(habit, "Asked for on every day") || strings.Contains(habit, "days after its last") {
+		t.Error("the page of a metric that is not daily speaks of the mark or of 14 days")
+	}
+	if daily := browse(t, h, "/metrics/Meditate"); !strings.Contains(daily, "Asked for on every day: its box is on every day page.") {
+		t.Errorf("the page of a daily metric does not say so:\n%s", daily)
+	}
+	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "1 done and 0 not done") || strings.Contains(weight, "Asked for on every day") {
 		t.Error("the page of a metric with a unit speaks of habits")
 	}
 
@@ -176,4 +183,35 @@ func returnedTo(t *testing.T, location string) string {
 	q.Del("feedback")
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+// TestAMetricsPageDrawsTheDailyFormUnderMore: the page of a metric offers edit-metric with the current mark, and the
+// form of the browser sets it. An unticked box sends nothing, which is 0. The page of a person has no such form.
+func TestAMetricsPageDrawsTheDailyFormUnderMore(t *testing.T) {
+	h, do := lifeOf(t)
+	do("/", "register-metric", map[string]string{"name": "Meditate"})
+	do("/", "create-person", map[string]string{"title": "Sam (barber)", "name": "Samuel Ortiz"})
+	page := regexp.MustCompile(`href="(/pages/\d+)"`).FindStringSubmatch(browse(t, h, "/metrics/Meditate"))[1]
+
+	more := func(body string) string { return regexp.MustCompile(`(?s)aria-label="More".*`).FindString(body) }
+	form := more(browse(t, h, page))
+	if !strings.Contains(form, "Ask for it every day") || strings.Contains(form, `name="daily" value="1" checked`) {
+		t.Errorf("the page of a metric that is not daily lacks an unticked box under More:\n%s", form)
+	}
+	if rec := submit(h, page+"/metric", url.Values{"daily": {"1"}}, page); rec.Code != http.StatusSeeOther {
+		t.Fatalf("the form answered %d: %.300s", rec.Code, rec.Body.String())
+	}
+	if form := more(browse(t, h, page)); !strings.Contains(form, `name="daily" value="1" checked`) {
+		t.Errorf("after the form, the box is not ticked:\n%s", form)
+	}
+	if rec := submit(h, page+"/metric", url.Values{}, page); rec.Code != http.StatusSeeOther {
+		t.Fatalf("the form with an empty box answered %d", rec.Code)
+	}
+	if form := more(browse(t, h, page)); strings.Contains(form, `name="daily" value="1" checked`) {
+		t.Errorf("after an empty box, the mark is still set:\n%s", form)
+	}
+	person := regexp.MustCompile(`href="(/pages/\d+)"`).FindStringSubmatch(browse(t, h, "/browse?kind=person"))[1]
+	if strings.Contains(browse(t, h, person), "Ask for it every day") {
+		t.Error("the page of a person draws the daily form")
+	}
 }

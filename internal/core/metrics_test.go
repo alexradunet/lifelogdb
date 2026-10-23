@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"lifelog/internal/text"
 )
 
 func TestMeasurementsAreAppendOnly(t *testing.T) {
@@ -639,5 +641,75 @@ func TestNewDatabaseReadingLookupUsesIndexes(t *testing.T) {
 		if !searched[alias] {
 			t.Errorf("reading lookup does not search %s by an index: %v", alias, plan)
 		}
+	}
+}
+
+// TestTheDailyMarkIsWrittenWithTheMetricAndEdited: a new metric and a promoted plain page get the mark that the call
+// names. An existing metric keeps its mark when it is registered again. EditMetric flips the mark and touches
+// neither the unit nor the readings. A plain page is a 409 and a missing page a 404.
+func TestTheDailyMarkIsWrittenWithTheMetricAndEdited(t *testing.T) {
+	s := fresh(t)
+	daily := func(name string) (unit string, daily bool) {
+		t.Helper()
+		if err := s.DB.R.QueryRowContext(ctx, `SELECT m.unit, m.daily FROM metrics m JOIN entity_names n ON n.entity_id = m.id WHERE n.name_key = ?`, text.TitleKey(name)).Scan(&unit, &daily); err != nil {
+			t.Fatal(err)
+		}
+		return unit, daily
+	}
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Meditate", Daily: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "Stretch", "my own words", ""); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Stretch", Daily: true}); err != nil || !added {
+		t.Fatalf("a plain page becomes a metric: %v %v", added, err)
+	}
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Sleep", Unit: "h"}); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{"Meditate": true, "Stretch": true, "Sleep": false} {
+		if _, got := daily(name); got != want {
+			t.Errorf("%s: daily %v, want %v", name, got, want)
+		}
+	}
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Meditate"}); err != nil || added {
+		t.Fatalf("registering Meditate again: %v %v", added, err)
+	}
+	if _, got := daily("Meditate"); !got {
+		t.Error("registering a metric again cleared its mark")
+	}
+
+	if _, err := s.Record(ctx, "cli", Reading{Metric: "Sleep", Day: "2026-10-01", Value: 7}); err != nil {
+		t.Fatal(err)
+	}
+	id, err := s.PageID(ctx, "Sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditMetric(ctx, "cli", id, true); err != nil {
+		t.Fatal(err)
+	}
+	if unit, got := daily("Sleep"); !got || unit != "h" {
+		t.Errorf("after EditMetric true: unit %q daily %v, want h and true", unit, got)
+	}
+	if err := s.EditMetric(ctx, "cli", id, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, got := daily("Sleep"); got {
+		t.Error("after EditMetric false: daily is still set")
+	}
+	if rs, err := s.Series(ctx, "Sleep", "2026-01-01", "2026-12-31"); err != nil || len(rs) != 1 {
+		t.Errorf("the readings of Sleep: %v %v, want 1", rs, err)
+	}
+	plain, _, err := s.CreatePage(ctx, "cli", "Plain", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditMetric(ctx, "cli", plain, true); status(err) != 409 {
+		t.Errorf("EditMetric on a plain page: %v, want 409", err)
+	}
+	if err := s.EditMetric(ctx, "cli", 9999, true); status(err) != 404 {
+		t.Errorf("EditMetric on a missing page: %v, want 404", err)
 	}
 }

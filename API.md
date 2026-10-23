@@ -437,7 +437,7 @@ picture of the page's cover, when it has one), `choose-cover` (the [pictures it 
 is not a file), `make-metric` (a live plain page that is not a day page: the address of the [New metric form](#metrics) with the name filled; registering the metric turns this page into it and keeps its text). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote`, `rename`, `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
+cannot empty a page), `promote`, `rename`, `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `edit-metric` (a live metric: `daily` filled with the current mark, 1 or 0; a field left out is 0; a page that is not a live metric is 409), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
 files a page and, with `from`, takes it out; a plain page, whose only kind would be `part-of`, offers neither), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
@@ -471,6 +471,9 @@ that is not a kept picture, or a file page, is refused (422).
 | `person.name` | string | the full name |
 | `person.birth_day` | day | born; absent when unknown |
 | `person.death_day` | day | died; absent when unknown |
+| `metric` | object | a metric's details; absent otherwise |
+| `metric.unit` | string | its unit, `''` for a count or a habit |
+| `metric.daily` | boolean | whether the owner asks for a reading of it on every day (D31) |
 | `file` | object | a file's identity; absent otherwise |
 | `file.sha256` | string | the SHA-256 of the original, hex |
 | `file.mime` | string | its media type |
@@ -597,12 +600,12 @@ page, D27). Embedded: `reading` links. Actions: `record` (this metric).
 | `readings[].value` | number | |
 | `readings[].captured_with_id` | integer | |
 | `unit` | string | its unit, `''` for a count or a habit, a range (`1-5`) for a scale; absent when the name is no live metric |
-| `habit_days` | integer | only when `unit` is `''`: after its last reading, the days a habit stays in Today |
+| `daily` | boolean | only for a live metric: whether the owner asks for a reading of it on every day (D31) |
 
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with every live metric as an option,
-[`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner). A
+[`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner; `daily` 1 asks for the metric on every day). A
 browser draws each metric as a card: its latest reading and the line of its recent readings
 ([plan 112](docs/plans/112-metrics-as-cards.md)). The answer of `register-metric` is the metric's [series](#series),
 with a `result` sentence; `file-pages` files a metric in a category.
@@ -613,6 +616,7 @@ with a `result` sentence; `file-pages` files a metric in a category.
 | `metrics[].id` | integer | its page's id |
 | `metrics[].name` | string | its name (the page's title) |
 | `metrics[].unit` | string | the unit, `''` for a count or a habit, a range (`1-5`) for a scale |
+| `metrics[].daily` | boolean | whether the owner asks for a reading of it on every day (D31) |
 | `metrics[].note` | string | the page's text; absent when empty |
 | `metrics[].categories` | list | the category paths it is filed in; absent when none |
 | `metrics[].recent[]` | list | its newest 30 current readings, oldest first: the last is its latest |
@@ -628,6 +632,7 @@ with a `result` sentence; `file-pages` files a metric in a category.
 | `groups[].metrics[].id` | integer | |
 | `groups[].metrics[].name` | string | |
 | `groups[].metrics[].unit` | string | |
+| `groups[].metrics[].daily` | boolean | |
 | `groups[].metrics[].note` | string | |
 | `groups[].metrics[].categories` | list | |
 | `categories[]` | list | every category page, by path: what `file-pages` files in |

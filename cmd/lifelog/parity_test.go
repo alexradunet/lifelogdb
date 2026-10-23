@@ -311,6 +311,7 @@ func parityRows() []parityRow {
 		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
 		parityRow{"edit-person", rowEditPerson},
+		parityRow{"edit-metric", rowEditMetric},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
 		parityRow{"set-cover by a kept title", rowSetCover},
 		parityRow{"a capture with a key sent again", rowCaptureSentAgain},
@@ -869,11 +870,39 @@ func rowRegisterMetric(x *parityRun) {
 		if e, err := x.page("Weight"); err != nil || props(x.t, e)["entity_type"] != "metric" {
 			x.t.Errorf("the page Weight: %v %v, want a metric", e, err)
 		}
+		// The mark: Weight has none, Run is registered with daily 1. The page and the board both say so.
+		x.ok("register-metric", map[string]string{"name": "Run", "daily": "1"})
+		for name, want := range map[string]bool{"Weight": false, "Run": true} {
+			pid, err := x.store.PageID(x.t.Context(), name)
+			if err != nil {
+				x.t.Fatal(err)
+			}
+			if m, _ := x.pageByID(pid)["metric"].(map[string]any); m["daily"] != want {
+				x.t.Errorf("the page %s: metric %v, want daily %v", name, m, want)
+			}
+			if got := x.boardDaily(name); got != want {
+				x.t.Errorf("GET /metrics: daily of %s is %v, want %v", name, got, want)
+			}
+		}
 		return
 	default:
 		x.refused("register-metric", args, http.StatusForbidden, "forbidden")
 	}
 	x.absent("Weight")
+}
+
+// boardDaily is the daily mark that GET /metrics says of the metric name.
+func (x *parityRun) boardDaily(name string) bool {
+	x.t.Helper()
+	rows, _ := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/metrics")))["metrics"].([]any)
+	for _, r := range rows {
+		if m, _ := r.(map[string]any); m["name"] == name {
+			d, _ := m["daily"].(bool)
+			return d
+		}
+	}
+	x.t.Fatalf("GET /metrics lists no metric %s", name)
+	return false
 }
 
 // rebuild-search is the owner's repair of the full-text index: a surface of an owner repairs a drifted index and
@@ -1001,6 +1030,61 @@ func rowEditPerson(x *parityRun) {
 	x.refused("edit-person", map[string]string{"id": id(plain), "name": "X"}, http.StatusConflict, "conflict")
 	if got := person(); !reflect.DeepEqual(got, want) {
 		x.t.Errorf("after refused edits: %v, want %v", got, want)
+	}
+}
+
+// edit-metric sets the daily mark of a metric, on every surface, for an owner and an agent alike: 1 sets it, and a call
+// with no daily (an unticked checkbox) sets 0. A plain page and a tombstoned metric are a 409. A refused call writes
+// nothing, and the readings stay.
+func rowEditMetric(x *parityRun) {
+	ctx := x.t.Context()
+	if _, err := x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: "Meditate"}); err != nil {
+		x.t.Fatal(err)
+	}
+	if _, err := x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: "Retired"}); err != nil {
+		x.t.Fatal(err)
+	}
+	plain, _, err := x.store.CreatePage(ctx, "cli", "Plain page", "", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	m, err := x.store.PageID(ctx, "Meditate")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	retired, err := x.store.PageID(ctx, "Retired")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	if _, err := x.store.Record(ctx, "cli", core.Reading{Metric: "Meditate", Day: "2026-10-01", Value: 1}); err != nil {
+		x.t.Fatal(err)
+	}
+	daily := func() any {
+		info, _ := x.pageByID(m)["metric"].(map[string]any)
+		return info["daily"]
+	}
+	if got := daily(); got != false {
+		x.t.Fatalf("a new metric: daily %v, want false", got)
+	}
+	x.ok("edit-metric", map[string]string{"id": id(m), "daily": "1"})
+	if got := daily(); got != true {
+		x.t.Errorf("after daily 1: %v", got)
+	}
+	x.ok("edit-metric", map[string]string{"id": id(m)}) // an unticked checkbox sends nothing
+	if got := daily(); got != false {
+		x.t.Errorf("after no daily: %v", got)
+	}
+	x.refused("edit-metric", map[string]string{"id": id(m), "daily": "2"}, http.StatusUnprocessableEntity, "invalid")
+	x.refused("edit-metric", map[string]string{"id": id(plain), "daily": "1"}, http.StatusConflict, "conflict")
+	if err := x.store.Tombstone(ctx, "cli", retired); err != nil {
+		x.t.Fatal(err)
+	}
+	x.refused("edit-metric", map[string]string{"id": id(retired), "daily": "1"}, http.StatusConflict, "conflict")
+	if got := daily(); got != false {
+		x.t.Errorf("after refused edits: %v", got)
+	}
+	if n := len(props(x.t, apitest.Must(x.t)(x.read.Get(ctx, "/metrics/Meditate")))["readings"].([]any)); n != 1 {
+		x.t.Errorf("the readings of Meditate: %d, want 1", n)
 	}
 }
 

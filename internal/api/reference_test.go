@@ -43,7 +43,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"result of schedule":        map[string]any{"line": 0, "page_id": int64(0), "written": "", "on": "", "due": ""},
 		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},
-		"series":                    map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "unit": "", "habit_days": 0},
+		"series":                    map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "unit": "", "daily": false},
 		"metrics":                   map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
 		"snapshot":                  map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
 		"rebuilt":                   map[string]any{"documents": 0},

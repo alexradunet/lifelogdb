@@ -8,7 +8,7 @@ import (
 )
 
 // todayStrip is what the Today strip of the rail shows (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4):
-// whether today has words and a mood, the habits in use with what today says of each, and the streak. The rail
+// whether today has words and a mood, the chips with what today says of each, and the streak. The rail
 // reads it once a page, and so does the head of a day for its streak.
 func todayStrip(ctx context.Context, s *core.Store, today string) (*view.Strip, error) {
 	streak, written, err := s.Streak(ctx, today)

@@ -13,14 +13,15 @@ import (
 	"lifelog/internal/text"
 )
 
-// RegisterMetric makes a metric (D27): a page titled name, whose body is the note, and its metrics row with the
-// unit, one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
+// RegisterMetric makes a metric (D27): a page titled m.Name, whose body is m.Note, and its metrics row with the
+// unit and the daily mark (D31), one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
 // the owner wrote about it, whose text is kept — the note is written only to an empty body. The schema refuses a
 // person, a place or a file of that title (entities_promote_from_page). Registering one that
 // exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
 // source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
-// refused: a unit never changes (metrics_unit_fixed).
-func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
+// refused: a unit never changes (metrics_unit_fixed). A metric that exists keeps its mark: EditMetric changes it.
+func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
+	name, unit, note := m.Name, m.Unit, m.Note
 	if err := checkTitle("metric name", name); err != nil {
 		return false, err
 	}
@@ -35,7 +36,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, id, unit); err != nil {
+		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, id, unit, m.Daily); err != nil {
 			return false, err
 		}
 		_, err = t.syncWikilinks(id, note)
@@ -55,7 +56,7 @@ func (t *Tx) RegisterMetric(name, unit, note string) (added bool, err error) {
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}
-	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit) VALUES (?, ?)`, p.ID, unit); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, p.ID, unit, m.Daily); err != nil {
 		return false, err
 	}
 	if note != "" && p.Body == "" { // the owner's text is never overwritten
@@ -99,15 +100,32 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-// NewMetric is what CreateMetric makes in one write: the metric, its unit and its note.
+// NewMetric is what CreateMetric makes in one write: the metric, its unit, its note and its daily mark (D31).
 type NewMetric struct {
 	Name, Unit, Note string
+	Daily            bool
+}
+
+// EditMetric sets the daily mark of a live metric (D31). The unit, the page and the readings stay. A missing page is
+// a 404, a tombstoned page or a page that is not a metric a 409, as EditPerson says for a person.
+func (s *Store) EditMetric(ctx context.Context, source string, id int64, daily bool) error {
+	return s.Do(ctx, source, func(t *Tx) error {
+		p, err := t.livePage(id)
+		if err != nil {
+			return err
+		}
+		if p.Type != "metric" {
+			return Conflict("page %d is a %s, not a metric", id, p.Type)
+		}
+		_, err = t.tx.ExecContext(t.ctx, `UPDATE metrics SET daily = ? WHERE id = ?`, daily, id)
+		return err
+	})
 }
 
 // CreateMetric registers a metric in one write. It reports whether the metric is new, as RegisterMetric does.
 // file-pages files it in a category (docs/plans/131-the-pareto-pass.md, part 2).
 func (s *Store) CreateMetric(ctx context.Context, source string, m NewMetric) (bool, error) {
-	return alone(s, ctx, source, func(t *Tx) (bool, error) { return t.RegisterMetric(m.Name, m.Unit, m.Note) })
+	return alone(s, ctx, source, func(t *Tx) (bool, error) { return t.RegisterMetric(m) })
 }
 
 // Reading is one measurement to record (D7).
@@ -222,15 +240,16 @@ type Metric struct {
 	Name       string   `json:"name"`
 	Unit       string   `json:"unit"`
 	Note       string   `json:"note,omitempty"`
+	Daily      bool     `json:"daily"`
 	Categories []string `json:"categories,omitempty"`
 }
 
 func (s *Store) Metrics(ctx context.Context) ([]Metric, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT m.id, p_name.title, m.unit, p.body
+		SELECT m.id, p_name.title, m.unit, p.body, m.daily
 		  FROM metrics m JOIN entities p ON p.id = m.id JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key AND p.deleted_at IS NULL
 		 ORDER BY p.preferred_name_key`)
-	out, err := list(rows, err, func(m *Metric) []any { return []any{&m.ID, &m.Name, &m.Unit, &m.Note} })
+	out, err := list(rows, err, func(m *Metric) []any { return []any{&m.ID, &m.Name, &m.Unit, &m.Note, &m.Daily} })
 	if err != nil {
 		return nil, err
 	}

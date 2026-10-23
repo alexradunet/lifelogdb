@@ -166,7 +166,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
   page's entity: it reads the clock, for today's date, and the Today strip
   ([plan 137](docs/plans/137-pixel-wood-and-the-focus-pass.md)). The strip says "2 of 4 done" over the entry, the mood
-  and the habits in use. A habit in use is a unitless metric with a reading in the last 14 days. Each chip is a link
+  and the chips. A chip is a daily metric with no unit ([D31](docs/decisions/D31-daily-metrics.md)). Each chip is a link
   to the form that does the thing. The strip also shows the days written in a row ([the streak](docs/cookbook/streaks.md)).
   On a phone the strip is in the sheet. While the entry box has the focus, the rest of the page steps back (writing
   mode). A page drawn before the handler
@@ -388,7 +388,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the count and a button for each action the list offers.
 - **New metric** ([plan 113](docs/plans/113-new-metric-on-metrics.md)). New metric is one form in the header of
   `/metrics`, not on the page of today: a name, a unit (kg; a range such as 1-5 for a score; nothing for done or not
-  done) and a note. The pick bar of the board files metrics in a category, made when it is new.
+  done), a note, and Ask for it every day (a box for it on every day page; a metric's page changes it under More). The pick bar of the board files metrics in a category, made when it is new.
 - **Files** ([keep a file](docs/cookbook/keep-a-file.md), D9). `add-file` (`POST /files`, `lifelog file`) streams
   the original through SHA-256 and drops it; nothing of it is stored. `internal/preview` makes every picture itself —
   from a JPEG, PNG or GIF, or a JPEG sent for a HEIC or a video frame: scaled to 1280 px, turned upright by EXIF,
@@ -455,6 +455,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
 | `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person or a place |
 | `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | a person, More: Edit name and dates |
+| `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric's page, More: Ask for it every day |
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
 | `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
 | `link` | `POST /pages/{id}/links` | `do link` | `link` | a day: Where, I was at a place; a page, More: Add a typed link |

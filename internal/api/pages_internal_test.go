@@ -70,6 +70,18 @@ func TestPageActionsByTypeAndState(t *testing.T) {
 			"file-pages /pages/file ids:5 category=Health|Writing move=0|1 move:0",
 			"tombstone-pages /pages/tombstone ids:5",
 		}},
+		{"a metric", core.Page{ID: 7, Type: "metric", Title: "Sleep", Version: "1", Metric: &core.MetricInfo{Unit: "h", Daily: true}}, []string{"part-of"}, []string{
+			"save-body /pages/7/body version:1",
+			"plan /pages/plan page:Sleep from_done=0|1",
+			"tick /pages/7/tick outcome=done|dropped|reopen",
+			"carry /pages/7/carry",
+			"schedule /pages/7/schedule",
+			"rename /pages/7/rename",
+			"edit-metric /pages/7/metric daily=0|1 daily:1",
+			"set-cover /pages/7/cover",
+			"file-pages /pages/file ids:7 category=Health|Writing move=0|1 move:0",
+			"tombstone-pages /pages/tombstone ids:7",
+		}},
 		{"a place", core.Page{ID: 6, Type: "place", Title: "Lisbon", Version: "1"}, []string{"part-of"}, []string{
 			"save-body /pages/6/body version:1",
 			"plan /pages/plan page:Lisbon from_done=0|1",

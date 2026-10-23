@@ -49,14 +49,14 @@ func browserSends(t *testing.T, body string) url.Values {
 	return sent
 }
 
-// TestALinkToTheRecordFormOfAMetricRecordsThatMetric: a metric not read for years is not among the ones in use,
+// TestALinkToTheRecordFormOfAMetricRecordsThatMetric: a metric not read for years is not among the ones read lately,
 // and the link ?new=record&metric=X must still record X, never the first metric of the list.
 func TestALinkToTheRecordFormOfAMetricRecordsThatMetric(t *testing.T) {
 	h, do := lifeOf(t)
 	for _, n := range []string{"Evening walk", "Meditate"} {
 		do("/", "register-metric", map[string]string{"name": n})
 	}
-	do("/days/"+dayOf(-1), "record", map[string]string{"metric": "Evening walk", "value": "1"}) // in use; Meditate is not
+	do("/days/"+dayOf(-1), "record", map[string]string{"metric": "Evening walk", "value": "1"}) // the one read; Meditate is not
 
 	body := browse(t, h, "/?new=record&metric=Meditate&value=1")
 	sent := browserSends(t, body)

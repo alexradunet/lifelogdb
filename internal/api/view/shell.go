@@ -24,11 +24,11 @@ type Shell struct {
 type Strip struct {
 	Written bool    // the day page of today has words
 	Mood    bool    // a mood reading of today
-	Habits  []Habit // the habits in use, by name
+	Habits  []Habit // the chips (daily metrics with no unit), by name
 	Streak  int     // days written in a row, ending today or yesterday
 }
 
-// Habit is a habit in use (D24). Done is nil when it has no reading today, else whether the reading is not 0.
+// Habit is a chip: a daily metric with no unit (D31, D24). Done is nil when it has no reading today, else whether the reading is not 0.
 type Habit struct {
 	Name string
 	Done *bool

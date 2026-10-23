@@ -295,27 +295,34 @@ func (s *Store) Tombstone(ctx context.Context, source string, ids ...int64) erro
 
 // Page is one page with what surrounds it. Version is the decimal entities.revision token: pass it back to SaveBody.
 type Page struct {
-	ID        int64   `json:"id"`
-	Type      string  `json:"entity_type"`
-	Title     string  `json:"title"`
-	Day       string  `json:"day,omitempty"`
-	Period    string  `json:"period,omitempty"` // year, month, quarter or week for a period page (D30), read from entities.period
-	Body      string  `json:"body"`
-	CreatedAt string  `json:"created_at"`
-	Version   string  `json:"version"`
-	DeletedAt string  `json:"deleted_at,omitempty"`
-	IsDayPage bool    `json:"is_day_page"`
-	Person    *Person `json:"person,omitempty"`
-	File      *File   `json:"file,omitempty"`
-	Cover     *Cover  `json:"cover,omitempty"` // nil for a file page, and for a page with no cover
-	Out       []Edge  `json:"links"`
-	In        []Edge  `json:"backlinks"`
+	ID        int64       `json:"id"`
+	Type      string      `json:"entity_type"`
+	Title     string      `json:"title"`
+	Day       string      `json:"day,omitempty"`
+	Period    string      `json:"period,omitempty"` // year, month, quarter or week for a period page (D30), read from entities.period
+	Body      string      `json:"body"`
+	CreatedAt string      `json:"created_at"`
+	Version   string      `json:"version"`
+	DeletedAt string      `json:"deleted_at,omitempty"`
+	IsDayPage bool        `json:"is_day_page"`
+	Person    *Person     `json:"person,omitempty"`
+	Metric    *MetricInfo `json:"metric,omitempty"`
+	File      *File       `json:"file,omitempty"`
+	Cover     *Cover      `json:"cover,omitempty"` // nil for a file page, and for a page with no cover
+	Out       []Edge      `json:"links"`
+	In        []Edge      `json:"backlinks"`
 }
 
 type Person struct {
 	Name  string `json:"name"`
 	Birth string `json:"birth_day,omitempty"`
 	Death string `json:"death_day,omitempty"`
+}
+
+// MetricInfo is what a metric's page holds beside the page: its unit and its daily mark (D31).
+type MetricInfo struct {
+	Unit  string `json:"unit"`
+	Daily bool   `json:"daily"`
 }
 
 // PageByID reads a page, tombstoned or not (the caller decides what a tombstone shows).
@@ -341,6 +348,13 @@ func (s *Store) PageByID(ctx context.Context, id int64) (*Page, error) {
 			return nil, err
 		}
 		p.Person.Birth, p.Person.Death = b.String, d.String
+	}
+	if p.Type == "metric" {
+		p.Metric = &MetricInfo{}
+		if err := s.DB.R.QueryRowContext(ctx, `SELECT unit, daily FROM metrics WHERE id = ?`, id).
+			Scan(&p.Metric.Unit, &p.Metric.Daily); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
 	}
 	if p.Type == "file" {
 		p.File = &File{}

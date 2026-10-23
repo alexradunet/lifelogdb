@@ -196,9 +196,7 @@ func (h *server) seriesEntity(ctx context.Context, name string, q url.Values) (*
 	}
 	if m != nil {
 		props["unit"] = m.Unit
-		if m.Unit == "" {
-			props["habit_days"] = core.HabitDays // a metric with no unit is a count or a habit (D24): Today shows it once it is read
-		}
+		props["daily"] = m.Daily
 		e.Links = append(e.Links, link("page", siren.PageHref(m.ID), "Page"))
 	}
 	for _, m := range rows {
@@ -321,7 +319,11 @@ func (h *server) registerMetric(r *http.Request, act spec, src string) (*siren.E
 	if err != nil {
 		return nil, err
 	}
-	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note")}
+	daily, err := flag(v, "daily")
+	if err != nil {
+		return nil, err
+	}
+	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Daily: daily}
 	added, err := h.s.CreateMetric(r.Context(), src, m)
 	if err != nil {
 		return nil, err

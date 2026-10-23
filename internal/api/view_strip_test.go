@@ -27,13 +27,13 @@ func doAction(t *testing.T, c *client.Client, from, action string, v map[string]
 	must(c.Do(t.Context(), apitest.Action(t, must(c.Get(t.Context(), from)), action), v))
 }
 
-// TestTheTodayStripReadsTheLife: three days written in a row ending today, a mood today, and three habits in use:
-// Walk done today, Stretch with a reading ten days ago and none today, Smoke recorded 0 today. A metric with a unit
+// TestTheTodayStripReadsTheLife: three days written in a row ending today, a mood today, and three chips (daily
+// metrics with no unit): Walk done today, Stretch with a reading ten days ago and none today, Smoke recorded 0 today. A metric with a unit
 // is no habit. The strip counts the entry, the mood and Walk: 3 of 5. The head of today shows the same streak.
 func TestTheTodayStripReadsTheLife(t *testing.T) {
 	h, do := lifeOf(t)
 	for _, n := range []string{"Walk", "Stretch", "Smoke"} {
-		do("/", "register-metric", map[string]string{"name": n})
+		do("/", "register-metric", map[string]string{"name": n, "daily": "1"})
 	}
 	do("/", "register-metric", map[string]string{"name": "Weight", "unit": "kg"})
 	for _, n := range []int{-2, -1, 0} {
@@ -132,7 +132,7 @@ func TestOnThisDayStopsAtFiveYears(t *testing.T) {
 func TestAHabitChipReturnsWithoutTheOpenForm(t *testing.T) {
 	h, do := lifeOf(t)
 	for _, n := range []string{"Walk", "Run"} {
-		do("/", "register-metric", map[string]string{"name": n})
+		do("/", "register-metric", map[string]string{"name": n, "daily": "1"})
 		do("/days/"+dayOf(-1), "record", map[string]string{"metric": n, "value": "1"})
 	}
 	body := browse(t, h, "/?back=%2F&metric=Walk&new=record&value=1")

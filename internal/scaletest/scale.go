@@ -269,7 +269,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 			return e
 		}
 		for i, name := range metricNames {
-			if _, e = tx.RegisterMetric(name, []string{"kg", "", "mg", ""}[i], "Synthetic metric"); e != nil {
+			if _, e = tx.RegisterMetric(core.NewMetric{Name: name, Unit: []string{"kg", "", "mg", ""}[i], Note: "Synthetic metric"}); e != nil {
 				return e
 			}
 		}

@@ -334,7 +334,7 @@ func TestAReadingsFactsAreOnACard(t *testing.T) {
 // New metric on /metrics (docs/plans/113-new-metric-on-metrics.md): one form of register-metric, a name, a unit and a
 // note (docs/plans/131-the-pareto-pass.md, part 3). file-pages files a metric in a category.
 
-func TestRegisterMetricTakesANameAUnitAndANote(t *testing.T) {
+func TestRegisterMetricTakesANameAUnitANoteAndTheDailyMark(t *testing.T) {
 	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
 	register := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/metrics")), "register-metric")
@@ -345,7 +345,7 @@ func TestRegisterMetricTakesANameAUnitAndANote(t *testing.T) {
 	for _, f := range register.Fields {
 		fields = append(fields, f.Name)
 	}
-	if !slices.Equal(fields, []string{"name", "unit", "note"}) {
+	if !slices.Equal(fields, []string{"name", "unit", "note", "daily"}) {
 		t.Errorf("register-metric fields: %v", fields)
 	}
 	walk := apitest.Must(t)(c.Do(ctx, register, map[string]string{"name": "Walk"}))
