@@ -36,3 +36,20 @@ A page shows on the day it was *written* (a link target the app created has no d
 edited since. "Edited" is the edit revision above 1, never two clock values compared: creating a page, with its owned
 name and typed row, leaves revision 1, and the clocks of separate statements need not agree
 (`lifelog_meta.edit_revisions`).
+
+## The readings asked for on this day
+
+The live daily metrics ([D31](../decisions/D31-daily-metrics.md)), in name order, each with the last value of the day.
+A daily metric with no value is a row with NULL: the day says nothing about it ([D24](../decisions/D24-habits.md)).
+
+```sql
+SELECT p.title, m.unit,
+       (SELECT v.value FROM measurement_values v
+         WHERE v.metric_id = m.id AND v.day = :day
+         ORDER BY v.taken_at DESC, v.id DESC LIMIT 1) AS value
+  FROM metrics m
+  JOIN entities e ON e.id = m.id AND e.deleted_at IS NULL
+  JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
+ WHERE m.daily = 1
+ ORDER BY e.preferred_name_key;
+```

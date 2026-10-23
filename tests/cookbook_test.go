@@ -122,6 +122,22 @@ func cookbookMeasurementReads(s *S) {
 	c.must("UPDATE entities SET deleted_at=NULL WHERE id IN (1,?)", weight)
 	s.K("active measurement recipes restore readings on metric revival", len(c.rows(series, params)) == 1 && len(c.rows(mood)) == 1 && len(c.rows(day, params)) == 2)
 
+	// the readings asked for on a day (D31): the live daily metrics in name order, a NULL value where the day has none
+	asked := sqlBlocks(s.d.Page("cookbook/day-view.md"))
+	if s.K("the day view has the block of the readings asked for on this day", len(asked) == 2) {
+		c = s.fresh()
+		sleep, meditate := c.metric("Sleep", "h"), c.metric("Meditate", "")
+		count, gone := c.metric("Count", ""), c.metric("Zeta", "")
+		for _, id := range []int64{sleep, meditate, gone} {
+			c.must("UPDATE metrics SET daily=1 WHERE id=?", id)
+		}
+		c.measure(sleep, "2026-10-01", 7.5)
+		c.measure(count, "2026-10-01", 3)
+		c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", gone)
+		s.K("the readings asked for on a day: the live daily metrics in name order, a metric with no reading has a NULL value, a metric that is not daily or is tombstoned is absent",
+			c.tab(asked[1], P{"day": "2026-10-01"}) == "Meditate||None; Sleep|h|7.5", c.tab(asked[1], P{"day": "2026-10-01"}))
+	}
+
 	blocks := sqlBlocks(s.d.Page("cookbook/metric-series.md"))
 	if !s.K("metric series includes a recorded-time cutoff recipe", len(blocks) == 2) {
 		return

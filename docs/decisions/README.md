@@ -36,3 +36,4 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D28](D28-capture-keys.md) | A capture key: a capture sent again changes nothing. | accepted |
 | [D29](D29-plan-lines.md) | A plan is a line of a page: the writer reads it, the file does not know it. | accepted |
 | [D30](D30-period-pages.md) | A period is a page with a canonical key: a week, a month, a quarter, a year. | accepted |
+| [D31](D31-daily-metrics.md) | A daily metric: the writer asks for a reading of it on every day. | accepted |

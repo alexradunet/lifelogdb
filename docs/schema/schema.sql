@@ -260,11 +260,13 @@ CREATE TABLE metrics (
   -- gives every stored value its meaning, so it never changes (metrics_unit_fixed). Seeded with Mood (D6).
   -- A category is a page: a metric is filed in one by a part-of link from its page (D26).
   -- A habit is a unitless metric with a reading of 1 or 0 a day (D24), NOT a category.
+  -- A daily metric (daily = 1) is one the writer asks for a reading of on every day (D31); the mark may change.
   -- A metric registered by mistake is tombstoned, never deleted (D11); its readings stay life data.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL DEFAULT 'metric' CONSTRAINT metrics_entity_type CHECK (entity_type = 'metric'),
   unit        TEXT NOT NULL DEFAULT '' CONSTRAINT metrics_unit CHECK (instr(unit, char(0)) = 0 AND unit = trim(unit)
                            AND length(CAST(unit AS BLOB)) <= 32),   -- 'kg', 'bpm', 'h'; '' for a count or a 0/1 habit; a scale names its range ('1-5', '0-10')
+  daily       INTEGER NOT NULL DEFAULT 0 CONSTRAINT metrics_daily CHECK (daily IN (0, 1)),  -- 1: the writer asks for a reading of it on every day (D31); a day with no reading still says nothing (D24)
   FOREIGN KEY (id, entity_type) REFERENCES entities(id, entity_type)
 ) STRICT;
 CREATE TRIGGER metrics_unit_fixed BEFORE UPDATE OF unit ON metrics

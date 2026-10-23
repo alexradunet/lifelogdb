@@ -295,6 +295,7 @@ var mutants = []struct {
 	{"identity", "measurements.source may be anything", "source  rejected on entities and measurements", nocheck("measurements_source")},
 	{"identity", "entities.entity_type may be anything", "entities.entity_type rejects an unknown type", nocheck("entities_entity_type")},
 	{"facts", "a metrics row may name a page that is not a metric", "...and cannot claim another type to hang off a person's page", nocheck("metrics_entity_type")},
+	{"facts", "a metric's daily mark takes any number", "metrics.daily takes only 0 or 1", nocheck("metrics_daily")},
 	{"facts", "a metric's unit can change", "metrics.unit cannot change", notrigger("metrics_unit_fixed")},
 	{"facts", "a reading may be corrected twice", "a second correction of the same row is refused", edit("CREATE UNIQUE INDEX measurements_one_correction", "CREATE INDEX measurements_one_correction")},
 	{"facts", "a measurement may be imported twice", "a duplicate measurement import is refused by its unique index", edit("CREATE UNIQUE INDEX measurements_import", "CREATE INDEX measurements_import")},

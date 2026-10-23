@@ -29,5 +29,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0020](0020-a-day-page-is-never-filed.md) | A day page is never filed: links_endpoint_types refuses a part-of link from it | accepted | [0080](../issues/0080-a-filed-day-page-is-shown-nowhere.md) | [D26](../decisions/D26-metric-categories.md) |
 | [0021](0021-a-capture-key.md) | A capture key: the writer keeps the key of each capture it adds | accepted | [0085](../issues/0085-a-resent-capture-appends-twice.md) | [D28](../decisions/D28-capture-keys.md) |
 | [0022](0022-plan-lines-and-period-pages.md) | Plan lines and period pages: the planning axis without a table | accepted | [0087](../issues/0087-a-plan-written-as-words-cannot-be-read-as-a-plan.md) | [D29](../decisions/D29-plan-lines.md), [D30](../decisions/D30-period-pages.md), [D23](../decisions/D23-no-tasks.md), [D15](../decisions/D15-recurrence.md) |
+| [0023](0023-a-daily-mark-on-a-metric.md) | A daily mark on a metric: the owner says which readings the writer asks for | accepted | [0090](../issues/0090-the-writer-guesses-which-metrics-are-daily.md) | [D31](../decisions/D31-daily-metrics.md) |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.

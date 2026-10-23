@@ -24,7 +24,7 @@
 - **One metric, one meaning.** A reading has no scope beside its metric and day. A total that must not add to a
   daily total, such as the steps of one workout, is a reading of another metric (`workout-steps` beside `steps`).
   `captured_with_id` is capture provenance only.
-- **Habits** are unitless metrics with a reading of 1 (done) or 0 (not done) a day ([D24](D24-habits.md)): ordinary rows here.
+- **Habits** are unitless metrics with a reading of 1 (done) or 0 (not done) a day ([D24](D24-habits.md)); the ones asked for on every day carry `metrics.daily` ([D31](D31-daily-metrics.md)): ordinary rows here.
 - **Categories** file metrics in pages nested by `part-of` links (Biomarkers, Lipids, Substances) ([D26](D26-metric-categories.md)).
 - **`captured_with_id`** is provenance (the day page the reading was captured with), not "about
   this person": the owner is the only subject of measurements.

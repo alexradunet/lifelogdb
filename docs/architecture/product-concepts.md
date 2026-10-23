@@ -12,7 +12,7 @@
 | Life graph ("everything about my son") | `links` in both directions from his id ([everything about](../cookbook/everything-about.md)) |
 | Sleep, workouts and other recorded activities | a reading on the reporting day, under a metric of its own when it must not add to a daily total (`workout-steps` beside `steps`); anything else is day-page prose ([D22](../decisions/D22-events.md)) |
 | A span of life (a trip, a job, a home) | a plain page: its body says when; the day pages inside it link it, so its backlinks list those days ([D22](../decisions/D22-events.md)) |
-| Habits | a unitless metric with a reading of 1 or 0 a day ([D24](../decisions/D24-habits.md)); its series is the record |
+| Habits | a unitless metric with a reading of 1 or 0 a day ([D24](../decisions/D24-habits.md)); its series is the record; the habits the writer asks for on every day carry `metrics.daily` ([D31](../decisions/D31-daily-metrics.md)) |
 | Birthdays | a query over `people.birth_day` |
 | Biomarkers / quantified self | `metrics` + `measurements` ([a metric series](../cookbook/metric-series.md)), filed in category pages ([metrics by category](../cookbook/metrics-by-category.md), [D26](../decisions/D26-metric-categories.md)) |
 | Imported notes (a vault) | `entities.import_key`, unique per `source`: a re-run inserts nothing, a changed note updates its page ([import a row once](../cookbook/import-a-row-once.md)) |

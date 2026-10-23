@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,23 @@ func facts(s *S) {
 	s.K("a metric rename preserves its id, readings and owned prior handle", renameErr == nil && renamed == w && c.n("SELECT count(*) FROM entity_names WHERE entity_id=?", w) == 2 && c.n("SELECT count(*) FROM measurements WHERE metric_id=?", w) == 1, renameErr)
 	_, duplicateErr := c.tryIdentity("metric", "WEIGHT", nil)
 	s.K("a metric name is reserved once across owned aliases, whatever its case", duplicateErr != nil && strings.Contains(duplicateErr.Error(), "UNIQUE"), duplicateErr)
+	// ---- a daily metric (D31): the mark is 0 or 1, and it may change while the unit stays
+	daily := func(value int) string { // a page promoted to a metric, then the insert that is the probe (D20)
+		id := c.page("Daily probe " + strconv.Itoa(value))
+		c.must("UPDATE entities SET entity_type='metric' WHERE id=?", id)
+		return c.tryx("INSERT INTO metrics(id,unit,daily) VALUES (?,'n',?)", id, value)
+	}
+	plain := c.page("Daily default")
+	c.must("UPDATE entities SET entity_type='metric' WHERE id=?", plain)
+	c.must("INSERT INTO metrics(id,unit) VALUES (?,'n')", plain)
+	s.K("metrics.daily takes only 0 or 1",
+		err(daily(2)) && err(daily(-1)) && daily(0) == "OK" && daily(1) == "OK" &&
+			c.n("SELECT count(*) FROM metrics WHERE daily NOT IN (0, 1)") == 0 &&
+			c.n("SELECT daily FROM metrics WHERE id=?", plain) == 0)
+	s.K("a metric's daily mark may change",
+		c.tryx("UPDATE metrics SET daily=1 WHERE id=?", w) == "OK" && c.n("SELECT daily FROM metrics WHERE id=?", w) == 1 &&
+			c.tryx("UPDATE metrics SET daily=0 WHERE id=?", w) == "OK" && c.n("SELECT daily FROM metrics WHERE id=?", w) == 0 &&
+			c.tab("SELECT unit FROM metrics WHERE id=?", w) == "kg")
 	pg := c.page("Steps")
 	s.K("a metrics row needs a page of type metric", err(c.tryx("INSERT INTO metrics(id,unit) VALUES (?,'n')", pg)))
 	s.K("...and cannot claim another type to hang off a person's page", err(c.tryx("INSERT INTO metrics(id,entity_type,unit) VALUES (?,'person','n')", c.named("person", "Ann"))))

@@ -5,7 +5,8 @@
 - **Decision.** A habit is a metric ([D7](D07-measurements.md)) with no unit, whose readings are 1 (done) or 0 (not
   done), one a day, recorded with `record` like any reading. There is no `habit_periods` table: when a habit applies
   is words in its page, and a day with no reading is a day with no reading. A habit is filed in a category like any
-  other metric ([D26](D26-metric-categories.md)); a category named Habits is the owner's choice.
+  other metric ([D26](D26-metric-categories.md)); a category named Habits is the owner's choice. Which habits the writer asks for on every day is `metrics.daily`
+  ([D31](D31-daily-metrics.md)).
 - **Why.** The owner reviewed the writer on 2026-10-15 and kept the core only
   ([RFC 0018](../rfcs/0018-no-habit-periods.md)): the periods answered "was this habit meant to be done that day",
   and the answer cost a table, eight triggers, two integrity queries, three actions, a lens of the metrics view, a

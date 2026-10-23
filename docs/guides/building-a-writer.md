@@ -24,5 +24,8 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
 5. For imports, [imports](../contract/imports.md): a program loads rows itself; an agent works with the owner through the
    writer's operations.
 
+A writer may read `metrics.daily` ([D31](../decisions/D31-daily-metrics.md)) to ask the owner for those readings on
+every day. It never refuses a reading of a metric that is not daily.
+
 Such an application changes nothing here. If it finds a rule that is ambiguous, untestable or missing, that is an
 [issue](../issues/README.md): the fix goes into the docs (and their suites), not just into the application.
