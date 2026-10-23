@@ -160,8 +160,8 @@ func TestTheDailyTilesComeFirst(t *testing.T) {
 		"units":    map[string]any{"Sleep": "h"},
 		"readings": []any{r(5, "weight", 70), r(6, "Sleep", 7), r(7, "Sleep", 8)}}}
 	want := []readingTile{
-		{Metric: "Meditate", Daily: true},
-		{Metric: "Sleep", Unit: "h", Value: "8", ID: "7", More: 1, Daily: true},
+		{Metric: "Meditate"},
+		{Metric: "Sleep", Unit: "h", Value: "8", ID: "7", More: 1},
 		{Metric: "weight", Value: "70", ID: "5"},
 	}
 	if got := v.ReadingTiles(); !reflect.DeepEqual(got, want) {

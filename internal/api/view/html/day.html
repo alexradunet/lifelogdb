@@ -57,7 +57,7 @@
 {{- if or $tiles (.Action "record")}}
 <section class="group" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><a href="/metrics">Metrics</a></div>
-{{with $tiles}}<div class="readings">{{range .}}{{$metric := .Metric}}{{$unit := .Unit}}<div class="reading-tile{{if .Daily}} daily{{end}}"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
+{{with $tiles}}<div class="readings">{{range .}}{{$metric := .Metric}}{{$unit := .Unit}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
 {{if .ID}}{{template "reading-link" (dict "id" .ID "value" .Value "unit" (unitWords .Unit))}}
 {{with .More}}<a class="meta" href="/metrics/{{pathesc $metric}}">and {{.}} more this day</a>{{end}}
 {{else}}{{with $.Action "record"}}{{if $unit}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "placeholder" (printf "value=%s" $unit))}}{{else}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "options" "value=1,0")}}{{end}}{{end}}{{end}}</div>{{end}}</div>{{end}}

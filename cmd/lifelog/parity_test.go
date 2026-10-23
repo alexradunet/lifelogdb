@@ -872,6 +872,9 @@ func rowRegisterMetric(x *parityRun) {
 		}
 		// The mark: Weight has none, Run is registered with daily 1. The page and the board both say so.
 		x.ok("register-metric", map[string]string{"name": "Run", "daily": "1"})
+		// Sent again with another mark it is refused; sent with no mark it is returned as it is.
+		x.refused("register-metric", map[string]string{"name": "Run", "daily": "0"}, http.StatusConflict, "conflict")
+		x.ok("register-metric", map[string]string{"name": "Run"})
 		for name, want := range map[string]bool{"Weight": false, "Run": true} {
 			pid, err := x.store.PageID(x.t.Context(), name)
 			if err != nil {

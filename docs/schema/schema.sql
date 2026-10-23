@@ -532,6 +532,10 @@ CREATE TRIGGER people_touch AFTER UPDATE ON people
 BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
 END;
+CREATE TRIGGER metrics_touch AFTER UPDATE OF daily ON metrics WHEN NEW.daily IS NOT OLD.daily
+BEGIN
+  UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;
+END;
 CREATE TRIGGER files_touch AFTER UPDATE ON files WHEN NEW.preview IS NOT OLD.preview
 BEGIN
   UPDATE entities SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), revision = revision + 1 WHERE id = NEW.id;

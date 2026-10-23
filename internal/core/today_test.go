@@ -70,7 +70,7 @@ func TestHabitsAreTheDailyMetricsWithNoUnit(t *testing.T) {
 		name, unit string
 		daily      bool
 	}{{"Walk", "", true}, {"No phone", "", true}, {"Stretch", "", true}, {"Read", "", false}, {"Sleep", "h", true}, {"Weight", "kg", false}} {
-		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit, Daily: m.daily}); err != nil {
+		if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: m.name, Unit: m.unit, Daily: &m.daily}); err != nil {
 			t.Fatal(err)
 		}
 	}

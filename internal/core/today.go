@@ -44,8 +44,7 @@ type Habit struct {
 }
 
 // Habits are the chips of the day today, by name: the live metrics that are daily and have no unit (D31, D24). A
-// reading of 0 is not done; any other value of today is. A daily metric with a unit is a box on the day page, not a
-// chip.
+// reading of 0 is not done; any other value of today is. A daily metric with a unit is not a chip.
 func (s *Store) Habits(ctx context.Context, today string) ([]Habit, error) {
 	if err := checkDay("today", today); err != nil {
 		return nil, err

@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** M. **Risk:** MEDIUM: one new column (`metrics.daily`), one new field of
   `register-metric`, one new action (`edit-metric`), a change of the Readings section of a day, and the Today strip
   reads the column in place of a 14-day window. The live file needs the column before the new binary runs.
-- **Status:** IN PROGRESS.
+- **Status:** IN PROGRESS. Built on 2026-10-23 on master, counter-reviewed; live after the owner runs Part 4.
 - **Resolves:** [issue 0090](../issues/0090-the-writer-guesses-which-metrics-are-daily.md) through
   [RFC 0023](../rfcs/0023-a-daily-mark-on-a-metric.md) and [D31](../decisions/D31-daily-metrics.md).
 
@@ -65,8 +65,9 @@ The path of [the process](../process.md), in one commit.
    nothing ([D24](../decisions/D24-habits.md)). It cites `metrics_daily`. D24 and D7 link it in one sentence each.
 4. **`schema.sql`**: inside `CREATE TABLE metrics`, as the last column before the `FOREIGN KEY` line, so that the live
    file's `ALTER TABLE ... ADD COLUMN` can give the same text:
-   `daily INTEGER NOT NULL DEFAULT 0 CONSTRAINT metrics_daily CHECK (daily IN (0, 1))`, with its comment. No new
-   table, view or trigger: the totals line and the ER diagrams do not change.
+   `daily INTEGER NOT NULL DEFAULT 0 CONSTRAINT metrics_daily CHECK (daily IN (0, 1))`, with its comment; and the
+   trigger `metrics_touch` (a change of the mark advances the page's revision; found by the counter-review). No new
+   table or view: the ER diagrams do not change; the totals line counts 42 triggers.
 5. **Pages**: [day view](../cookbook/day-view.md) gains the block "the readings asked for on this day" (the daily
    metrics left-joined to the values of the day, in name order); the schema page's row of `metrics`,
    [product concepts](../architecture/product-concepts.md) and [building a writer](../guides/building-a-writer.md) say
@@ -79,8 +80,10 @@ The path of [the process](../process.md), in one commit.
 1. `register-metric` takes `flagField("daily", ...)`, optional, so the form draws a checkbox; `core.NewMetric` carries
    it and `RegisterMetric` writes it in both branches. An existing metric is returned as it is.
 2. The new action `edit-metric`: `POST /pages/{id}/metric`, fields `id` (path) and `daily` (flag; absent is 0, as an
-   unticked checkbox sends nothing). Handler beside `editPerson`; `Store.EditMetric` updates the one column and
-   advances the page as `EditPerson` does. A page that is not a live metric is refused as `edit-person` refuses a
+   unticked checkbox sends nothing). Handler beside `editPerson`; `Store.EditMetric` updates the one column, and the
+   trigger `metrics_touch` advances the page's revision, as `people_touch` does for a person
+   (`lifelog_meta.edit_revisions`). `register-metric` sent a `daily` that differs from an existing metric's mark is
+   refused (409) and names `edit-metric`; sent no `daily`, the metric is returned as it is. A page that is not a live metric is refused as `edit-person` refuses a
    page that is not a person.
 3. `core.Page` gains `Metric` (unit, daily) beside `Person`; `pageActions` offers `edit-metric` on a metric's page, and
    the page draws it under More, boxed. `core.Metric` gains `Daily`.
@@ -94,7 +97,8 @@ The path of [the process](../process.md), in one commit.
 
 ## Part 2 — The day: one tile per daily metric
 
-1. `Store.DailyMetrics` reads the live daily metrics in name order (the SQL of the cookbook block). The day view carries
+1. The day reads the registry once (`Store.Metrics`, already read for the record form) and takes the daily metrics
+   from it, in name order; the cookbook block is the language-neutral statement of that read. The day view carries
    `daily` (the names) and the units of every daily metric with a unit.
 2. `ReadingTiles` lists the daily metrics first, in name order, each with the last reading of the day when there is
    one; then the other metrics read that day, in order of first reading.

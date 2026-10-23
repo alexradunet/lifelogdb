@@ -606,7 +606,7 @@ page, D27). Embedded: `reading` links. Actions: `record` (this metric).
 ### metrics
 
 `GET /metrics`: the registry. Embedded: `item` links to each series. Actions: `record` with every live metric as an option,
-[`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner; `daily` 1 asks for the metric on every day). A
+[`file-pages`](#filed) with the category titles as the options of `category`, and `register-metric` (owner; `daily` 1 asks for the metric on every day; a `daily` that differs from an existing metric's mark is 409). A
 browser draws each metric as a card: its latest reading and the line of its recent readings
 ([plan 112](docs/plans/112-metrics-as-cards.md)). The answer of `register-metric` is the metric's [series](#series),
 with a `result` sentence; `file-pages` files a metric in a category.

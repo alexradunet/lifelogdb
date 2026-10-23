@@ -7,7 +7,8 @@
   disappeared.
 - **Decision.** `metrics.daily` is 1 when the owner asks the writer for a reading of the metric on every day, and 0
   otherwise (`metrics_daily`). It is the metric's own ([D27](D27-a-metric-is-a-page.md)). The owner sets it with the
-  metric or later. Unlike the unit, it may change at any time. A day with no reading still says nothing
+  metric or later. Unlike the unit, it may change at any time, and a change of it advances the page's revision (`metrics_touch`,
+  `lifelog_meta.edit_revisions`); a no-op does not. A day with no reading still says nothing
   ([D24](D24-habits.md)): the mark is a prompt, not a rule about the readings. Which daily metrics a writer shows,
   and how, is the writer's choice. The block "The readings asked for on this day" of the
   [day view](../cookbook/day-view.md) shows the read.

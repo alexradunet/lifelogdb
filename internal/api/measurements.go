@@ -331,11 +331,14 @@ func (h *server) registerMetric(r *http.Request, act spec, src string) (*siren.E
 	if err != nil {
 		return nil, err
 	}
-	daily, err := flag(v, "daily")
-	if err != nil {
-		return nil, err
+	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note")}
+	if v.Has("daily") { // an unticked checkbox sends nothing: the mark is then not asked about
+		daily, err := flag(v, "daily")
+		if err != nil {
+			return nil, err
+		}
+		m.Daily = &daily
 	}
-	m := core.NewMetric{Name: v.Get("name"), Unit: v.Get("unit"), Note: v.Get("note"), Daily: daily}
 	added, err := h.s.CreateMetric(r.Context(), src, m)
 	if err != nil {
 		return nil, err

@@ -291,6 +291,14 @@ func editRevisions(s *S) {
 			c.must("UPDATE people SET name='changed' WHERE id=?", id)
 			s.K("person details advance revision", revision(id) > before)
 		}
+		if typ == "metric" {
+			before = revision(id)
+			c.must("UPDATE metrics SET daily=1 WHERE id=?", id)
+			s.K("metric details advance revision", revision(id) > before)
+			before = revision(id)
+			c.must("UPDATE metrics SET daily=1 WHERE id=?", id)
+			s.K("a no-op edit of the daily mark keeps the revision", revision(id) == before)
+		}
 		if typ == "file" {
 			before = revision(id)
 			c.must("UPDATE files SET preview=? WHERE id=?", jpegBytes, id)

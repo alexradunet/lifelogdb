@@ -245,12 +245,11 @@ func (v *view) MetricSections() []metricSection {
 }
 
 // readingTile is a metric of the day: its last reading of the day (the one to correct, with an ID), and how many more
-// readings of the day it stands for. A Daily tile with no reading (an empty ID) is asked for: it draws the form.
+// readings of the day it stands for. A tile with no reading (an empty ID) is a daily metric asked for: it draws the form.
 type readingTile struct {
 	Metric, Value, Unit string
 	ID                  string
 	More                int
-	Daily               bool
 }
 
 // ReadingTiles are the tiles of the day: first the daily metrics (property daily), in the order given, then the other
@@ -262,24 +261,24 @@ func (v *view) ReadingTiles() []readingTile {
 	units, _ := props["units"].(map[string]any)
 	var out []readingTile
 	at := map[string]int{}
-	add := func(metric string, isDaily bool) int {
+	add := func(metric string) int {
 		i, seen := at[metric]
 		if !seen {
 			i, at[metric] = len(out), len(out)
 			unit, _ := units[metric].(string)
-			out = append(out, readingTile{Metric: metric, Unit: unit, Daily: isDaily})
+			out = append(out, readingTile{Metric: metric, Unit: unit})
 		}
 		return i
 	}
 	for _, d := range daily {
 		name, _ := d.(string)
-		add(name, true)
+		add(name)
 	}
 	read := map[string]bool{}
 	for _, r := range readings {
 		m, _ := r.(map[string]any)
 		metric, _ := m["metric"].(string)
-		i := add(metric, false)
+		i := add(metric)
 		if read[metric] {
 			out[i].More++
 		}

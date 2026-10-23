@@ -656,13 +656,13 @@ func TestTheDailyMarkIsWrittenWithTheMetricAndEdited(t *testing.T) {
 		}
 		return unit, daily
 	}
-	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Meditate", Daily: true}); err != nil {
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Meditate", Daily: new(true)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreatePage(ctx, "cli", "Stretch", "my own words", ""); err != nil {
 		t.Fatal(err)
 	}
-	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Stretch", Daily: true}); err != nil || !added {
+	if added, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Stretch", Daily: new(true)}); err != nil || !added {
 		t.Fatalf("a plain page becomes a metric: %v %v", added, err)
 	}
 	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Sleep", Unit: "h"}); err != nil {
@@ -678,6 +678,12 @@ func TestTheDailyMarkIsWrittenWithTheMetricAndEdited(t *testing.T) {
 	}
 	if _, got := daily("Meditate"); !got {
 		t.Error("registering a metric again cleared its mark")
+	}
+	if _, err := s.CreateMetric(ctx, "cli", NewMetric{Name: "Meditate", Daily: new(false)}); err == nil || !strings.Contains(err.Error(), "edit-metric") {
+		t.Errorf("registering Meditate again with another mark: %v, want a refusal that names edit-metric", err)
+	}
+	if _, got := daily("Meditate"); !got {
+		t.Error("the refused registration changed the mark")
 	}
 
 	if _, err := s.Record(ctx, "cli", Reading{Metric: "Sleep", Day: "2026-10-01", Value: 7}); err != nil {

@@ -19,9 +19,11 @@ import (
 // person, a place or a file of that title (entities_promote_from_page). Registering one that
 // exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
 // source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
-// refused: a unit never changes (metrics_unit_fixed). A metric that exists keeps its mark: EditMetric changes it.
+// refused: a unit never changes (metrics_unit_fixed). A metric that exists keeps its mark, and a request that sends a
+// different mark is refused: EditMetric changes it (nothing is dropped in silence).
 func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
 	name, unit, note := m.Name, m.Unit, m.Note
+	daily := m.Daily != nil && *m.Daily
 	if err := checkTitle("metric name", name); err != nil {
 		return false, err
 	}
@@ -36,18 +38,22 @@ func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, id, unit, m.Daily); err != nil {
+		if _, err = t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, id, unit, daily); err != nil {
 			return false, err
 		}
 		_, err = t.syncWikilinks(id, note)
 		return err == nil, err
 	case p.Type == "metric":
 		var have string
-		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit FROM metrics WHERE id = ?`, p.ID).Scan(&have); err != nil {
+		var haveDaily bool
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT unit, daily FROM metrics WHERE id = ?`, p.ID).Scan(&have, &haveDaily); err != nil {
 			return false, err
 		}
 		if have != unit && !(isScale(have) && unit == "") {
 			return false, Conflict("metric %s exists with unit %q, not %q: a unit never changes; add a new metric (New metric, register-metric)", p.Title, have, unit)
+		}
+		if m.Daily != nil && *m.Daily != haveDaily {
+			return false, Conflict("metric %s exists with daily %d: change the mark on its page (Ask for it every day, edit-metric)", p.Title, b2i(haveDaily))
 		}
 		return false, nil
 	}
@@ -56,7 +62,7 @@ func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err
 	}
-	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, p.ID, unit, m.Daily); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `INSERT INTO metrics(id, unit, daily) VALUES (?, ?, ?)`, p.ID, unit, daily); err != nil {
 		return false, err
 	}
 	if note != "" && p.Body == "" { // the owner's text is never overwritten
@@ -74,6 +80,13 @@ func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
 func isScale(unit string) bool {
 	a, b, found := strings.Cut(unit, "-")
 	return found && asciiDigits(a) && asciiDigits(b)
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func asciiDigits(s string) bool {
@@ -100,10 +113,11 @@ func (t *Tx) metricID(name string) (int64, error) {
 	return id, err
 }
 
-// NewMetric is what CreateMetric makes in one write: the metric, its unit, its note and its daily mark (D31).
+// NewMetric is what CreateMetric makes in one write: the metric, its unit, its note and its daily mark (D31). Daily is
+// nil when the request did not send it: a new metric is then not daily, and a metric that exists keeps its mark.
 type NewMetric struct {
 	Name, Unit, Note string
-	Daily            bool
+	Daily            *bool
 }
 
 // EditMetric sets the daily mark of a live metric (D31). The unit, the page and the readings stay. A missing page is
