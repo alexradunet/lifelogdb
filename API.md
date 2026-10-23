@@ -584,7 +584,7 @@ holds the current one), and `retract`: to remove a reading, retract it. A retrac
 `to` (`to` is today by default). An alias names the metric too. Links: `self` (with the query that is not a
 default; `/metrics/{name}` when there is none), `all-readings` (with a `from` only: the same with no `from`), `up`
 (metrics). A live metric is a page (D27), and the answer carries that page: its properties (the rows below that follow `daily`), its
-links but `self` and `series` (so `preview`, `cover`, `choose-cover`, `make-metric`), its embedded links (every
+links but `self`, `series` and `index` (so `cover` and `choose-cover`), its embedded links (every
 outgoing link under its kind, every incoming one under `backlink`) and its actions, all as in [a page](#page-person-place-file).
 The `metric` object of the page is not repeated: `unit` and `daily` are here. Embedded: `reading` links, and the page's.
 Actions: `record` (this metric), and the page's.

@@ -22,7 +22,9 @@
 {{/* The view of a metric (/metrics/{name}): its page and its readings in one place (docs/plans/144-one-view-for-a-metric.md).
      The head has the categories and the latest reading. The sheet has the note, the body, Add a reading, the one open
      form of the daily mark, the chart and every reading in one fold a year, newest first. The margin is the margin of
-     a page (page-margin). A browser request of the page of a live metric is a redirect here. */}}
+     a page (page-margin). A series that carries no page (a name that is not a live metric) draws the readings alone.
+     A browser request of the page of a live metric is a redirect here; Delete returns to the page, which a deleted
+     metric keeps, with Restore. */}}
 {{define "metric"}}{{template "head" .}}
 {{$s := .Props}}{{$r := .MetricReadings}}
 {{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
@@ -35,7 +37,7 @@
 
 <div class="sheet-margin">
 <div class="sheet">
-{{template "page-sheet" .}}
+{{if $s.id}}{{template "page-sheet" .}}{{end}}
 {{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
 {{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
 {{with .Action "edit-metric"}}<section class="daily-mark" aria-label="Every day"><h2>Every day</h2>
@@ -52,9 +54,9 @@
 {{else}}<p class="empty">{{if $s.from}}No reading in this window. <a href="{{.Link "all-readings"}}">All readings</a> has the rest.{{else}}No reading yet. Add the first one above.{{end}}</p>{{end}}
 </section>
 </div>
-<div class="margin">
+{{if $s.id}}<div class="margin">
 {{template "page-margin" .}}
-</div>
+</div>{{end}}
 </div>
 {{template "foot" .}}{{end}}
 

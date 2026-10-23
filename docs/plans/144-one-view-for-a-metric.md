@@ -68,7 +68,9 @@ flowchart LR
    composes them as today; nothing a page shows changes.
 2. The `metric` template (metrics.html) draws: the head (kind, title, the categories with Add, Every metric, the
    latest reading); the sheet: the note with Edit and the body, then Add a reading, then the chart and the years; the
-   margin: cover, facts, links, backlinks, More (typed links, Plan a line here, Rename, Delete). "Ask for it every day"
+   margin: cover, facts, links, backlinks, More (Plan a line here, Rename, Delete; a metric starts no typed link).
+   Delete returns to the page, which a deleted metric keeps, with Restore. A redirect of a request that carries a
+   feedback receipt moves the receipt to the address it lands on, so a toast survives it. "Ask for it every day"
    is one open form beside Add a reading (the checkbox and Save), not boxed and not under More: it is the metric's own
    setting, drawn where the owner looks. The sentences and links of plan 143 that pointed to the page go.
 3. `?new=<action>` on `/metrics/{name}` opens that form, as on a page, so `?new=edit-metric` carried by the redirect

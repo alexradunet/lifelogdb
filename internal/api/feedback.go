@@ -72,6 +72,17 @@ func (s *feedbackStore) put(destination string, result any) string {
 	return u.String()
 }
 
+// move re-keys a receipt to another path: a GET with a receipt that is answered with a redirect (the page of a live
+// metric, to its series) keeps its toast at the address it lands on.
+func (s *feedbackStore) move(token, from, to string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r, ok := s.entries[token]; ok && r.path == from {
+		r.path = to
+		s.entries[token] = r
+	}
+}
+
 func (s *feedbackStore) take(path, token string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

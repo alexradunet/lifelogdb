@@ -219,6 +219,11 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 		var rd redirect
 		switch {
 		case errors.As(err, &rd):
+			if token := r.URL.Query().Get("feedback"); token != "" { // the toast follows the redirect
+				if to, perr := url.Parse(rd.to); perr == nil {
+					h.feedback.move(token, r.URL.Path, to.Path)
+				}
+			}
 			http.Redirect(w, r, rd.to, http.StatusSeeOther)
 			return
 		case err != nil:

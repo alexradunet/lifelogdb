@@ -737,3 +737,53 @@ func TestARecordOfAnUnknownMetricSaysHowToRegisterIt(t *testing.T) {
 		t.Errorf("record of an unknown metric: %v, want 404 naming register-metric", err)
 	}
 }
+
+// TestDeleteFromTheViewReturnsToThePage: Delete on the view of a metric lands on the metric's page, which a deleted
+// metric keeps, with Restore (plan 144); the view of a name that is not a live metric draws no part of a page; and a
+// toast follows the redirect of a page to its view, so a form sent with no back shows its result there.
+func TestDeleteFromTheViewReturnsToThePage(t *testing.T) {
+	c, h, _ := metricFixture(t)
+	series := apitest.Must(t)(c.Get(t.Context(), "/metrics/Weight"))
+	self := pageOf(series)
+	body := browse(t, h, "/metrics/Weight")
+
+	// A form of the metric sent with no back (a form opened from /actions): the POST returns to the page, the page
+	// redirects to the view, and the toast comes along.
+	mark := apitest.Action(t, series, "edit-metric").Href
+	form := formSends(t, body, `action="`+mark+`"`, url.Values{"daily": {"1"}})
+	form.Del("back")
+	rec := submit(h, mark, form, "/actions")
+	loc := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, self+"?feedback=") {
+		t.Fatalf("the mark sent with no back: %d to %q, want 303 to %s?feedback=…", rec.Code, loc, self)
+	}
+	rec = getAs(h, "GET", loc, true)
+	loc2 := rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc2, "/metrics/Weight?feedback=") {
+		t.Fatalf("the page in a browser: %d to %q, want 303 to the view with the receipt", rec.Code, loc2)
+	}
+	if view := browse(t, h, loc2); !strings.Contains(view, `class="toast"`) || !strings.Contains(view, "Asked for on every day.") {
+		t.Error("the toast is lost across the redirect to the view")
+	}
+
+	// Delete from the view: the browser lands on the page, with Restore.
+	del := apitest.Action(t, series, "tombstone-pages").Href
+	rec = submit(h, del, formSends(t, body, `action="`+del+`"`, nil), "/metrics/Weight")
+	loc = rec.Header().Get("Location")
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, self+"?feedback=") {
+		t.Fatalf("Delete from the view: %d to %q, want 303 to %s?feedback=…", rec.Code, loc, self)
+	}
+	if page := browse(t, h, loc); !strings.Contains(page, `action="`+self+`/revive"`) || !strings.Contains(page, `class="toast"`) {
+		t.Error("after Delete from the view the browser is not on the page with Restore and the result")
+	}
+
+	// A name that is not a live metric: the readings alone, no page part.
+	for _, path := range []string{"/metrics/Weight", "/metrics/Nope"} {
+		view := browse(t, h, path)
+		for _, bad := range []string{"Nothing written here yet.", `aria-label="Facts"`, `<summary>Edit</summary>`, `aria-label="Every day"`} {
+			if strings.Contains(view, bad) {
+				t.Errorf("%s carries no page but draws %q", path, bad)
+			}
+		}
+	}
+}

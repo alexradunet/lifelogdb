@@ -154,6 +154,10 @@ type view struct {
 	query     url.Values // the page's own query: ?new=<action> and the fields it fills
 }
 
+// IsSeries reports the view of a metric (class series): it carries the metric's page (docs/plans/144-one-view-for-a-metric.md),
+// draws the mark as its own form, and its Delete returns to the page, which a deleted metric keeps.
+func (v *view) IsSeries() bool { return slices.Contains(v.Class, "series") }
+
 // Asked is a parameter of the page's own query (docs/plans/114-one-way-to-do-a-thing.md): ?new=<action> opens that
 // action's form, and ?category= fills a field.
 func (v *view) Asked(name string) string { return v.query.Get(name) }
