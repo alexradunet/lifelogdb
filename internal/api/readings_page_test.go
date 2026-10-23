@@ -139,14 +139,29 @@ func TestHabitsAndUnitsAreSaid(t *testing.T) {
 			t.Errorf("the page of a habit lacks %q", want)
 		}
 	}
-	if strings.Contains(habit, "Asked for on every day") || strings.Contains(habit, "days after its last") {
-		t.Error("the page of a metric that is not daily speaks of the mark or of 14 days")
+	if strings.Contains(habit, "Asked for on every day:") || strings.Contains(habit, "days after its last") {
+		t.Error("the readings of a metric that is not daily say it is asked for, or speak of 14 days")
 	}
-	if daily := browse(t, h, "/metrics/Meditate"); !strings.Contains(daily, "Asked for on every day: its box is on every day page.") {
-		t.Errorf("the page of a daily metric does not say so:\n%s", daily)
+	// The mark is set on the metric's page: the readings link that form, open, in both states.
+	pageLink := regexp.MustCompile(`<a href="(/pages/\d+)">The page: `)
+	formOf := func(readings string) string { // the link of the page, from the head of the readings
+		m := pageLink.FindStringSubmatch(readings)
+		if m == nil {
+			t.Fatalf("the readings do not link the page:\n%s", readings)
+		}
+		return `<a href="` + m[1] + `?new=edit-metric">`
 	}
-	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "1 done and 0 not done") || strings.Contains(weight, "Asked for on every day") {
-		t.Error("the page of a metric with a unit speaks of habits")
+	if !strings.Contains(habit, "Not asked for on every day. "+formOf(habit)+"Ask for it every day</a>") {
+		t.Errorf("the readings of a metric that is not daily do not link the form that asks for it:\n%s", habit)
+	}
+	if daily := browse(t, h, "/metrics/Meditate"); !strings.Contains(daily, "Asked for on every day: its box is on every day page. "+formOf(daily)+"Stop asking</a>") {
+		t.Errorf("the readings of a daily metric do not say so and link the form:\n%s", daily)
+	}
+	if weight := browse(t, h, "/metrics/Weight"); strings.Contains(weight, "1 done and 0 not done") || strings.Contains(weight, "Asked for on every day:") {
+		t.Error("the readings of a metric with a unit speak of habits")
+	}
+	if opened := browse(t, h, strings.TrimSuffix(strings.TrimPrefix(formOf(habit), `<a href="`), `">`)); !strings.Contains(opened, `<details class="action" open>`) || !strings.Contains(opened, `action="/pages/`) || !strings.Contains(opened, `name="daily"`) {
+		t.Errorf("the link does not open the edit-metric form on the page:\n%s", opened)
 	}
 
 	day := browse(t, h, "/days/"+fixedToday)
