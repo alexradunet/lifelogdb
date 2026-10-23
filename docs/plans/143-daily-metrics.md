@@ -9,7 +9,7 @@
 - **Priority:** P1. **Effort:** M. **Risk:** MEDIUM: one new column (`metrics.daily`), one new field of
   `register-metric`, one new action (`edit-metric`), a change of the Readings section of a day, and the Today strip
   reads the column in place of a 14-day window. The live file needs the column before the new binary runs.
-- **Status:** IN PROGRESS. Built on 2026-10-23 on master, counter-reviewed; live after the owner runs Part 4.
+- **Status:** IN REVIEW (owner). Built on 2026-10-23 on master, counter-reviewed; live since 2026-10-23 15:21 (Part 4, shipped).
 - **Resolves:** [issue 0090](../issues/0090-the-writer-guesses-which-metrics-are-daily.md) through
   [RFC 0023](../rfcs/0023-a-daily-mark-on-a-metric.md) and [D31](../decisions/D31-daily-metrics.md).
 
@@ -126,6 +126,15 @@ column and makes the stored text of `metrics` equal to the DDL, and refuses any 
 synthetic file. The owner runs each line: stop the service, snapshot to a new folder outside the git tree, dry run,
 run, integrity check with the staged binary, install, start, and the log line is reported. Then the owner marks the
 metrics they want daily.
+
+## Shipped on 2026-10-23
+
+The owner ran each line. The service was stopped at 15:16; the snapshot
+`/home/cico/life/snapshots/2026-10-23-plan-143/life-2026-10-23.db` passed its restore check; the dry run and the run of
+`plan143-bin` found the file equal to the old DDL, added the column to 119 metrics (every mark 0), made `metrics_touch`,
+and left the file equal to the new DDL with `integrity_check` ok; the new binary's `/integrity` reported no schema
+drift; the binary was installed with the previous one kept as `lifelog.prev`; the service started at 15:21:10 and
+logged "serving /home/cico/dev/lifelogdb/life.db on http://127.0.0.1:7777".
 
 ## Done when
 
