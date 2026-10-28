@@ -350,7 +350,7 @@ func (a *Agent) look(ctx context.Context) error {
 			return err
 		}
 		if c.pending { // the first turn of the day was said on another surface
-			a.answerPending(ctx, c, at)
+			a.answerPending(ctx, c, at, c.lastText)
 		}
 		return nil
 	}
@@ -366,7 +366,11 @@ func (a *Agent) look(ctx context.Context) error {
 		if err := a.adopt(c); err != nil {
 			return err
 		}
-		a.answerPending(ctx, c, at)
+		mirror := c.lastText
+		if mirror == "" { // text with no marker of a turn: the words as they were added
+			mirror = suffix
+		}
+		a.answerPending(ctx, c, at, mirror)
 		return nil
 	}
 	a.logger.Printf("the page was edited elsewhere: adopted, no answer")
@@ -385,16 +389,21 @@ func (a *Agent) closeDay(ctx context.Context, at time.Time) error {
 		if err := a.adopt(c); err != nil {
 			return err
 		}
-		a.answerPending(ctx, c, at)
+		a.answerPending(ctx, c, at, c.lastText)
 	}
 	a.conv = nil
 	return nil
 }
 
-// answerPending answers the last turn of c, which the extension has adopted. at is the time of the turn.
-func (a *Agent) answerPending(ctx context.Context, c *convo, at time.Time) {
+// answerPending answers the last turn of c, which the extension has adopted: a turn written on another surface. The
+// chat first gets the owner's own words, marked as written in lifelog, so the phone shows the same thread as the
+// page; then the reply. at is the time of the turn.
+func (a *Agent) answerPending(ctx context.Context, c *convo, at time.Time, words string) {
 	tctx, cancel := context.WithTimeout(ctx, turnTimeout)
 	defer cancel()
+	if words != "" {
+		a.say(ctx, "You wrote in lifelog: "+words)
+	}
 	a.typing(tctx, true)
 	a.finish(ctx, tctx, c, at)
 }
@@ -436,12 +445,14 @@ func convoFrom(e *siren.Entity, fallback string) (*convo, error) {
 	}
 	// The last turn is the owner's: nobody has answered it. A page entity has no turns, so it is never pending.
 	turns, _ := p["turns"].([]any)
-	pending := false
+	pending, lastText := false, ""
 	if len(turns) > 0 {
 		last, _ := turns[len(turns)-1].(map[string]any)
-		pending = last["who"] == "owner"
+		if pending = last["who"] == "owner"; pending {
+			lastText, _ = last["text"].(string)
+		}
 	}
-	return &convo{Day: day, ID: id, Version: version, Body: strings.ReplaceAll(text, "\r\n", "\n"), pending: pending}, nil
+	return &convo{Day: day, ID: id, Version: version, Body: strings.ReplaceAll(text, "\r\n", "\n"), pending: pending, lastText: lastText}, nil
 }
 
 // save appends extra to the body of c and saves it with the version of c. A stale version reads the page again

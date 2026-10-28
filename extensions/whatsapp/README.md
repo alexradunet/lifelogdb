@@ -31,8 +31,9 @@ flowchart LR
   at the next turn. With no model set, the reply of the turn is one line, "No model is set: open Settings in
   lifelog.", on the page and on the phone. The agent keeps running.
 - **Continued anywhere.** Every 3 seconds the extension reads today's conversation. Text added to its end on another surface
-  (the browser, `lifelog do save-body`, an MCP tool) is an owner's turn: the reply is added to the page and sent on
-  WhatsApp. The first turn of a day on any surface is answered too: a page that is new to the extension, on a new day
+  (the browser, `lifelog do save-body`, an MCP tool) is an owner's turn: the owner's words go to WhatsApp first,
+  marked "You wrote in lifelog:", so the phone shows the same thread as the page, then the reply is added to the
+  page and sent on WhatsApp. The first turn of a day on any surface is answered too: a page that is new to the extension, on a new day
   or after a restart, is answered when its last turn is the owner's, and a turn said before midnight is answered on
   its own page. Any other change of the page is adopted and answered with nothing. A body is read with its CRLF line
   endings made LF (a browser submits a textarea that way), and saved with LF. When the owner saves the page while

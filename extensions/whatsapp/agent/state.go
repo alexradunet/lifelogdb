@@ -19,7 +19,8 @@ type convo struct {
 	Body    string    `json:"body"`
 	SavedAt time.Time `json:"saved_at"`
 
-	pending bool // the last turn is the owner's; read from the API, not kept in the file
+	pending  bool   // the last turn is the owner's; read from the API, not kept in the file
+	lastText string // the words of that turn, for the chat; read from the API, not kept in the file
 }
 
 // loadState reads the state file. A file that does not exist, or that has no day, is no state.

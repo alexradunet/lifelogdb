@@ -90,7 +90,11 @@ func (f *fakeAPI) conversation(day string) siren.Entity {
 			case strings.HasPrefix(para, "**lifelog**"):
 				who = "lifelog"
 			}
-			turns = append(turns, map[string]any{"who": who, "text": para})
+			text := para // the real API gives the words after the mark
+			if i := strings.Index(para, "): "); who != "text" && i >= 0 {
+				text = para[i+3:]
+			}
+			turns = append(turns, map[string]any{"who": who, "text": text})
 		}
 		props["turns"] = turns
 	}

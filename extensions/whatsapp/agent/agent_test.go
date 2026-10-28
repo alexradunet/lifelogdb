@@ -389,6 +389,9 @@ func TestTheWatcherAnswersATurnThatWasWrittenOnAnotherSurface(t *testing.T) {
 	}
 	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\nFrom the web: what did I do?")
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: From the web: what did I do?" {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer 2" {
 		t.Errorf("reply %q", got)
 	}
@@ -415,6 +418,9 @@ func TestTheWatcherReadsABodyThatABrowserSaved(t *testing.T) {
 	crlf := strings.ReplaceAll(r.api.body(todayTitle), "\n", "\r\n") + "\r\n\r\nFrom the browser: hello?"
 	r.api.edit(todayTitle, crlf)
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: From the browser: hello?" {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer 2" {
 		t.Errorf("reply %q", got)
 	}
@@ -443,6 +449,9 @@ func TestTheWatcherAdoptsAnEditAndAnswersNothing(t *testing.T) {
 	// The edit is the base now: growth after it is a turn.
 	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\nMore.")
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: More." {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer" {
 		t.Errorf("reply %q", got)
 	}
@@ -465,6 +474,9 @@ func TestTheWatcherLooksTheTitleUpAgainOnANewDay(t *testing.T) {
 	}
 	r.api.edit("Conversation 2031-05-21", "[[2031-05-21]]\n\nGood morning.")
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: Good morning." {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer" {
 		t.Errorf("reply %q", got)
 	}
@@ -601,6 +613,9 @@ func TestAPageNewToTheExtensionThatEndsWithAnOwnerTurnIsAnsweredOnce(t *testing.
 	r.settle(t) // no page yet
 	r.api.add(todayTitle, pendingBody("2031-05-20"))
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: said in the browser" {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer 1" {
 		t.Errorf("reply %q", got)
 	}
@@ -634,6 +649,9 @@ func TestARestartWithTheStateFileOfPlan145AnswersThePendingTurnOfToday(t *testin
 	}
 	r := startOn(t, func(int, chatReq) (int, string) { return text("welcome back") }, api, state)
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: said in the browser" {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "welcome back" {
 		t.Errorf("reply %q", got)
 	}
@@ -657,6 +675,9 @@ func TestAPendingTurnOnYesterdaysPageIsAnsweredOnceAtTheDayChange(t *testing.T) 
 	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\n**Owner** (23.59): one more thing")
 	r.setDay(fixedNow.AddDate(0, 0, 1))
 	r.poll(t)
+	if got := r.chat.reply(t); got != "You wrote in lifelog: one more thing" {
+		t.Errorf("the mirror of the owner's words %q", got)
+	}
 	if got := r.chat.reply(t); got != "answer 2" {
 		t.Errorf("reply %q", got)
 	}
