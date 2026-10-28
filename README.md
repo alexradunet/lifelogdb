@@ -113,7 +113,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   changed, so a reload never posts twice. A refused one is answered with the error page: the alert, the text it
   sent and a link Back to the page it came from ([plan 131](docs/plans/131-the-pareto-pass.md)). A form may name the
   page to return to in `back` (a path on this server, not a field of any action): a Done button on a list returns to
-  the list. A value that is not a plain path is ignored, and a JSON client never follows it
+  the list. The path may end in an id, which names the row that the page opens at. A value that is not a plain path is ignored, and a JSON client never follows it
   ([plan 091](docs/plans/091-the-browser-for-daily-use.md)).
 - **The page is semantic HTML, and the catalog says how to draw it.** A field is a `label` around its input (a flag,
   the options 0 and 1 in a field that the action does not require, one checkbox that sends 1 or nothing; a field of 2
@@ -123,7 +123,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows the
   same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser lets
   a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find, but the id of a
-  `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's name).
+  `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's name), the
+  id of a tick form and its box, and the id of a plan row, which a write returns to.
   What a template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an
   owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
   title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.

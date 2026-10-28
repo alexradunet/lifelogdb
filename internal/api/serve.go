@@ -303,18 +303,25 @@ func submittedText(r *http.Request) string {
 // maxBack is the longest return path a browser form may send.
 const maxBack = 2048
 
+// backFragment is the id that a return path may end with: a browser never sends a fragment to a server, so it only
+// names where the page opens (the row that a write came from).
+var backFragment = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 // backOf is the page a browser form asks to return to after its write (docs/plans/091-the-browser-for-daily-use.md):
 // the form field back, when it is a path on this server, "" otherwise. Only a path that starts with one slash is
-// kept: "//host" and "/\host" name another host to a browser, and a scheme, a host, a fragment or a control
-// character makes the value something other than a path here. A value that is not kept is ignored, not refused:
-// the write is done, and the browser goes to the resource it changed.
+// kept: "//host" and "/\host" name another host to a browser, and a scheme, a host or a control character makes the
+// value something other than a path here. The path may end with one id fragment (backFragment). Any other "#" makes
+// the value not a path. A value that is not kept is ignored, not refused: the write is done, and the browser goes to
+// the resource it changed.
 func backOf(r *http.Request) string {
 	b := r.PostForm.Get("back")
+	path, fragment, hasFragment := strings.Cut(b, "#")
 	if b == "" || len(b) > maxBack || !strings.HasPrefix(b, "/") || strings.HasPrefix(b, "//") ||
-		strings.ContainsAny(b, "\\#") || strings.IndexFunc(b, func(c rune) bool { return c < 0x20 || c == 0x7f }) >= 0 {
+		strings.Contains(b, "\\") || hasFragment && !backFragment.MatchString(fragment) ||
+		strings.IndexFunc(b, func(c rune) bool { return c < 0x20 || c == 0x7f }) >= 0 {
 		return ""
 	}
-	u, err := url.Parse(b)
+	u, err := url.Parse(path)
 	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" || !strings.HasPrefix(u.Path, "/") {
 		return ""
 	}

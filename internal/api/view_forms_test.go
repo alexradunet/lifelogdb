@@ -101,6 +101,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct{ back, want string }{
 		{"/days?limit=5&offset=10", "/days?limit=5&offset=10"},
+		{"/plans?order=page#row-1-3", "/plans?order=page#row-1-3"}, // the fragment names where the page opens
 		{"//evil.example/", "/days/2026-09-29"},
 	} {
 		rec := submit(h, "/days/2026-09-29/capture", url.Values{"text": {"a line"}, "back": {tc.back}}, "")

@@ -485,12 +485,13 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & code{background:none; color:inherit}}
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
-   colour before its heading. It is an open dialog in the flow of the page, not the browser's centred box: its
-   position, size and margin are reset here; Escape and Close close it. Its display is set only while it is open:
-   a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
+   colour before its heading. It is an open dialog in the flow of the page (plan 108), not the browser's centred box: its
+   position, size and margin are reset here; Escape and Close close it. It sticks at the top of the column, as the pick
+   bar does, so it is in view after the browser opens the page at the row that a write returned to. Its display is set
+   only while it is open: a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
 .toast[open]{display:flex}
 .toast{flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
-  position:static; inset:auto; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
+  position:sticky; inset:auto; inset-block-start:0; z-index:4; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
   font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;
     &::before{content:"\2713" / ""}}
@@ -810,7 +811,7 @@ li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){
     & .picked::after{content:counter(picked) " selected"; font-size:13px; color:var(--text-muted)}
     &>form{flex:1 1 100%}}
   &:has(.pick-on:checked) .pick-tools{display:flex}}
-@media (max-width:899px){.pick-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
+@media (max-width:899px){.pick-bar,.toast{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>a.entry{flex:1 1 auto; min-inline-size:0}
   &>a.row-move{flex:none; align-self:center; padding:0 var(--space-2); font-size:13px; color:var(--text-link); opacity:0}

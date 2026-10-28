@@ -22,7 +22,7 @@ and this page disagree, so a property here is a property on the wire.
   for `add-file` and `set-cover`, `multipart/form-data`.
 - **Writes answer with the resource they changed** (200, with `Location`), and `result` says what the write did. A
   browser form is answered 303 to that resource instead, or to the page its field `back` names when that is a path
-  on this server.
+  on this server. The path may end in an id (`#row-4-2`) that names where the page opens.
 - **Preview:** `POST /render` with the field `body` (or `text`) answers a page that shows the body as its page shows
   it once saved; it writes nothing, answers `text/html` only and is not a catalog action: it is the browser's Preview,
   a second button of a form that writes a body, which opens it in a new tab.

@@ -186,12 +186,12 @@ func TestPlanBoxesInABody(t *testing.T) {
 	body := "- [ ] Call on:2026-10-22\n\n- [x] Paid done:2026-10-01\n\n- [-] Skipped\n\n- [>] Moved\n\n- [x] Bad done:2026-13-45\n\n> - [ ] quoted\n\n```\n- [ ] code\n```\n\nText [ ] mid\n"
 	got := string(markdownCover(body, "", "/pages/7/tick", "/days/today"))
 	for _, want := range []string{
-		`<button class="box open" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
+		`<button class="box open" id="box-1" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
 		`<span class="badge">on Thu 22 Oct</span>`, `<span class="badge">done Thu 1 Oct</span>`,
-		`<button class="box done" form="tick-3" name="outcome" value="reopen" aria-label="Reopen: Paid">☑</button> Paid`,
-		`<button class="box dropped" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skipped">☒</button> Skipped`,
+		`<button class="box done" id="box-3" form="tick-3" name="outcome" value="reopen" aria-label="Reopen: Paid">☑</button> Paid`,
+		`<button class="box dropped" id="box-5" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skipped">☒</button> Skipped`,
 		`<span class="box carried" role="img" aria-label="carried">`, `<span class="box done" role="img" aria-label="done">`,
-		`<form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form>`,
+		`<form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today#box-1"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form>`,
 		`[ ] quoted`, `- [ ] code`, `Text [ ] mid`,
 	} {
 		if !strings.Contains(got, want) {
