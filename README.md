@@ -34,6 +34,7 @@ lifelog do settings model_url=http://HOST/v1 model=ID   # the model of the agent
 lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
+lifelog serve --public --token-file ~/life/token --with whatsapp   # the server with the WhatsApp agent beside it
 lifelog mcp --agent lmstudio               # MCP on stdio (the extension lifelog-mcp); rows are written as agent:lmstudio
 lifelog snapshot --snapshots ~/snapshots --human  # life-YYYY-MM-DD.db and its restore check
 lifelog file memo.m4a --text memo.txt     # keep a file: its text, the original hashed and never stored
@@ -328,8 +329,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `.settings.json` added), mode 0600, written through a temporary file and a rename, and never in git (`.gitignore`). They are not in `life.db`: the
   model key is a secret, and a snapshot copies the database. They are not in `docs/` either: they belong to this
   application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
-  chat-completions protocol, ending in `/v1`), `model` (the model id) and `model_key` (a bearer credential, optional);
-  a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
+  chat-completions protocol, ending in `/v1`), `model` (the model id) `model_key` (a bearer credential, optional) and `owner_number` (the digits of the owner's phone number with the
+  country code: the one number that the agent on the phone answers; a value that is not digits is 422); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
   `GET /settings` are the owner's: refused to an `agent:*` or `import:*` writer, and the action is never an MCP tool.
   `GET /actions` offers `settings` with no value, because any writer reads the catalog; only `GET /settings` fills
   the values, the key too, so the owner's form sends the key back as it is. A field of the type `password` is drawn
@@ -453,6 +454,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   in-process CLI dispatch is unchanged. Browser-origin protection inside it rejects cross-origin writes while
   keeping same-origin forms and non-browser clients that send no browser origin headers working. `--token-file`,
   `--allow-origin`, `--tls-cert` and `--tls-key` are refused without `--public`, never ignored.
+  `--with NAME` (repeatable, [plan 147](docs/plans/147-serve-with-an-extension.md)) runs the extension `lifelog-NAME`
+  as a child of the server and keeps it running; [the contract of an extension](extensions/README.md#run-by-serve)
+  says how. An unknown name refuses the command before the file opens, and `--with` with `--tls-cert` is refused.
 - **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
   **token**: `--token-file PATH` (one line of at least 32 characters; the command line never carries the secret) or
   `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. The default bind becomes `0.0.0.0:7777`

@@ -95,14 +95,7 @@ func extension(ctx context.Context, e env, name string, args []string) (err erro
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = e.stdin, e.stdout, e.stderr
 	cmd.Env = extensionEnv(os.Environ(), exe, file, url)
-	if runtime.GOOS != "windows" {
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-	} else {
-		// Windows cannot send an interrupt to another process, and the console gives the extension the Ctrl-C itself.
-		// So Cancel does nothing, and WaitDelay gives the extension the same ten seconds to end as on Unix.
-		cmd.Cancel = func() error { return nil }
-	}
-	cmd.WaitDelay = 10 * time.Second
+	interruptOnCancel(cmd)
 	err = cmd.Run()
 	if errors.Is(err, context.Canceled) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
 		return nil // the interrupt was the owner's word, and the extension ended cleanly on it
@@ -112,6 +105,19 @@ func extension(ctx context.Context, e env, name string, args []string) (err erro
 		return exitError{code: max(ee.ExitCode(), 1)} // -1: a signal ended it
 	}
 	return err
+}
+
+// interruptOnCancel makes the end of the context of cmd an interrupt of the extension, and gives it ten seconds to end
+// before the kill.
+func interruptOnCancel(cmd *exec.Cmd) {
+	if runtime.GOOS != "windows" {
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	} else {
+		// Windows cannot send an interrupt to another process, and the console gives the extension the Ctrl-C itself.
+		// So Cancel does nothing, and WaitDelay gives the extension the same ten seconds to end as on Unix.
+		cmd.Cancel = func() error { return nil }
+	}
+	cmd.WaitDelay = 10 * time.Second
 }
 
 // extensionEnv is the environment of the extension: the inherited one, with the three variables of the contract set

@@ -17,6 +17,9 @@ import (
 // maxLine is the longest line of input.
 const maxLine = 1 << 20
 
+// Sender is the sender of every line, and the owner that the agent answers on a terminal: no number is needed.
+const Sender = "terminal"
+
 // Chat is the chat of one owner on a terminal.
 type Chat struct {
 	in   io.ReadCloser

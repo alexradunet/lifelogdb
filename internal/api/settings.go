@@ -14,13 +14,16 @@ import (
 // (GET /settings), while the catalog (GET /actions) offers the action with no value in it.
 func settingsEntity(s core.Settings) *siren.Entity {
 	props := map[string]any{"model_url": s.ModelURL, "model": s.Model}
+	if s.OwnerNumber != "" {
+		props["owner_number"] = s.OwnerNumber
+	}
 	if s.ModelKey != "" {
 		props["model_key"] = s.ModelKey
 	}
 	return &siren.Entity{Class: []string{"settings"}, Title: "Settings", Properties: props,
 		Links: []siren.Link{link("self", "/settings", "Settings"), link("index", "/", "Home")},
 		Actions: []siren.Action{action("settings", nil,
-			map[string]any{"model_url": s.ModelURL, "model": s.Model, "model_key": s.ModelKey})}}
+			map[string]any{"model_url": s.ModelURL, "model": s.Model, "model_key": s.ModelKey, "owner_number": s.OwnerNumber})}}
 }
 
 // settings is GET /settings: the owner's alone.
@@ -36,7 +39,7 @@ func (h *server) settings(r *http.Request) (*siren.Entity, error) {
 }
 
 // saveSettings is the action settings. A field that the request leaves out stays as it is, and an empty one clears
-// that setting (a browser form sends all three).
+// that setting (a browser form sends all four).
 func (h *server) saveSettings(r *http.Request, act spec, _ string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
@@ -46,10 +49,13 @@ func (h *server) saveSettings(r *http.Request, act spec, _ string) (*siren.Entit
 	if err != nil {
 		return nil, err
 	}
-	for name, to := range map[string]*string{"model_url": &s.ModelURL, "model": &s.Model, "model_key": &s.ModelKey} {
+	for name, to := range map[string]*string{"model_url": &s.ModelURL, "model": &s.Model, "model_key": &s.ModelKey, "owner_number": &s.OwnerNumber} {
 		if v.Has(name) {
 			*to = strings.TrimSpace(v.Get(name))
 		}
+	}
+	if s.OwnerNumber != "" && strings.Trim(s.OwnerNumber, "0123456789") != "" {
+		return nil, core.Invalid("owner_number: digits with the country code, such as 40712345678")
 	}
 	if err := h.s.WriteSettings(s); err != nil {
 		return nil, err

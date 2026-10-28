@@ -64,6 +64,34 @@ line that says what to run. It never guesses an address: `127.0.0.1:7777` may be
 - An interrupt or SIGTERM reaches `lifelog` and the extension. `lifelog` sends the extension an interrupt (on Windows:
   a kill), waits for it for ten seconds at most, then stops the server and closes the file.
 
+## Run by serve
+
+`lifelog serve --with NAME` (repeatable) runs the extension as a child of the server and keeps it running.
+
+```mermaid
+flowchart TD
+  S["serve: the listener is up"] --> A["start lifelog-NAME with no arguments"]
+  A --> W["wait for the end"]
+  W -->|"exit 0"| E0["ended: not started again"]
+  W -->|"exit 2 or 3"| E2["the owner acts first: not started again"]
+  W -->|"any other end: 1, a signal"| R["wait 10 seconds, then start again"]
+  R --> A
+  T["interrupt or SIGTERM"] -->|"interrupt the child, 10 seconds at most, then a kill"| W
+  W -->|"the child ended"| D["serve drains its requests and closes the file"]
+```
+
+- **The environment** is the one above. `LIFELOG_URL` is the address of the listener on the loopback
+  (`http://127.0.0.1:PORT`, also for a listener on every interface). `LIFELOG_TOKEN` is the token of a `--public`
+  listener. `LIFELOG_EXE` and `LIFELOG_DB` are as for any extension.
+- **No arguments, and an empty stdin** (`/dev/null`). The extension configures itself from the settings of the API.
+  stdout and stderr are those of the server, so the lines go to its log.
+- **The exit status** decides. 0: the extension ended by its own choice, and is not started again. 2 or 3: the owner
+  must act first (for example pair a device); it is not started again until `serve` starts again. Any other end (1, a
+  signal, a crash): `serve` starts it again after 10 seconds. `serve` logs each start and each end.
+- **The stop.** On an interrupt or SIGTERM, `serve` interrupts the child first and waits for it, 10 seconds at most,
+  then kills it. Then it drains its own requests and closes the file, so the child may still write while it ends.
+- `--with` and `--tls-cert` together are refused: the child would have to trust the certificate.
+
 ## Who writes
 
 An extension writes as `import:NAME` (an importer) or `agent:NAME` (a model), with the header
@@ -83,4 +111,4 @@ the rule that exists already ([API.md](../API.md)). `GET /actions` of the server
 | `extensions/googlephotos` | `lifelog-gphotos` | `lifelog gphotos [--addr A] [--credentials F] [--zone Z]` | `import:google-photos` | yes |
 | `extensions/agentic` | `lifelog-agentic-init` | `lifelog agentic-init [--force]` | nothing | no: it reads `LIFELOG_EXE` and `LIFELOG_DB`, and refuses to run without them |
 | `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `--source` is refused as today |
-| `extensions/whatsapp` | `lifelog-whatsapp` | `lifelog whatsapp login` and `lifelog whatsapp --owner NUMBER [--token-file F] [--url U] [--terminal]` | `agent:whatsapp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `login` needs none |
+| `extensions/whatsapp` | `lifelog-whatsapp` | `lifelog serve --with whatsapp` (the always-on way), `lifelog whatsapp login` and `lifelog whatsapp [--terminal] [--url U] [--token-file F]` (the number is the setting `owner_number`) | `agent:whatsapp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `login` needs none |

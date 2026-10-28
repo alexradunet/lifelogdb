@@ -54,6 +54,14 @@ type fakeAPI struct {
 	alwaysStale bool
 	// the settings of the model, as GET /settings answers them (an empty value is absent)
 	modelURL, model, modelKey string
+	ownerNumber               string // owner_number of the settings
+}
+
+// setOwnerNumber changes the owner's number in the settings, as the owner would in lifelog.
+func (f *fakeAPI) setOwnerNumber(n string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ownerNumber = n
 }
 
 // setModel changes the settings, as the owner would in lifelog.
@@ -152,7 +160,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		props := map[string]any{}
-		for k, v := range map[string]string{"model_url": f.modelURL, "model": f.model, "model_key": f.modelKey} {
+		for k, v := range map[string]string{"model_url": f.modelURL, "model": f.model, "model_key": f.modelKey, "owner_number": f.ownerNumber} {
 			if v != "" {
 				props[k] = v
 			}
@@ -223,7 +231,7 @@ func catalog() []siren.Action {
 			{Name: "id", Type: "number", In: "path", Required: true}, {Name: "body", Type: "textarea", Required: true}, {Name: "version", Type: "hidden", Required: true}}},
 		{Name: "snapshot", Owner: true, Method: "POST", Href: "/snapshot"},
 		{Name: "settings", Owner: true, Method: "POST", Href: "/settings", Fields: []siren.Field{
-			{Name: "model_url", Type: "text"}, {Name: "model", Type: "text"}, {Name: "model_key", Type: "password"}}},
+			{Name: "model_url", Type: "text"}, {Name: "model", Type: "text"}, {Name: "model_key", Type: "password"}, {Name: "owner_number", Type: "text"}}},
 	}
 }
 

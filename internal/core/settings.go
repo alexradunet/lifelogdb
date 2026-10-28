@@ -17,6 +17,9 @@ type Settings struct {
 	ModelURL string `json:"model_url,omitempty"` // the base URL of a server that speaks the chat-completions protocol, ending in /v1
 	Model    string `json:"model,omitempty"`     // the model id
 	ModelKey string `json:"model_key,omitempty"` // a bearer credential, when the server needs one
+	// OwnerNumber is the digits of the owner's phone number with the country code: the one number that the agent on
+	// the phone answers. The action settings refuses a value that is not digits.
+	OwnerNumber string `json:"owner_number,omitempty"`
 }
 
 // SettingsPathFor is the settings file of the database at dbPath: the path with .db cut and .settings.json added

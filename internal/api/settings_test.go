@@ -83,6 +83,45 @@ func TestSettingsAreTheOwnersFile(t *testing.T) {
 	}
 }
 
+// TestTheOwnerNumberIsDigits: digits with the country code are kept and read back; letters, a plus sign and spaces are
+// 422 with the sentence, and a refused save leaves the setting as it was; an empty value clears it.
+func TestTheOwnerNumberIsDigits(t *testing.T) {
+	c, _, _ := apitest.Fresh(t, "cli")
+	act := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "settings")
+	if f := act.Field("owner_number"); f.Type != "text" || !strings.Contains(f.Title, "digits with the country code") {
+		t.Errorf("the field owner_number: %+v", f)
+	}
+	read := func() any {
+		t.Helper()
+		p, _ := apitest.Must(t)(c.Get(t.Context(), "/settings")).Properties.(map[string]any)
+		return p["owner_number"]
+	}
+	if got := read(); got != nil {
+		t.Errorf("owner_number with none set: %v, want absent", got)
+	}
+	if _, err := c.Do(t.Context(), act, map[string]string{"owner_number": " 40712345678 "}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != "40712345678" {
+		t.Errorf("owner_number after a save: %v", got)
+	}
+	for _, bad := range []string{"abc", "+40712345678", "0712 345 678", "40712345678x"} {
+		_, err := c.Do(t.Context(), act, map[string]string{"owner_number": bad})
+		if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "owner_number: digits with the country code, such as 40712345678") {
+			t.Errorf("owner_number %q: %v, want 422 with the sentence", bad, err)
+		}
+	}
+	if got := read(); got != "40712345678" {
+		t.Errorf("owner_number after refused saves: %v, want it unchanged", got)
+	}
+	if _, err := c.Do(t.Context(), act, map[string]string{"owner_number": ""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != nil {
+		t.Errorf("owner_number after an empty save: %v, want absent", got)
+	}
+}
+
 // TestSettingsAreRefusedToAnAgentAndAnImport: both routes answer 403 forbidden, and a refused save writes nothing.
 func TestSettingsAreRefusedToAnAgentAndAnImport(t *testing.T) {
 	_, h, s := apitest.Fresh(t, "cli")

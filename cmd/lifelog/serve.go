@@ -100,7 +100,7 @@ func serveHTTP(ctx context.Context, srv *http.Server, listener net.Listener, dra
 // prepareServe reads the --public flags and the address before anything opens: a wrong flag, a wrong address or a
 // snapshot folder that is not one refuses the command with life.db untouched. It gives the line with the address
 // checked and the public options set.
-func prepareServe(o opts) (opts, error) {
+func prepareServe(e env, o opts) (opts, error) {
 	pub, err := publicOptions(o)
 	if err != nil {
 		return o, err
@@ -117,6 +117,22 @@ func prepareServe(o opts) (opts, error) {
 		return o, err
 	}
 	o.serve.pub = pub
+	if len(o.serve.with) > 0 && o.serve.tlsCert != "" {
+		return o, errors.New("--with and --tls-cert cannot go together: the extension would have to trust the certificate of the server")
+	}
+	if len(o.serve.with) > 0 {
+		exe, err := program(e)
+		if err != nil {
+			return o, err
+		}
+		for _, name := range o.serve.with {
+			path, err := findExtension(exe, name)
+			if err != nil {
+				return o, fmt.Errorf("--with %s: %w", name, err)
+			}
+			o.serve.withPaths = append(o.serve.withPaths, path)
+		}
+	}
 	if o.url != "" {
 		return o, errors.New("serve opens the file itself: drop --url")
 	}
@@ -165,7 +181,10 @@ func serve(ctx context.Context, e env, _ []string) error {
 		return fmt.Errorf("read user_version: %w", err)
 	}
 	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s (version %s, user_version %d)\n", o.db, scheme, listener.Addr(), note, version, userVersion)
-	err = serveHTTP(ctx, srv, listener, 10*time.Second)
+	// The children end before the server drains: an extension may still write while it ends (extensions/README.md).
+	serveCtx, waitWith := startWith(ctx, e, listener.Addr())
+	err = serveHTTP(serveCtx, srv, listener, 10*time.Second)
+	waitWith()
 	// After the drain, before the database closes: the log shows that the stop was clean, or why it was not.
 	if err != nil {
 		fmt.Fprintf(e.stderr, "lifelog: stopped serving %s with an error: %v\n", o.db, err)

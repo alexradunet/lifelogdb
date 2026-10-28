@@ -44,9 +44,10 @@ type opts struct {
 type serveFlags struct {
 	addr                       string
 	tokenFile, tlsCert, tlsKey string
-	allowOrigins               []string
+	allowOrigins, with         []string // with: the names of the extensions that serve runs (--with)
 	addrExplicit, public       bool
 	pub                        *api.PublicOptions // set by prepareServe from the flags of --public
+	withPaths                  []string           // set by prepareServe: the program of each --with, in the order of the line
 }
 
 // fileFlags are the flags that only file and cover read. --day, which capture reads too, is opts.day.
@@ -92,13 +93,13 @@ type env struct {
 // command takes and whether an interrupt reaches it all read it.
 type command struct {
 	name       string
-	gap        bool                       // a blank line before its usage: the start of a group
-	usage      string                     // its lines of the usage text; "" for an alias with none of its own
-	flags      []string                   // the flags it takes, besides the global ones
-	refuses    []string                   // the global flags it does not take: it would ignore them
-	setup      bool                       // a setup command of the machine (init): no client, and the OS's interrupt
-	ownHandler bool                       // it builds the handler of its listener (serve): it gets the store and no client
-	prepare    func(o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
+	gap        bool                              // a blank line before its usage: the start of a group
+	usage      string                            // its lines of the usage text; "" for an alias with none of its own
+	flags      []string                          // the flags it takes, besides the global ones
+	refuses    []string                          // the global flags it does not take: it would ignore them
+	setup      bool                              // a setup command of the machine (init): no client, and the OS's interrupt
+	ownHandler bool                              // it builds the handler of its listener (serve): it gets the store and no client
+	prepare    func(e env, o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
 	run        func(ctx context.Context, e env, args []string) error
 }
 
@@ -116,11 +117,12 @@ var commands = []command{
 	{name: "init", setup: true, gap: true, refuses: []string{"--url", "--source"},
 		usage: "  lifelog init [PATH]                 create a new life.db from docs/schema/schema.sql (default: beside this program)",
 		run:   initDB},
-	{name: "serve", ownHandler: true, refuses: []string{"--human"}, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key"},
+	{name: "serve", ownHandler: true, refuses: []string{"--human"}, flags: []string{"--addr", "--snapshots", "--public", "--token-file", "--allow-origin", "--tls-cert", "--tls-key", "--with"},
 		usage: "  lifelog serve [--addr 127.0.0.1:7777] [--snapshots DIR]   the API: Siren JSON, or HTML in a browser; this machine only\n" +
 			"  lifelog serve --public [--addr 0.0.0.0:7777] [--allow-origin O]... [--tls-cert F --tls-key F]\n" +
 			"                                      the API for other devices: every request needs the owner's token\n" +
-			"                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login",
+			"                                      (--token-file PATH or $LIFELOG_TOKEN); a browser logs in at /login\n" +
+			"  lifelog serve ... --with NAME       also run the extension lifelog-NAME as a child, and start it again when it fails",
 		prepare: prepareServe, run: serve},
 	{name: "get", gap: true,
 		usage: "  lifelog get PATH                    fetch a resource, e.g. /, /days/today, /pages/12 (or pages/12: Git Bash rewrites a leading /)",
@@ -217,7 +219,7 @@ var commands = []command{
 		usage: "  lifelog snapshot [--snapshots DIR]  a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
 			"                                      server's folder (serve --snapshots), and --snapshots is refused",
-		prepare: func(o opts) (opts, error) {
+		prepare: func(_ env, o opts) (opts, error) {
 			if o.url != "" && o.snapshots != "" {
 				return o, errors.New("snapshot over --url lands in the server's folder (serve --snapshots): drop --snapshots")
 			}
@@ -313,7 +315,7 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 			continue
 		}
 		p, ok := vals[name]
-		if !ok && name != "--allow-origin" {
+		if !ok && name != "--allow-origin" && name != "--with" {
 			if strings.HasPrefix(a, "--") {
 				return o, fmt.Errorf("unknown flag %s", a)
 			}
@@ -331,6 +333,8 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 		switch name {
 		case "--allow-origin":
 			o.serve.allowOrigins = append(o.serve.allowOrigins, val)
+		case "--with":
+			o.serve.with = append(o.serve.with, val)
 		case "--db":
 			*p, o.dbExplicit = val, true
 		case "--addr":
@@ -431,7 +435,7 @@ func runContext(ctx context.Context, e env) (err error) {
 	e.cmd = cmd
 	args := o.args[1:]
 	if cmd.prepare != nil {
-		if o, err = cmd.prepare(o); err != nil {
+		if o, err = cmd.prepare(e, o); err != nil {
 			return err
 		}
 	}

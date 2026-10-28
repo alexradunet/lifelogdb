@@ -222,6 +222,47 @@ func (a *Agent) model(ctx context.Context) (*model.Client, error) {
 	return model.New(url, name, key), nil
 }
 
+// OwnerEvery is the time between two reads of the settings while no owner number is set.
+var OwnerEvery = 30 * time.Second
+
+// WaitOwner reads the owner's number from GET /settings (the property owner_number) with c, which has the owner's
+// token and no source. With none set, it logs one line, then reads again at each tick (nil: every OwnerEvery) until
+// a number is set. It returns the error of ctx when ctx ends. A number that is set is used for the whole run.
+func WaitOwner(ctx context.Context, c *client.Client, logger *log.Logger, tick <-chan time.Time) (string, error) {
+	if tick == nil {
+		t := time.NewTicker(OwnerEvery)
+		defer t.Stop()
+		tick = t.C
+	}
+	logged := false
+	for {
+		e, err := c.Get(ctx, "/settings")
+		switch {
+		case ctx.Err() != nil:
+			return "", ctx.Err()
+		case err != nil:
+			if !logged {
+				logger.Printf("settings: %v", err)
+				logged = true
+			}
+		default:
+			p, _ := e.Properties.(map[string]any)
+			if n, _ := p["owner_number"].(string); n != "" {
+				return n, nil
+			}
+			if !logged {
+				logger.Print("no owner number: set it in Settings (owner_number)")
+				logged = true
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-tick:
+		}
+	}
+}
+
 // reply makes the reply of a turn on the body of the page. The error is the error of ctx.
 func (a *Agent) reply(ctx context.Context, body string, at time.Time) (string, []string, error) {
 	m, err := a.model(ctx)

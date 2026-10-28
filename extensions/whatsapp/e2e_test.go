@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 )
 
 // The end-to-end test builds the real lifelog and lifelog-whatsapp into one folder and runs
-// `lifelog whatsapp --owner 123 --terminal --db F` against a fake model. That line holds the discovery of the
+// `lifelog whatsapp --terminal --db F` against a fake model. That line holds the discovery of the
 // extension (lifelog finds lifelog-whatsapp beside itself), the temporary server of the extension contract
 // (extensions/README.md), the conversation page and the tool calls over HTTP. The tests of ./agent hold the turns
 // on a fake catalog; this test holds the surface against the real writer. The connection to WhatsApp has no test.
@@ -141,7 +142,7 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 
 	b.setModel(t, srv.URL+"/v1", "synthetic-key")
 
-	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
+	cmd := exec.Command(b.lifelog, "whatsapp", "--terminal", "--db", b.db)
 	cmd.Env = env(t)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -272,11 +273,10 @@ func TestTheAgentRefusesWhatItCannotRun(t *testing.T) {
 		env  []string
 		want string
 	}{
-		{"no owner", []string{b.lifelog, "whatsapp", "--terminal", "--db", b.db}, nil, "--owner is required"},
-		{"an owner that is not a number", []string{b.lifelog, "whatsapp", "--owner", "me", "--terminal", "--db", b.db}, nil, "--owner is required"},
-		{"no server", []string{b.ext, "--owner", "123", "--terminal"}, nil, "no LIFELOG_URL and no --url"},
-		{"no file", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", missing}, nil, "no LIFELOG_URL and no --url"},
-		{"a source flag", []string{b.lifelog, "whatsapp", "--owner", "123", "--source", "x", "--db", b.db}, nil, "flag provided but not defined: -source"},
+		{"the owner flag is gone", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db}, nil, "flag provided but not defined: -owner"},
+		{"no server", []string{b.ext, "--terminal"}, nil, "no LIFELOG_URL and no --url"},
+		{"no file", []string{b.lifelog, "whatsapp", "--terminal", "--db", missing}, nil, "no LIFELOG_URL and no --url"},
+		{"a source flag", []string{b.lifelog, "whatsapp", "--source", "x", "--db", b.db}, nil, "flag provided but not defined: -source"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(tc.line[0], tc.line[1:]...)
@@ -295,10 +295,11 @@ func TestTheAgentRefusesWhatItCannotRun(t *testing.T) {
 	}
 }
 
-// TestServingWithoutAPairingExitsWithTwo: the session store is new, so the device is not paired (no network).
+// TestServingWithoutAPairingExitsWithTwo: the session store is new, so the device is not paired (no network). The
+// check comes before the wait for the owner's number: no number is set here, and the exit is still 2.
 func TestServingWithoutAPairingExitsWithTwo(t *testing.T) {
 	b := build(t)
-	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--db", b.db)
+	cmd := exec.Command(b.lifelog, "whatsapp", "--db", b.db)
 	cmd.Env = env(t)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -323,7 +324,7 @@ func TestAnInterruptEndsTheTerminalAgentAtOnce(t *testing.T) {
 	srv := httptest.NewServer(&fakeModel{})
 	defer srv.Close()
 	b.setModel(t, srv.URL+"/v1", "")
-	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
+	cmd := exec.Command(b.lifelog, "whatsapp", "--terminal", "--db", b.db)
 	cmd.Env = env(t)
 	stdin, err := cmd.StdinPipe() // stays open: the read of the agent blocks on it
 	if err != nil {
@@ -374,4 +375,87 @@ func TestAnInterruptEndsTheTerminalAgentAtOnce(t *testing.T) {
 		t.Fatalf("the agent did not stop within 5 seconds of an interrupt; stderr:\n%s", stderr.String())
 	}
 	stdin.Close()
+}
+
+// lockedBuffer is a buffer that a process writes to and a test reads from.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+// TestServeWithWhatsappStartsTheAgentAndDoesNotStartItAgainWhenTheOwnerMustAct: `lifelog serve --with whatsapp`
+// runs lifelog-whatsapp as a child. The state folder is new, so the device is not paired: the child exits with 2,
+// and serve says that it does not start it again (the contract of extensions/README.md, "Run by serve"). A SIGTERM
+// ends serve with exit 0. The answer to a `say` under --with needs a paired session, so it has no test.
+func TestServeWithWhatsappStartsTheAgentAndDoesNotStartItAgainWhenTheOwnerMustAct(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a SIGTERM cannot be sent to a process on Windows")
+	}
+	b := build(t)
+	srv := httptest.NewServer(&fakeModel{})
+	defer srv.Close()
+	b.setModel(t, srv.URL+"/v1", "")
+	if out, err := b.run("do", "settings", "--db", b.db, "owner_number=40712345678"); err != nil {
+		t.Fatalf("lifelog do settings: %v\n%s", err, out)
+	}
+	cmd := exec.Command(b.lifelog, "serve", "--with", "whatsapp", "--db", b.db, "--addr", "127.0.0.1:0")
+	cmd.Env = env(t)
+	stderr := &lockedBuffer{}
+	cmd.Stderr = stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	ended := false
+	defer func() {
+		if !ended {
+			cmd.Process.Kill()
+			<-done
+		}
+	}()
+	for _, want := range []string{"serving", "with whatsapp: started", "not started again (the owner acts first)"} {
+		deadline := time.Now().Add(wait)
+		for !strings.Contains(stderr.String(), want) {
+			select {
+			case err := <-done:
+				ended = true
+				t.Fatalf("serve ended (%v) before the line %q; stderr:\n%s", err, want, stderr.String())
+			case <-time.After(50 * time.Millisecond):
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no line %q; stderr:\n%s", want, stderr.String())
+			}
+		}
+	}
+	if !strings.Contains(stderr.String(), "not paired") {
+		t.Errorf("the child did not say why it ended; stderr:\n%s", stderr.String())
+	}
+	if n := strings.Count(stderr.String(), "with whatsapp: started"); n != 1 {
+		t.Errorf("the child started %d times, want 1; stderr:\n%s", n, stderr.String())
+	}
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		ended = true
+		if err != nil {
+			t.Errorf("serve after SIGTERM: %v; stderr:\n%s", err, stderr.String())
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatalf("serve did not stop after SIGTERM; stderr:\n%s", stderr.String())
+	}
 }

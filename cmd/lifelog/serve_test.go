@@ -42,7 +42,7 @@ func TestServeAddressFlag(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if o, err = prepareServe(o); err != nil || o.serve.addr != "127.0.0.1:7777" {
+		if o, err = prepareServe(e, o); err != nil || o.serve.addr != "127.0.0.1:7777" {
 			t.Errorf("serve %v: the address %q, %v; want 127.0.0.1:7777", at("LOCALHOST:7777"), o.serve.addr, err)
 		}
 		argv := append(at("0.0.0.0:7777"), "serve", "--db", absent)

@@ -66,7 +66,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	}
 	fs := flag.NewFlagSet("lifelog-whatsapp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	owner := fs.String("owner", "", "the number of the owner, digits with the country code (required)")
 	// The address is $LIFELOG_URL, which `lifelog whatsapp` sets, or --url. There is no default: a guess such as
 	// 127.0.0.1:7777 could be the owner's service, and a stale config with a missing file would then write there.
 	base := fs.String("url", getenv("LIFELOG_URL"), "address of lifelog (default $LIFELOG_URL)")
@@ -79,9 +78,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", fs.Arg(0))
-	}
-	if *owner == "" || strings.Trim(*owner, "0123456789") != "" {
-		return errors.New("--owner is required: the number of the owner, digits with the country code, such as 40712345678")
 	}
 	if *base == "" {
 		return errors.New("no LIFELOG_URL and no --url: run it as `lifelog whatsapp` on a life.db that exists, or start `lifelog serve` and give --url")
@@ -105,13 +101,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	logger := log.New(stderr, "lifelog-whatsapp: ", log.LstdFlags)
 	a := &agent.Agent{
 		Client: client.Remote(*base, siren.AgentPrefix+agent.Source, token),
-		// The settings hold the key of the model: they are read as the owner, with no source.
+		// The settings hold the key of the model and the owner's number: they are read as the owner, with no source.
 		Settings: client.Remote(*base, "", token),
-		Owner:    *owner,
 		State:    statePath,
 		Log:      logger,
 	}
 	if *terminalMode {
+		a.Owner = terminal.Sender
 		return serveTerminal(ctx, a, stdin, stdout)
 	}
 	return serveWhatsApp(ctx, a, sessionPath, logger)
@@ -134,7 +130,7 @@ func login(ctx context.Context, stdout io.Writer) (err error) {
 	if err := whatsapp.Login(ctx, s, stdout); err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, "Paired. Start the agent with: lifelog whatsapp --owner NUMBER")
+	fmt.Fprintln(stdout, "Paired. Start the agent with: lifelog whatsapp")
 	return nil
 }
 
@@ -153,6 +149,10 @@ func serveWhatsApp(ctx context.Context, a *agent.Agent, sessionPath string, logg
 	defer func() { err = errors.Join(err, s.Close()) }()
 	if s.Number() == "" {
 		return &exitCode{exitNotPaired, whatsapp.ErrNotPaired}
+	}
+	// The number comes from the settings, before the connection. A number that is set is used for the whole run.
+	if a.Owner, err = agent.WaitOwner(ctx, a.Settings, logger, nil); err != nil {
+		return err
 	}
 	// A message is answered when it is newer than the earlier of the start and the last save of the page: an
 	// offline message is answered once, and a restart does not answer what the page holds.
