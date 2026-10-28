@@ -5,8 +5,8 @@ import (
 	"image/color"
 )
 
-// IconSize is the width and the height of a glyph, in pixels. A glyph is at the top-left corner of its cell of
-// CellSize by CellSize pixels.
+// IconSize is the width and the height of the box of a glyph, in pixels. The box is at the top-left corner of its cell
+// of CellSize by CellSize pixels, and the ink of the drawing is in the middle of the box (see centred).
 const IconSize = 10
 
 // IconNames are the names of the glyphs, in the order of the cells of the icon sheet: the name at index n is the
@@ -245,13 +245,30 @@ var glyphs = map[string]drawing{
 func Icons() *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, len(IconNames)*CellSize, CellSize))
 	for cell, name := range IconNames {
+		dx, dy := centred(glyphs[name])
 		for y, row := range glyphs[name] {
 			for x := 0; x < len(row); x++ {
 				if row[x] == 'X' {
-					img.SetNRGBA(cell*CellSize+x, y, iconInk)
+					img.SetNRGBA(cell*CellSize+x+dx, y+dy, iconInk)
 				}
 			}
 		}
 	}
 	return img
+}
+
+// centred gives the move that puts the ink of a drawing in the middle of the IconSize box. The box is even and the
+// ink can be odd, so the margin at the left and at the top is half of the free space, rounded down: the extra pixel
+// is at the right and at the bottom.
+func centred(d drawing) (dx, dy int) {
+	x0, y0, x1, y1 := IconSize, IconSize, -1, -1
+	for y, row := range d {
+		for x := 0; x < len(row); x++ {
+			if row[x] == 'X' {
+				x0, x1 = min(x0, x), max(x1, x)
+				y0, y1 = min(y0, y), max(y1, y)
+			}
+		}
+	}
+	return (IconSize-(x1-x0+1))/2 - x0, (IconSize-(y1-y0+1))/2 - y0
 }
