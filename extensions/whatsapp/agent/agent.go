@@ -163,8 +163,8 @@ func (a *Agent) typing(ctx context.Context, on bool) {
 	}
 }
 
-// stamp is the time of a paragraph: HH.MM.
-func (a *Agent) stamp(t time.Time) string { return t.In(a.Now().Location()).Format("15.04") }
+// stamp is the time of a paragraph: HH:MM.
+func (a *Agent) stamp(t time.Time) string { return t.In(a.Now().Location()).Format("15:04") }
 
 // phoneTurn answers a message from the phone: the action say adds the owner's paragraph to today's conversation,
 // then the model answers. The API stamps the paragraph and makes the page on the first turn of the day.

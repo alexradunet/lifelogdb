@@ -22,7 +22,7 @@ flowchart LR
   its category, its first line, the paragraph of a turn: see the conversation class in [API.md](../../API.md)). A
   message from the phone goes in with the action `say` (`day` = `today`). The extension reads the page with
   `GET /days/{day}/conversation` and holds no title and no category. The tool calls and the reply are added with
-  `save-body`, as lines and `**lifelog** (HH.MM): text`. The model reads the whole page on each turn. The extension
+  `save-body`, as lines and `**lifelog** (HH:MM): text`. The model reads the whole page on each turn. The extension
   keeps nothing else of the conversation.
 - **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, with the owner's
   token and no `Lifelog-Source`, through a second client that only this read uses. Every other request, the tools of

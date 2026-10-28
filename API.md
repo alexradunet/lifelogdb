@@ -298,8 +298,8 @@ names, or to today when `day` is absent or empty, and a value that is not a day 
 `record`, `plan` (with `page` this day), `tick`, `carry` and `schedule` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover`, `unlink` (with `kind` at, for the places of Where) and `save-body`
 of it (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. The entry it
-appends begins with the brackets of a turn of [the conversation](#conversation): `(HH.MM) ` in the server's local
-time, or `(HH.MM, via NAME) ` when an `agent:*` or `import:*` writer sent it; a mood alone appends no text. Its field
+appends begins with the brackets of a turn of [the conversation](#conversation): `(HH:MM) ` in the server's local
+time, or `(HH:MM, via NAME) ` when an `agent:*` or `import:*` writer sent it; a mood alone appends no text. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
 unchanged on a retry, and the answer is then the class [result](#result), not this entity.
 
@@ -861,10 +861,10 @@ for the owner's turn. The page:
 - is titled `Conversation YYYY-MM-DD` (the day), is filed in the category `Conversations`, and starts with the line
   `[[YYYY-MM-DD]]`;
 - is read by lines. Line ends are LF; CRLF is read as LF;
-- has a turn from each marker line. A marker line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is
-  outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH.MM` is the
-  server's local time. The agent writes `**lifelog**`, and `say` writes `**Owner**`. The brackets may also name the
-  writer that relayed the turn: `**Owner** (HH.MM, via whatsapp): `, where the name is `[a-z0-9_:.-]+`. `say` writes
+- has a turn from each marker line. A marker line starts with `**Owner** (HH:MM): ` or `**lifelog** (HH:MM): ` and is
+  outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH:MM` is the
+  server's local time; a marker written with the earlier separator, `(HH.MM)`, is read the same. The agent writes `**lifelog**`, and `say` writes `**Owner**`. The brackets may also name the
+  writer that relayed the turn: `**Owner** (HH:MM, via whatsapp): `, where the name is `[a-z0-9_:.-]+`. `say` writes
   it when the writer is an `agent:*` or `import:*` source (the name is the source without its prefix), and writes
   no such part for any other writer;
 - runs a turn from its marker line to the line before the next marker line, or to the end of the page. The words of
@@ -883,7 +883,7 @@ for the owner's turn. The page:
 | `day` | day | the day of the conversation |
 | `turns[]` | list | the turns, in the order of the page; empty when the page does not exist |
 | `turns[].who` | string | `owner`, `lifelog`, or `text` for a free paragraph |
-| `turns[].at` | string | `HH.MM`; absent for a free paragraph |
+| `turns[].at` | string | `HH:MM`, also for a marker written as `HH.MM`; absent for a free paragraph |
 | `turns[].via` | string | the writer that relayed the turn, its prefix cut; absent when the owner wrote it on a surface of lifelog |
 | `turns[].text` | string | the words of the turn, without the mark |
 | `turns[].tools` | list | the tool lines of a `lifelog` turn, as written, with the leading ``- ` ``; absent when none |

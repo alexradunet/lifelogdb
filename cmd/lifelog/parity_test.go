@@ -347,7 +347,7 @@ func rowCaptureSentAgain(x *parityRun) {
 		return props(x.t, e)["body"]
 	}
 	// each paragraph begins with its stamp: the hour of the surface's clock, and via parity when the writer is the agent
-	const stamp = `\(\d\d\.\d\d(, via parity)?\) `
+	const stamp = `\(\d\d:\d\d(, via parity)?\) `
 	day := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/"+parityToday)))
 	if one := regexp.MustCompile("^" + stamp + "Walked the dog$"); fmt.Sprint(day["mood"]) != "[4]" || !one.MatchString(fmt.Sprint(body())) {
 		x.t.Errorf("%s after the sends again: moods %v, page %q, want [4] and one stamped paragraph", parityToday, day["mood"], body())
@@ -1353,7 +1353,7 @@ func rowSay(x *parityRun) {
 		x.t.Fatal(err)
 	}
 	p := props(x.t, pe)
-	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_:.-]+)?\): Hello\.\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_:.-]+)?\): Again\.$`)
+	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d:\d\d(?:, via [a-z0-9_:.-]+)?\): Hello\.\n\n\*\*Owner\*\* \(\d\d:\d\d(?:, via [a-z0-9_:.-]+)?\): Again\.$`)
 	if body, _ := p["body"].(string); !want.MatchString(body) {
 		x.t.Errorf("the body after two turns: %q", body)
 	}

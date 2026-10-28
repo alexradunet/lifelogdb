@@ -55,7 +55,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 			marked = append(marked, fmt.Sprintf("%v %v %v %v", m["day"], m["page"], m["mood"], m["first_line"]))
 		}
 	}
-	want := "2031-05-01 true [4] (00.00) May day: a walk by the lake. | 2031-05-14 true [3] <nil> | 2031-05-31 true <nil> (00.00) The last day."
+	want := "2031-05-01 true [4] (00:00) May day: a walk by the lake. | 2031-05-14 true [3] <nil> | 2031-05-31 true <nil> (00:00) The last day."
 	if got := strings.Join(marked, " | "); got != want {
 		t.Errorf("May:\n got %s\nwant %s", got, want)
 	}
@@ -72,7 +72,7 @@ func TestTheMonthIsACalendar(t *testing.T) {
 	body := browse(t, h, "/months/2031-05")
 	for _, w := range []string{`<table class="calendar">`,
 		`<td class="written" aria-current="date"><a href="/days/2031-05-14"><span class="n">14</span><span class="meta">mood 3 · okay</span></a></td>`,
-		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">(00.00) May day: a walk by the lake.</span><span class="meta">mood 4 · good</span></a></td>`,
+		`<td class="written"><a href="/days/2031-05-01"><span class="n">1</span><span class="first">(00:00) May day: a walk by the lake.</span><span class="meta">mood 4 · good</span></a></td>`,
 		`<td><a href="/days/2031-05-20"><span class="n">20</span></a></td>`,
 		`aria-label="Previous month, April 2031"`, `aria-label="Next month, June 2031"`} {
 		if !strings.Contains(body, w) {
@@ -130,7 +130,7 @@ func TestTheFirstMonthOfTheDaysIsACalendar(t *testing.T) {
 		t.Fatalf("%q, %d days", m.Title, len(days))
 	}
 	first, third := days[0].(map[string]any), days[2].(map[string]any)
-	if first["day"] != "0000-01-01" || first["page"] != true || first["first_line"] != "(00.00) The first day." {
+	if first["day"] != "0000-01-01" || first["page"] != true || first["first_line"] != "(00:00) The first day." {
 		t.Errorf("the first day: %v", first)
 	}
 	if third["day"] != "0000-01-03" || third["page"] != false || said(third["readings"]) != "1" {

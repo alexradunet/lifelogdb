@@ -37,7 +37,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 	if err := r.finish(t); err != nil {
 		t.Fatal(err)
 	}
-	want := "[[2031-05-20]]\n\n**Owner** (09.30): I walked by the river\n\n- `capture` → [/days/2031-05-20/capture](/days/2031-05-20/capture)\n\n**lifelog** (09.30): Written to today."
+	want := "[[2031-05-20]]\n\n**Owner** (09:30): I walked by the river\n\n- `capture` → [/days/2031-05-20/capture](/days/2031-05-20/capture)\n\n**lifelog** (09:30): Written to today."
 	if got := r.api.body(todayTitle); got != want {
 		t.Errorf("page body\n%q\nwant\n%q", got, want)
 	}
@@ -65,7 +65,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 		t.Errorf("system message %+v", sys)
 	}
 	// The model sees the page with the owner's paragraph, which was saved before the model was called.
-	if got := userOf(reqs[0]); got != "[[2031-05-20]]\n\n**Owner** (09.30): I walked by the river" || len(reqs[0].Messages) != 2 {
+	if got := userOf(reqs[0]); got != "[[2031-05-20]]\n\n**Owner** (09:30): I walked by the river" || len(reqs[0].Messages) != 2 {
 		t.Errorf("user message %q", got)
 	}
 	if last := reqs[1].Messages[len(reqs[1].Messages)-1]; last.Role != "tool" || last.ToolCallID != "call1" {
@@ -125,7 +125,7 @@ func TestATurnWithNoModelGivesOneLineOnThePageAndInTheChatAndTheAgentGoesOn(t *t
 	if got := r.chat.reply(t); got != want {
 		t.Errorf("reply %q", got)
 	}
-	if body := r.api.body(todayTitle); !strings.HasSuffix(body, "**lifelog** (09.30): "+want) {
+	if body := r.api.body(todayTitle); !strings.HasSuffix(body, "**lifelog** (09:30): "+want) {
 		t.Errorf("page body %q", body)
 	}
 	if n := len(r.mod.requests()); n != 0 {
@@ -262,7 +262,7 @@ func TestAModelErrorGivesTheFailedReplyOnThePageAndInTheChat(t *testing.T) {
 	if err := r.finish(t); err != nil {
 		t.Fatal(err)
 	}
-	if body := r.api.body(todayTitle); !strings.HasSuffix(body, "**lifelog** (09.30): "+got) {
+	if body := r.api.body(todayTitle); !strings.HasSuffix(body, "**lifelog** (09:30): "+got) {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -278,7 +278,7 @@ func TestTwoMessagesAreAnsweredInOrderAndTheSecondSeesTheFirstOnThePage(t *testi
 		t.Fatal(err)
 	}
 	got := userOf(r.mod.requests()[1])
-	want := "[[2031-05-20]]\n\n**Owner** (09.30): first\n\n**lifelog** (09.30): answer 1\n\n**Owner** (09.30): second"
+	want := "[[2031-05-20]]\n\n**Owner** (09:30): first\n\n**lifelog** (09:30): answer 1\n\n**Owner** (09:30): second"
 	if got != want {
 		t.Errorf("second user message\n%q\nwant\n%q", got, want)
 	}
@@ -358,7 +358,7 @@ func TestAStaleVersionReadsTheSaveAgainAndAppendsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := api.body(todayTitle)
-	if strings.Count(body, "**Owner** (09.30): hello") != 1 || !strings.Contains(body, "Added on the web.x") || !strings.HasSuffix(body, "**lifelog** (09.30): noted") {
+	if strings.Count(body, "**Owner** (09:30): hello") != 1 || !strings.Contains(body, "Added on the web.x") || !strings.HasSuffix(body, "**lifelog** (09:30): noted") {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -402,7 +402,7 @@ func TestTheWatcherAnswersATurnThatWasWrittenOnAnotherSurface(t *testing.T) {
 	if got := userOf(reqs[1]); !strings.HasSuffix(got, "From the web: what did I do?") {
 		t.Errorf("the model did not read the new paragraph: %q", got)
 	}
-	if body := r.api.body(todayTitle); strings.Count(body, "**Owner**") != 1 || !strings.HasSuffix(body, "**lifelog** (09.30): answer 2") {
+	if body := r.api.body(todayTitle); strings.Count(body, "**Owner**") != 1 || !strings.HasSuffix(body, "**lifelog** (09:30): answer 2") {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -427,7 +427,7 @@ func TestTheWatcherReadsABodyThatABrowserSaved(t *testing.T) {
 	if err := r.finish(t); err != nil {
 		t.Fatal(err)
 	}
-	if body := r.api.body(todayTitle); strings.Contains(body, "\r") || !strings.HasSuffix(body, "From the browser: hello?\n\n**lifelog** (09.30): answer 2") {
+	if body := r.api.body(todayTitle); strings.Contains(body, "\r") || !strings.HasSuffix(body, "From the browser: hello?\n\n**lifelog** (09:30): answer 2") {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -515,7 +515,7 @@ func TestARestartKeepsTheThreadAndDoesNotAnswerItsOwnSaves(t *testing.T) {
 	if n := len(r2.mod.requests()); n != 1 {
 		t.Errorf("%d model requests after the restart, want 1", n)
 	}
-	if got := userOf(r2.mod.requests()[0]); !strings.Contains(got, "**lifelog** (09.30): first answer") || !strings.HasSuffix(got, "**Owner** (09.30): two") {
+	if got := userOf(r2.mod.requests()[0]); !strings.Contains(got, "**lifelog** (09:30): first answer") || !strings.HasSuffix(got, "**Owner** (09:30): two") {
 		t.Errorf("the restarted agent lost the thread: %q", got)
 	}
 	if _, ok, err := LastSave(state + ".missing"); ok || err != nil {
@@ -605,7 +605,7 @@ func TestTheModelCannotReadTheKeyThroughGet(t *testing.T) {
 
 // pendingBody is the page of a day where the owner spoke on another surface and nothing answered.
 func pendingBody(day string) string {
-	return "[[" + day + "]]\n\n**Owner** (08.15): said in the browser"
+	return "[[" + day + "]]\n\n**Owner** (08:15): said in the browser"
 }
 
 func TestAPageNewToTheExtensionThatEndsWithAnOwnerTurnIsAnsweredOnce(t *testing.T) {
@@ -630,7 +630,7 @@ func TestAPageNewToTheExtensionThatEndsWithAnOwnerTurnIsAnsweredOnce(t *testing.
 	if got := userOf(r.mod.requests()[0]); !strings.HasSuffix(got, "said in the browser") {
 		t.Errorf("the model read %q", got)
 	}
-	if body := r.api.body(todayTitle); strings.Count(body, "**lifelog**") != 1 || !strings.HasSuffix(body, "**lifelog** (09.30): answer 1") {
+	if body := r.api.body(todayTitle); strings.Count(body, "**lifelog**") != 1 || !strings.HasSuffix(body, "**lifelog** (09:30): answer 1") {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -672,7 +672,7 @@ func TestAPendingTurnOnYesterdaysPageIsAnsweredOnceAtTheDayChange(t *testing.T) 
 	r.chat.say(t, "good night")
 	r.chat.reply(t)
 	// Said before midnight on another surface; the clock moves past midnight before the watcher looks.
-	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\n**Owner** (23.59): one more thing")
+	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\n**Owner** (23:59): one more thing")
 	r.setDay(fixedNow.AddDate(0, 0, 1))
 	r.poll(t)
 	if got := r.chat.reply(t); got != "You wrote in lifelog: one more thing" {
@@ -691,7 +691,7 @@ func TestAPendingTurnOnYesterdaysPageIsAnsweredOnceAtTheDayChange(t *testing.T) 
 	if n := len(r.mod.requests()); n != 2 {
 		t.Errorf("%d model requests, want 2", n)
 	}
-	if body := r.api.body(todayTitle); strings.Count(body, "one more thing") != 1 || !strings.HasSuffix(body, "**lifelog** (09.30): answer 2") {
+	if body := r.api.body(todayTitle); strings.Count(body, "one more thing") != 1 || !strings.HasSuffix(body, "**lifelog** (09:30): answer 2") {
 		t.Errorf("yesterday's page %q", body)
 	}
 	var conv []string
@@ -708,7 +708,7 @@ func TestAPendingTurnOnYesterdaysPageIsAnsweredOnceAtTheDayChange(t *testing.T) 
 
 func TestAPageNewToTheExtensionThatEndsWithTheAgentsTurnIsNotAnswered(t *testing.T) {
 	r := start(t, func(n int, _ chatReq) (int, string) { return text("answer") })
-	r.api.add(todayTitle, pendingBody("2031-05-20")+"\n\n**lifelog** (08.16): already answered")
+	r.api.add(todayTitle, pendingBody("2031-05-20")+"\n\n**lifelog** (08:16): already answered")
 	r.settle(t)
 	r.settle(t)
 	if err := r.finish(t); err != nil {

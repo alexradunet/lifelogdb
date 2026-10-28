@@ -26,8 +26,8 @@ func ConversationTitle(day string) string { return "Conversation " + day }
 // conversationFirstLine is the first line of the page: a link to the day it is about.
 func conversationFirstLine(day string) string { return "[[" + day + "]]" }
 
-// stamp is the brackets that begin an entry: the time in the server's zone, HH.MM, and the writer that relayed the
-// entry when an agent or an import wrote it (its prefix cut): `(HH.MM)` or `(HH.MM, via NAME)`. say and capture both
+// stamp is the brackets that begin an entry: the time in the server's zone, HH:MM, and the writer that relayed the
+// entry when an agent or an import wrote it (its prefix cut): `(HH:MM)` or `(HH:MM, via NAME)`. say and capture both
 // begin with it, so every surface stamps an entry alike.
 func (h *server) stamp(source string) string {
 	via := ""
@@ -36,13 +36,13 @@ func (h *server) stamp(source string) string {
 			via = ", via " + name
 		}
 	}
-	return "(" + h.s.Local().Format("15.04") + via + ")"
+	return "(" + h.s.Local().Format("15:04") + via + ")"
 }
 
 // words is the text of an entry as the page keeps it: LF line ends (a browser sends CRLF) and no blank edge.
 func words(text string) string { return strings.TrimSpace(strings.ReplaceAll(text, "\r\n", "\n")) }
 
-// ownerParagraph is the paragraph of one turn of the owner: `**Owner** (HH.MM): words`, with the stamp of the writer.
+// ownerParagraph is the paragraph of one turn of the owner: `**Owner** (HH:MM): words`, with the stamp of the writer.
 func ownerParagraph(stamp, text string) string { return "**Owner** " + stamp + ": " + words(text) }
 
 // conversationDay is the day of a conversation page, from its title; "" when the title is not one.
@@ -66,7 +66,7 @@ type Turn struct {
 	Refs  []string `json:"refs,omitempty"`
 }
 
-var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)(?:, via ([a-z0-9_:.-]+))?\): ?`)
+var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d[:.]\d\d)(?:, via ([a-z0-9_:.-]+))?\): ?`)
 
 // toolRefs are the addresses that the tool lines name after an arrow: `- `name` → [href](href)` or
 // `- `name` → href`. A value that does not start with a slash is no address. An address is listed once.
@@ -95,9 +95,10 @@ func toolRefs(tools []string) []string {
 }
 
 // ParseTurns reads the turns of the body of the conversation page of day (CRLF is read as LF). A marker line starts
-// with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `, and may name the relaying writer inside the brackets,
-// `**Owner** (HH.MM, via NAME): ` (NAME is [a-z0-9_:.-]+), and is outside a fenced code block (a line that starts with
-// three backticks opens or closes a fence). A turn runs from its marker line to the line before the next marker line,
+// with `**Owner** (HH:MM): ` or `**lifelog** (HH:MM): `, and may name the relaying writer inside the brackets,
+// `**Owner** (HH:MM, via NAME): ` (NAME is [a-z0-9_:.-]+), and is outside a fenced code block (a line that starts with
+// three backticks opens or closes a fence). A page written with the earlier separator, `(HH.MM)`, is read the same,
+// and its turn's At is HH:MM. A turn runs from its marker line to the line before the next marker line,
 // or to the end of the page; it keeps its inner blank lines and loses its blank edge. The tool lines of a lifelog
 // turn are the lines that start with "- `" right before its marker: one block, with at most one blank line between
 // it and the marker. They are not part of the turn before. The text before the first marker, after the first line
@@ -152,7 +153,7 @@ func ParseTurns(day, body string) []Turn {
 		m := turnStart.FindStringSubmatch(lines[at])
 		seg, next := segment(at+1, to)
 		words := strings.TrimSpace(lines[at][len(m[0]):] + "\n" + strings.Join(seg, "\n"))
-		turns = append(turns, Turn{Who: strings.ToLower(m[1]), At: m[2], Via: m[3], Text: words, Tools: tools, Refs: toolRefs(tools)})
+		turns = append(turns, Turn{Who: strings.ToLower(m[1]), At: strings.Replace(m[2], ".", ":", 1), Via: m[3], Text: words, Tools: tools, Refs: toolRefs(tools)})
 		tools = next
 	}
 	return turns

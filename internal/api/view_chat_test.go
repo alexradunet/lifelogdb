@@ -114,7 +114,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 		}
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "How did I **sleep**? See [[Sleep notes]]."}))
-	conversationBody(t, c, "\n\n- `search_pages` words=sleep\n- `read_day` failed: not_found\n\n**lifelog** (09.30): You slept *well*.\n")
+	conversationBody(t, c, "\n\n- `search_pages` words=sleep\n- `read_day` failed: not_found\n\n**lifelog** (09:30): You slept *well*.\n")
 	relay := apitest.Remote(t, h, "agent:whatsapp")
 	apitest.Must(t)(relay.Do(t.Context(), apitest.Action(t, apitest.Must(t)(relay.Get(t.Context(), "/days/today/conversation")), "say"), map[string]string{"text": "And last night?"}))
 	body := apitest.Must(t)(c.Get(t.Context(), apitest.Href(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "page"))).Properties.(map[string]any)["body"].(string)
@@ -171,7 +171,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 		t.Error("the composer lacks its keyboard rule")
 	}
 	// The agent has answered last: the three dots are gone.
-	conversationBody(t, c, "\n\n**lifelog** (09.40): Last night you slept 7 hours.\n")
+	conversationBody(t, c, "\n\n**lifelog** (09:40): Last night you slept 7 hours.\n")
 	if strings.Contains(browse(t, h, "/days/"+fixedToday+"/conversation"), `class="thinking"`) {
 		t.Error("the screen waits for an agent that has answered")
 	}
@@ -319,7 +319,7 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 	refs := cardsWorld(t, c)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "What did I touch?"}))
 	seven := []string{"/pages/999999", "/days/2031-05-02", "/days/2031-05-03", "/days/2031-05-04", "/days/2031-05-05", "/days/2031-05-06", "/days/2031-05-07"}
-	conversationBody(t, c, "\n\n"+toolLines(refs...)+"\n**lifelog** (09.30): Here they are.\n\n"+toolLines(seven...)+"\n**lifelog** (09.31): And a week.\n\n"+toolLines("/days/today")+"\n**lifelog** (09.32): And today, by the word.\n")
+	conversationBody(t, c, "\n\n"+toolLines(refs...)+"\n**lifelog** (09:30): Here they are.\n\n"+toolLines(seven...)+"\n**lifelog** (09:31): And a week.\n\n"+toolLines("/days/today")+"\n**lifelog** (09:32): And today, by the word.\n")
 
 	page := browse(t, h, "/days/"+fixedToday+"/conversation")
 	cards := cardsOf(page)
@@ -371,7 +371,7 @@ func TestTheColumnDrawsTheCompactCards(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	refs := cardsWorld(t, c)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "Show me"}))
-	conversationBody(t, c, "\n\n"+toolLines(refs[0], refs[3], "/pages/999999")+"\n**lifelog** (09.30): Here.\n")
+	conversationBody(t, c, "\n\n"+toolLines(refs[0], refs[3], "/pages/999999")+"\n**lifelog** (09:30): Here.\n")
 	column := chatColumn.FindString(browse(t, h, "/browse"))
 	cards := cardsOf(column)
 	if len(cards) != 3 || cards[0][1] != "day" || cards[1][1] != "series" || cards[2][1] != "link" {
@@ -391,7 +391,7 @@ func TestTheColumnDrawsTheCompactCards(t *testing.T) {
 func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "Settings?"}))
-	conversationBody(t, c, "\n\n"+toolLines("/settings", "/integrity")+"\n**lifelog** (09.30): No.\n")
+	conversationBody(t, c, "\n\n"+toolLines("/settings", "/integrity")+"\n**lifelog** (09:30): No.\n")
 	// The card's source is refused the owner-only reads by the API itself.
 	for _, path := range []string{"/settings", "/integrity"} {
 		rec := request(h, "GET", path, "", map[string]string{"Accept": "application/vnd.siren+json", siren.SourceHeader: "agent:card"})
@@ -417,7 +417,7 @@ func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 
 	public, s := publicHandler(t, api.PublicOptions{Token: testToken})
 	today := s.Today()
-	if _, _, err := s.CreatePage(t.Context(), "cli", "Conversation "+today, "[["+today+"]]\n\n- `open_day` → [/days/"+today+"](/days/"+today+")\n\n**lifelog** (09.00): Here.\n", ""); err != nil {
+	if _, _, err := s.CreatePage(t.Context(), "cli", "Conversation "+today, "[["+today+"]]\n\n- `open_day` → [/days/"+today+"](/days/"+today+")\n\n**lifelog** (09:00): Here.\n", ""); err != nil {
 		t.Fatal(err)
 	}
 	with := map[string]string{"Accept": "text/html", "Cookie": api.CookieName + "=" + testToken}

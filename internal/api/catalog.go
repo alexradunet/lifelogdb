@@ -65,14 +65,14 @@ func areaReq(name, title string, rows int) siren.Field {
 // server are built from it.
 var catalog = []spec{
 	{Name: "capture", Title: "Add to the day",
-		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. The entry begins with its time, (HH.MM) in the server's zone, and names the relay when an agent or an import wrote it: (HH.MM, via NAME). [[Title]] and #tag in the text link pages, creating them if new. import_key makes a re-send a no-op: make one key for one capture and send it again unchanged on a retry; the answer is then Already added, with the day.",
+		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. The entry begins with its time, (HH:MM) in the server's zone, and names the relay when an agent or an import wrote it: (HH:MM, via NAME). [[Title]] and #tag in the text link pages, creating them if new. import_key makes a re-send a no-op: make one key for one capture and send it again unchanged on a retry; the answer is then Already added, with the day.",
 		Hint:        "Add a note to the journal of a day. A mood from 1 to 5 is optional. A name in [[double brackets]] or a #tag links a page, and makes it when it is new.",
 		Method:      "POST", Path: "/days/{day}/capture",
 		Fields: []siren.Field{path("day", "date", "Local day"), area("text", "Entry (CommonMark)", 4),
 			{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}, opt("import_key", "text", "Key")},
 	},
 	{Name: "say", Title: "Chat",
-		Description: "Write to the agent: text is added to the conversation page of a local day (the page Conversation YYYY-MM-DD, made on the first turn of the day, filed in the category Conversations) as the paragraph **Owner** (HH.MM): text, with the time in the server's zone. The core calls no model: an agent that watches the page (an extension) answers on the same page. The answer is the conversation of the day, with the turns, and the result of a save of a body.",
+		Description: "Write to the agent: text is added to the conversation page of a local day (the page Conversation YYYY-MM-DD, made on the first turn of the day, filed in the category Conversations) as the paragraph **Owner** (HH:MM): text, with the time in the server's zone. The core calls no model: an agent that watches the page (an extension) answers on the same page. The answer is the conversation of the day, with the turns, and the result of a save of a body.",
 		Hint:        "Write to the agent. It answers here when it runs.",
 		Method:      "POST", Path: "/days/{day}/say",
 		Fields: []siren.Field{path("day", "date", "Local day"), areaReq("text", "To the agent", 3)},

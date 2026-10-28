@@ -77,7 +77,7 @@ func TestTheRootIsTodayAtAGlance(t *testing.T) {
 		m := r.(map[string]any)
 		recent = append(recent, fmt.Sprintf("%v %v %v", m["day"], m["mood"], m["first_line"]))
 	}
-	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] (00.00) Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> (00.00) Morning run"; got != want {
+	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] (00:00) Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> (00:00) Morning run"; got != want {
 		t.Errorf("recent:\n got %s\nwant %s", got, want)
 	}
 	if p["today"] != fixedToday || !hasAction(root, "snapshot") {
@@ -133,7 +133,7 @@ func TestTheDayOfTodayCarriesTheLastEntries(t *testing.T) {
 		m := r.(map[string]any)
 		recent = append(recent, fmt.Sprintf("%v %v %v", m["day"], m["mood"], m["first_line"]))
 	}
-	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] (00.00) Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> (00.00) Morning run"; got != want {
+	if got, want := strings.Join(recent, " | "), fixedToday+" [4 3] (00:00) Quiet day. | "+dayOf(-1)+" [2] <nil> | "+dayOf(-2)+" <nil> (00:00) Morning run"; got != want {
 		t.Errorf("recent of today:\n got %s\nwant %s", got, want)
 	}
 	if _, ok := props(apitest.Must(t)(c.Get(t.Context(), "/days/"+dayOf(-1))))["recent"]; ok {
@@ -369,7 +369,7 @@ func TestACaptureFormSentAgainIsAddedOnce(t *testing.T) {
 	if got := fmt.Sprint(props(day)["mood"]); got != "[4]" {
 		t.Errorf("the moods of the day after a send again: %s, want [4]", got)
 	}
-	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "(00.00) Walked the dog" {
+	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "(00:00) Walked the dog" {
 		t.Errorf("the page after a send again: %q", props(page)["body"])
 	}
 
@@ -384,7 +384,7 @@ func TestACaptureFormSentAgainIsAddedOnce(t *testing.T) {
 	if answer.Title != "Already added" || apitest.Href(answer, "day") != toDay {
 		t.Errorf("sent again by JSON: %q links the day %q, want Already added with %s", answer.Title, apitest.Href(answer, "day"), toDay)
 	}
-	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "(00.00) Walked the dog\n\n(00.00) By JSON" {
+	if page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))); props(page)["body"] != "(00:00) Walked the dog\n\n(00:00) By JSON" {
 		t.Errorf("the page after the JSON sends: %q", props(page)["body"])
 	}
 }
@@ -419,7 +419,7 @@ func TestTheStreamPagesByDay(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	top := apitest.Must(t)(c.Get(t.Context(), "/days?limit=2"))
-	if got, want := cards(top), "2031-05-14:(00.00) Today. 2031-05-13:(00.00) Yesterday."; got != want {
+	if got, want := cards(top), "2031-05-14:(00:00) Today. 2031-05-13:(00:00) Yesterday."; got != want {
 		t.Errorf("the top page: %s, want %s", got, want)
 	}
 	if apitest.Href(top, "next") != "/days?limit=2&offset=2" || apitest.Href(top, "prev") != "" {
@@ -431,7 +431,7 @@ func TestTheStreamPagesByDay(t *testing.T) {
 		}
 	}
 	older := apitest.Must(t)(c.Get(t.Context(), apitest.Href(top, "next")))
-	if got, want := cards(older), "2031-05-12:(00.00) Two days ago. 2030-05-14:(00.00) A year ago."; got != want {
+	if got, want := cards(older), "2031-05-12:(00:00) Two days ago. 2030-05-14:(00:00) A year ago."; got != want {
 		t.Errorf("the older page: %s, want %s", got, want)
 	}
 	if apitest.Href(older, "next") != "" || apitest.Href(older, "prev") != "/days?limit=2" {
@@ -442,7 +442,7 @@ func TestTheStreamPagesByDay(t *testing.T) {
 	}
 
 	body := browse(t, h, "/days")
-	for _, want := range []string{`<article class="day-card" aria-label="2031-05-14">`, `<p class="card-words">(00.00) Today.</p>`} {
+	for _, want := range []string{`<article class="day-card" aria-label="2031-05-14">`, `<p class="card-words">(00:00) Today.</p>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the stream lacks %s", want)
 		}

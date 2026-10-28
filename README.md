@@ -338,10 +338,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   test) refuses a read and a write. The core calls no model: the agent reads the settings.
 - **The conversation of a day** ([plan 146](docs/plans/146-settings-and-the-chat-column.md), after
   [plan 145](docs/plans/145-whatsapp.md)). The conversation of a day is the plain page `Conversation YYYY-MM-DD`, filed
-  in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn runs from a marker line, `**Owner** (HH.MM): text` or
-  `**lifelog** (HH.MM): text` (outside a fenced code block), to the next marker line, with the tool lines of the agent
+  in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn runs from a marker line, `**Owner** (HH:MM): text` or
+  `**lifelog** (HH:MM): text` (outside a fenced code block), to the next marker line, with the tool lines of the agent
   (`` - `tool` ``) just before its marker. The time is
-  the server's local time. The marker may name the relay, `**Owner** (HH.MM, via whatsapp): `: `say` writes it for an
+  the server's local time. The marker may name the relay, `**Owner** (HH:MM, via whatsapp): `: `say` writes it for an
   `agent:*` or `import:*` writer, and the turn carries it as `via` (and the addresses of its tool lines as `refs`). [API.md](API.md#conversation) states the format for an agent in any language, and
   `internal/api/conversation.go` holds it in this program. `say` (`POST /days/{day}/say`, `today` allowed) adds the
   owner's turn and makes the page on the first turn of the day, in one write; it is for today only (another day is

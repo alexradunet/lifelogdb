@@ -182,7 +182,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			p = &page{id: len(f.pages) + 1, title: "Conversation " + day, body: "[[" + day + "]]", category: "Conversations", version: 1}
 			f.pages = append(f.pages, p)
 		}
-		p.body, p.version = p.body+"\n\n**Owner** (09.30): "+r.PostForm.Get("text"), p.version+1
+		p.body, p.version = p.body+"\n\n**Owner** (09:30): "+r.PostForm.Get("text"), p.version+1
 		e = f.conversation(day)
 	case strings.HasSuffix(r.URL.Path, "/body") && r.Method == "POST":
 		fmt.Sscanf(r.URL.Path, "/pages/%d/body", &id)

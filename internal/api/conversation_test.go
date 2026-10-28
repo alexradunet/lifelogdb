@@ -57,7 +57,7 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 		t.Fatal(err)
 	}
 	title := "Conversation " + convDay
-	want := "[[" + convDay + "]]\n\n**Owner** (11.07): How did I sleep?"
+	want := "[[" + convDay + "]]\n\n**Owner** (11:07): How did I sleep?"
 	if got := bodyOf(t, s, title); got != want {
 		t.Errorf("the body after one turn: %q, want %q", got, want)
 	}
@@ -70,7 +70,7 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 	if _, err := say(t, c, convDay, "Line one\r\nline two\r\n"); err != nil {
 		t.Fatal(err)
 	}
-	want += "\n\n**Owner** (11.07): Line one\nline two"
+	want += "\n\n**Owner** (11:07): Line one\nline two"
 	if got := bodyOf(t, s, title); got != want {
 		t.Errorf("the body after two turns: %q, want %q", got, want)
 	}
@@ -95,12 +95,12 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 // marker and the entity's turn has `via`; the owner's own surfaces give the marker without it and no `via`.
 func TestSayNamesTheRelayInTheOwnersParagraph(t *testing.T) {
 	for _, tc := range []struct{ source, marker, via string }{
-		{"agent:x", "**Owner** (11.07, via x): Hi", "x"},
-		{"agent:a:b", "**Owner** (11.07, via a:b): Hi", "a:b"},
-		{"import:y.z", "**Owner** (11.07, via y.z): Hi", "y.z"},
-		{"cli", "**Owner** (11.07): Hi", ""},
-		{"ui", "**Owner** (11.07): Hi", ""},
-		{"app:phone", "**Owner** (11.07): Hi", ""},
+		{"agent:x", "**Owner** (11:07, via x): Hi", "x"},
+		{"agent:a:b", "**Owner** (11:07, via a:b): Hi", "a:b"},
+		{"import:y.z", "**Owner** (11:07, via y.z): Hi", "y.z"},
+		{"cli", "**Owner** (11:07): Hi", ""},
+		{"ui", "**Owner** (11:07): Hi", ""},
+		{"app:phone", "**Owner** (11:07): Hi", ""},
 	} {
 		t.Run(tc.source, func(t *testing.T) {
 			_, h, s := conversationStore(t)
@@ -179,7 +179,7 @@ func TestTheConversationOfADay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SaveBody(t.Context(), "agent:test", id, p.Body+"\n\n- `search`\n- `get`: no hits\n\n**lifelog** (11.08): Hello.", p.Version); err != nil {
+	if _, err := s.SaveBody(t.Context(), "agent:test", id, p.Body+"\n\n- `search`\n- `get`: no hits\n\n**lifelog** (11:08): Hello.", p.Version); err != nil {
 		t.Fatal(err)
 	}
 	e = get()
@@ -189,7 +189,7 @@ func TestTheConversationOfADay(t *testing.T) {
 		t.Fatalf("the turns: %v, want two", turns)
 	}
 	reply, _ := turns[1].(map[string]any)
-	if reply["who"] != "lifelog" || reply["at"] != "11.08" || reply["text"] != "Hello." || fmt.Sprint(reply["tools"]) != "[- `search` - `get`: no hits]" {
+	if reply["who"] != "lifelog" || reply["at"] != "11:08" || reply["text"] != "Hello." || fmt.Sprint(reply["tools"]) != "[- `search` - `get`: no hits]" {
 		t.Errorf("the reply: %v", reply)
 	}
 	if props["id"] == nil || props["version"] == nil || props["title"] != "Conversation "+convDay || props["body"] == nil {
@@ -360,8 +360,8 @@ func TestSayRevivesADeletedConversationsCategory(t *testing.T) {
 	}
 }
 
-// TestCaptureStampsTheHourAsSayDoes: a capture begins with the brackets of say, (HH.MM) in the zone of the store,
-// and (HH.MM, via NAME) when an agent or an import relayed it, so a day page says when each entry was added, from
+// TestCaptureStampsTheHourAsSayDoes: a capture begins with the brackets of say, (HH:MM) in the zone of the store,
+// and (HH:MM, via NAME) when an agent or an import relayed it, so a day page says when each entry was added, from
 // every surface alike. A browser's CRLF becomes LF. A capture of a mood alone adds no text and no stamp.
 func TestCaptureStampsTheHourAsSayDoes(t *testing.T) {
 	_, h, s := conversationStore(t)
@@ -376,7 +376,7 @@ func TestCaptureStampsTheHourAsSayDoes(t *testing.T) {
 	capture("cli", map[string]string{"text": "Ran 5k with [[Sam]]."})
 	capture("agent:whatsapp", map[string]string{"text": " Slept well.\r\nA second line.\r\n"})
 	capture("import:y.z", map[string]string{"mood": "4"})
-	want := "(11.07) Ran 5k with [[Sam]].\n\n(11.07, via whatsapp) Slept well.\nA second line."
+	want := "(11:07) Ran 5k with [[Sam]].\n\n(11:07, via whatsapp) Slept well.\nA second line."
 	if got := bodyOf(t, s, convDay); got != want {
 		t.Errorf("the day page:\n%q\nwant:\n%q", got, want)
 	}
