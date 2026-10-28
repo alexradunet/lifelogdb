@@ -17,7 +17,8 @@
   a relay's name with a colon broke the marker (`via` takes a colon); the composer lost its focus after Enter; an
   address beyond the newest 36 drew nothing (its link now); the extension's e2e holds the relay part. The contrast
   test needed no new pair: the new classes use the aliases of the materials. Screenshots on a synthetic database:
-  the screen, the menu and the menu with Edit open, on the desktop and the phone.
+  the screen, the menu and the menu with Edit open, on the desktop and the phone. Live since 2026-10-28 19:20 (the
+  binary installed, the service restarted with its agent, the previous binary kept as `lifelog.prev`).
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)
