@@ -247,7 +247,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   next page; the footer and the dialog say so. A form that writes a body offers **Preview**, a second button that
   sends it to `POST /render` in a new tab (`formaction`, `formtarget`), where the body shows as its page will show
   it, and the form keeps its words. The list that deletes several rows counts the checked boxes on its button by a
-  CSS counter. **Dropped, by the owner's word:** the names after `[[`, the live preview as one types, Ctrl+Enter,
+  CSS counter. A page of the shell carries the `Speculation-Rules` header, so Chromium draws the previous and next page on
+  hover before the click, with no element on the page and nothing on another engine. `Vary: Accept` says that one URL has
+  two representations ([plan 149](docs/plans/149-the-browser-on-the-current-platform.md)). **Dropped, by the owner's word:** the names after `[[`, the live preview as one types, Ctrl+Enter,
   Escape to leave a field, the question before the browser leaves text not sent, the second press of a danger
   button (a boxed danger already takes two presses, and a tombstone has Restore), and the command list's ranking of
   this page's actions.

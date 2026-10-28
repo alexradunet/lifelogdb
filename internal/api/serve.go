@@ -146,6 +146,11 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
+	// The rules of speculation. JSON has no comments, so the reasons are here. No address with a query string: a
+	// ?feedback= receipt is read once, and ?new= opens a form. The others are the routes that redirect (today, go,
+	// random, find), the pictures, the install file and the integrity check, which a hover must not run. A browser
+	// without speculation rules ignores the header.
+	m.HandleFunc("GET /assets/speculation.json", install("speculation.json", "application/speculationrules+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/chat.js", install("chat.js", "text/javascript; charset=utf-8", "public, max-age=300"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-192.png", install("icon-192.png", "image/png", "public, max-age=31536000, immutable"))
@@ -441,6 +446,10 @@ func answer(w http.ResponseWriter, r *http.Request, status int, e *siren.Entity,
 		status, b = sirenAnswer(r, status, e)
 	}
 	w.Header().Set("Content-Type", typ)
+	w.Header().Add("Vary", "Accept") // one URL, two representations
+	if fr.shell != nil && typ == "text/html; charset=utf-8" {
+		w.Header().Set("Speculation-Rules", `"/assets/speculation.json"`) // a quoted URL string
+	}
 	if status == http.StatusServiceUnavailable {
 		w.Header().Set("Retry-After", retryAfter)
 	}
