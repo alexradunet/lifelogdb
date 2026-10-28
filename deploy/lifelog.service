@@ -9,6 +9,7 @@ Type=simple
 User=OWNER
 ExecStart=/home/OWNER/.local/bin/lifelog --db /home/OWNER/lifelog/life.db serve --snapshots /home/OWNER/snapshots
 # add --with whatsapp to run the WhatsApp agent beside the server (extensions/whatsapp)
+# with ProtectHome=read-only, the agent's state folder must be writable: ReadWritePaths=/home/OWNER/.config/lifelog-whatsapp
 Restart=on-failure
 # systemd stops the server with SIGTERM. lifelog then drains the requests that it admitted (up to 10 seconds) and
 # closes life.db. TimeoutStopSec is longer than the drain, so systemd sends SIGKILL only to a server that is stuck.

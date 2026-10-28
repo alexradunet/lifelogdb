@@ -84,6 +84,9 @@ flowchart TD
   (`http://127.0.0.1:PORT`, also for a listener on every interface). `LIFELOG_TOKEN` is the token of a `--public`
   listener. `LIFELOG_EXE` and `LIFELOG_DB` are as for any extension.
 - **No arguments, and an empty stdin** (`/dev/null`). The extension configures itself from the settings of the API.
+- **Its state folder must be writable under the unit.** A unit with `ProtectHome=read-only` lists
+  `os.UserConfigDir()/lifelog-NAME` in `ReadWritePaths`, else the extension fails at its start and `serve` starts it
+  again every 10 seconds.
   stdout and stderr are those of the server, so the lines go to its log.
 - **The exit status** decides. 0: the extension ended by its own choice, and is not started again. 2 or 3: the owner
   must act first (for example pair a device); it is not started again until `serve` starts again. Any other end (1, a
