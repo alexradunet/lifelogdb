@@ -2,6 +2,7 @@
 // (#conversation); every form works without it. It polls while the agent has not answered, posts the composer in
 // place, and lets Enter send (Shift+Enter breaks a line). The thread is a reversed column, so after a swap it is still
 // at its newest turn. For the column it also remembers whether the popover is open. Any error leaves the page as it is.
+// A prerendered page runs it too; it polls only while the dots are drawn and guards showPopover, so it does nothing there.
 (() => {
   const chat = document.getElementById('chat') || document.getElementById('conversation');
   if (!chat) return;

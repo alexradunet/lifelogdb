@@ -573,3 +573,14 @@ func TestTheSheetReadsTheIconCellsWhereTheyAre(t *testing.T) {
 		t.Errorf("app.css has %d icon position rules, want %d", got, 2*n)
 	}
 }
+
+// TestTheSheetsHoldTheRailStillAndKeepTheGutter: the rail has its own transition name, so the sidebar stays while
+// the column cross-fades, and the base sheet keeps the scrollbar's room (plan 149).
+func TestTheSheetsHoldTheRailStillAndKeepTheGutter(t *testing.T) {
+	if !regexp.MustCompile(`\.rail\{[^}]*view-transition-name:rail`).MatchString(string(appCSS)) {
+		t.Error("app.css: .rail has no view-transition-name")
+	}
+	if !strings.Contains(string(baseCSS), "scrollbar-gutter:stable") {
+		t.Error("base.css: html lacks scrollbar-gutter:stable")
+	}
+}

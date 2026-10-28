@@ -59,7 +59,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 /* The rail is wood: pixel planks, a raised bevel, the outline on its right. Its words are the rail's ink; where the
    owner is, gold on a carved well. */
 .rail{position:sticky; inset-block-start:0; block-size:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--space-4);
-  padding:var(--space-4) var(--space-3); border-inline-end:2px solid var(--outline); box-shadow:var(--bevel-up);
+  padding:var(--space-4) var(--space-3); border-inline-end:2px solid var(--outline); box-shadow:var(--bevel-up); view-transition-name:rail;
   & .date{font:400 12px/16px var(--mono); color:var(--rail-ink)}}
 .rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2);
   & .brand{font:400 26px/28px var(--display); letter-spacing:.02em; color:var(--rail-accent);
@@ -96,8 +96,9 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   & :is(a,button){display:flex; align-items:center; gap:10px; padding:8px 10px; color:var(--rail-ink); white-space:nowrap;
     &:hover{color:var(--rail-accent); text-decoration:none}
     &[aria-current=page]{background:var(--accent-tint); color:var(--rail-accent); font-weight:700; box-shadow:inset 3px 0 0 var(--rail-accent)}}}
+/* A scroll inside a sheet (More, the chat column, the chat menu) stops at its edge and does not move the page behind. */
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
-.rail-more{display:contents}
+.rail-more{display:contents; overscroll-behavior:contain}
 .today-inline{display:none}
 .rail-more-link,.rail-more-head,.rail .rail-search-link,.rail-chat-link{display:none}
 /* The Today strip: a carved well under the sections (in the More sheet on a phone, before the owner's links). A chip
@@ -130,7 +131,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .chat-head{display:flex; align-items:center; gap:var(--space-3);
   & .label{color:var(--rail-accent); margin-inline-end:auto}
   & a{color:var(--rail-ink); font-size:13px}}
-.chat-scroll{flex:1 1 auto; min-block-size:0; overflow-y:auto; display:flex; flex-direction:column-reverse}
+.chat-scroll{overscroll-behavior:contain; flex:1 1 auto; min-block-size:0; overflow-y:auto; display:flex; flex-direction:column-reverse}
 .chat .empty{color:var(--rail-ink)}
 .chat-form{display:flex; flex-direction:column; gap:var(--space-2);
   & label>span{color:var(--rail-ink)}}
@@ -220,7 +221,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
    it is a sheet from the top, over the bars. */
 .daybar button.more{inline-size:34px; block-size:30px; min-block-size:0; margin:0; padding:0; border:2px solid var(--line); background:none; box-shadow:none; font:700 16px/1 var(--sans); color:var(--text)}
 .more-body:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-3);
-  inline-size:min(26rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; box-shadow:var(--parch-bevel),var(--shadow-float);
+  inline-size:min(26rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; overscroll-behavior:contain; box-shadow:var(--parch-bevel),var(--shadow-float);
   & .sub{margin:0}}
 /* The menu hangs from its button; the fixed inset above is the fallback for an engine without anchor positioning.
    The phone resets this in its media block below. */
@@ -271,7 +272,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail .rail-search-link{display:inline-flex; inline-size:var(--control); padding:0; margin-inline-start:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
   .rail .rail-new.primary{inline-size:auto}
   .new-menu:popover-open{position-area:none; margin:auto; &::backdrop{background:rgb(0 0 0 / .35)}} /* centred on the phone, where the button is in the top bar */
-  .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
+  .rail>nav{view-transition-name:bars; position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
     padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
     & ul{flex-direction:row; justify-content:space-around; gap:0; padding:0; background:none; border:0; box-shadow:none}
     & li{flex:1 1 0; min-inline-size:0}

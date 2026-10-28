@@ -39,7 +39,7 @@ import (
 // Files are the files of html/: the templates, the two stylesheets, the script, the icons (one SVG and two PNG), the manifest,
 // and the fonts with their licences.
 //
-//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.png html/*.webmanifest html/*.json html/fonts/*.woff2 html/fonts/*.txt
 var Files embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
