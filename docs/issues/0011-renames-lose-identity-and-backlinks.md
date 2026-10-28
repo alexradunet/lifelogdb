@@ -1,7 +1,7 @@
 # 0011 — Renames change identity and repeated renames lose backlinks
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a synthetic writer audit and the owner's request to rename notes, people, places, metrics and files without losing references.
 
 ## What happened
@@ -35,6 +35,8 @@ For a person, place, metric or file, the rename is refused by design rather than
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes one named-object core and direct aliases to
-stable IDs. It must define conflicts, day-page names, tombstones and the former typo-ghost merge behavior; an alias
-must not silently merge two existing objects. No schema or rename behavior has changed.
+Resolved by the rule "Renames" of [titles and wikilinks](../contract/titles-and-wikilinks.md) and
+[rename a page](../cookbook/rename-a-page.md): a rename selects a new preferred spelling on the same identity in one
+transaction, previous names stay direct aliases, and every link keeps its identity. No rename makes a redirect, so no
+chain can form. The writer runs it as `lifelog rename` and the `rename` action. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md)
+is withdrawn.

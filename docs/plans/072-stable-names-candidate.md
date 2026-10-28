@@ -4,7 +4,8 @@
 
 - **Date:** 2026-10-06.
 - **Baseline / branch:** `cfb7fe29b15d157baa1cccf78473ca0dc2b3696d` / `implement/rfc0006-sol61-20261006`.
-- **Status:** THREE COMPONENT HANDOFFS ACCEPTED BY PARENT; FRESH INTEGRATION INSPECTION COMPLETE; FINAL CANDIDATE GATES RECORDED EXTERNALLY; PARENT/OWNER REVIEW PENDING. Parent accepted identity checkpoint `20261006T150510Z-ce99b566`, temporal checkpoint `20261006T192421Z-ac1f0119` and import checkpoint `20261006T234055Z-0ef0a919` after independent review. Fresh integration is authorized only for inspection, reserved temporal hardenings, small justified seam fixes and validation. These dispositions are not owner/RFC/release acceptance; real-data/publication/freeze remain unauthorized.
+- **Status:** REJECTED (2026-10-28): [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is withdrawn and its issues
+  are closed; the candidate branch was never merged. The record below is as it was: THREE COMPONENT HANDOFFS ACCEPTED BY PARENT; FRESH INTEGRATION INSPECTION COMPLETE; FINAL CANDIDATE GATES RECORDED EXTERNALLY; PARENT/OWNER REVIEW PENDING. Parent accepted identity checkpoint `20261006T150510Z-ce99b566`, temporal checkpoint `20261006T192421Z-ac1f0119` and import checkpoint `20261006T234055Z-0ef0a919` after independent review. Fresh integration is authorized only for inspection, reserved temporal hardenings, small justified seam fixes and validation. These dispositions are not owner/RFC/release acceptance; real-data/publication/freeze remain unauthorized.
 - **Proposal:** [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md), still draft; issues remain proposed.
 - **Owner authorization:** “Let's implement this into an subagent using sol 6.1 on medium and then we review it.” This authorizes an uncommitted candidate, not acceptance, real-data operations or freeze.
 - [Plan 071](071-audit-followups.md) remains IN REVIEW (owner), untouched.

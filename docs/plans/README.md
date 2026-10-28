@@ -49,8 +49,8 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 | [106](106-one-continuous-conversation.md) | One continuous conversation: a page per day, compacted into the daily note | P1 | M | plans 102, 103; owner decision 2026-10-14 | DONE |
 | [105](105-the-owners-shape-in-the-synthetic-fixture.md) | The owner's shape in the synthetic fixture: a calibrated workload for tests | P1 | L | owner request 2026-10-14; `bd16083` | TODO |
 | [104](104-the-chat-in-basm.md) | The chat in Basm: the conversation drawn as the Chat of the owner's design system | P2 | S | plan 103; owner decision 2026-10-14 | DONE |
-| [103](103-the-conversation-on-the-screen.md) | The conversation on the screen: a chat page, and a sidebar that follows the owner | P1 | M | issue 0072; owner decision 2026-10-14 | IN REVIEW (owner) |
-| [102](102-a-conversation-with-lifelog.md) | A conversation with lifelog: the action `ask`, an agent inside the writer | P1 | M | RFC 0012; issue 0071; owner decisions 2026-10-14 | IN REVIEW (owner) |
+| [103](103-the-conversation-on-the-screen.md) | The conversation on the screen: a chat page, and a sidebar that follows the owner | P1 | M | issue 0072; owner decision 2026-10-14 | REJECTED (superseded by plan 116, RFC 0015) |
+| [102](102-a-conversation-with-lifelog.md) | A conversation with lifelog: the action `ask`, an agent inside the writer | P1 | M | RFC 0012; issue 0071; owner decisions 2026-10-14 | REJECTED (superseded by plan 116, RFC 0015) |
 | [101](101-the-calendar-holds-every-dated-thing.md) | The calendar holds every dated thing | P1 | M | issue 0070; owner decision 2026-10-13 | DONE |
 | [100](100-one-page-a-metric.md) | One page a metric: Record, every reading, and its own page | P1 | M | issue 0069; owner decision 2026-10-13 | DONE |
 | [099](099-rules-into-the-schema.md) | Rules into the schema: a Go copy deleted, a writer-held rule made a trigger | P1 | M | issue 0068 | DONE |
@@ -80,8 +80,8 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 | [075](075-schema-validation-depth.md) | Schema validation depth | P1/P2 | L | Owner authorization; 90c062e | DONE |
 | [074](074-schema-review-findings.md) | Repair schema review findings | P1/P2 | L | Issues 0026–0032; owner authorization | DONE |
 | [073](073-review-repairs.md) | Schema, reliability and validation repairs | P1/P2 | L | Reproduced review findings | DONE |
-| [071](071-audit-followups.md) | Integrate the 22 residual audit follow-ups | P1/P2 | L aggregate | Existing import/surface behavior retained | IN REVIEW (owner) |
-| [072](072-stable-names-candidate.md) | Stable names and life periods implementation candidate | P1 | L aggregate | RFC 0006 candidate approvals; identity-core first | BLOCKED (partial proof checkpoint; implementation pending continuation) |
+| [071](071-audit-followups.md) | Integrate the 22 residual audit follow-ups | P1/P2 | L aggregate | Existing import/surface behavior retained | REJECTED (the import machinery was removed by plan 089) |
+| [072](072-stable-names-candidate.md) | Stable names and life periods implementation candidate | P1 | L aggregate | RFC 0006 candidate approvals; identity-core first | REJECTED (RFC 0006 withdrawn; never merged) |
 
 Status values: TODO | IN PROGRESS | IN REVIEW (owner) | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale). Close a plan with its result and status, retaining the dated record as

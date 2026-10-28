@@ -1,7 +1,7 @@
 # 0013 — Promotion can strand a typed link while integrity reports success
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a synthetic writer audit of category promotion.
 
 ## What happened
@@ -34,6 +34,8 @@ transition atomically unless all retained incoming and outgoing edges remain val
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes checking both endpoints on type changes and
-adding a semantic integrity witness for invalid typed edges. A permanent regression and constraint mutant remain
-to be written; no existing check has been changed or described as covering this case.
+Resolved by the trigger `entities_endpoint_types`: a type change is refused when a retained link of the row would
+then start or end at a type its kind does not permit. The typed-edge query of
+[integrity checks](../contract/integrity-checks.md) checks both endpoints of every link against `link_kinds`, so a
+row written while the trigger was missing is found. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is
+withdrawn.

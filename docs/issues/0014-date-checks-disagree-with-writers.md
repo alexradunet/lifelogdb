@@ -1,7 +1,7 @@
 # 0014 — Date round trips admit values that the writer rejects
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** direct DDL probes compared with the writer's date and instant validators.
 
 ## What happened
@@ -33,6 +33,9 @@ its own validator.
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes explicit canonical shape/range checks in
-addition to round trips, with shared boundary vectors and mutants. The accepted calendar range, including year
-zero, must be stated consistently; this issue does not independently choose a different calendar.
+Resolved in `schema.sql`: every instant column has the CHECK of `lifelog_meta.instants` (the exact 24-character
+shape by GLOB, the hour `BETWEEN '00' AND '23'`, and `strftime(...) IS x`), and every day column the CHECK of
+`lifelog_meta.days` (`length(x) = 10`, the ASCII shape by GLOB, and `date(x) IS x`). `2026-01-01T24:59:59.000Z` fails
+the hour test and `-0001-01-01` the length. Both are vectors of [exact time](../contract/exact-time.md), the one
+copy of the boundary values, which the `dates` suite executes on every day and instant column and against the
+writer's own validators, so the file and the writer agree. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is withdrawn.

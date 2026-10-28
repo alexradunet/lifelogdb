@@ -1,7 +1,7 @@
 # 0019 — Jobs, study and trips cannot define honest query windows
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** won't-fix
 - **Seen in:** the owner's questions about past life periods and their association with health, routines and choices.
 
 ## What happened
@@ -33,6 +33,8 @@ uncertainty with facts the owner did not provide.
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes named life periods with overlapping spans
-and a small explicit date profile. Approximate period boundaries must not loosen the representation of exact
-measurement days or write timestamps. Query treatment of uncertain boundaries remains an acceptance gate.
+Won't-fix. The owner removed recorded periods ([RFC 0014](../rfcs/0014-no-periods.md),
+[D22](../decisions/D22-events.md)): a span of life is a plain page, and its dates are its words. A week, a month, a
+quarter and a year are period pages with a key ([D30](../decisions/D30-period-pages.md)). The
+[non-goals](../architecture/non-goals.md) keep generic events out, with the question that reopens them.
+[RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is withdrawn.

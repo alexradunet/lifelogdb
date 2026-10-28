@@ -1,7 +1,7 @@
 # 0017 — Link identity and creation time can change despite the stated immutability rule
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a direct DDL probe of the documented link mutation boundary.
 
 ## What happened
@@ -29,6 +29,6 @@ Observed: both fields change. Expected under the documented rule: the update is 
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes covering link ID and creation time with the
-existing immutability rule. Tests must mutate each protected field independently, not rely only on one update that
-changes several fields, and must retain the permitted note-edit control.
+Resolved in `schema.sql`: the trigger `links_fixed` refuses a change of `id`, `from_id`, `to_id`, `kind`,
+`created_at` and `source`; only `note` may change. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is
+withdrawn.

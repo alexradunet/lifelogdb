@@ -1,7 +1,7 @@
 # 0016 — An accepted handle cannot be expressed by its literal wikilink
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a synthetic writer audit of title creation followed by body capture.
 
 ## What happened
@@ -31,6 +31,7 @@ unaddressable reference name up front or specify an unambiguous way to write its
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes aligning reference names and grammar before
-introducing aliases. A bracket-only fix is not evidence that every CommonMark-sensitive name round-trips; the
-reference profile and its punctuation/Unicode vectors still need review and permanent tests.
+Resolved by the title predicate of [titles and wikilinks](../contract/titles-and-wikilinks.md) ("Reference-name
+addressability"): a writer rejects brackets, and a title must come back as the one extracted target of `[[name]]`,
+`![[name]]` and `[[name|display]]`. `Lab [old]` is not a title. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md)
+is withdrawn.
