@@ -303,3 +303,24 @@ func TestAConversationPageKeepsItsTitle(t *testing.T) {
 		t.Errorf("a plain page renamed: %q", renamed.Title)
 	}
 }
+
+// TestSayRevivesADeletedConversationsCategory: a category page Conversations that was deleted (the owner's file
+// keeps one from an earlier design) does not refuse the first say of a day: the write revives it, as it revives a
+// deleted conversation page, so the page is filed in it.
+func TestSayRevivesADeletedConversationsCategory(t *testing.T) {
+	c, _, s := conversationStore(t)
+	id, _, err := s.CreatePage(t.Context(), "cli", "Conversations", "The old category.", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Tombstone(t.Context(), "cli", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := say(t, c, convDay, "Hello"); err != nil {
+		t.Fatalf("the first say with a deleted category: %v", err)
+	}
+	cat, err := s.PageByID(t.Context(), id)
+	if err != nil || cat.DeletedAt != "" {
+		t.Errorf("the category after the say: %v, deleted at %q; want it live", err, cat.DeletedAt)
+	}
+}

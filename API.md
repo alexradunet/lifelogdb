@@ -847,7 +847,8 @@ live conversation page is a 303 to this resource, with the query kept; the JSON 
 
 `POST /days/{day}/say` (the action `say`, any writer): the field `text` is added to the page of the day as the
 owner's turn, with the time of the server's clock in its zone. The page is made on the first turn of the day, in
-the same write. The answer is this entity, and `result` is the [save result](#result-of-capture-create-page-save-body).
+the same write; a deleted page of the conversation, or a deleted category `Conversations`, is revived by it. The
+answer is this entity, and `result` is the [save result](#result-of-capture-create-page-save-body).
 `say` is for today: a `day` that is not the server's local today is 422 `say is for today: the agent answers today's
 conversation`, and writes nothing. A `text` that is empty or only blanks is 422 and writes nothing.
 

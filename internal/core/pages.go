@@ -598,6 +598,15 @@ func (s *Store) AppendParagraph(ctx context.Context, source, title, day, categor
 			if err != nil {
 				return made{}, err
 			}
+			// The category is the writer's own convention: a deleted one (the owner's file keeps one from an earlier
+			// design) is revived, as a deleted page of the conversation is below, so the first turn is not refused.
+			if c, err := t.lookup(category); err != nil {
+				return made{}, err
+			} else if c != nil && c.Deleted {
+				if err := t.setDeleted(c.ID, false); err != nil {
+					return made{}, err
+				}
+			}
 			return made{id, r}, t.fileNew(id, category)
 		}
 		if p.Type != "page" {
