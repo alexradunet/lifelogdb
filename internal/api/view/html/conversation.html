@@ -39,7 +39,7 @@
 {{define "thread"}}{{$v := .v}}<ol class="turns">
 {{with .day}}<li class="datesep">{{$v.LongDate .}}</li>{{end}}
 {{range .turns}}{{if eq .Who "text"}}<li class="turn text"><p class="free">{{.Text}}</p></li>
-{{else}}<li class="turn {{if eq .Who "owner"}}owner{{else}}agent{{end}}"><div class="meta"><span class="from">{{if eq .Who "owner"}}You{{else}}lifelog{{end}}</span>{{with .Via}}<span class="via">· via {{.}}</span>{{end}}{{if .At}}<time datetime="{{.Time}}">{{.At}}</time>{{end}}</div>
+{{else}}<li class="turn {{if eq .Who "owner"}}owner{{else}}agent{{end}}"><div class="meta"><span class="from">{{if eq .Who "owner"}}You{{else}}lifelog{{end}}</span>{{with .Via}}<span class="via">· via {{.}}</span>{{end}}{{if .At}}<time datetime="{{.At}}">{{.At}}</time>{{end}}</div>
 {{with .Tools}}<ul class="tools">{{range .}}{{with toolChip .}}<li><b>{{.Name}}</b>{{with .Words}} {{.}}{{end}}</li>{{end}}{{end}}</ul>{{end}}
 <div class="bubble prose">{{markdown .Text}}</div>
 {{with $v.CardsOf .Refs}}<div class="cards">{{range .}}{{template "card" .}}{{end}}</div>{{end}}</li>

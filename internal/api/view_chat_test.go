@@ -167,7 +167,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 		!strings.Contains(form[:strings.Index(form, "</form>")], `<input type="hidden" name="back" value="/days/`+fixedToday+`/conversation">`) {
 		t.Error("the composer offers Preview, or does not return to the screen")
 	}
-	if !regexp.MustCompile(`<time datetime="\d\d:\d\d">\d\d\.\d\d</time>`).MatchString(view) {
+	if !regexp.MustCompile(`<time datetime="\d\d:\d\d">\d\d:\d\d</time>`).MatchString(view) {
 		t.Error("a turn's time has no datetime attribute in the form of HTML")
 	}
 	if !strings.Contains(composerForm(view), ` enterkeyhint="send"`) {

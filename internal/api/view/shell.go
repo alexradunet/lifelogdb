@@ -38,9 +38,6 @@ type Turn struct {
 	Tools, Refs        []string
 }
 
-// Time is the time of the turn as the datetime attribute writes it: the page keeps "09.08", HTML says "09:08".
-func (t Turn) Time() string { return strings.Replace(t.At, ".", ":", 1) }
-
 // Chat is the chat column of the shell. The conversation view is the column at full size, so it has none.
 func (v *view) Chat() *Chat {
 	if v.Shell == nil || v.IsConversation() {
