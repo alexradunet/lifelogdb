@@ -25,7 +25,7 @@
 <section class="thread" aria-label="Conversation of {{$.Date $p.day}}">
 {{if $turns}}{{template "thread" (dict "v" $ "turns" $turns "day" $p.day)}}{{else if .Action "say"}}<div class="turns"><p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p></div>{{else}}<div class="turns"><p class="empty">Nothing was said on this day.</p></div>{{end}}
 </section>
-{{with .Action "say"}}<footer class="composer">{{template "form" (form . "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}
+{{with .Action "say"}}<footer class="composer">{{template "form" (form . "button" "Say" "class" "chat-form" "plain" "1" "send" "1" "back" $.ReturnHere)}}
 <p class="hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> a new line</p></footer>{{end}}
 </div>
 {{template "foot" .}}{{end}}
@@ -39,7 +39,7 @@
 {{define "thread"}}{{$v := .v}}<ol class="turns">
 {{with .day}}<li class="datesep">{{$v.LongDate .}}</li>{{end}}
 {{range .turns}}{{if eq .Who "text"}}<li class="turn text"><p class="free">{{.Text}}</p></li>
-{{else}}<li class="turn {{if eq .Who "owner"}}owner{{else}}agent{{end}}"><div class="meta"><span class="from">{{if eq .Who "owner"}}You{{else}}lifelog{{end}}</span>{{with .Via}}<span class="via">· via {{.}}</span>{{end}}{{with .At}}<time>{{.}}</time>{{end}}</div>
+{{else}}<li class="turn {{if eq .Who "owner"}}owner{{else}}agent{{end}}"><div class="meta"><span class="from">{{if eq .Who "owner"}}You{{else}}lifelog{{end}}</span>{{with .Via}}<span class="via">· via {{.}}</span>{{end}}{{if .At}}<time datetime="{{.Time}}">{{.At}}</time>{{end}}</div>
 {{with .Tools}}<ul class="tools">{{range .}}{{with toolChip .}}<li><b>{{.Name}}</b>{{with .Words}} {{.}}{{end}}</li>{{end}}{{end}}</ul>{{end}}
 <div class="bubble prose">{{markdown .Text}}</div>
 {{with $v.CardsOf .Refs}}<div class="cards">{{range .}}{{template "card" .}}{{end}}</div>{{end}}</li>
@@ -67,5 +67,5 @@
 <div class="chat compact" id="chat" popover role="complementary" data-day="today" data-version="{{.Version}}" aria-label="Chat">
 <div class="chat-head"><span class="label">Chat</span><a href="/days/today/conversation">Open the day</a><button type="button" class="button small" popovertarget="chat" popovertargetaction="hide">Close</button></div>
 <div class="chat-scroll"><div class="chat-turns">{{if .Turns}}{{template "thread" (dict "v" $ "turns" .Turns)}}{{else if .Say.Name}}<p class="empty">Nothing is said today yet. Write to the agent below. It answers here when it runs.</p>{{else}}<p class="empty">Nothing was said on this day.</p>{{end}}</div></div>
-{{if .Say.Name}}{{template "form" (form .Say "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}<p class="hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> a new line</p>{{end}}
+{{if .Say.Name}}{{template "form" (form .Say "button" "Say" "class" "chat-form" "plain" "1" "send" "1" "back" $.ReturnHere)}}<p class="hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> a new line</p>{{end}}
 </div>{{end}}{{end}}

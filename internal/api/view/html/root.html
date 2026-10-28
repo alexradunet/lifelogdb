@@ -4,7 +4,7 @@
      icon of its kind. */}}
 {{define "search"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Search</h1></div></header>
-{{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words" "outside" "order" "hide" "kind" "more" "limit,offset")}}
+<search>{{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words" "outside" "order" "hide" "kind" "more" "limit,offset")}}</search>
 <details class="more-fields"><summary>How to search</summary>
 <ul class="plain"><li>Words find the pages that have all of them.</li><li>"A phrase" finds the words in that order.</li><li><code>word*</code> finds the words that start with it.</li><li><code>a OR b</code> finds either.</li></ul>
 <p><small class="desc">A page whose title starts with the words comes first.</small></p></details>
@@ -29,7 +29,7 @@
 {{define "error"}}{{template "head" .}}{{$e := .Props}}{{$a := alert $e.code}}
 <header class="page-head"><div class="what"><span class="date">{{num $e.status}}{{with $e.code}} · {{nameWords .}}{{end}}</span>
 <h1>{{if .Submitted}}Not saved{{else if eq (num $e.status) "404"}}Not found{{else}}Refused{{end}}</h1></div></header>
-<div class="alert{{if $a.Danger}} danger{{end}}" role="alert"><p>{{with $a.Words}}<strong>{{.}}</strong> {{end}}{{$e.message}}</p></div>
+<div class="alert{{if $a.Danger}} danger{{end}}" role="alert" tabindex="-1" autofocus><p>{{with $a.Words}}<strong>{{.}}</strong> {{end}}{{$e.message}}</p></div>
 {{with .LinkByRel "register"}}<aside><p><a href="{{.Href}}">{{.Title}}</a>.</p></aside>{{end}}
 {{with .Link "existing"}}<aside><p>A page with that title exists: <a href="{{.}}">open it</a>.{{with $.LinkByRel "promote"}} Or <a href="{{.Href}}">{{.Title}}</a>.{{end}}</p></aside>{{end}}
 {{with .Submitted}}<section class="section" aria-label="What you sent"><h2>What you sent</h2><small class="desc">Nothing was saved. Copy it from here.</small><textarea rows="14" readonly>{{.}}</textarea></section>{{end}}

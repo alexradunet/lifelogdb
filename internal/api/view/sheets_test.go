@@ -259,6 +259,21 @@ func TestTheFieldsSayWhatTheBrowserRefuses(t *testing.T) {
 	}
 }
 
+// TestTheTextAreasGrowWithTheirText: one base rule makes every text area grow with its text, up to a height that
+// keeps the page in view. A sheet of the app keeps only the least height of its own.
+func TestTheTextAreasGrowWithTheirText(t *testing.T) {
+	base := cssComments.ReplaceAllString(string(baseCSS), "")
+	rule := regexp.MustCompile(`(?m)^textarea\{[^{}]*\}`).FindString(base)
+	for _, want := range []string{"field-sizing:content", "max-block-size:60vh"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("the base textarea rule %q lacks %s", rule, want)
+		}
+	}
+	if strings.Contains(cssComments.ReplaceAllString(string(appCSS), ""), "field-sizing") {
+		t.Error("app.css says field-sizing again: the base rule holds it")
+	}
+}
+
 // TestAClosedToastIsNotShown: the toast is a dialog, and a closed dialog is the browser's display:none, which a
 // display on the element itself would beat; so the sheet sets the toast's display only while it is open (the
 // owner's Close once closed the dialog and left the box in view).

@@ -106,7 +106,7 @@ func TestTheSearchDialogIsInThePage(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	body := browse(t, h, "/days/"+fixedToday) // Home is the page of today
 	for _, want := range []string{
-		`<dialog class="palette" id="palette" closedby="any" aria-label="Search">` + "\n" + `<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>`,
+		`<dialog class="palette" id="palette" closedby="any" aria-label="Search">` + "\n" + `<search><form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form></search>`,
 		`<button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">`,
 	} {
 		if strings.Count(body, want) != 1 {
