@@ -12,10 +12,11 @@
 - **Status:** IN REVIEW (owner). Parts A, B and C are on master: `c0bd381` (a write returns to its row), `90db28b`
   (fields grow, one form open at a time, `enterkeyhint`, `<search>`, the alert's focus), `b807157` (the anchored
   menus), `98ca42e` (a plan row's group), merged in `7e936c1`; `5483aef` folds the turn's time into `At` after the
-  stamp became `HH:MM` (`e401109`). Part D (the `Speculation-Rules` header, `Vary: Accept`, the rail held still, the
-  gutter) and Part E are not built: the owner stopped the Part D agent on 2026-10-28. The screenshots of Parts A and C
-  are not taken yet: the review server needs the owner's hand (the session may not run `lifelog serve`). The deploy
-  waits for the owner's word.
+  stamp became `HH:MM` (`e401109`). Part D is on master in `479ba6e`, merged in `a991504`: the
+  `Speculation-Rules` header and its rules file, `Vary: Accept`, the rail and the phone's bars held still across a
+  navigation, the stable scrollbar gutter, `overscroll-behavior` on the sheets. Part E is not built. The screenshots
+  of Parts A and C are not taken yet: the review server needs the owner's hand (the session may not run `lifelog
+  serve`). The deploy waits for the owner's word.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)
