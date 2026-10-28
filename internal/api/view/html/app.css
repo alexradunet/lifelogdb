@@ -839,6 +839,13 @@ li.tile:is(:hover,:focus-within)>a.row-move{opacity:1}
 .rows .meta .badge.category{margin-inline-start:var(--space-2); font-size:11px; padding-block:1px; opacity:.8}
 .pick-box{flex:none; flex-direction:row; align-items:center; padding:0 var(--space-1); cursor:pointer;
   & input:disabled{opacity:.35; cursor:default}}
+/* A sticky bar that is stuck at the top (the pick bar, the toast on a page opened at a row) shows the hard drop of a
+   floating slab under its edge, so the reader sees it is over the rows and not between them. A scroll-state query is
+   asked of a child, never of the container itself. Chromium only; another engine draws the bar flat. */
+@supports (container-type: scroll-state){
+  .pick-bar,.toast{container-type:scroll-state}
+  @container scroll-state(stuck: block-start){
+    .pick-bar::after,.toast::after{content:""; position:absolute; inset:0; z-index:-1; box-shadow:var(--shadow-float); pointer-events:none}}}
 
 /* The metrics as cards (docs/plans/112-metrics-as-cards.md): a jump bar to the groups, a grid of cards in each group
    and in each category under it. A card a lab marker has not had for 60 days is muted, so the series in daily use

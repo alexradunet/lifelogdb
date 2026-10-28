@@ -22,7 +22,8 @@
   twelve rows to the base minimum (its details is `.body-editor`, twelve lines least); the New menu resets the
   popover's inset as the chat menu does; the view test renders a week, which draws a body and the plan rows. Noted,
   unverified: Chromium prerenders only on a secure context, so on a plain-HTTP origin the header is accepted and does
-  nothing. Part E is not built. The screenshots of Parts A and C are not taken yet: the review server needs the
+  nothing. Part E is on master: the stuck edge of the pick bar and the toast, a scroll-state query inside `@supports`,
+  Chromium only. The screenshots of Parts A and C are not taken yet: the review server needs the
   owner's hand (the session may not run `lifelog serve`). The deploy waits for the owner's word.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 

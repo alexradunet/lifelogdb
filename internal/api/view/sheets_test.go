@@ -207,6 +207,26 @@ func TestTheMenusHangFromTheirButtons(t *testing.T) {
 	}
 }
 
+// TestTheStuckEdgeIsAnEnhancement: the drop under a stuck bar is asked of a scroll-state query, inside a @supports
+// block, and of a child of the container (a query cannot style its own container), so an engine without the query
+// draws the bar flat and the sheet stays valid.
+func TestTheStuckEdgeIsAnEnhancement(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	i := strings.Index(app, "@supports (container-type: scroll-state)")
+	if i < 0 {
+		t.Fatal("app.css has no @supports (container-type: scroll-state) block")
+	}
+	block := app[i:]
+	for _, want := range []string{"container-type:scroll-state", "@container scroll-state(stuck: block-start)", ".pick-bar::after,.toast::after"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("no %s inside the @supports (container-type: scroll-state) block", want)
+		}
+	}
+	if strings.Contains(app[:i], "scroll-state") {
+		t.Error("a scroll-state rule stands outside its @supports block")
+	}
+}
+
 // TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of the sheets is inside a block
 // that asks for motion (prefers-reduced-motion:no-preference), and the scroll-driven one inside @supports as well,
 // so a browser that does not want motion, or cannot drive it by the scroll, gets none.
