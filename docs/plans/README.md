@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [149](149-the-browser-on-the-current-platform.md) | The browser on the current platform: HTML and CSS in place of a library | P2 | M | owner word 2026-10-28; plan 108; `f59554d` | TODO |
+| [149](149-the-browser-on-the-current-platform.md) | The browser on the current platform: HTML and CSS in place of a library | P2 | M | owner word 2026-10-28; plan 108; `f59554d` | IN REVIEW (owner) |
 | [148](148-the-chat-screen.md) | The chat screen: the conversation as a chat, with a card for each thing the agent touched | P1 | L | owner word 2026-10-28; plan 146; `87a7133` | IN REVIEW (owner) |
 | [147](147-serve-with-an-extension.md) | serve --with: the server runs an extension beside itself, so the agent and the API are one unit | P1 | M | owner word 2026-10-28; plan 146; `9cc622c` | IN REVIEW (owner) |
 | [146](146-settings-and-the-chat-column.md) | Settings and the chat column: the model set in the app, and today's conversation on every page | P1 | L | owner word 2026-10-28; plan 145; `2d7315f` | IN REVIEW (owner) |
