@@ -10,7 +10,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | id | title | status |
 |---|---|---|
 | [0090](0090-the-writer-guesses-which-metrics-are-daily.md) | The writer guesses which metrics are daily | resolved |
-| [0089](0089-a-plan-line-added-to-a-crlf-body-gets-two-blank-lines.md) | A plan line added to a body with CRLF line ends gets two blank lines before it | open |
+| [0089](0089-a-plan-line-added-to-a-crlf-body-gets-two-blank-lines.md) | A plan line added to a body with CRLF line ends gets two blank lines before it | resolved |
 | [0088](0088-open-plans-are-scattered-over-their-pages.md) | The open plans are scattered over their pages | resolved |
 | [0087](0087-a-plan-written-as-words-cannot-be-read-as-a-plan.md) | A plan written as words cannot be read as a plan | resolved |
 | [0086](0086-today-is-the-hubs-day.md) | The days rule says never a server's day, and the word today is the hub's day | resolved |
@@ -51,7 +51,7 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | [0050](0050-one-doubtful-write-refuses-a-whole-file.md) | One doubtful write refuses a whole facts file, and the refusal names only the first | resolved |
 | [0051](0051-look-alikes-compare-with-every-entity-type.md) | A new name is a look-alike of a day page, a metric or a file that shares a word | resolved |
 | [0049](0049-replay-refuses-a-large-ledger.md) | A real replay refuses a source whose ledger is larger than a prepared artifact may be | resolved |
-| [0048](0048-writer-opens-a-file-of-another-ddl.md) | The writer opens a file built from another DDL and fails only at the integrity check | open |
+| [0048](0048-writer-opens-a-file-of-another-ddl.md) | The writer opens a file built from another DDL and fails only at the integrity check | resolved |
 | [0047](0047-two-daily-notes-for-one-day-cannot-merge.md) | Two daily notes of one day in a folder of notes cannot be merged | resolved |
 | [0043](0043-notes-folder-without-obsidian-marker.md) | A folder of notes is only recognised when it is an Obsidian vault | resolved |
 | [0044](0044-ledger-and-plan-cannot-take-added-files.md) | Files added to a source after the ledger is made are invisible to the import | resolved |
@@ -67,17 +67,17 @@ data could not answer, a rule that is ambiguous or untestable. It is the evidenc
 | [0040](0040-import-keys-have-no-shape.md) | An empty import key makes later rows vanish as imported before | resolved |
 | [0041](0041-fresh-pages-read-as-edited.md) | A fresh page reads as edited: creating it counted as an edit | resolved |
 | [0042](0042-incoming-link-invalidates-an-open-edit.md) | An incoming link makes another writer's open edit stale | resolved |
-| [0011](0011-renames-lose-identity-and-backlinks.md) | Renames change identity and repeated renames lose backlinks | proposed |
-| [0012](0012-timestamps-allow-stale-overwrites.md) | A timestamp used as an edit version permits a stale overwrite | proposed |
-| [0013](0013-promotion-strands-typed-links.md) | Promotion can strand a typed link while integrity reports success | proposed |
-| [0014](0014-date-checks-disagree-with-writers.md) | Date round trips admit values that the writer rejects | proposed |
+| [0011](0011-renames-lose-identity-and-backlinks.md) | Renames change identity and repeated renames lose backlinks | resolved |
+| [0012](0012-timestamps-allow-stale-overwrites.md) | A timestamp used as an edit version permits a stale overwrite | resolved |
+| [0013](0013-promotion-strands-typed-links.md) | Promotion can strand a typed link while integrity reports success | resolved |
+| [0014](0014-date-checks-disagree-with-writers.md) | Date round trips admit values that the writer rejects | resolved |
 | [0015](0015-mood-can-become-a-habit.md) | Starting Mood as a habit disables normal mood capture | resolved |
-| [0016](0016-accepted-handle-cannot-be-linked.md) | An accepted handle cannot be expressed by its literal wikilink | proposed |
-| [0017](0017-link-identity-and-time-are-mutable.md) | Link identity and creation time escape the stated immutability rule | proposed |
-| [0018](0018-symmetric-link-note-semantics-are-unclear.md) | Symmetric-link note semantics are unclear | proposed |
-| [0019](0019-life-period-questions-have-no-structured-boundaries.md) | Jobs, study and trips cannot define honest query windows | proposed |
+| [0016](0016-accepted-handle-cannot-be-linked.md) | An accepted handle cannot be expressed by its literal wikilink | resolved |
+| [0017](0017-link-identity-and-time-are-mutable.md) | Link identity and creation time escape the stated immutability rule | resolved |
+| [0018](0018-symmetric-link-note-semantics-are-unclear.md) | Symmetric-link note semantics are unclear | resolved |
+| [0019](0019-life-period-questions-have-no-structured-boundaries.md) | Jobs, study and trips cannot define honest query windows | won't-fix |
 | [0020](0020-imported-sessions-need-time-and-measurement-scope.md) | Session exports need time and measurement scope | won't-fix |
-| [0021](0021-selected-photo-sidecars-have-unhandled-time-evidence.md) | Selected photo sidecars have unhandled time evidence | proposed |
+| [0021](0021-selected-photo-sidecars-have-unhandled-time-evidence.md) | Selected photo sidecars have unhandled time evidence | won't-fix |
 | [0022](0022-nul-suffixes-bypass-text-checks.md) | NUL suffixes bypass constrained text checks | resolved |
 | [0023](0023-place-point-ownership-bypasses-revisions.md) | Moving a place point bypasses both owners' edit revisions | resolved |
 | [0024](0024-ghost-cleanup-includes-referenced-pages.md) | Ghost cleanup includes pages referenced by sessions and measurements | resolved |

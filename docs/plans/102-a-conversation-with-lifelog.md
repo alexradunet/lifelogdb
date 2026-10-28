@@ -8,7 +8,8 @@
 - **Date / baseline:** 2026-10-14, `fa2cf64` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** MEDIUM: a model writes through the catalog with no approval step; its
   writes carry `agent:chat`, never the owner-only actions, and nothing is ever deleted. Nothing for the schema.
-- **Status:** IN PROGRESS.
+- **Status:** REJECTED (2026-10-28): superseded by [plan 116](116-strip-to-the-core.md) and
+  [RFC 0015](../rfcs/0015-no-conversation.md), which removed the conversation from the writer.
 - **Resolves:** issue [0071](../issues/0071-the-owner-cannot-talk-to-lifelog.md), by
   [RFC 0012](../rfcs/0012-a-conversation-with-lifelog.md) option A.
 

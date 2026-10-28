@@ -7,7 +7,8 @@
 - **Date / baseline:** 2026-10-14, `04b636d` (master).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW: two new reads, a new view and a script for the browser; nothing
   for the schema or the contract.
-- **Status:** IN PROGRESS.
+- **Status:** REJECTED (2026-10-28): superseded by [plan 116](116-strip-to-the-core.md) and
+  [RFC 0015](../rfcs/0015-no-conversation.md), which removed the conversation and its pages from the browser.
 - **Resolves:** issue [0072](../issues/0072-a-conversation-reads-as-a-page.md). No RFC: the contract in `docs/` does
   not change.
 

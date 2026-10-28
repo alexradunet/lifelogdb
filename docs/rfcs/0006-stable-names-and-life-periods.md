@@ -1,7 +1,12 @@
 # 0006 — Stable names, one named-object core, and recorded life periods
 
 - **Date:** 2026-10-06
-- **Status:** draft
+- **Status:** withdrawn (2026-10-28). Nothing of this proposal was adopted as written. Issues 0011, 0012, 0013, 0014,
+  0016 and 0017 were resolved by the schema and the contract as they stand (`entities.revision`, `links_fixed`,
+  `entities_endpoint_types`, the title predicate, the rename rule); 0015 by its own fix; 0018 by
+  [RFC 0017](0017-no-typed-links.md); 0019 and 0020 by [RFC 0014](0014-no-periods.md) and [RFC 0013](0013-no-sessions.md);
+  0021 by [D21](../decisions/D21-location-history.md). Each issue records its resolution. The candidate of
+  [plan 072](../plans/072-stable-names-candidate.md) was never merged.
 - **Answers:** [issues 0011–0021](../issues/README.md), individually linked below.
 - **Baseline:** `cfb7fe2`; a design proposal, not a change to [schema.sql](../schema/schema.sql).
 

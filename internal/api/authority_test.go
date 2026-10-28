@@ -37,6 +37,9 @@ func TestHTTPAuthority(t *testing.T) {
 		t.Run(bind, func(t *testing.T) {
 			ln, err := net.Listen("tcp", bind)
 			if err != nil {
+				if bind != "127.0.0.1:0" {
+					t.Skipf("no IPv6 loopback on this host: %v", err)
+				}
 				t.Fatal(err)
 			}
 			var calls atomic.Int32

@@ -1,0 +1,47 @@
+name: Baseline
+
+# The baseline of AGENTS.md on Linux, on every push and pull request: gofmt, go vet and the full tests, at the root
+# and in each extension (an extension's end-to-end test builds the real lifelog). The Windows baseline stays a manual
+# run (windows-validation.yml).
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CGO_ENABLED: '0'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            extensions/mcp/go.sum
+      - name: Report environment
+        run: go version; go env GOOS GOARCH
+      - name: gofmt
+        run: |
+          files=$(gofmt -l $(git ls-files '*.go'))
+          if [ -n "$files" ]; then echo "gofmt would change:"; echo "$files"; exit 1; fi
+      - name: Vet
+        run: go vet ./...
+      - name: Full baseline including mutants
+        run: go test -count=1 -timeout=30m ./...
+      - name: Extensions
+        run: |
+          for dir in extensions/mcp extensions/agentic extensions/googlephotos; do
+            echo "== $dir"
+            (cd "$dir" && go vet ./... && go test -count=1 -timeout=20m ./...)
+          done

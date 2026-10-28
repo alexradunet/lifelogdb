@@ -1,7 +1,7 @@
 # 0012 — A timestamp used as an edit version permits a stale overwrite
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a synthetic writer audit of conditional body saves.
 
 ## What happened
@@ -35,8 +35,8 @@ SQLite/filesystem I/O depend on a fake-clock scheduler.
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes a monotonic edit revision independent of
-wall-clock timestamps. Validation must cover committed changes, no-ops, rollback, cancellation and stale-write
-refusal through applicable client surfaces. No fix or permanent regression test has been added. Which writes advance
-that revision, a page's creation and an incoming link, is the subject of [0041](0041-fresh-pages-read-as-edited.md)
-and [0042](0042-incoming-link-invalidates-an-open-edit.md).
+Resolved by `entities.revision` (`lifelog_meta.edit_revisions`): a monotonic edit token independent of the clock,
+advanced by the `*_touch` triggers and never decreased (`entities_revision_monotonic`). A save sends the `version` it
+read, and a newer one is refused with 409 `stale_version` (`API.md`). Which writes advance it was settled by
+[0041](0041-fresh-pages-read-as-edited.md) and [0042](0042-incoming-link-invalidates-an-open-edit.md).
+[RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is withdrawn.

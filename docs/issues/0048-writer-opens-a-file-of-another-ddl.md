@@ -1,7 +1,7 @@
 # 0048 — The writer opens a file built from another DDL and fails only at the integrity check
 
 - **Date:** 2026-10-08
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the 2026-10 import: `life.db` initialised by a build of the morning, the vault applied to its trial copy
   by a build of the evening, after `schema.sql` had gained columns and tables (`is_journal`, the task tables)
 
@@ -32,4 +32,9 @@ replay ([imports](../contract/imports.md)). After the freeze `user_version` carr
 
 ## Resolution
 
-Open.
+Resolved by the schema check of [integrity checks](../contract/integrity-checks.md) ("The schema — a file that no
+longer has the DDL"): the writer builds a fresh file from `schema.sql` and lists every object the file lacks, has
+beyond the DDL or holds with another text, by name. `integrity-check` on the file of this incident answers `changed table
+entities` and `missing table ...` by name, and the owner rebuilds and replays as
+[D13](../decisions/D13-migrations-and-freeze.md) says, instead of reading an SQL error as a defect of the writer. The refusal at `Open` that this issue asked for was declined in the same page: a refusal there would
+lock the owner out of the data, so the check is one the owner asks for. After the freeze `user_version` carries it.

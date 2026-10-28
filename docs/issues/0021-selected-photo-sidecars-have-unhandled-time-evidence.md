@@ -1,7 +1,7 @@
 # 0021 — Selected photo sidecars contain time evidence the capture policy does not handle
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** won't-fix
 - **Seen in:** owner-authorized inspection of a small Google Photos metadata sample.
 
 ## What happened
@@ -34,6 +34,8 @@ what happened. These fixtures are not yet implemented and no failed production i
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) proposes a reviewed sidecar-aware preparation policy
-for selected files only. Association, conflicts and missing local-day evidence must be decided before importing.
-This does not reopen whole-library ingestion, managed originals or location tracks.
+Won't-fix. A kept photo gives its day from its own metadata, else from the day it is kept, and its position is
+never read ([D9](../decisions/D09-binary-files.md), [D21](../decisions/D21-location-history.md)); the Google Photos
+extension gives the day from the photo's time in the zone the owner names. A sidecar is never read. The
+[non-goals](../architecture/non-goals.md) keep a photo archive out. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md)
+is withdrawn.

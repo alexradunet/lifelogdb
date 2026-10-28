@@ -626,7 +626,8 @@ func TestScheduleRefusals(t *testing.T) {
 }
 
 // TestPlanWritesKeepTheLineEndsOfABody: a tick, a schedule and a carry change the bytes of their line only, so the
-// CRLF ends of every other line stay. A new line is added with "\n\n". Each write advances the revision by one. The
+// CRLF ends of every other line stay. A new line is added as its own paragraph in the line end of the body: one
+// CRLF after the CRLF the body ends in, never "\n\n" (issue 0089). Each write advances the revision by one. The
 // expected bodies are written by hand.
 func TestPlanWritesKeepTheLineEndsOfABody(t *testing.T) {
 	s := planStore(t)
@@ -687,9 +688,35 @@ func TestPlanWritesKeepTheLineEndsOfABody(t *testing.T) {
 	if _, err := s.Plan(ctx, "cli", "Week", "c", "", "", "", false); err != nil {
 		t.Fatal(err)
 	}
-	body += "\n\n- [ ] c"
+	body += "\r\n- [ ] c"
 	check("plan", body, v)
 	if n := len(text.Plans(body)); n != 3 {
 		t.Errorf("the body holds %d plan lines, want 3 (a, b and c)", n)
+	}
+}
+
+// TestAPlanLineIsOneParagraphAfterAnyBody: the blank line before a new plan line is one blank line in the line end
+// the body uses, whether the body ends in a line break or not (issue 0089). The expected bodies are written by hand.
+func TestAPlanLineIsOneParagraphAfterAnyBody(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"empty", "", "- [ ] c"},
+		{"no line break at the end", "Week", "Week\n\n- [ ] c"},
+		{"LF at the end", "Week\n", "Week\n\n- [ ] c"},
+		{"CRLF at the end", "Week\r\n", "Week\r\n\r\n- [ ] c"},
+		{"CRLF lines, none at the end", "Week\r\n- [ ] a", "Week\r\n- [ ] a\r\n\r\n- [ ] c"},
+		{"a blank line at the end already", "Week\n\n", "Week\n\n\n- [ ] c"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, at, err := appendLine(tc.body, "- [ ] c")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("body %q, want %q", got, tc.want)
+			}
+			if plans := text.Plans(got); len(plans) == 0 || plans[len(plans)-1].Line != at {
+				t.Errorf("the new line is reported at %d, the parser reads it at %v", at, plans)
+			}
+		})
 	}
 }

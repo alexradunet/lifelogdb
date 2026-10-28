@@ -6,7 +6,8 @@
 
 - **Date / baseline:** 2026-10-05, `e1d79591b6f57235a2132d17ad5123fe3bd424d0`.
 - **Priority:** P1/P2. **Effort:** L aggregate. **Risk:** HIGH for import evidence/identity, MED for surface integration.
-- **Status:** IN REVIEW (owner), not DONE.
+- **Status:** REJECTED (2026-10-28): the import machinery it repaired was removed by [plan 089](089-no-import-process.md)
+  ([RFC 0011](../rfcs/0011-no-import-process.md)); the candidate branch was never merged.
 - **Scope:** all 22 owner-selected residual findings, implemented by nine isolated components and one serialized CLI stage, then integrated and reviewed in `implement/audit22-20261005-01`.
 - **Related residual briefs:** 038, 043, 050, 055, 057, 058, 059, 065 and 066, available [at this record's baseline](https://github.com/alexradunet/lifelogdb/tree/e1d79591b6f57235a2132d17ad5123fe3bd424d0/docs/plans). Their owner-review status is unchanged.
 

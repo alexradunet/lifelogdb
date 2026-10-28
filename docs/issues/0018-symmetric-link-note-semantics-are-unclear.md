@@ -1,7 +1,7 @@
 # 0018 — The two directions of a symmetric relationship can retain different notes
 
 - **Date:** 2026-10-06
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** a direct DDL probe of an explicitly permitted link-note edit.
 
 ## What happened
@@ -32,6 +32,7 @@ need the same answer about whether the notes describe one relationship or two pe
 
 ## Resolution
 
-Open. [RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) recommends relationship-wide notes for symmetric
-kinds, subject to explicit review. Choosing directional notes instead would require clear documentation and reader
-tests, not a synchronization trigger. No new note semantics have been accepted or implemented.
+Resolved by [RFC 0017](../rfcs/0017-no-typed-links.md) and [D8](../decisions/D08-entities-and-links.md): the
+relationship kinds and the symmetric mirror are gone. `link_kinds` holds `wikilink`, `at` and `part-of`, none of them
+mirrored, so no relationship has two rows that can hold two notes.
+[RFC 0006](../rfcs/0006-stable-names-and-life-periods.md) is withdrawn.
