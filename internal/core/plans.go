@@ -183,13 +183,21 @@ func (t *Tx) bodyOf(id int64) (string, error) {
 	return body, err
 }
 
-// appendLine adds a plan line to the end of a body as its own paragraph. at is the number of the new line. It is read
-// back from the new body, and a line that the parser does not read as a new plan line (an open fence or a quote
-// swallows it) is refused.
+// appendLine adds a plan line to the end of a body as its own paragraph: one blank line, then the line, in the line
+// end the body uses (issue 0089: a CRLF body gets CRLF, and a body that ends in a line break gets one more, not
+// two). at is the number of the new line. It is read back from the new body, and a line that the parser does not
+// read as a new plan line (an open fence or a quote swallows it) is refused.
 func appendLine(body, line string) (newBody string, at int, err error) {
 	newBody = body
 	if body != "" {
-		newBody += "\n\n"
+		eol := "\n"
+		if strings.Contains(body, "\r\n") {
+			eol = "\r\n"
+		}
+		if !strings.HasSuffix(body, "\n") {
+			newBody += eol
+		}
+		newBody += eol
 	}
 	newBody += line
 	plans := text.Plans(newBody)

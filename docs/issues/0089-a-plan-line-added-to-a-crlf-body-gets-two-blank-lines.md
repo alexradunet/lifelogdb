@@ -1,7 +1,7 @@
 # 0089 — A plan line added to a body with CRLF line ends gets two blank lines before it
 
 - **Date:** 2026-10-22
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the counter-review of [plan 142](../plans/142-the-fall-back-pass.md), on a synthetic page
 
 ## What happened
@@ -26,5 +26,7 @@ On a fresh database, make a page whose body is `Week\r\n\r\n- [ ] a\r\n` and add
 
 ## Resolution
 
-Open. A fix adds one line break when the body already ends in one, in the line end of the body; the test above then
-changes with it.
+Resolved on 2026-10-28 by the commit that changes `appendLine` (`internal/core/plans.go`): the paragraph break is
+written in the line end the body uses, and a body that ends in a line break gets one more, not two. The body of the
+example is now `Week\r\n\r\n- [ ] a\r\n\r\n- [ ] c`. [Plan lines](../contract/plan-lines.md) says so, the test above
+expects it, and `TestAPlanLineIsOneParagraphAfterAnyBody` holds the other line ends.

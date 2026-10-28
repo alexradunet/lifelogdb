@@ -129,7 +129,8 @@ The other date, if the line has both, keeps its distance in days from the primar
 day from `0000-01-01` to `9999-12-31` refuses the tick: nothing changes.
 
 The new line is written as `- [ ] <text> on:… due:… every:… from:done`, in that key order, with the tokens the line
-has. It is appended to the end of the body as its own paragraph (a blank line, then the line). The ticked line
+has. It is appended to the end of the body as its own paragraph (a blank line, then the line, in the line end the body
+uses: one CRLF after a body that ends in CRLF). The ticked line
 keeps its `every:` and `from:` tokens.
 
 A clamp changes the repeat in one case only. The line has `every:month`, no `from:done`, and the day of the
@@ -170,7 +171,7 @@ A carry moves a line to another page. The line must be open and not malformed, w
 text the client sends.
 
 1. The box of the line becomes `[>]`. Every other character stays.
-2. The target page gets a copy at the end of its body, as its own paragraph: `- [ ] <text> <tokens>`. The tokens
+2. The target page gets a copy at the end of its body, as its own paragraph in the line end the body uses: `- [ ] <text> <tokens>`. The tokens
    are `on:`, `due:`, `every:` and `from:done` of the line, in that order. If the target is a day page, `on:` is the
    target day. It replaces the `on:` of the line, or it is added. `due:` stays. If the target is not a day page,
    `on:` stays as it is.
