@@ -9,7 +9,15 @@
 - **Priority:** P1. **Effort:** L. **Risk:** LOW to MEDIUM. The browser's conversation view and its column change;
   the conversation entity gains two derived properties of a turn (`via`, `refs`); the owner's paragraph of `say`
   gains the writer's name when a relay wrote it. No table, no action, no route; the core still calls no model.
-- **Status:** PLANNED.
+- **Status:** IN REVIEW (owner). Built in `cbc25ad` (via and refs) and `127d11d` (the screen and the cards); the
+  counter-review's findings are fixed in the commit after them: the card fetch carried the page's own source, so a
+  tool line on the page could make the owner's browser run an owner-only read (the fetch carries `agent:card` now,
+  which the owner-only rule refuses: a plain link); the `⋯` menu was clipped by the screen, so Edit and Delete were
+  out of reach (a popover now, closed by Close, Escape or a tap outside, with the page's Links and Backlinks in it);
+  a relay's name with a colon broke the marker (`via` takes a colon); the composer lost its focus after Enter; an
+  address beyond the newest 36 drew nothing (its link now); the extension's e2e holds the relay part. The contrast
+  test needed no new pair: the new classes use the aliases of the materials. Screenshots on a synthetic database:
+  the screen, the menu and the menu with Edit open, on the desktop and the phone.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)

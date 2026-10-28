@@ -9,16 +9,18 @@
   const KEY = 'lifelog.chat.open';
   let timer;
 
-  // swap replaces the column's content with the one in a page's HTML, and keeps a draft that is being typed.
+  // swap replaces the column's content with the one in a page's HTML, keeps a draft that is being typed, and gives the
+  // new box the focus that the old one had.
   const swap = (html) => {
     const next = new DOMParser().parseFromString(html, 'text/html').getElementById(chat.id);
     if (!next) return;
     const draft = chat.querySelector('.chat-form textarea');
     const typed = draft && !draft.form.dataset.sent ? draft.value : '';
+    const focused = draft && document.activeElement === draft;
     chat.dataset.version = next.dataset.version;
     chat.innerHTML = next.innerHTML;
     const box = chat.querySelector('.chat-form textarea');
-    if (box) box.value = typed;
+    if (box) { box.value = typed; if (focused) box.focus(); }
     poll();
   };
 

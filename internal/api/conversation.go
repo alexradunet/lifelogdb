@@ -60,7 +60,7 @@ type Turn struct {
 	Refs  []string `json:"refs,omitempty"`
 }
 
-var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)(?:, via ([a-z0-9_.-]+))?\): ?`)
+var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)(?:, via ([a-z0-9_:.-]+))?\): ?`)
 
 // toolRefs are the addresses that the tool lines name after an arrow: `- `name` → [href](href)` or
 // `- `name` → href`. A value that does not start with a slash is no address. An address is listed once.
@@ -90,7 +90,7 @@ func toolRefs(tools []string) []string {
 
 // ParseTurns reads the turns of the body of the conversation page of day (CRLF is read as LF). A marker line starts
 // with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `, and may name the relaying writer inside the brackets,
-// `**Owner** (HH.MM, via NAME): ` (NAME is [a-z0-9_.-]+), and is outside a fenced code block (a line that starts with
+// `**Owner** (HH.MM, via NAME): ` (NAME is [a-z0-9_:.-]+), and is outside a fenced code block (a line that starts with
 // three backticks opens or closes a fence). A turn runs from its marker line to the line before the next marker line,
 // or to the end of the page; it keeps its inner blank lines and loses its blank edge. The tool lines of a lifelog
 // turn are the lines that start with "- `" right before its marker: one block, with at most one blank line between

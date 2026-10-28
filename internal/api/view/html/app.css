@@ -202,18 +202,20 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   &>main{max-inline-size:none; gap:0; min-block-size:0}
   &>footer{display:none}}
 .chat-screen{flex:1; min-block-size:0; min-inline-size:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto}
-.daybar{display:flex; align-items:center; gap:var(--space-3) var(--space-4); padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-3) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-end:2px solid var(--line);
+.daybar{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3) var(--space-4); padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-3) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-end:2px solid var(--line);
   & h1{margin:0; font:400 34px/1 var(--display); letter-spacing:.5px; color:var(--text-strong)}
   & .day{font:400 13px/18px var(--mono); color:var(--text-muted)}
-  & .days{display:flex; align-items:center; gap:6px; margin-inline-start:auto}
+  & .days{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-inline-start:auto}
   & .days a{padding:5px 9px; border:2px solid var(--line); font:400 12px/16px var(--mono); color:var(--text); text-decoration:none}
   & .days a[aria-current]{border-color:var(--accent); color:var(--accent); font-weight:500}}
-.more-menu{position:relative;
-  &>summary.more{justify-content:center; inline-size:34px; block-size:30px; min-block-size:0; margin:0; padding:0; border:2px solid var(--line); font:700 16px/1 var(--sans); color:var(--text)}
-  &>summary.more::before{content:none}
-  &[open]>summary.more{margin:0; border-color:var(--accent)}
-  & .more-body{position:absolute; z-index:5; inset-block-start:calc(100% + var(--space-2)); inset-inline-end:0; display:flex; flex-direction:column; gap:var(--space-3); inline-size:min(26rem, calc(100vw - 2rem)); padding:var(--space-3); box-shadow:var(--parch-bevel),var(--shadow-float)}
-  & .more-body .sub{margin:0}}
+/* The menu of the day bar is a popover, as the sheet of the shell is: the top layer, so the column's overflow cannot clip
+   it, and Close, Escape or a tap outside closes it. On a wide screen it hangs under the bar at the right; on a phone
+   it is a sheet from the top, over the bars. */
+.daybar button.more{inline-size:34px; block-size:30px; min-block-size:0; margin:0; padding:0; border:2px solid var(--line); background:none; box-shadow:none; font:700 16px/1 var(--sans); color:var(--text)}
+.more-body:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-3);
+  inline-size:min(26rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; box-shadow:var(--parch-bevel),var(--shadow-float);
+  & .sub{margin:0}}
+.more-head{display:flex; align-items:center; justify-content:space-between}
 .thread{display:flex; flex-direction:column-reverse; min-block-size:0; overflow-y:auto; padding:var(--space-4) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-left, 0px))}
 .composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
   & .chat-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; max-inline-size:72ch; margin-inline:auto}
@@ -287,7 +289,8 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .column:has(>main>.chat-screen){flex:1 1 auto; block-size:auto; min-block-size:0; padding:0 0 calc(58px + env(safe-area-inset-bottom, 0px))}
   .daybar{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .daybar h1{font-size:28px}
-  .daybar .days a:not([aria-current]){display:none}
+  .more-body:popover-open{inset:0 0 auto 0; inline-size:auto; max-block-size:calc(100dvh - 58px - env(safe-area-inset-bottom, 0px));
+    padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .turn{max-inline-size:94%}
   .thread,.composer{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */

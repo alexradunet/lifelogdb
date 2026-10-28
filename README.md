@@ -353,8 +353,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `rename` or `promote`, and `rename` to such a title is 409. The agent (`lifelog whatsapp`) watches today's page
   and answers on it; the core calls no model. In the browser, a right column on every page shows today's turns and the
   composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's and lets Enter send; every form
-  works without it. The conversation view is the chat screen, not a page ([plan 148](docs/plans/148-the-chat-screen.md)): a day bar with the chips of the last days and a menu of the page's own actions, the thread, and the composer
-  at the bottom. The server asks its own handler for each address in the tool lines of a turn (at most six a turn, with the page's own source and authority)
+  works without it. The conversation view is the chat screen, not a page ([plan 148](docs/plans/148-the-chat-screen.md)): a day bar with the chips of the last days and a menu (a popover) of the page's own actions, links and backlinks, the thread, and the composer
+  at the bottom. The server asks its own handler for each address in the tool lines of a turn (at most six a turn, the newest 36 addresses of the screen and the newest six of the column; the older draw their link; the request carries the source `agent:card`, so an owner-only read such as `/settings` or `/integrity` is refused and draws its link)
   and the browser draws the entity that answers as a card by its class (a day, a page, a metric, a plan line, a search); the column draws the same cards on one line.
 - **One delete, of one row or several** ([plan 107](docs/plans/107-delete-several-at-once.md),
   [plan 131](docs/plans/131-the-pareto-pass.md)). `tombstone-pages` (`POST /pages/tombstone`) takes `ids`, separated

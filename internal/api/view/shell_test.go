@@ -273,25 +273,48 @@ func TestTheDayBarMarksTheDayShown(t *testing.T) {
 	}
 }
 
-// TestACardIsDrawnOnlyForAnAddressTheServerResolved: an address that is not in the facts has no card; one that is
-// there with no entity is the plain link; the entity picks the card by its class.
+// TestACardIsDrawnOnlyForAnAddressTheServerResolved: an address that is not in the facts (an older turn) and one that
+// is there with no entity are the plain link, cut at 80 characters with its href whole; the entity picks the card by
+// its class.
 func TestACardIsDrawnOnlyForAnAddressTheServerResolved(t *testing.T) {
 	v := &view{Shell: &Shell{Today: "2026-10-28"}, cards: map[string]*siren.Entity{
 		"/gone":    nil,
 		"/pages/3": {Class: []string{"person", "page"}, Title: "Sam", Properties: map[string]any{"body": "# Sam\n\nMy **friend** from [[Lisbon]].", "cover": map[string]any{"id": 9}}},
 		"/odd":     {Class: []string{"settings"}, Title: "Settings"},
 	}}
-	cards := v.CardsOf([]string{"/unasked", "/gone", "/pages/3", "/odd"})
-	if len(cards) != 3 {
-		t.Fatalf("%d cards, want 3: %+v", len(cards), cards)
+	long := "/search?q=" + strings.Repeat("a", 100)
+	cards := v.CardsOf([]string{"/unasked", "/gone", "/pages/3", "/odd", long})
+	if len(cards) != 5 {
+		t.Fatalf("%d cards, want 5: %+v", len(cards), cards)
 	}
-	if c := cards[0]; c.Kind != "link" || c.Title != "/gone" {
-		t.Errorf("the plain link: %+v", c)
+	for i, href := range []string{"/unasked", "/gone"} {
+		if c := cards[i]; c.Kind != "link" || c.Title != href || c.Href != href {
+			t.Errorf("the plain link of %s: %+v", href, c)
+		}
 	}
-	if c := cards[1]; c.Kind != "person" || c.Title != "Sam" || c.Icon != "people" || c.Picture != "/pages/9/preview" || len(c.Lines) != 1 || c.Lines[0] != "Sam" {
+	if c := cards[4]; c.Kind != "link" || c.Href != long || c.Title != long[:80]+"…" {
+		t.Errorf("a long plain link: %+v", c)
+	}
+	if c := cards[2]; c.Kind != "person" || c.Title != "Sam" || c.Icon != "people" || c.Picture != "/pages/9/preview" || len(c.Lines) != 1 || c.Lines[0] != "Sam" {
 		t.Errorf("the person: %+v", c)
 	}
-	if c := cards[2]; c.Kind != "other" || c.Title != "Settings" || c.Value != "settings" {
+	if c := cards[3]; c.Kind != "other" || c.Title != "Settings" || c.Value != "settings" {
 		t.Errorf("a class without a card: %+v", c)
+	}
+}
+
+// TestAPlainLineIsNotAnEmbed: a body that starts with an embed (a cover) gives the first line with words, and the
+// date above a thread is in full words.
+func TestAPlainLineIsNotAnEmbed(t *testing.T) {
+	got := plainLines("![[River.jpg]]\n\nA path along the water.\nA heron.", 1)
+	if len(got) != 1 || got[0] != "A path along the water." {
+		t.Errorf("plainLines: %q, want the first line with words", got)
+	}
+	v := &view{Shell: &Shell{Today: "2026-10-28"}}
+	if got := v.LongDate("2026-10-28"); got != "Wednesday 28 October" {
+		t.Errorf("LongDate: %q", got)
+	}
+	if got := v.LongDate("2025-01-05"); got != "Sunday 5 January 2025" {
+		t.Errorf("LongDate of another year: %q", got)
 	}
 }

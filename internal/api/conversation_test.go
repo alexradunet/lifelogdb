@@ -96,6 +96,7 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 func TestSayNamesTheRelayInTheOwnersParagraph(t *testing.T) {
 	for _, tc := range []struct{ source, marker, via string }{
 		{"agent:x", "**Owner** (11.07, via x): Hi", "x"},
+		{"agent:a:b", "**Owner** (11.07, via a:b): Hi", "a:b"},
 		{"import:y.z", "**Owner** (11.07, via y.z): Hi", "y.z"},
 		{"cli", "**Owner** (11.07): Hi", ""},
 		{"ui", "**Owner** (11.07): Hi", ""},

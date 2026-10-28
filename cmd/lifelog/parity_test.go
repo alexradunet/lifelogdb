@@ -1351,7 +1351,7 @@ func rowSay(x *parityRun) {
 		x.t.Fatal(err)
 	}
 	p := props(x.t, pe)
-	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_.-]+)?\): Hello\.\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_.-]+)?\): Again\.$`)
+	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_:.-]+)?\): Hello\.\n\n\*\*Owner\*\* \(\d\d\.\d\d(?:, via [a-z0-9_:.-]+)?\): Again\.$`)
 	if body, _ := p["body"].(string); !want.MatchString(body) {
 		x.t.Errorf("the body after two turns: %q", body)
 	}

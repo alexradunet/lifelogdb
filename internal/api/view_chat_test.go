@@ -122,10 +122,14 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 	conv := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, conv, "save-body"), map[string]string{"body": body}))
 
+	if _, _, err := s.CreatePage(t.Context(), "cli", "Sleep log", "I talked it over in [[Conversation "+fixedToday+"]].\n", ""); err != nil { // a page that links the conversation
+		t.Fatal(err)
+	}
 	view := browse(t, h, "/days/"+fixedToday+"/conversation")
 	order := []string{`<h1>Chat</h1><span class="day">Wed 14 May · today</span>`,
 		`<nav class="days" aria-label="Days"><a href="/days/2031-05-10/conversation">Sat 10</a><a href="/days/2031-05-12/conversation">Mon 12</a><a href="/days/2031-05-13/conversation">Tue 13</a><a href="/days/today/conversation" aria-current="page">Today</a></nav>`,
-		`<details class="more-menu">`, `<summary>Edit</summary>`, `Plan a line`, `class="danger">Delete`, `</details>`,
+		`<button type="button" class="more" popovertarget="chat-menu"`, `<div class="more-body" id="chat-menu" popover>`, `popovertargetaction="hide">Close</button>`,
+		`the day view</a>`, `aria-label="Categories"`, `<summary>Edit</summary>`, `Plan a line`, `aria-label="Links"`, `aria-label="Backlinks"`, `class="danger">Delete`, `<section class="thread"`,
 		`<li class="turn text">`, "A note the owner typed.",
 		`<li class="turn owner">`, `<span class="from">You</span><time>`, `How did I <strong>sleep</strong>?`, `<a href="/pages?title=Sleep+notes" class="wikilink">Sleep notes</a>`,
 		`<li class="turn agent">`, `<span class="from">lifelog</span>`, `<li><b>search_pages</b> words=sleep</li>`, `<li><b>read_day</b> failed: not_found</li>`, `You slept <em>well</em>.`,
@@ -139,7 +143,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 		}
 		at += i
 	}
-	for _, gone := range []string{`class="page-head"`, `page-margin`, `aria-label="Facts"`, `aria-label="Backlinks"`, `id="chat"`, `class="page-body"`, `class="waiting"`} {
+	for _, gone := range []string{`class="page-head"`, `page-margin`, `aria-label="Facts"`, `id="chat"`, `<details class="more-menu"`, `class="page-body"`, `class="waiting"`} {
 		if strings.Contains(view, gone) {
 			t.Errorf("the chat screen draws %s", gone)
 		}
@@ -380,25 +384,35 @@ func TestTheColumnDrawsTheCompactCards(t *testing.T) {
 	}
 }
 
-// TestACardAsksForWhatThePageMayRead: the card is read with the page's own source and authority. The owner's page
-// reads the settings address and draws a card; the page of an agent is refused it (the owner's alone), so the address
-// is the plain link. On a public listener the cards follow the guard of the page: the cookie opens the page and its
-// cards.
+// TestACardAsksForWhatThePageMayRead: the card is read with a source of its own, agent:card, which the owner-only
+// reads refuse. A tool line that names /settings or /integrity draws the plain link on the owner's page and on an
+// agent's page alike, and the integrity check does not run. On a public listener the cards follow the guard of the
+// page: the cookie opens the page and its cards.
 func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "Settings?"}))
-	conversationBody(t, c, "\n\n"+toolLines("/settings")+"\n**lifelog** (09.30): No.\n")
-	owner := cardsOf(browse(t, h, "/days/"+fixedToday+"/conversation"))
-	if len(owner) != 1 || owner[0][1] != "other" || !strings.Contains(owner[0][3], "Settings") {
-		t.Errorf("the owner's page draws %v, want the card of the settings", owner)
+	conversationBody(t, c, "\n\n"+toolLines("/settings", "/integrity")+"\n**lifelog** (09.30): No.\n")
+	// The card's source is refused the owner-only reads by the API itself.
+	for _, path := range []string{"/settings", "/integrity"} {
+		rec := request(h, "GET", path, "", map[string]string{"Accept": "application/vnd.siren+json", siren.SourceHeader: "agent:card"})
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("GET %s as agent:card: %d, want 403", path, rec.Code)
+		}
 	}
+	owner := browse(t, h, "/days/"+fixedToday+"/conversation")
 	req := httptest.NewRequest("GET", "/days/"+fixedToday+"/conversation", nil)
 	req.Header.Set("Accept", "text/html")
-	req.Header.Set("Lifelog-Source", "agent:x")
+	req.Header.Set(siren.SourceHeader, "agent:x")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if agent := cardsOf(rec.Body.String()); len(agent) != 1 || agent[0][1] != "link" || strings.Contains(rec.Body.String(), "model_key") {
-		t.Errorf("an agent's page draws %v, want the plain link", agent)
+	for who, page := range map[string]string{"the owner's": owner, "an agent's": rec.Body.String()} {
+		got := cardsOf(page)
+		if len(got) != 2 || got[0][1] != "link" || got[0][3] != "/settings" || got[1][1] != "link" || got[1][3] != "/integrity" {
+			t.Errorf("%s page draws %v, want the plain links of /settings and /integrity", who, got)
+		}
+		if strings.Contains(page, "model_key") || strings.Contains(strings.ToLower(page), "card-integrity") {
+			t.Errorf("%s page draws an owner-only read", who)
+		}
 	}
 
 	public, s := publicHandler(t, api.PublicOptions{Token: testToken})

@@ -15,8 +15,12 @@ import (
 )
 
 // The cards of the chat (docs/plans/148-the-chat-screen.md): each address that a tool line of the agent names is
-// asked of the server's own handler, and the view draws the entity that answers as a card. The request is the page's
-// own in what it carries (its context, its host, its source), so what the page may read, the card may read.
+// asked of the server's own handler, and the view draws the entity that answers as a card. The page's own guard has
+// passed already. The request carries the page's context and host, and a source of its own, agent:card: the owner-only
+// reads (the settings, the integrity check) refuse it, so a tool line cannot make a view run one.
+
+// cardSource is the source of the in-process request of a card. It is an agent's, so requireOwner refuses it.
+const cardSource = siren.AgentPrefix + "card"
 
 const (
 	// cardsPerView bounds the work of one page: the newest addresses are resolved first. The column of every page
@@ -82,13 +86,13 @@ func (h *server) card(r *http.Request, ref string) *siren.Entity { return h.card
 func (h *server) cardAt(r *http.Request, ref string, hops int) *siren.Entity {
 	path, _, _ := strings.Cut(ref, "#") // a fragment stays with the browser: it is for the view
 	u, err := url.ParseRequestURI(path)
-	if err != nil || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || u.Host != "" {
+	if err != nil || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") {
 		return nil
 	}
 	req := httptest.NewRequestWithContext(r.Context(), http.MethodGet, u.RequestURI(), nil)
 	req.Host, req.RemoteAddr = r.Host, r.RemoteAddr
 	req.Header.Set("Accept", "application/vnd.siren+json")
-	req.Header.Set(siren.SourceHeader, source(r))
+	req.Header.Set(siren.SourceHeader, cardSource)
 	rec := httptest.NewRecorder()
 	h.mux.ServeHTTP(rec, req)
 	if rec.Code/100 == 3 && hops > 0 {
@@ -108,14 +112,14 @@ func (h *server) cardAt(r *http.Request, ref string, hops int) *siren.Entity {
 }
 
 // conversationDays are the days before today that have a live conversation page, the newest three, oldest first. It
-// looks back over the last month: a day further back is a link from the day view.
+// looks back over two weeks: a day further back is a link from the day view.
 func conversationDays(ctx context.Context, h *server, today string) ([]string, error) {
 	t, err := time.Parse(time.DateOnly, today)
 	if err != nil {
 		return nil, err
 	}
 	var days []string
-	for i := 1; i <= 31 && len(days) < 3; i++ {
+	for i := 1; i <= 14 && len(days) < 3; i++ {
 		day := t.AddDate(0, 0, -i).Format(time.DateOnly)
 		id, err := h.s.PageID(ctx, ConversationTitle(day))
 		if err != nil {

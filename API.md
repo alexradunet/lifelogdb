@@ -862,7 +862,7 @@ for the owner's turn. The page:
 - has a turn from each marker line. A marker line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is
   outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH.MM` is the
   server's local time. The agent writes `**lifelog**`, and `say` writes `**Owner**`. The brackets may also name the
-  writer that relayed the turn: `**Owner** (HH.MM, via whatsapp): `, where the name is `[a-z0-9_.-]+`. `say` writes
+  writer that relayed the turn: `**Owner** (HH.MM, via whatsapp): `, where the name is `[a-z0-9_:.-]+`. `say` writes
   it when the writer is an `agent:*` or `import:*` source (the name is the source without its prefix), and writes
   no such part for any other writer;
 - runs a turn from its marker line to the line before the next marker line, or to the end of the page. The words of

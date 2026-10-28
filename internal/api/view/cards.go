@@ -2,6 +2,7 @@ package view
 
 import (
 	"html/template"
+	"slices"
 	"strings"
 
 	"lifelog/internal/api/siren"
@@ -31,18 +32,11 @@ type Card struct {
 }
 
 // CardsOf are the cards of a turn's addresses, in order, at most CardsPerTurn. An address that the server did not
-// resolve has none: only the turns of a view that the server resolved for draw a card.
+// resolve (an older turn, beyond the bound of the view) is the plain link, as an address that answered an error.
 func (v *view) CardsOf(refs []string) []Card {
 	var out []Card
-	for _, ref := range refs {
-		e, ok := v.cards[ref]
-		if !ok {
-			continue
-		}
-		if len(out) == CardsPerTurn {
-			break
-		}
-		out = append(out, v.cardOf(ref, e))
+	for _, ref := range refs[:min(len(refs), CardsPerTurn)] {
+		out = append(out, v.cardOf(ref, v.cards[ref]))
 	}
 	return out
 }
@@ -54,7 +48,7 @@ var cardIcons = map[string]string{"page": "files", "person": "people", "place": 
 // cardOf is the card of the entity e at href. A nil entity, an entity with a property that JSON cannot carry, and
 // an entity of no title give the plain link.
 func (v *view) cardOf(href string, e *siren.Entity) Card {
-	link := Card{Href: href, Kind: "link", Title: href}
+	link := Card{Href: href, Kind: "link", Title: linkWords(href)}
 	if e == nil {
 		return link
 	}
@@ -65,9 +59,10 @@ func (v *view) cardOf(href string, e *siren.Entity) Card {
 	props, _ := shape.(map[string]any)
 	cv := &view{Entity: e, Props: shape, Shell: v.Shell}
 	c := Card{Href: href, Title: e.Title}
+	line := planLineOf(href, props)
 	switch kind := cardKind(e.Class); {
-	case planLineOf(href, props) != nil:
-		c = cv.planCard(c, planLineOf(href, props))
+	case line != nil:
+		c = cv.planCard(c, line)
 	case kind == "day" || kind == "day-page":
 		c = cv.dayCard(c, props, kind)
 	case kind == "series":
@@ -90,25 +85,25 @@ func (v *view) cardOf(href string, e *siren.Entity) Card {
 		}
 	}
 	if c.Title == "" {
-		c.Title = href
+		c.Title = linkWords(href)
 	}
 	c.Icon = cardIcons[c.Kind]
 	return c
 }
 
+// linkWords are the words of a plain link: the address, cut at 80 characters with an ellipsis. The href stays whole.
+func linkWords(href string) string {
+	if r := []rune(href); len(r) > 80 {
+		return string(r[:80]) + "…"
+	}
+	return href
+}
+
 // cardKind picks the kind of an entity from its classes. A conversation is also a page, and a day page is a page
 // and a day page: the more particular class wins. A kind of page is its own (person, place, file, metric, page); "" is a class without a card.
 func cardKind(class []string) string {
-	has := func(c string) bool {
-		for _, x := range class {
-			if x == c {
-				return true
-			}
-		}
-		return false
-	}
 	for _, k := range []string{"conversation", "day", "day-page", "series", "measurement", "search", "person", "place", "file", "metric", "page"} {
-		if has(k) {
+		if slices.Contains(class, k) {
 			return k
 		}
 	}
@@ -128,10 +123,14 @@ func (v *view) valueWords(value any, unit, day string) string {
 	return words
 }
 
-// plainLines are the first n lines of a body with words in them, without their CommonMark.
+// plainLines are the first n lines of a body with words in them, without their CommonMark. A line that is an embed
+// (`![[…]]`) has none.
 func plainLines(body string, n int) []string {
 	var out []string
 	for line := range strings.SplitSeq(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "![[") { // an embed (a cover) is a picture, not a line
+			continue
+		}
 		if w := plainSnippet(line); w != "" {
 			out = append(out, w)
 			if len(out) == n {

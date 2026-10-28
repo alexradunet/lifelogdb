@@ -60,11 +60,8 @@
 <dt>created</dt><dd>{{$.When $p.created_at}}</dd>
 </dl></section>
 
-{{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2>{{template "typed-links" (dict "v" $ "links" .)}}</section>{{end}}
-{{$groups := .Backlinks}}
-{{if $groups}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
-<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
-<div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}
+{{template "links" .}}
+{{template "backlinks" .}}
 
 {{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "link") "button" "Add a typed link")}}
@@ -77,6 +74,12 @@
 {{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
 {{$back := $.Here}}{{if .IsSeries}}{{$back = printf "/pages/%s" (num $p.id)}}{{end}}{{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $back)}}</div></section>{{end}}
 {{end}}
+
+{{/* links and backlinks are two groups of the margin of a page: the typed links of the page and the pages that link to it. The chat screen's menu draws them too. */}}
+{{define "links"}}{{$p := .Props}}{{with $p.links}}<section class="group" aria-label="Links"><h2>Links</h2>{{template "typed-links" (dict "v" $ "links" .)}}</section>{{end}}{{end}}
+{{define "backlinks"}}{{$groups := .Backlinks}}{{if $groups}}<section class="group" aria-label="Backlinks"><h2>Backlinks</h2>{{range $groups}}<p class="sub">{{if eq .Key "wikilink"}}mentioned in{{else}}{{.Key}}{{end}}</p>
+<ul class="plain">{{range .Items}}<li><a href="/pages/{{num .id}}">{{$.Date .title}}</a>{{if ne .entity_type "page"}} <span class="badge">{{.entity_type}}</span>{{end}}{{with .context}}
+<div class="snippet">{{.}}</div>{{end}}</li>{{end}}</ul>{{end}}</section>{{end}}{{end}}
 
 {{/* cover is the cover of a page or a day at the head of its margin: the picture as a square, and the one link to the
      picker of every kept picture and of a new photo (choose-cover; docs/plans/131-the-pareto-pass.md, part 2). The

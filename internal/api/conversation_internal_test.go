@@ -48,6 +48,8 @@ func TestParseTurnsReadsAHandWrittenBody(t *testing.T) {
 			[]Turn{{Who: "owner", At: "14.37", Via: "whatsapp", Text: "Hi"}, {Who: "lifelog", At: "14.38", Text: "Hello"}}},
 		{"a via with a dot and a dash", "**Owner** (14.37, via a.b-c_1): Hi",
 			[]Turn{{Who: "owner", At: "14.37", Via: "a.b-c_1", Text: "Hi"}}},
+		{"a via with a colon (the relay agent:a:b)", "**Owner** (14.37, via a:b): Hi\n\n**lifelog** (14.38): Hello",
+			[]Turn{{Who: "owner", At: "14.37", Via: "a:b", Text: "Hi"}, {Who: "lifelog", At: "14.38", Text: "Hello"}}},
 		{"a bracket part that is not via", "**Owner** (14.37, from whatsapp): Hi\n\n**Owner** (14.37, via WhatsApp): Hi\n\n**Owner** (14.37, via ): Hi",
 			[]Turn{{Who: "text", Text: "**Owner** (14.37, from whatsapp): Hi\n\n**Owner** (14.37, via WhatsApp): Hi\n\n**Owner** (14.37, via ): Hi"}}},
 		{"the refs of the tool lines", "**Owner** (09.07): Q\n\n" +

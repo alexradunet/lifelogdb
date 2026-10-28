@@ -1,6 +1,6 @@
 {{/* The conversation of a day is the chat screen (docs/plans/148-the-chat-screen.md), not a page: a thin day bar (the
      title, the day, the chips of the last days that have a conversation page, and a menu ⋯ with the things of the page
-     itself), the thread that fills the height and starts at its newest turn, and the composer pinned at the bottom.
+     itself, a popover that Close, Escape or a tap outside closes: the top layer, so nothing clips it), the thread that fills the height and starts at its newest turn, and the composer pinned at the bottom.
      It has no page head, no margin and no categories row. The Edit fold is the page's body editor; the thread is the
      body, so the body is not drawn a second time. #conversation is the screen that chat.js swaps in place; the
      column is not drawn on this view, since the screen is the column at full size. */}}
@@ -10,14 +10,17 @@
 <header class="daybar">
 <h1>Chat</h1><span class="day">{{$.Date $p.day}}{{if eq $p.day .Today}} · today{{end}}</span>
 <nav class="days" aria-label="Days">{{range .ChatDays}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Text}}</a>{{end}}</nav>
-<details class="more-menu"><summary class="more" aria-label="More: the day view, the page of this conversation">⋯</summary>
-<div class="more-body">
+<button type="button" class="more" popovertarget="chat-menu" aria-label="More: the day view, the page of this conversation">⋯</button>
+<div class="more-body" id="chat-menu" popover>
+<div class="more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="chat-menu" popovertargetaction="hide">Close</button></div>
 <p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>
 {{if $p.id}}{{template "categories" (dict "v" $ "back" $.Here)}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line" "more" "on,due,every,from_done" "back" $.Here)}}
+{{template "links" .}}
+{{template "backlinks" .}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}{{end}}
-</div></details>
+</div>
 </header>
 <section class="thread" aria-label="Conversation of {{$.Date $p.day}}">
 {{if $turns}}{{template "thread" (dict "v" $ "turns" $turns "day" $p.day)}}{{else if .Action "say"}}<div class="turns"><p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p></div>{{else}}<div class="turns"><p class="empty">Nothing was said on this day.</p></div>{{end}}
@@ -34,7 +37,7 @@
      a chip, by CSS) and a card for each address of its tool lines. A turn of who text (a paragraph the owner edited
      in) is shown as it is. Three dots wait under the thread when the last turn is the owner's. */}}
 {{define "thread"}}{{$v := .v}}<ol class="turns">
-{{with .day}}<li class="datesep">{{$v.Date .}}</li>{{end}}
+{{with .day}}<li class="datesep">{{$v.LongDate .}}</li>{{end}}
 {{range .turns}}{{if eq .Who "text"}}<li class="turn text"><p class="free">{{.Text}}</p></li>
 {{else}}<li class="turn {{if eq .Who "owner"}}owner{{else}}agent{{end}}"><div class="meta"><span class="from">{{if eq .Who "owner"}}You{{else}}lifelog{{end}}</span>{{with .Via}}<span class="via">· via {{.}}</span>{{end}}{{with .At}}<time>{{.}}</time>{{end}}</div>
 {{with .Tools}}<ul class="tools">{{range .}}{{with toolChip .}}<li><b>{{.Name}}</b>{{with .Words}} {{.}}{{end}}</li>{{end}}{{end}}</ul>{{end}}

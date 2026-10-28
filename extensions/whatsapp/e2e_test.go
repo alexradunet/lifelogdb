@@ -256,7 +256,7 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	if strings.Contains(string(out), "synthetic-key") {
 		t.Error("the model key is on the conversation page")
 	}
-	for _, want := range []string{"[[" + day + "]]", "**Owner** (", "): I walked by the river", "- `get` failed: forbidden", "): The settings are not mine to read.", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
+	for _, want := range []string{"[[" + day + "]]", "**Owner** (", ", via whatsapp): I walked by the river", "- `get` failed: forbidden", "): The settings are not mine to read.", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the conversation page lacks %q: %q", want, body)
 		}
