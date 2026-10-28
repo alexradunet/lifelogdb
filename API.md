@@ -297,7 +297,9 @@ names, or to today when `day` is absent or empty, and a value that is not a day 
 `page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
 `record`, `plan` (with `page` this day), `tick`, `carry` and `schedule` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover`, `unlink` (with `kind` at, for the places of Where) and `save-body`
 of it (its body and `version` filled in). The write `capture`
-answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. Its field
+answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. The entry it
+appends begins with the brackets of a turn of [the conversation](#conversation): `(HH.MM) ` in the server's local
+time, or `(HH.MM, via NAME) ` when an `agent:*` or `import:*` writer sent it; a mood alone appends no text. Its field
 `import_key` makes a send again a no-op ([D28](docs/decisions/D28-capture-keys.md)): the sender makes one key for one capture and sends it
 unchanged on a retry, and the answer is then the class [result](#result), not this entity.
 

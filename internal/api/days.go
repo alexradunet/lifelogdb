@@ -373,7 +373,11 @@ func (h *server) capture(r *http.Request, act spec, src string) (*siren.Entity, 
 		return nil, err
 	}
 	day := h.dayNamed(r.PathValue("day")) // the share target of the manifest cannot know the day: it sends the word
-	_, sync, already, err := h.s.CaptureWithKey(r.Context(), src, v.Get("import_key"), day, v.Get("text"), mood)
+	entry := words(v.Get("text"))
+	if entry != "" { // the entry begins with its stamp, as a turn of say does; a mood alone writes no text
+		entry = h.stamp(src) + " " + entry
+	}
+	_, sync, already, err := h.s.CaptureWithKey(r.Context(), src, v.Get("import_key"), day, entry, mood)
 	if err != nil {
 		return nil, err
 	}

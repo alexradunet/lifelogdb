@@ -346,13 +346,15 @@ func rowCaptureSentAgain(x *parityRun) {
 		}
 		return props(x.t, e)["body"]
 	}
+	// each paragraph begins with its stamp: the hour of the surface's clock, and via parity when the writer is the agent
+	const stamp = `\(\d\d\.\d\d(, via parity)?\) `
 	day := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/"+parityToday)))
-	if fmt.Sprint(day["mood"]) != "[4]" || body() != "Walked the dog" {
-		x.t.Errorf("%s after the sends again: moods %v, page %q, want [4] and one paragraph", parityToday, day["mood"], body())
+	if one := regexp.MustCompile("^" + stamp + "Walked the dog$"); fmt.Sprint(day["mood"]) != "[4]" || !one.MatchString(fmt.Sprint(body())) {
+		x.t.Errorf("%s after the sends again: moods %v, page %q, want [4] and one stamped paragraph", parityToday, day["mood"], body())
 	}
 	x.ok("capture", map[string]string{"day": "today", "text": "Again", "import_key": "parity-key-2"})
-	if body() != "Walked the dog\n\nAgain" {
-		x.t.Errorf("the page after another key: %q", body())
+	if two := regexp.MustCompile("^" + stamp + "Walked the dog\n\n" + stamp + "Again$"); !two.MatchString(fmt.Sprint(body())) {
+		x.t.Errorf("the page after another key: %q, want two stamped paragraphs", body())
 	}
 	bad := map[string]string{"day": "today", "text": "Never", "import_key": strings.Repeat("k", 513)}
 	if msg := x.refused("capture", bad, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, "capture_keys_import_key") {

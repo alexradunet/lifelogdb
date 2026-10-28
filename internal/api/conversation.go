@@ -26,18 +26,24 @@ func ConversationTitle(day string) string { return "Conversation " + day }
 // conversationFirstLine is the first line of the page: a link to the day it is about.
 func conversationFirstLine(day string) string { return "[[" + day + "]]" }
 
-// ownerParagraph is the paragraph of one turn of the owner: the stamp is the time in the server's zone, HH.MM. The
-// text has LF line ends (a browser sends CRLF) and no blank edge. When a relay wrote the turn (an agent or an import
-// source), the marker names it, its prefix cut: `**Owner** (HH.MM, via NAME): `.
-func ownerParagraph(stamp, source, words string) string {
+// stamp is the brackets that begin an entry: the time in the server's zone, HH.MM, and the writer that relayed the
+// entry when an agent or an import wrote it (its prefix cut): `(HH.MM)` or `(HH.MM, via NAME)`. say and capture both
+// begin with it, so every surface stamps an entry alike.
+func (h *server) stamp(source string) string {
 	via := ""
 	for _, prefix := range []string{siren.AgentPrefix, siren.ImportPrefix} {
 		if name, ok := strings.CutPrefix(source, prefix); ok {
 			via = ", via " + name
 		}
 	}
-	return "**Owner** (" + stamp + via + "): " + strings.TrimSpace(strings.ReplaceAll(words, "\r\n", "\n"))
+	return "(" + h.s.Local().Format("15.04") + via + ")"
 }
+
+// words is the text of an entry as the page keeps it: LF line ends (a browser sends CRLF) and no blank edge.
+func words(text string) string { return strings.TrimSpace(strings.ReplaceAll(text, "\r\n", "\n")) }
+
+// ownerParagraph is the paragraph of one turn of the owner: `**Owner** (HH.MM): words`, with the stamp of the writer.
+func ownerParagraph(stamp, text string) string { return "**Owner** " + stamp + ": " + words(text) }
 
 // conversationDay is the day of a conversation page, from its title; "" when the title is not one.
 func conversationDay(title string) string {
@@ -165,12 +171,12 @@ func (h *server) say(r *http.Request, act spec, src string) (*siren.Entity, erro
 	if day != h.s.Today() {
 		return nil, core.Invalid("say is for today: the agent answers today's conversation")
 	}
-	words := strings.TrimSpace(v.Get("text"))
-	if words == "" {
+	entry := words(v.Get("text"))
+	if entry == "" {
 		return nil, core.Invalid("missing field text")
 	}
 	_, sync, err := h.s.AppendParagraph(r.Context(), src, ConversationTitle(day), day, conversationCategory,
-		conversationFirstLine(day), ownerParagraph(h.s.Local().Format("15.04"), src, words))
+		conversationFirstLine(day), ownerParagraph(h.stamp(src), entry))
 	if err != nil {
 		return nil, err
 	}

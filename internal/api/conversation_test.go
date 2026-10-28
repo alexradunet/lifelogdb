@@ -359,3 +359,25 @@ func TestSayRevivesADeletedConversationsCategory(t *testing.T) {
 		t.Errorf("the category after the say: %v, deleted at %q; want it live", err, cat.DeletedAt)
 	}
 }
+
+// TestCaptureStampsTheHourAsSayDoes: a capture begins with the brackets of say, (HH.MM) in the zone of the store,
+// and (HH.MM, via NAME) when an agent or an import relayed it, so a day page says when each entry was added, from
+// every surface alike. A browser's CRLF becomes LF. A capture of a mood alone adds no text and no stamp.
+func TestCaptureStampsTheHourAsSayDoes(t *testing.T) {
+	_, h, s := conversationStore(t)
+	capture := func(source string, v map[string]string) {
+		t.Helper()
+		c := client.InProcess(h, source)
+		home := apitest.Must(t)(c.Get(t.Context(), "/"))
+		if _, err := c.Do(t.Context(), apitest.Action(t, home, "capture"), v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	capture("cli", map[string]string{"text": "Ran 5k with [[Sam]]."})
+	capture("agent:whatsapp", map[string]string{"text": " Slept well.\r\nA second line.\r\n"})
+	capture("import:y.z", map[string]string{"mood": "4"})
+	want := "(11.07) Ran 5k with [[Sam]].\n\n(11.07, via whatsapp) Slept well.\nA second line."
+	if got := bodyOf(t, s, convDay); got != want {
+		t.Errorf("the day page:\n%q\nwant:\n%q", got, want)
+	}
+}

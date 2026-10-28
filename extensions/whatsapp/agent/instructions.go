@@ -17,8 +17,9 @@ const instructions = "life.db is a personal life log: a journal of day pages (on
 	"conversation, the page Conversation %[1]s: answer its last paragraph. An earlier day's conversation is the page " +
 	"Conversation YYYY-MM-DD of that day: read it with get on /days/YYYY-MM-DD/conversation when the owner " +
 	"refers to earlier talk. The day pages are the log itself. When the owner tells you something that happened, " +
-	"write it with capture on today's day page unless they name another day. When you are not sure what they want " +
-	"written, ask."
+	"write it with capture on today's day page unless they name another day. capture writes the time of the entry " +
+	"itself, as (HH.MM) before the text: do not begin the text with the hour, and do not repeat the time of the " +
+	"owner's turn. When you are not sure what they want written, ask."
 
 // systemText is the instructions for the local day of at.
 func systemText(at time.Time) string {

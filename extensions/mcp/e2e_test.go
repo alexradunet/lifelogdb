@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -127,8 +128,9 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 
 	// plan adds a plan line to a day page (a flag field is a number), and tick closes it: a repeat adds the next line.
 	planned, _ := call(t, ctx, session, "plan", map[string]any{"page": "2031-05-20", "text": "Pay rent", "due": "2031-05-20", "every": "month", "from_done": 1})
-	if want := "Walked by the river, synthetic entry.\n\n- [ ] Pay rent due:2031-05-20 every:month from:done"; props(t, planned)["body"] != want {
-		t.Errorf("plan wrote the body %q, want %q", props(t, planned)["body"], want)
+	// the capture begins with its stamp: the hour of the server's clock, via test (the source of the server is agent:test)
+	if want := regexp.MustCompile(`^\(\d\d\.\d\d, via test\) Walked by the river, synthetic entry\.\n\n- \[ \] Pay rent due:2031-05-20 every:month from:done$`); !want.MatchString(fmt.Sprint(props(t, planned)["body"])) {
+		t.Errorf("plan wrote the body %q, want %s", props(t, planned)["body"], want)
 	}
 	ticked, _ := call(t, ctx, session, "tick", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 3, "text": "Pay rent", "outcome": "done", "done": "2031-05-20"})
 	if res, _ := ticked.Result.(map[string]any); res["appended"] != "- [ ] Pay rent due:2031-06-20 every:month from:done" {
