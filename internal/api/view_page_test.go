@@ -371,3 +371,20 @@ func TestARefusalWithoutAPageToReturnToIsTheErrorView(t *testing.T) {
 		t.Errorf("a JSON client's refusal: %d %s %.300s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
 	}
 }
+
+// TestTheMoreRowOfAPageOpensOneFormAtATime: the forms of the More row share one group name, so opening Rename closes
+// Link. The row of a page has no other details with a name.
+func TestTheMoreRowOfAPageOpensOneFormAtATime(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	essay := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Essay"}))
+	body := browse(t, h, apitest.Href(essay, "self"))
+	if n := strings.Count(body, `<details class="action" name="more">`); n < 3 {
+		t.Errorf("the More row has %d forms with the group more, want at least link, rename and delete", n)
+	}
+	for _, m := range regexp.MustCompile(`<details class="action"[^>]*>`).FindAllString(body, -1) {
+		if strings.Contains(m, "name=") && m != `<details class="action" name="more">` {
+			t.Errorf("a form of the page has another group: %s", m)
+		}
+	}
+}

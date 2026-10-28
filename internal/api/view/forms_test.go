@@ -383,3 +383,26 @@ func TestOptionalFieldsFoldUnderMoreFields(t *testing.T) {
 		t.Errorf("a form whose view folds nothing has More fields: %s", got)
 	}
 }
+
+// TestAGroupNamesTheDetailsOfABoxedForm: boxed gives its <details> the name of the option "group", so a browser keeps
+// one form of the group open. A form with no group has no name attribute.
+func TestAGroupNamesTheDetailsOfABoxedForm(t *testing.T) {
+	draw := func(opts ...string) string {
+		t.Helper()
+		f, err := formOf(tombstonePages(), opts...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var b bytes.Buffer
+		if err := templates.ExecuteTemplate(&b, "boxed", f); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+	if got := draw("group", "more"); !strings.HasPrefix(got, `<details class="action" name="more">`) {
+		t.Errorf("a grouped form is drawn %.80s, want a details named more", got)
+	}
+	if got := draw(); !strings.HasPrefix(got, `<details class="action">`) || strings.Contains(got, ` name="more"`) {
+		t.Errorf("a form with no group is drawn %.80s, want a details with no name", got)
+	}
+}

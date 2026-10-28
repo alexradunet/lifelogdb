@@ -38,7 +38,15 @@ var backCases = []struct{ back, want string }{
 	{"/a\r\nSet-Cookie: x=1", ""},
 	{"/\t/evil.example/", ""},
 	{"/a\x7fb", ""},
-	{"/page#part", ""},
+	{"/page#part", "/page#part"}, // an id fragment names where the page opens
+	{"/plans#row-1-3", "/plans#row-1-3"},
+	{"/plans?order=page#row-1-3", "/plans?order=page#row-1-3"},
+	{"/plans#", ""},
+	{"/plans#a b", ""},
+	{"/#<script>", ""},
+	{"/plans#a#b", ""},
+	{"/plans#" + strings.Repeat("a", 64), "/plans#" + strings.Repeat("a", 64)},
+	{"/plans#" + strings.Repeat("a", 65), ""},
 	{"/%zz", ""}, // not a URL: the escape is not hex
 }
 

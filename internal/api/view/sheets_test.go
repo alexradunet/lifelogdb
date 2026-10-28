@@ -185,6 +185,28 @@ func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
 	}
 }
 
+// TestTheMenusHangFromTheirButtons: the anchors are inside an @supports block, so an engine without anchor
+// positioning keeps the centred box and the fixed inset, and a later edit cannot drop that fallback by accident.
+func TestTheMenusHangFromTheirButtons(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	i := strings.Index(app, "@supports (position-area")
+	if i < 0 {
+		t.Fatal("app.css has no @supports (position-area block")
+	}
+	block := app[i:]
+	for _, want := range []string{"position-anchor:--new", "position-anchor:--more"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("no %s inside an @supports (position-area block", want)
+		}
+	}
+	if !strings.Contains(app, "anchor-name:--new") || !strings.Contains(app, "anchor-name:--more") {
+		t.Error("app.css does not name the anchors --new and --more")
+	}
+	if strings.Contains(app[:i], "position-anchor:") {
+		t.Error("a position-anchor stands outside an @supports (position-area block")
+	}
+}
+
 // TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of the sheets is inside a block
 // that asks for motion (prefers-reduced-motion:no-preference), and the scroll-driven one inside @supports as well,
 // so a browser that does not want motion, or cannot drive it by the scroll, gets none.
@@ -256,6 +278,21 @@ func TestTheFieldsSayWhatTheBrowserRefuses(t *testing.T) {
 	}
 	if strings.Count(base, "base-select") != 2 {
 		t.Errorf("base.css names base-select %d times, want the @supports and the one declaration", strings.Count(base, "base-select"))
+	}
+}
+
+// TestTheTextAreasGrowWithTheirText: one base rule makes every text area grow with its text, up to a height that
+// keeps the page in view. A sheet of the app keeps only the least height of its own.
+func TestTheTextAreasGrowWithTheirText(t *testing.T) {
+	base := cssComments.ReplaceAllString(string(baseCSS), "")
+	rule := regexp.MustCompile(`(?m)^textarea\{[^{}]*\}`).FindString(base)
+	for _, want := range []string{"field-sizing:content", "max-block-size:60vh"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("the base textarea rule %q lacks %s", rule, want)
+		}
+	}
+	if strings.Contains(cssComments.ReplaceAllString(string(appCSS), ""), "field-sizing") {
+		t.Error("app.css says field-sizing again: the base rule holds it")
 	}
 }
 

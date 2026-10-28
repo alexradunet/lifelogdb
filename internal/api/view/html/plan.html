@@ -3,17 +3,18 @@
      tick (Done and Dropped, one button each, as outcome), the carry in a box and the schedule in a box. A done or dropped line has one quiet
      button, Reopen, which undoes a tick made by mistake. A carried line shows its box as a glyph. The tick and the carry post to the line's page, with the line and its words as the view read them:
      a line that changed since is a 409. It takes v (the view), l (the line), own (the title of the page of the view)
-     and to (the day the carry offers). */}}
-{{define "planrow"}}{{$v := .v}}{{$own := .own}}{{$to := .to}}{{with .l}}{{$open := eq .box " "}}<li class="plan-row{{if not $open}} closed{{end}}">
+     and to (the day the carry offers). The row has an id, and every form of it returns there: the browser opens the page at the row. Its Carry and Schedule share the id as
+     their group, so one of the two is open. */}}
+{{define "planrow"}}{{$v := .v}}{{$own := .own}}{{$to := .to}}{{with .l}}{{$open := eq .box " "}}{{$row := printf "row-%s-%s" (num .page_id) (num .line)}}<li class="plan-row{{if not $open}} closed{{end}}" id="{{$row}}">
 <span class="text">{{if not $open}}{{box .box}} {{end}}{{if .text}}{{inline .text}}{{else}}(no words){{end}}</span>
 <span class="meta">{{if ne .title $own}}<a href="/pages/{{num .page_id}}">{{if .is_day_page}}{{$v.Date .title}}{{else}}{{.title}}{{end}}</a>{{end}}
 {{- with .on}} <span class="badge">on {{shortDay .}}</span>{{end}}{{with .due}} <span class="badge{{if and $open (lt . $v.Today)}} danger{{end}}">due {{shortDay .}}</span>{{end}}{{with .done}} <span class="badge">done {{shortDay .}}</span>{{end}}{{with .every}} <span class="badge">every {{.}}</span>{{end}}</span>
 {{- if $open}}{{with $v.LineAction "tick" .}}
-<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>
-{{template "boxed" (form ($v.LineAction "carry" $.l "to" $to) "hide" "line,text" "back" $v.Here)}}
-{{template "boxed" (form ($v.LineAction "schedule" $.l "on" (or $.l.on "") "due" (or $.l.due "")) "button" "Schedule" "hide" "line,text" "back" $v.Here)}}</div>{{end}}
+<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}#{{$row}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>
+{{template "boxed" (form ($v.LineAction "carry" $.l "to" $to) "hide" "line,text" "back" (print $v.Here "#" $row) "group" $row)}}
+{{template "boxed" (form ($v.LineAction "schedule" $.l "on" (or $.l.on "") "due" (or $.l.due "")) "button" "Schedule" "hide" "line,text" "back" (print $v.Here "#" $row) "group" $row)}}</div>{{end}}
 {{- else if and .text (or (eq .box "x") (eq .box "-"))}}{{with $v.LineAction "tick" .}}
-<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="reopen" class="small quiet">Reopen</button></form></div>{{end}}{{end}}</li>{{end}}{{end}}
+<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}#{{$row}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="reopen" class="small quiet">Reopen</button></form></div>{{end}}{{end}}</li>{{end}}{{end}}
 
 {{/* planlist is lines as rows. It takes v, lines, own and to as planrow does. */}}
 {{define "planlist"}}{{$a := .}}<ul class="plain plan-list">{{range .lines}}{{template "planrow" (dict "v" $a.v "l" . "own" $a.own "to" $a.to)}}{{end}}</ul>{{end}}

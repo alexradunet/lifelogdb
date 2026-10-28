@@ -154,7 +154,8 @@ input[type=date],input[type=time],input[type=number],input[type=datetime-local]{
 input[type=checkbox],input[type=radio]{inline-size:auto; block-size:auto; box-shadow:none; accent-color:var(--accent-ink)}
 label:has(>input[type=checkbox]){flex-direction:row; align-items:center} /* a checkbox before its words, on one row */
 input[type=file]{block-size:auto; padding:var(--space-2) var(--space-3)}
-textarea{block-size:auto; min-block-size:6em; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
+/* The box grows with its text (a browser without field-sizing keeps the rows that the server sets). */
+textarea{block-size:auto; min-block-size:6em; max-block-size:60vh; field-sizing:content; padding:10px var(--space-3); resize:vertical; font:400 16px/26px var(--sans)}
 input[readonly],textarea[readonly]{background:var(--surface)}
 /* A field the server refused (aria-invalid, with the alert that says why) and a field the browser refuses once the
    owner has typed in it (:user-invalid: a required field left empty, a number that is not one) show the same edge. */

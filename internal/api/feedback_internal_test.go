@@ -68,6 +68,24 @@ func TestBrowserMutationFeedbackReceipts(t *testing.T) {
 		t.Fatal("restart retained receipt")
 	}
 }
+
+// TestTheFeedbackDestinationKeepsItsFragment: the receipt goes in the query, before the fragment that names the row
+// the page opens at. The receipt is matched by the path alone, as a browser never sends a fragment.
+func TestTheFeedbackDestinationKeepsItsFragment(t *testing.T) {
+	s := feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}
+	got := s.put("/plans#row-1-3", map[string]any{"ok": true})
+	u, err := url.Parse(got)
+	if err != nil || u.Path != "/plans" || u.Fragment != "row-1-3" || len(u.Query().Get("feedback")) != 64 {
+		t.Fatalf("put gave %q", got)
+	}
+	if !strings.HasPrefix(got, "/plans?feedback=") || !strings.HasSuffix(got, "#row-1-3") {
+		t.Errorf("put gave %q, want /plans?feedback=...#row-1-3", got)
+	}
+	if s.take("/plans", u.Query().Get("feedback")) == "" {
+		t.Error("the receipt was not found by the path alone")
+	}
+}
+
 func TestBrowserMutationFeedbackIndependentTabs(t *testing.T) {
 	s := feedbackStore{now: func() time.Time { return time.Unix(0, 0) }}
 	var wg sync.WaitGroup

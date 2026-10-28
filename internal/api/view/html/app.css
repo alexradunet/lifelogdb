@@ -78,6 +78,13 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   margin:auto; padding:var(--space-4); background:var(--rail); border:2px solid var(--outline); box-shadow:var(--bevel-up),var(--shadow-float);
   & nav ul{display:grid; grid-template-columns:1fr 1fr; gap:2px}
   &::backdrop{background:rgb(0 0 0 / .35)}}
+/* The menu hangs from its button, so it needs no veil. An engine without anchor positioning keeps the centred box above;
+   the phone resets this in its media block below. */
+.rail-new{anchor-name:--new}
+@supports (position-area: block-end){
+  .new-menu:popover-open{position-anchor:--new; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline;
+    margin:var(--space-1) 0 0;
+    &::backdrop{background:none}}}
 .new-menu-head{display:flex; align-items:center; justify-content:space-between;
   & .label{color:var(--rail-accent); font-weight:700}}
 /* The sections are a carved well in the wood; the current one is lit by a gold bar at its left. More, which opens the
@@ -215,12 +222,17 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .more-body:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-3);
   inline-size:min(26rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; box-shadow:var(--parch-bevel),var(--shadow-float);
   & .sub{margin:0}}
+/* The menu hangs from its button; the fixed inset above is the fallback for an engine without anchor positioning.
+   The phone resets this in its media block below. */
+.daybar button.more{anchor-name:--more}
+@supports (position-area: block-end){
+  .more-body:popover-open{position-anchor:--more; position-area:block-end span-inline-start; position-try-fallbacks:flip-block, flip-inline; inset:auto}}
 .more-head{display:flex; align-items:center; justify-content:space-between}
 .thread{display:flex; flex-direction:column-reverse; min-block-size:0; overflow-y:auto; padding:var(--space-4) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-left, 0px))}
 .composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
   & .chat-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; max-inline-size:72ch; margin-inline:auto}
   & .chat-form label>span{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-  & textarea{inline-size:100%; min-block-size:46px; max-block-size:40vh; resize:none; field-sizing:content}
+  & textarea{inline-size:100%; min-block-size:46px; max-block-size:40vh; resize:none}
   & .chat-form button{block-size:46px; padding:0 18px}
   & .hint{max-inline-size:72ch; margin-block-start:var(--space-2); margin-inline:auto}}
 
@@ -258,6 +270,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail .rail-search{display:none}
   .rail .rail-search-link{display:inline-flex; inline-size:var(--control); padding:0; margin-inline-start:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
   .rail .rail-new.primary{inline-size:auto}
+  .new-menu:popover-open{position-area:none; margin:auto; &::backdrop{background:rgb(0 0 0 / .35)}} /* centred on the phone, where the button is in the top bar */
   .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
     padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
     & ul{flex-direction:row; justify-content:space-around; gap:0; padding:0; background:none; border:0; box-shadow:none}
@@ -289,7 +302,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .column:has(>main>.chat-screen){flex:1 1 auto; block-size:auto; min-block-size:0; padding:0 0 calc(58px + env(safe-area-inset-bottom, 0px))}
   .daybar{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .daybar h1{font-size:28px}
-  .more-body:popover-open{inset:0 0 auto 0; inline-size:auto; max-block-size:calc(100dvh - 58px - env(safe-area-inset-bottom, 0px));
+  .more-body:popover-open{position-area:none; inset:0 0 auto 0; inline-size:auto; max-block-size:calc(100dvh - 58px - env(safe-area-inset-bottom, 0px));
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .turn{max-inline-size:94%}
   .thread,.composer{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
@@ -485,12 +498,13 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
   & code{background:none; color:inherit}}
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
-   colour before its heading. It is an open dialog in the flow of the page, not the browser's centred box: its
-   position, size and margin are reset here; Escape and Close close it. Its display is set only while it is open:
-   a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
+   colour before its heading. It is an open dialog in the flow of the page (plan 108), not the browser's centred box: its
+   position, size and margin are reset here; Escape and Close close it. It sticks at the top of the column, as the pick
+   bar does, so it is in view after the browser opens the page at the row that a write returned to. Its display is set
+   only while it is open: a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
 .toast[open]{display:flex}
 .toast{flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
-  position:static; inset:auto; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
+  position:sticky; inset:auto; inset-block-start:0; z-index:4; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
   font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;
     &::before{content:"\2713" / ""}}
@@ -581,9 +595,9 @@ fieldset.segmented.faces label:has(input[value="5"]) span::before{background-pos
   & form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between;
     &>label{flex:1 1 100%}
     &>button{margin-inline-start:auto}}
-  /* The box grows with its text (a browser without field-sizing keeps its rows). The least height is four lines of
-     the textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
-  & textarea{field-sizing:content; min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
+  /* The least height is four lines of the textarea (26 px each), its padding and its border; base.css grows the box
+     and caps it. */
+  & textarea{min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
     &:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}}}
 /* Writing mode: while the box has the focus and holds words, the rest of the page steps back and the box takes a
    halo. The box takes the focus on arrival, so the focus alone is not the sign: the first word is. */
@@ -810,7 +824,7 @@ li.pick:has(input[name=ids]:checked),.metric-card:has(>.pick-box input:checked){
     & .picked::after{content:counter(picked) " selected"; font-size:13px; color:var(--text-muted)}
     &>form{flex:1 1 100%}}
   &:has(.pick-on:checked) .pick-tools{display:flex}}
-@media (max-width:899px){.pick-bar{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
+@media (max-width:899px){.pick-bar,.toast{inset-block-start:calc(72px + env(safe-area-inset-top, 0px))}}
 li.pick{display:flex; align-items:stretch; gap:var(--space-1);
   &>a.entry{flex:1 1 auto; min-inline-size:0}
   &>a.row-move{flex:none; align-self:center; padding:0 var(--space-2); font-size:13px; color:var(--text-link); opacity:0}

@@ -131,9 +131,9 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 		`<button type="button" class="more" popovertarget="chat-menu"`, `<div class="more-body" id="chat-menu" popover>`, `popovertargetaction="hide">Close</button>`,
 		`the day view</a>`, `aria-label="Categories"`, `<summary>Edit</summary>`, `Plan a line`, `aria-label="Links"`, `aria-label="Backlinks"`, `class="danger">Delete`, `<section class="thread"`,
 		`<li class="turn text">`, "A note the owner typed.",
-		`<li class="turn owner">`, `<span class="from">You</span><time>`, `How did I <strong>sleep</strong>?`, `<a href="/pages?title=Sleep+notes" class="wikilink">Sleep notes</a>`,
+		`<li class="turn owner">`, `<span class="from">You</span><time datetime="`, `How did I <strong>sleep</strong>?`, `<a href="/pages?title=Sleep+notes" class="wikilink">Sleep notes</a>`,
 		`<li class="turn agent">`, `<span class="from">lifelog</span>`, `<li><b>search_pages</b> words=sleep</li>`, `<li><b>read_day</b> failed: not_found</li>`, `You slept <em>well</em>.`,
-		`<li class="turn owner">`, `<span class="from">You</span><span class="via">· via whatsapp</span><time>`, "And last night?",
+		`<li class="turn owner">`, `<span class="from">You</span><span class="via">· via whatsapp</span><time datetime="`, "And last night?",
 		`<div class="thinking" role="status"`, `<footer class="composer">`}
 	at := 0
 	for _, want := range order {
@@ -166,6 +166,12 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 	} else if form := view[i:]; strings.Contains(form[:strings.Index(form, "</form>")], "Preview") ||
 		!strings.Contains(form[:strings.Index(form, "</form>")], `<input type="hidden" name="back" value="/days/`+fixedToday+`/conversation">`) {
 		t.Error("the composer offers Preview, or does not return to the screen")
+	}
+	if !regexp.MustCompile(`<time datetime="\d\d:\d\d">\d\d\.\d\d</time>`).MatchString(view) {
+		t.Error("a turn's time has no datetime attribute in the form of HTML")
+	}
+	if !strings.Contains(composerForm(view), ` enterkeyhint="send"`) {
+		t.Error("the composer's text area does not say that Enter sends")
 	}
 	if !strings.Contains(view, `<kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> a new line`) {
 		t.Error("the composer lacks its keyboard rule")
@@ -231,6 +237,9 @@ func TestEveryPageOfTheShellDrawsTheChatColumn(t *testing.T) {
 		if !strings.Contains(empty, want) {
 			t.Errorf("the page of a day with no talk lacks %s", want)
 		}
+	}
+	if !strings.Contains(chatColumn.FindString(empty), `<textarea name="text"`) || !strings.Contains(composerForm(chatColumn.FindString(empty)), ` enterkeyhint="send"`) {
+		t.Error("the text area of the column does not say that Enter sends")
 	}
 	if strings.Count(empty, `<script`) != 1 || strings.Contains(empty, `class="thinking"`) || strings.Contains(chatColumn.FindString(empty), "Preview") {
 		t.Error("the column draws more than one script, the three dots with no turn, or a Preview button")
@@ -428,4 +437,13 @@ func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 	if rec = request(public, "GET", "/days/today/conversation", "", map[string]string{"Accept": "text/html"}); rec.Code != 303 || strings.Contains(rec.Body.String(), "card") {
 		t.Errorf("the public listener with no cookie: %d, want the login redirect", rec.Code)
 	}
+}
+
+// composerForm is the first chat-form of page, up to its end.
+func composerForm(page string) string {
+	i := strings.Index(page, `class="chat-form">`)
+	if i < 0 {
+		return ""
+	}
+	return page[i : i+strings.Index(page[i:], "</form>")]
 }

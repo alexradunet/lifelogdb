@@ -112,11 +112,13 @@ func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
 			outcome, verb = "reopen", "Reopen"
 		}
 		if p.Box != '>' && p.Bad == "" && p.Text != "" && tickHref != "" {
-			id := "tick-" + strconv.Itoa(p.Line)
-			box = `<button class="box ` + word + `" form="` + id + `" name="outcome" value="` + outcome + `" aria-label="` + verb + `: ` + esc(p.Text) + `">` + glyph + `</button>`
+			n := strconv.Itoa(p.Line)
+			id := "tick-" + n
+			// The button has an id, and the form returns to it: after the write the browser opens the page at this box.
+			box = `<button class="box ` + word + `" id="box-` + n + `" form="` + id + `" name="outcome" value="` + outcome + `" aria-label="` + verb + `: ` + esc(p.Text) + `">` + glyph + `</button>`
 			forms.WriteString(`<form id="` + id + `" method="post" action="` + esc(tickHref) + `">` +
-				`<input type="hidden" name="back" value="` + esc(back) + `">` +
-				`<input type="hidden" name="line" value="` + strconv.Itoa(p.Line) + `">` +
+				`<input type="hidden" name="back" value="` + esc(back+"#box-"+n) + `">` +
+				`<input type="hidden" name="line" value="` + n + `">` +
 				`<input type="hidden" name="text" value="` + esc(p.Text) + `"></form>`)
 		}
 		spans := []span{{p.BoxAt, p.BoxAt + 3, box}}

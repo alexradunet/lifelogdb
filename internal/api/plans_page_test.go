@@ -29,7 +29,8 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 	for _, want := range []string{
 		`<section class="group plan" aria-label="Planned">`, `<h3>Today</h3>`, `<h3>Earlier</h3>`,
 		`<span class="text">Call the bank</span>`, `<a href="/pages/` + bank + `">Bank</a>`, `<span class="badge">due Wed 14 May</span>`,
-		`<form class="tick-line" method="post" action="/pages/` + bank + `/tick"><input type="hidden" name="back" value="/days/` + fixedToday + `">` +
+		`<li class="plan-row" id="row-` + bank + `-` + line + `">`,
+		`<form class="tick-line" method="post" action="/pages/` + bank + `/tick"><input type="hidden" name="back" value="/days/` + fixedToday + `#row-` + bank + `-` + line + `">` +
 			`<input type="hidden" name="line" value="` + line + `"><input type="hidden" name="text" value="Call the bank">` +
 			`<button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>`,
 		`action="/pages/` + bank + `/carry"`, `<input type="hidden" name="text" value="Call the bank">`, `name="to" value="2031-05-15"`,
@@ -51,7 +52,7 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 		t.Fatalf("tick: %d %s", rec.Code, rec.Body.String())
 	}
 	body := browse(t, h, "/pages/"+bank)
-	if !strings.Contains(body, `<button class="box done" form="tick-`+line+`" name="outcome" value="reopen" aria-label="Reopen: Call the bank">`) || !strings.Contains(body, `<span class="badge">done Wed 14 May</span>`) {
+	if !strings.Contains(body, `<button class="box done" id="box-`+line+`" form="tick-`+line+`" name="outcome" value="reopen" aria-label="Reopen: Call the bank">`) || !strings.Contains(body, `<span class="badge">done Wed 14 May</span>`) {
 		t.Errorf("the ticked line is not drawn as done:\n%s", mainOf(body))
 	}
 	if strings.Contains(body, `form="tick-`+line+`" name="outcome" value="done"`) {
@@ -69,7 +70,7 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 	if toast := browse(t, h, rec.Header().Get("Location")); !strings.Contains(toast, "<p>Reopened.</p>") || strings.Contains(toast, `value="Undo"`) || strings.Contains(toast, ">Undo<") {
 		t.Errorf("the toast of a reopen:\n%s", mainOf(toast))
 	}
-	if body := browse(t, h, "/pages/"+bank); !strings.Contains(body, `<button class="box open" form="tick-`+line+`" name="outcome" value="done"`) || strings.Contains(body, "done:2031-05-14") {
+	if body := browse(t, h, "/pages/"+bank); !strings.Contains(body, `<button class="box open" id="box-`+line+`" form="tick-`+line+`" name="outcome" value="done"`) || strings.Contains(body, "done:2031-05-14") {
 		t.Errorf("the reopened line is not open:\n%s", mainOf(body))
 	}
 	rec = submit(h, "/pages/"+bank+"/tick", url.Values{"line": {line}, "text": {"Call the bank"}, "outcome": {"done"}, "back": {"/pages/" + bank}}, "/")
@@ -90,8 +91,8 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 	id := strings.TrimPrefix(apitest.Href(made, "self"), "/pages/")
 	body := browse(t, h, "/pages/"+id)
 	for _, want := range []string{
-		`<button class="box open" form="tick-3" name="outcome" value="done" aria-label="Done: Buy &lt;b&gt;stamps&lt;/b&gt;">`,
-		`<form id="tick-3" method="post" action="/pages/` + id + `/tick"><input type="hidden" name="back" value="/pages/` + id + `">` +
+		`<button class="box open" id="box-3" form="tick-3" name="outcome" value="done" aria-label="Done: Buy &lt;b&gt;stamps&lt;/b&gt;">`,
+		`<form id="tick-3" method="post" action="/pages/` + id + `/tick"><input type="hidden" name="back" value="/pages/` + id + `#box-3">` +
 			`<input type="hidden" name="line" value="3"><input type="hidden" name="text" value="Buy &lt;b&gt;stamps&lt;/b&gt;"></form>`,
 		`<span class="badge">on Thu 15 May</span>`, `<span class="badge">every week</span>`,
 		`class="box done"`, `class="box dropped"`, `class="box carried"`,
@@ -104,8 +105,8 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 	if n := strings.Count(body, `<form id="tick-`); n != 3 {
 		t.Errorf("%d tick forms in the body, want 3", n)
 	}
-	if !strings.Contains(body, `<button class="box done" form="tick-4" name="outcome" value="reopen" aria-label="Reopen: Post it">`) ||
-		!strings.Contains(body, `<button class="box dropped" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skip">`) {
+	if !strings.Contains(body, `<button class="box done" id="box-4" form="tick-4" name="outcome" value="reopen" aria-label="Reopen: Post it">`) ||
+		!strings.Contains(body, `<button class="box dropped" id="box-5" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skip">`) {
 		t.Errorf("a closed line has no reopen box:\n%s", body)
 	}
 	// Ticking from the body is the same write as from the Planned block.
@@ -114,7 +115,7 @@ func TestAnOpenLineInABodyTicksAndThePreviewDoesNot(t *testing.T) {
 	}
 	after := browse(t, h, "/pages/"+id)
 	// The ticked line keeps its form (it reopens). The next line has a form of a new number.
-	if !regexp.MustCompile(`<button class="box open" form="tick-(\d+)"`).MatchString(after) || strings.Contains(after, `<button class="box open" form="tick-3"`) || !strings.Contains(after, `value="Buy &lt;b&gt;stamps&lt;/b&gt;"`) ||
+	if !regexp.MustCompile(`<button class="box open" id="box-\d+" form="tick-(\d+)"`).MatchString(after) || strings.Contains(after, `<button class="box open" id="box-3" form="tick-3"`) || !strings.Contains(after, `value="Buy &lt;b&gt;stamps&lt;/b&gt;"`) ||
 		!strings.Contains(after, `<span class="badge">on Thu 22 May</span>`) {
 		t.Errorf("the next line of an every: line has no tick form with a new line number:\n%s", mainOf(after))
 	}
