@@ -14,9 +14,16 @@
   menus), `98ca42e` (a plan row's group), merged in `7e936c1`; `5483aef` folds the turn's time into `At` after the
   stamp became `HH:MM` (`e401109`). Part D is on master in `479ba6e`, merged in `a991504`: the
   `Speculation-Rules` header and its rules file, `Vary: Accept`, the rail and the phone's bars held still across a
-  navigation, the stable scrollbar gutter, `overscroll-behavior` on the sheets. Part E is not built. The screenshots
-  of Parts A and C are not taken yet: the review server needs the owner's hand (the session may not run `lifelog
-  serve`). The deploy waits for the owner's word.
+  navigation, the stable scrollbar gutter, `overscroll-behavior` on the sheets. The counter-review's findings are fixed in the
+  commit after them: the rule that excluded a query string, `/*\?*`, has the search `*`, which an empty search
+  matches, so it excluded every address and nothing was prerendered (the rule is `/*\?*=*` now, probed with a
+  URLPattern implementation: a Go test cannot run one); the sticky toast covered the pick bar on a list after a
+  delete-many (it sticks only on a page opened at a row, `:root:has(:target)`); the body editor had fallen from its
+  twelve rows to the base minimum (its details is `.body-editor`, twelve lines least); the New menu resets the
+  popover's inset as the chat menu does; the view test renders a week, which draws a body and the plan rows. Noted,
+  unverified: Chromium prerenders only on a secure context, so on a plain-HTTP origin the header is accepted and does
+  nothing. Part E is not built. The screenshots of Parts A and C are not taken yet: the review server needs the
+  owner's hand (the session may not run `lifelog serve`). The deploy waits for the owner's word.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)

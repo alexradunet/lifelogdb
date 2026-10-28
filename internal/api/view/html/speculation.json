@@ -4,7 +4,7 @@
       "where": {
         "and": [
           { "href_matches": "/*" },
-          { "not": { "href_matches": "/*\\?*" } },
+          { "not": { "href_matches": "/*\\?*=*" } },
           { "not": { "href_matches": "/assets/*" } },
           { "not": { "selector_matches": "[target],[download]" } },
           { "not": { "href_matches": "/days/today" } },

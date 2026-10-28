@@ -83,7 +83,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .rail-new{anchor-name:--new}
 @supports (position-area: block-end){
   .new-menu:popover-open{position-anchor:--new; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline;
-    margin:var(--space-1) 0 0;
+    inset:auto; margin:var(--space-1) 0 0;
     &::backdrop{background:none}}}
 .new-menu-head{display:flex; align-items:center; justify-content:space-between;
   & .label{color:var(--rail-accent); font-weight:700}}
@@ -500,12 +500,14 @@ table.calendar{inline-size:100%; min-inline-size:320px; table-layout:fixed; bord
 
 /* The toast: what a write did, at the top of the page. It is calm: parchment with a gold edge, a check in the done
    colour before its heading. It is an open dialog in the flow of the page (plan 108), not the browser's centred box: its
-   position, size and margin are reset here; Escape and Close close it. It sticks at the top of the column, as the pick
-   bar does, so it is in view after the browser opens the page at the row that a write returned to. Its display is set
-   only while it is open: a closed dialog is the browser's display:none, which a rule on the element alone would beat. */
+   position, size and margin are reset here; Escape and Close close it. On a page the browser opened at a row (a write
+   returned to it: the row is :target) it sticks at the top of the column, so it stays in view; elsewhere it is static,
+   so the pick bar, sticky at the same edge, is not covered. Its display is set only while it is open: a closed dialog
+   is the browser's display:none, which a rule on the element alone would beat. */
 .toast[open]{display:flex}
+:root:has(:target) .toast{position:sticky}
 .toast{flex-direction:column; gap:var(--space-2); padding:var(--space-3) var(--space-4); background-color:var(--toast-bg); color:var(--toast-ink);
-  position:sticky; inset:auto; inset-block-start:0; z-index:4; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
+  position:static; inset:auto; inset-block-start:0; z-index:4; inline-size:auto; block-size:auto; max-inline-size:none; max-block-size:none; margin:0;
   font-size:15px; line-height:22px; border-color:var(--accent-ink); box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{display:flex; align-items:center; gap:var(--space-2); color:var(--done); font-size:15px; line-height:22px;
     &::before{content:"\2713" / ""}}
@@ -600,6 +602,8 @@ fieldset.segmented.faces label:has(input[value="5"]) span::before{background-pos
      and caps it. */
   & textarea{min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
     &:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}}}
+/* The body editor opens at twelve lines, as its rows said before the box grew with its text; base.css caps it. */
+.body-editor textarea{min-block-size:calc(12 * 26px + 2 * 10px + 2 * 2px)}
 /* Writing mode: while the box has the focus and holds words, the rest of the page steps back and the box takes a
    halo. The box takes the focus on arrival, so the focus alone is not the sign: the first word is. */
 .column:has(.capture textarea:focus:not(:placeholder-shown)){

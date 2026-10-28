@@ -94,6 +94,7 @@ func TestEveryViewRenders(t *testing.T) {
 			`<a href="/days" aria-current="page">Days</a>`, `</span>Ana</a>`,
 			`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
+		{"/weeks/2026-W40", http.StatusOK, nil}, // a week draws a body with its boxes and the plan rows: no id repeats
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
@@ -224,7 +225,7 @@ func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
 	if !strings.Contains(body, `<p class="empty">Nothing written here yet.</p>`) {
 		t.Error("an empty page does not say that nothing is written")
 	}
-	if !strings.Contains(body, `<details><summary>Edit</summary>`) || strings.Contains(body, `<details open><summary>Edit</summary>`) {
+	if !strings.Contains(body, `<details class="body-editor"><summary>Edit</summary>`) || strings.Contains(body, `<details class="body-editor" open><summary>Edit</summary>`) {
 		t.Error("an empty page opens its editor")
 	}
 	if strings.Count(body, "autofocus") != 0 {

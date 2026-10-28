@@ -49,7 +49,7 @@ func TestAShellPageAsksForPrerenderAndEveryAnswerVariesByAccept(t *testing.T) {
 		t.Fatalf("rules are not JSON with a prerender rule: %v", err)
 	}
 	first := string(doc.Prerender[0])
-	for _, want := range []string{`/*\\?*`, `/assets/*`} {
+	for _, want := range []string{`/*\\?*=*`, `/assets/*`} {
 		if !strings.Contains(first, want) {
 			t.Errorf("the first prerender rule does not exclude %s: %s", want, first)
 		}

@@ -108,7 +108,7 @@
      refused save answers with the error page, which keeps the words sent. It takes action (save-body; nothing is drawn
      without it), back (the page
      the browser returns to) and summary (the words of the fold). */}}
-{{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details{{if .Asked}} open{{end}}><summary>{{$.summary}}</summary>
+{{define "body-editor"}}{{with form .action "button" "Save" "back" .back}}<details class="body-editor"{{if .Asked}} open{{end}}><summary>{{$.summary}}</summary>
 <small class="desc">CommonMark. [[Title]] links a page and #tag a tag page; both are created if new. Nothing is saved until the version you read is still the current one.</small>
 {{template "form" .}}</details>{{end}}{{end}}
 
