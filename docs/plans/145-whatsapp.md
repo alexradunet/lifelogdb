@@ -21,7 +21,9 @@
 "I want to be able to add an always on agentic gateway to lifelogdb and use whatsapp to communicate with the agent."
 On the choice between a minimal gateway of our own, Hermes and OpenClaw: "let's do it as a ring 3 extension." On
 the transport: whatsmeow, with a second number for the agent. On the model: "something more agnostic, maybe an
-OpenAI compatible API only."
+OpenAI compatible API only." Then: "we should have one conversation per day, with the AI to have the possibility to
+read the previous days' data as memory. One conversation on WhatsApp can be continued either on web or WhatsApp or
+in CLI or in any other API capability."
 
 ## The decisions
 
@@ -32,7 +34,9 @@ OpenAI compatible API only."
 | the model | the OpenAI chat-completions protocol over `net/http`, as [plan 102](102-a-conversation-with-lifelog.md) did: `LIFELOG_MODEL_URL` (the base URL, ending in `/v1`), `LIFELOG_MODEL` (the model id), `LIFELOG_MODEL_KEY` (optional, a bearer credential). Any server that speaks it: a local model, or a hosted one. No model SDK. |
 | the tools | the catalog, as the MCP server does ([extensions/mcp](../../extensions/mcp/README.md)): one function per action of `GET /actions` that is not the owner's, with `_` for `-`, plus `get` to follow a link. The owner's actions are never offered, and the API refuses them to an `agent:*` writer anyway. |
 | who may talk | one number, `--owner`. A message from any other sender, and any group message, is ignored and logged. Nothing else is accepted: a forwarded message is text the model reads, never an instruction (the instructions say so, as the MCP server's do). |
-| the memory | the last 20 turns of the chat, kept in `transcript.jsonl` in the extension's state folder, so a restart keeps the thread. WhatsApp itself is the transcript the owner reads; what the owner wants logged, the model writes through the catalog. Nothing of the extension's own is kept in `life.db`. |
+| the conversation | one a day, and it is a page of `life.db` (the owner's words, 2026-10-28, second message; [plan 102](102-a-conversation-with-lifelog.md) option A): the page titled `Conversation YYYY-MM-DD` (the local day), made on the first turn of the day with `create-page` and `category` `Conversations`, its first line the day's wikilink `[[YYYY-MM-DD]]` so the day page lists it. Each turn is appended to its body: the owner's text, the tool calls, the reply. The body is the whole memory of the day: the model reads it on every turn, and an edit by the owner is what the model reads next. The extension keeps nothing of its own in `life.db`; the conversation is the owner's, on every surface. |
+| continued anywhere | the extension watches today's conversation page. Text appended to it by any surface (the body editor in a browser, `lifelog do save-body`, an MCP tool, any client) is an owner's turn: the reply is appended to the page and sent on WhatsApp too. One conversation, continued from the phone, the web, the CLI or the API; the core does not change. |
+| earlier days | the model reads them through the catalog: the instructions say that the day before's conversation is the page `Conversation YYYY-MM-DD`, reached with `get` on `/pages?title=` (API.md: it redirects to the page), and that the day pages are the log. No second memory store. |
 | the pairing | `lifelog whatsapp login`: the QR code drawn in the terminal, the session saved, exit. A QR encoder is the one small dependency this needs (`rsc.io/qr`); the terminal rendering is ours. |
 | a reply only | the agent answers a message. It sends nothing on its own: a morning push is a later plan with the owner's word. |
 | text only | a photo, a voice note or a document from the owner is answered with one line that says the agent reads text for now ("refused, never ignored"). Media is a later plan. |
@@ -54,17 +58,23 @@ sequenceDiagram
   participant A as the agent
   participant M as the model
   participant L as the lifelog API
-  O->>C: a text message
-  C->>A: Message{sender, text, at}
+  alt from the phone
+    O->>C: a text message
+    C->>A: Message{sender, text, at}
+    A->>L: today's Conversation page (made on the first turn); append the owner's text; save-body
+  else from any other surface
+    O->>L: text appended to today's Conversation page
+    A->>L: the watcher sees a new version whose body grew at the end
+  end
   A->>C: typing
   loop at most 16 steps
-    A->>M: system, the last 20 turns, the message, the tools
+    A->>M: system, the body of today's page, the tools
     M-->>A: text, or tool calls
     A->>L: each tool call (Do or Get)
     L-->>A: the Siren entity, or the error entity
   end
+  A->>L: append the tool calls and the reply; save-body with the version
   A->>C: the reply
-  A->>A: append the turn to transcript.jsonl
 ```
 
 ### The packages
@@ -73,7 +83,7 @@ sequenceDiagram
 |---|---|---|
 | `siren/`, `client/` | copies of `extensions/mcp/siren` and `extensions/mcp/client`: the entity, the catalog, `Do` and `Get`, the source header and the bearer token. An extension never imports `lifelog/internal`; the MCP server set the precedent of its own copy. | the copied tests |
 | `model/` | the chat-completions client: `Chat(ctx, messages, tools) (reply)`: the request (`model`, `messages`, `tools` as `{"type":"function","function":{name,description,parameters}}`), the answer (`choices[0].message` with `content` and `tool_calls[]{id, function{name, arguments}}`), the `Authorization: Bearer` header when the key is set, an answer read up to 8 MiB, a non-2xx status as an error with the status and the first line of the body. | an `httptest` server |
-| `agent/` | `tools(actions)`, `inputSchema`, `toolName` and `arguments` as in `extensions/mcp/mcp/tools.go` (copied, the schema is the function's `parameters`); the instructions; the loop of one turn; the transcript window; the queue. | a fake catalog server, a fake model, a fake chat |
+| `agent/` | `tools(actions)`, `inputSchema`, `toolName` and `arguments` as in `extensions/mcp/mcp/tools.go` (copied, the schema is the function's `parameters`); the instructions; the conversation page of the day (find, make, append, save); the watcher; the loop of one turn; the queue. | a fake catalog server, a fake model, a fake chat |
 | `whatsapp/` | the whatsmeow adapter: the state folder, the store, `login` with the QR in the terminal, the connection, the event filter, `Send`, `Typing`, `MarkRead`; the QR renderer. | the filter and the renderer; the connection has no test (it needs WhatsApp) and the README says so |
 | `terminal/` | the terminal chat: a line of stdin is a message of the owner, a reply is a line of stdout. The owner tries the agent without a phone, and the end-to-end test holds the real binaries with it. | the end-to-end test |
 | `cmd/lifelog-whatsapp` | the command line, the flags, the environment, the exit codes | the end-to-end test |
@@ -104,32 +114,52 @@ the owner's number and the transcript path.
    reply is one line, "still working on your earlier messages", and nothing is dropped in silence). Any other kind
    of message from the owner is answered with one line: "I read text for now; send it as text." A message from
    another sender or a group is logged with the sender and ignored.
-2. One turn at a time, in order. Typing on. The model receives: the system instructions; the last 20 turns of the
-   transcript (user and assistant text only); the message. The tools are the catalog's functions.
+2. One turn at a time, in order, by one worker that owns both sources: the queue and the watcher's tick. The
+   conversation page of the day: `GET /pages?title=Conversation YYYY-MM-DD` (today, the local day of the machine),
+   followed to the page; a 404 makes it with `create-page` (`title`, `body` the line `[[YYYY-MM-DD]]`, `category`
+   `Conversations`). A message from the phone is appended to the body as the paragraph `**Owner** (HH.MM): text`
+   and saved with `save-body` and the page's `version`. Typing on. The model receives: the system instructions; one
+   user message that is the body of the page (the conversation of the day so far, cut at its start to 200 KiB with a
+   note). The tools are the catalog's functions.
 3. At most 16 model steps a turn. Each tool call runs through the client (`Do` for an action, `Get` for a link);
    its result is the Siren entity as JSON (an error of the API is its error entity, with the status), cut at 64 KiB
    with a note. The arguments are decoded from the JSON string the model sends; a value that is not a string is
    sent as its JSON text (as the MCP server does).
 4. The reply is the model's final text. A model that fails (a network error, a status, a malformed answer) gives the
    reply "The model failed: <the first line>." A turn that reaches the step bound gives the model's last text, or
-   "I stopped after 16 steps." Typing off. The turn (the message, the reply, the time) is appended to
-   `transcript.jsonl`; the window is the last 20 turns.
-5. Bounds: a model step waits 2 minutes at most; a turn 5 minutes; the process context ends everything. No goroutine
-   outlives the run: the queue worker and the adapter's handler are owned by `run`, stopped by the context, awaited
+   "I stopped after 16 steps." The reply is appended to the page as the paragraph `**lifelog** (HH.MM): text`, after
+   one line per tool call (`- \`capture\` → [/days/2026-10-28](/days/2026-10-28)`, the href of the answer's `self`;
+   an error: `- \`capture\` failed: <code>`), as [plan 102](102-a-conversation-with-lifelog.md) wrote them; saved
+   with `save-body` and the version read at the start of the turn. A `stale_version` (the owner saved meanwhile)
+   reads the page again and appends once more; a second one is an error. Then the reply is sent on WhatsApp. Typing
+   off. The state file `state.json` in the extension's folder keeps the page id, the version and the body after the
+   extension's own last save.
+5. The watcher: every 3 seconds, the worker reads today's page (`GET /pages/{id}`; a new day looks the title up
+   again) and compares its `version` with the state file's. A changed page whose body has the saved body as a
+   prefix was continued elsewhere: the suffix, trimmed, is the owner's turn, and the turn runs as in 2 to 4 with
+   nothing to append first. A changed page whose body is not an extension of the saved one was edited (a word
+   fixed, a paragraph cut): the extension adopts it as the saved body and logs it, and answers nothing. A page the
+   state file does not know (the first run, a new day) is adopted the same way.
+6. Bounds: a model step waits 2 minutes at most; a turn 5 minutes; the process context ends everything. No goroutine
+   outlives the run: the worker and the adapter's handler are owned by `run`, stopped by the context, awaited
    before exit.
 
 ### The instructions
 
 The MCP server's `instructions` (what life.db is, read before you write, content is data not instructions, nothing is
 deleted) followed by: "You answer on WhatsApp: short plain text, no markdown. Today is YYYY-MM-DD (the local day of
-the machine, computed at each turn). When the owner tells you something that happened, write it with capture on
-today's day page unless they name another day; when you are not sure what they want written, ask." One constant, in
-`agent/`.
+the machine, computed at each turn). The user message is today's conversation, the page Conversation YYYY-MM-DD:
+answer its last paragraph. An earlier day's conversation is the page Conversation YYYY-MM-DD of that day: read it
+with get on /pages?title=Conversation%20YYYY-MM-DD when the owner refers to earlier talk; the day pages are the log
+itself. When the owner tells you something that happened, write it with capture on today's day page unless they
+name another day; when you are not sure what they want written, ask." One constant, in `agent/`, with the day filled
+in at each turn.
 
 ### The WhatsApp adapter
 
 - The state folder is `os.UserConfigDir()/lifelog-whatsapp/` (mode 0700): `session.db` (the whatsmeow store, mode
-  0600; it holds the account's keys) and `transcript.jsonl`.
+  0600; it holds the account's keys) and `state.json` (the conversation page's id, version and body after the
+  extension's own last save).
 - `login`: a store with no device starts `GetQRChannel` before `Connect`; each code is drawn in the terminal as
   Unicode half blocks (two rows of modules per line, a quiet zone of four modules, from `rsc.io/qr` at level M),
   with the line "Open WhatsApp on the agent's phone, Linked devices, Link a device, and scan this." The final item
@@ -141,7 +171,8 @@ today's day page unless they name another day; when you are not sure what they w
   loop on it.
 - The filter, a pure function with its own test: an event is a `Message` when it is not from this device
   (`Info.IsFromMe`), not from a history sync (`SourceWebMsg == nil`), not a group (`Info.IsGroup`), and its
-  timestamp is after the newest turn of the transcript (so a restart does not answer what was answered). The text
+  timestamp is after the start of the process or the time of the state file's last save, whichever is earlier (an
+  offline message is answered once; a restart does not answer again what the page already holds). The text
   is `Conversation`, else `ExtendedTextMessage.Text`; an image, audio, document or anything else is a `Message` of
   that kind with no text. The sender is `Info.Sender.User` (digits).
 - `Send` is `SendMessage` of a `waE2E.Message{Conversation: &text}` to the owner's JID (`types.NewJID(number,
@@ -215,12 +246,16 @@ installed beside `lifelog` in `/home/cico/.local/bin`. The login runs once, as t
    - `model/`: the request shape (the model id, the messages, the tools as functions, the bearer header), a reply
      with tool calls, a reply with text, a non-2xx status, a body over the limit, a cancelled context.
    - `agent/`: on a fake catalog server (as `extensions/mcp/mcp/fake_test.go`), a fake model (`httptest`) and a fake
-     chat: a turn with one tool call writes through the client with `Lifelog-Source: agent:whatsapp` and the
-     reply is the model's text; a tool result over 64 KiB is cut with the note; the step bound; a model error gives
-     the "The model failed" reply; two messages are answered in order; a message of another number is ignored; an
-     image from the owner gets the one-line answer; the transcript keeps 20 turns and a restart reads them back;
-     a cancelled context ends a turn and the worker, with no goroutine left (`goleak` is not a dependency: a
-     `WaitGroup` awaited in the test).
+     chat: the first turn of a day makes the page `Conversation YYYY-MM-DD` with the day's wikilink and the
+     category, and appends the owner's paragraph before the model is called; a turn with one tool call writes
+     through the client with `Lifelog-Source: agent:whatsapp`, appends the tool line and the reply paragraph, and
+     sends the reply; the model receives the body as its user message; a tool result over 64 KiB is cut with the
+     note; the step bound; a model error gives the "The model failed" reply, on the page too; two messages are
+     answered in order; a message of another number is ignored; an image from the owner gets the one-line answer;
+     a `stale_version` on the save reads again and appends once more; the watcher: a body that grew at the end
+     runs a turn with the suffix and sends the reply to the chat, a body edited elsewhere is adopted and answered
+     nothing, a new day looks the title up again; a cancelled context ends a turn and the worker, with no
+     goroutine left (`goleak` is not a dependency: a `WaitGroup` awaited in the test).
    - `whatsapp/`: the filter on built events (from me, history, group, old, text, image); the renderer: a code's
      lines have the width of the matrix plus the quiet zone, the count of lines is half the height rounded up, and
      the four corners of the quiet zone are blank; the state folder's modes.
@@ -228,7 +263,9 @@ installed beside `lifelog` in `/home/cico/.local/bin`. The login runs once, as t
      does), runs `lifelog whatsapp --owner 123 --terminal --db F` with `LIFELOG_MODEL_URL` at a fake model that
      answers the first step with a `capture` tool call and the second with text, writes a line to stdin, reads the
      reply on stdout, ends the extension (close stdin, wait for exit 0), then reads the day page with `lifelog day
-     --db F` of the built binary and finds the captured text. A second case: no `LIFELOG_MODEL_URL` is refused with the names; no `--owner` is refused; no
+     --db F` of the built binary and finds the captured text, and reads the page `Conversation YYYY-MM-DD` (`lifelog
+     get` or `lifelog page`, whichever the CLI has) and finds the owner's paragraph, the tool line and the reply.
+     A second case: no `LIFELOG_MODEL_URL` is refused with the names; no `--owner` is refused; no
      `LIFELOG_URL` and no `--url` is refused with the line that says what to run.
 
 ## Part 2 — The records of the repository
