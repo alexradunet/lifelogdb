@@ -17,7 +17,12 @@
   changes, and the start time is taken before the wait; the deploy page names `lifelog-whatsapp` among the programs
   to build, and the reference unit uses `KillMode=mixed`. The e2e holds the start under `serve --with whatsapp`, the
   exit 2 of an unpaired child and the stop with 0, not an answered `say`: that needs a paired session, which no test
-  has. Not run: Windows, where a stop gives the child no interrupt and kills it after 10 seconds.
+  has. Not run: Windows, where a stop gives the child no interrupt and kills it after 10 seconds. Live since
+  2026-10-28 16:42: the owner's unit runs `serve --public … --with whatsapp` with `KillMode=mixed` and the agent's
+  state folder in `ReadWritePaths`; the first run under the unit found two things, fixed in the commits after: the
+  state folder was read-only under `ProtectHome=read-only`, and `login` left at the scan, before the connection
+  that finishes a pairing, so the first connection was logged out (it waits for that connection now). The child
+  connected on a fresh pairing and answered a turn of the page within seconds.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)
