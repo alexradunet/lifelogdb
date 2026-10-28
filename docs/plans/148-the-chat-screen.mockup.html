@@ -1,0 +1,142 @@
+<title>Lifelog Chat Screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Jersey+15&display=swap">
+<style>
+/* Layout: the Almanac shell (rail on the left) and one chat screen that fills the rest: a thin day bar, a scrolling
+   thread that starts at its end, and a composer pinned at the bottom. No page header, no margin. */
+:root{
+  --ground:#efe2bd; --rail:#3a2210; --rail-deep:#2c1a0c; --surface:#f4e9c4; --surface-deep:#e4d49e;
+  --edge:#8c7240; --outline:#241708; --line:#c8b488;
+  --ink:#2c2012; --muted:#5c4c2f; --page-ink:#3a2c18; --page-strong:#241a0c; --page-muted:#6a5838; --rail-ink:#d6bb92;
+  --accent:#6f4e0e; --rail-accent:#f2c14e; --link:#0a5546; --primary:#b5400a; --on-primary:#fff3dc;
+  --bevel-light:#ffdea64d; --bevel-dark:#0000008c; --paper-light:#ffffff73; --focus:#0e7f6b;
+  --well:#2c1a0c; --well-ink:#e6d3a8; --well-strong:#f2c14e;
+  --display:"Jersey 15","Atkinson Hyperlegible",system-ui,sans-serif;
+  --sans:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --ground:#140c06; --rail:#2a1709; --rail-deep:#1d0f06; --surface:#e8d9ae; --surface-deep:#d6c188;
+  --edge:#7f663a; --outline:#120a04; --line:#3b2a16; --muted:#463a24; --page-ink:#c9b894; --page-strong:#ecdcb2; --page-muted:#bfb19c; --rail-ink:#cbb18e;
+  --accent:#f2c14e; --link:#084337; --primary:#ff955c; --on-primary:#1c0d04; --bevel-light:#ffc4762e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --ground:#140c06; --rail:#2a1709; --rail-deep:#1d0f06; --surface:#e8d9ae; --surface-deep:#d6c188;
+  --edge:#7f663a; --outline:#120a04; --line:#3b2a16; --muted:#463a24; --page-ink:#c9b894; --page-strong:#ecdcb2; --page-muted:#bfb19c; --rail-ink:#cbb18e;
+  --accent:#f2c14e; --link:#084337; --primary:#ff955c; --on-primary:#1c0d04; --bevel-light:#ffc4762e; color-scheme:dark}
+html,body{height:100%}
+body{margin:0; background:var(--ground); color:var(--page-ink); font:15px/1.5 var(--sans);
+  background-image:repeating-conic-gradient(#2c20120a 0% 25%,transparent 0% 50%); background-size:4px 4px}
+*{box-sizing:border-box}
+.shell{display:grid; grid-template-columns:248px minmax(0,1fr); height:100%}
+/* the rail, as it is today */
+.rail{background:var(--rail); color:var(--rail-ink); padding:20px 16px; display:flex; flex-direction:column; gap:18px; border-right:2px solid var(--outline);
+  box-shadow:inset -3px 0 0 var(--bevel-dark)}
+.brand{display:flex; justify-content:space-between; align-items:baseline}
+.brand b{font:28px/1 var(--display); color:var(--rail-accent)}
+.brand time{font:12px var(--mono)}
+.rail nav ul{list-style:none; margin:0; padding:0; border:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light)}
+.rail nav li{border-bottom:1px solid #00000040}
+.rail nav li:last-child{border-bottom:0}
+.rail nav a{display:block; padding:9px 12px; color:var(--rail-ink); text-decoration:none}
+.rail nav a[aria-current]{background:var(--rail-deep); color:var(--rail-accent); font-weight:700; box-shadow:inset 3px 0 0 var(--rail-accent)}
+.rail .foot{margin-top:auto; font-size:12px; opacity:.85}
+/* the chat screen */
+.chat{display:grid; grid-template-rows:auto minmax(0,1fr) auto; height:100%; min-width:0}
+.daybar{display:flex; align-items:center; gap:14px; padding:12px max(16px, env(safe-area-inset-right,0px)) 12px max(24px, env(safe-area-inset-left,0px));
+  border-bottom:2px solid var(--line); background:var(--ground)}
+.daybar h1{margin:0; font:34px/1 var(--display); color:var(--page-strong); letter-spacing:.5px}
+.daybar .day{font:13px var(--mono); color:var(--page-muted)}
+.days{display:flex; gap:6px; margin-left:auto; align-items:center}
+.days a{font:12px var(--mono); color:var(--page-ink); text-decoration:none; padding:5px 9px; border:2px solid var(--line)}
+.days a[aria-current]{color:var(--accent); border-color:var(--accent); font-weight:500}
+.more{border:2px solid var(--line); background:none; color:var(--page-ink); font:700 16px/1 var(--sans); width:34px; height:30px; cursor:pointer}
+.thread{overflow-y:auto; display:flex; flex-direction:column-reverse; padding:18px max(16px, env(safe-area-inset-right,0px)) 18px max(24px, env(safe-area-inset-left,0px))}
+.turns{display:flex; flex-direction:column; gap:14px; max-width:72ch; width:100%; margin:0 auto}
+.turn{display:flex; flex-direction:column; gap:6px; max-width:86%}
+.turn.owner{align-self:flex-end}
+.turn.agent{align-self:flex-start}
+.bubble{padding:10px 14px; border:2px solid var(--outline); line-height:1.5}
+.owner .bubble{background:var(--surface); color:var(--ink); box-shadow:inset 0 2px 0 var(--paper-light),inset 0 -3px 0 var(--surface-deep),0 3px 0 var(--bevel-dark)}
+.agent .bubble{background:var(--well); color:var(--well-ink); box-shadow:inset 0 3px 0 var(--bevel-dark),inset 3px 0 0 var(--bevel-dark),inset 0 -3px 0 var(--bevel-light)}
+.agent .bubble strong{color:var(--well-strong)}
+.meta{display:flex; gap:10px; align-items:center; font:12px var(--mono); color:var(--page-muted); padding:0 4px}
+.owner .meta{justify-content:flex-end}
+.meta .from{text-transform:uppercase; letter-spacing:.08em; font-weight:500}
+.tools{display:flex; flex-wrap:wrap; gap:6px; padding:0 2px}
+.tools span{font:12px var(--mono); color:var(--page-muted); border:1px dashed var(--line); padding:2px 8px; background:#00000012}
+.tools span b{color:var(--page-ink); font-weight:500}
+.thinking{display:flex; gap:5px; align-items:center; padding:12px 16px; width:max-content; background:var(--well); border:2px solid var(--outline);
+  box-shadow:inset 0 3px 0 var(--bevel-dark),inset 3px 0 0 var(--bevel-dark)}
+.thinking i{width:7px; height:7px; background:var(--well-strong); display:block; animation:blink 1.2s infinite}
+.thinking i:nth-child(2){animation-delay:.2s} .thinking i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.25} 30%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.thinking i{animation:none; opacity:.8}}
+.datesep{align-self:center; font:12px var(--mono); color:var(--page-muted); letter-spacing:.08em; text-transform:uppercase; padding:4px 0}
+.composer{border-top:2px solid var(--line); background:var(--ground); padding:12px max(16px, env(safe-area-inset-right,0px)) max(12px, env(safe-area-inset-bottom,0px)) max(24px, env(safe-area-inset-left,0px))}
+.composer form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; max-width:72ch; margin:0 auto}
+.composer textarea{width:100%; min-height:46px; max-height:40vh; resize:none; font:15px/1.5 var(--sans); color:var(--ink); background:var(--surface);
+  border:2px solid var(--outline); padding:10px 12px; box-shadow:inset 0 3px 0 var(--bevel-dark),inset 3px 0 0 var(--bevel-dark)}
+.composer textarea:focus{outline:3px solid var(--focus); outline-offset:1px}
+.composer button{font:700 15px var(--sans); color:var(--on-primary); background:var(--primary); border:2px solid var(--outline); padding:0 18px; height:46px; cursor:pointer;
+  box-shadow:inset 0 3px 0 var(--bevel-light),inset 3px 0 0 var(--bevel-light),0 3px 0 var(--bevel-dark)}
+.hint{grid-column:1/-1; font:12px var(--mono); color:var(--page-muted); margin:0}
+.hint kbd{border:1px solid var(--line); padding:0 4px; font:inherit}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .rail{display:none}
+  .daybar{padding-left:max(16px, env(safe-area-inset-left,0px))}
+  .daybar h1{font-size:28px}
+  .days a:not([aria-current]){display:none}
+  .turn{max-width:94%}
+  .thread,.composer{padding-left:max(16px, env(safe-area-inset-left,0px))}
+}
+</style>
+
+<div class="shell">
+  <aside class="rail" aria-label="Rail">
+    <div class="brand"><b>Lifelog</b><time>Wed 28 Oct</time></div>
+    <nav aria-label="Sections"><ul>
+      <li><a href="#">Today</a></li><li><a href="#">This week</a></li><li><a href="#">Plans</a></li>
+      <li><a href="#">Calendar</a></li><li><a href="#">Metrics</a></li><li><a href="#">Browse</a></li>
+      <li><a href="#" aria-current="page">Chat</a></li>
+    </ul></nav>
+    <p class="foot">Owner · Every action · Integrity checks · Settings · Snapshot</p>
+  </aside>
+
+  <main class="chat" aria-label="Chat">
+    <header class="daybar">
+      <h1>Chat</h1><span class="day">Wed 28 Oct · today</span>
+      <nav class="days" aria-label="Days">
+        <a href="#">Mon 26</a><a href="#">Tue 27</a><a href="#" aria-current="page">Today</a>
+        <button class="more" type="button" aria-label="More: the page of this day, edit, delete">⋯</button>
+      </nav>
+    </header>
+
+    <section class="thread" aria-label="Today's conversation">
+      <ol class="turns" style="list-style:none;margin:0;padding:0">
+        <li class="datesep">Wednesday 28 October</li>
+        <li class="turn owner"><div class="meta"><span class="from">You</span><time>14.36</time></div>
+          <div class="bubble">What did I do yesterday?</div></li>
+        <li class="turn agent"><div class="meta"><span class="from">lifelog</span><time>14.36</time></div>
+          <div class="tools"><span><b>open_day</b> 2026-10-27</span></div>
+          <div class="bubble">You walked by the river with <strong>Sam</strong> and took the wheels to the garage in the morning. Nothing else is written for yesterday.</div></li>
+        <li class="turn owner"><div class="meta"><span class="from">You · on the phone</span><time>14.37</time></div>
+          <div class="bubble">Thanks. Add that I slept 7 hours.</div></li>
+        <li class="turn agent"><div class="meta"><span class="from">lifelog</span><time>14.37</time></div>
+          <div class="tools"><span><b>record</b> Sleep 7 h</span></div>
+          <div class="bubble">Done: Sleep 7 h on today's page.</div></li>
+        <li class="turn owner"><div class="meta"><span class="from">You</span><time>16.52</time></div>
+          <div class="bubble">Plan a dentist visit next Tuesday at 9.</div></li>
+        <li class="turn agent"><div class="thinking" role="status" aria-label="lifelog is answering"><i></i><i></i><i></i></div></li>
+      </ol>
+    </section>
+
+    <footer class="composer">
+      <form>
+        <textarea id="say" name="text" placeholder="Write to the agent…" aria-label="To the agent"></textarea>
+        <button type="submit">Say</button>
+        <p class="hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd>+<kbd>Enter</kbd> a new line · the thread stays on the page Conversation 2026-10-28</p>
+      </form>
+    </footer>
+  </main>
+</div>
