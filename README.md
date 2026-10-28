@@ -329,7 +329,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `.settings.json` added), mode 0600, written through a temporary file and a rename, and never in git (`.gitignore`). They are not in `life.db`: the
   model key is a secret, and a snapshot copies the database. They are not in `docs/` either: they belong to this
   application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
-  chat-completions protocol, ending in `/v1`), `model` (the model id) `model_key` (a bearer credential, optional) and `owner_number` (the digits of the owner's phone number with the
+  chat-completions protocol, ending in `/v1`), `model` (the model id), `model_key` (a bearer credential, optional) and `owner_number` (the digits of the owner's phone number with the
   country code: the one number that the agent on the phone answers; a value that is not digits is 422); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
   `GET /settings` are the owner's: refused to an `agent:*` or `import:*` writer, and the action is never an MCP tool.
   `GET /actions` offers `settings` with no value, because any writer reads the catalog; only `GET /settings` fills

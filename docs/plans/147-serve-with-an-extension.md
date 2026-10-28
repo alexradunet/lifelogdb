@@ -10,7 +10,14 @@
   flag and a child process; the contract of an extension gains the run by `serve`; the settings gain the owner's
   number; the WhatsApp extension loses its `--owner` flag. The core still names no third party and dials nothing:
   the name of the extension is a word of the unit's line.
-- **Status:** PLANNED.
+- **Status:** IN REVIEW (owner). Built in `e81a097`; the counter-review's findings are fixed in the commit after
+  it: the child's address was always the IPv4 loopback (now the listener's own host, the loopback for one on every
+  interface); `--with NAME` twice ran two children on one session (refused); the lines say the real delay, a kill
+  on the stop and an end by a signal; the extension's wait for the number says each state once and again when it
+  changes, and the start time is taken before the wait; the deploy page names `lifelog-whatsapp` among the programs
+  to build, and the reference unit uses `KillMode=mixed`. The e2e holds the start under `serve --with whatsapp`, the
+  exit 2 of an unpaired child and the stop with 0, not an answered `say`: that needs a paired session, which no test
+  has. Not run: Windows, where a stop gives the child no interrupt and kills it after 10 seconds.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)

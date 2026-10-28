@@ -28,7 +28,7 @@ func startWith(ctx context.Context, e env, listen net.Addr) (serveCtx context.Co
 	if len(paths) == 0 {
 		return ctx, func() {}
 	}
-	url := "http://127.0.0.1:" + portOf(listen)
+	url := "http://" + loopbackOf(listen)
 	childCtx, endChildren := context.WithCancel(ctx)
 	serveCtx, endServe := context.WithCancel(context.WithoutCancel(ctx))
 	var children sync.WaitGroup
@@ -53,13 +53,19 @@ func startWith(ctx context.Context, e env, listen net.Addr) (serveCtx context.Co
 	}
 }
 
-// portOf is the port of a listener address. The child reaches a listener on every interface on the loopback.
-func portOf(a net.Addr) string {
-	if t, ok := a.(*net.TCPAddr); ok {
-		return strconv.Itoa(t.Port)
+// loopbackOf is the address a child reaches the listener at: the listener's own host and port, or the IPv4 loopback
+// for a listener on every interface (0.0.0.0, [::]). A listener on [::1] or on one address of the machine is
+// reached there.
+func loopbackOf(a net.Addr) string {
+	t, ok := a.(*net.TCPAddr)
+	if !ok {
+		return a.String()
 	}
-	_, port, _ := net.SplitHostPort(a.String())
-	return port
+	host := t.IP.String()
+	if t.IP.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return net.JoinHostPort(host, strconv.Itoa(t.Port))
 }
 
 // withEnv is the environment of a child of serve: the one of any extension, and the token of a public listener. A
@@ -101,7 +107,7 @@ func runWith(ctx context.Context, e env, path string, env []string, say func(str
 	for {
 		again, err := runWithOnce(ctx, e, path, env, stdin, say)
 		if err != nil {
-			say("not started: %v, started again in 10 s", err)
+			say("not started: %v, started again in %s", err, restartDelay)
 		} else if !again {
 			return nil
 		}
@@ -126,19 +132,25 @@ func runWithOnce(ctx context.Context, e env, path string, env []string, stdin *o
 	}
 	say("started (pid %d)", cmd.Process.Pid)
 	err = cmd.Wait()
-	if ctx.Err() != nil || err == nil { // the interrupt of the stop, or the extension's own choice
+	clean := cmd.ProcessState != nil && cmd.ProcessState.Success() // Wait gives the context's error for a clean end after Cancel
+	switch {
+	case err == nil || ctx.Err() != nil && clean: // the extension's own choice, or a clean end on the interrupt of the stop
 		say("ended")
 		return false, nil
+	case ctx.Err() != nil: // the stop: the extension did not end cleanly on the interrupt, or was killed after the wait
+		say("ended by the stop: %v", err)
+		return false, nil
 	}
-	status := -1 // a signal ended it, or Wait failed
 	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		status = ee.ExitCode()
+	if !errors.As(err, &ee) || ee.ExitCode() < 0 { // Wait failed, or a signal ended it
+		say("ended by a signal (%v), started again in %s", err, restartDelay)
+		return true, nil
 	}
+	status := ee.ExitCode()
 	if status == 2 || status == 3 {
 		say("ended with status %d: not started again (the owner acts first)", status)
 		return false, nil
 	}
-	say("ended with status %d, started again in 10 s", status)
+	say("ended with status %d, started again in %s", status, restartDelay)
 	return true, nil
 }

@@ -13,6 +13,8 @@ Restart=on-failure
 # systemd stops the server with SIGTERM. lifelog then drains the requests that it admitted (up to 10 seconds) and
 # closes life.db. TimeoutStopSec is longer than the drain, so systemd sends SIGKILL only to a server that is stuck.
 KillSignal=SIGTERM
+# mixed: SIGTERM reaches lifelog alone, which interrupts its --with children first and then drains; the group is killed only on the timeout
+KillMode=mixed
 TimeoutStopSec=30
 
 [Install]

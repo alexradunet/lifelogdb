@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -200,7 +201,7 @@ func TestServeWithAppliesTheExitRule(t *testing.T) {
 	t.Run("1 starts again", func(t *testing.T) {
 		w := startWithServer(t, map[string]string{"fake": "exit-once=1"})
 		w.logOf(t, "fake", 2) // the second start: the first one ended with 1
-		w.waitFor(t, "lifelog: with fake: ended with status 1, started again in 10 s")
+		w.waitFor(t, "lifelog: with fake: ended with status 1, started again in "+restartDelay.String())
 		if n := strings.Count(w.stderr.String(), "lifelog: with fake: started (pid "); n < 2 {
 			t.Errorf("%d start lines, want 2\n%s", n, w.stderr.String())
 		}
@@ -251,6 +252,7 @@ func TestServeWithRefusesBeforeAnythingOpens(t *testing.T) {
 	}{
 		{[]string{"serve", "--with", "nosuch"}, "lifelog-nosuch"},
 		{[]string{"serve", "--with", "fake", "--with", "nosuch"}, "lifelog-nosuch"},
+		{[]string{"serve", "--with", "fake", "--with", "fake"}, "given twice"}, // two children on one session: refused
 		{[]string{"serve", "--public", "--token-file", tokenFile, "--tls-cert", "c.pem", "--tls-key", "k.pem", "--with", "fake"}, "--with and --tls-cert"},
 	} {
 		e, _, stderr := testEnv(t)
@@ -298,5 +300,22 @@ func TestServeWithEndsTheChildBeforeTheDrain(t *testing.T) {
 	page, err := store.PageByID(t.Context(), id)
 	if err != nil || !strings.Contains(page.Body, "written while the child ended") {
 		t.Fatalf("the capture of the child is not on the day page: %+v, %v", page, err)
+	}
+}
+
+// TestTheChildReachesTheListenerWhereItIs: the address in LIFELOG_URL is the listener's own host and port; a listener
+// on every interface is reached on the IPv4 loopback, one on [::1] or on one address of the machine where it is.
+func TestTheChildReachesTheListenerWhereItIs(t *testing.T) {
+	for addr, want := range map[string]string{
+		"127.0.0.1:7777": "127.0.0.1:7777", "0.0.0.0:7777": "127.0.0.1:7777", "[::]:7777": "127.0.0.1:7777",
+		"[::1]:7777": "[::1]:7777", "192.168.1.10:7777": "192.168.1.10:7777",
+	} {
+		a, err := net.ResolveTCPAddr("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := loopbackOf(a); got != want {
+			t.Errorf("loopbackOf(%s) = %q, want %q", addr, got, want)
+		}
 	}
 }

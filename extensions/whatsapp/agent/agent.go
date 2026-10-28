@@ -234,26 +234,25 @@ func WaitOwner(ctx context.Context, c *client.Client, logger *log.Logger, tick <
 		defer t.Stop()
 		tick = t.C
 	}
-	logged := false
+	last := "" // the line said last: each state is said once, and again when it changes
 	for {
 		e, err := c.Get(ctx, "/settings")
+		line := ""
 		switch {
 		case ctx.Err() != nil:
 			return "", ctx.Err()
 		case err != nil:
-			if !logged {
-				logger.Printf("settings: %v", err)
-				logged = true
-			}
+			line = fmt.Sprintf("settings: %v", err)
 		default:
 			p, _ := e.Properties.(map[string]any)
 			if n, _ := p["owner_number"].(string); n != "" {
 				return n, nil
 			}
-			if !logged {
-				logger.Print("no owner number: set it in Settings (owner_number)")
-				logged = true
-			}
+			line = "no owner number: set it in Settings (owner_number)"
+		}
+		if line != last {
+			logger.Print(line)
+			last = line
 		}
 		select {
 		case <-ctx.Done():

@@ -150,17 +150,18 @@ func serveWhatsApp(ctx context.Context, a *agent.Agent, sessionPath string, logg
 	if s.Number() == "" {
 		return &exitCode{exitNotPaired, whatsapp.ErrNotPaired}
 	}
-	// The number comes from the settings, before the connection. A number that is set is used for the whole run.
-	if a.Owner, err = agent.WaitOwner(ctx, a.Settings, logger, nil); err != nil {
-		return err
-	}
 	// A message is answered when it is newer than the earlier of the start and the last save of the page: an
-	// offline message is answered once, and a restart does not answer what the page holds.
+	// offline message is answered once, and a restart does not answer what the page holds. The start is taken
+	// before the wait for the number, so a message sent during that wait is answered too.
 	after := time.Now()
 	if saved, ok, err := agent.LastSave(a.State); err != nil {
 		return err
 	} else if ok && saved.Before(after) {
 		after = saved
+	}
+	// The number comes from the settings, before the connection. A number that is set is used for the whole run.
+	if a.Owner, err = agent.WaitOwner(ctx, a.Settings, logger, nil); err != nil {
+		return err
 	}
 	chat, err := whatsapp.Connect(ctx, s, a.Owner, after, logger)
 	if err != nil {

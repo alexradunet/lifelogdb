@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -125,7 +126,10 @@ func prepareServe(e env, o opts) (opts, error) {
 		if err != nil {
 			return o, err
 		}
-		for _, name := range o.serve.with {
+		for i, name := range o.serve.with {
+			if slices.Contains(o.serve.with[:i], name) { // two flags that name one thing twice are refused
+				return o, fmt.Errorf("--with %s is given twice: one child runs an extension", name)
+			}
 			path, err := findExtension(exe, name)
 			if err != nil {
 				return o, fmt.Errorf("--with %s: %w", name, err)
