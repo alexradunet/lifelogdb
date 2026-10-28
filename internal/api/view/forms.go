@@ -50,7 +50,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 }
 
 // formView is an action as the "form" template draws it. formOf takes name/value pairs: "button" labels the
-// button, "class" styles the form, "id" names it (the controls outside it name it), "hide" lists fields kept with their
+// button, "class" styles the form, "autocomplete" sets its autocomplete attribute, "id" names it (the controls outside it name it), "hide" lists fields kept with their
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
 // "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
@@ -62,6 +62,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 type formView struct {
 	*siren.Action
 	Button, Class string
+	Autocomplete  string // the form's autocomplete attribute, when the form asks for one (Settings)
 	ID            string // the form's id, which the controls outside it name (form="pick")
 	Focus         string
 	Back          string
@@ -187,6 +188,7 @@ func (f *formView) MoreOpen() bool {
 // template cannot build a struct, so the pairs stay its syntax; this is the one place that knows the names.
 type formOptions struct {
 	button, class, id, back string
+	autocomplete            string
 	plain                   bool // "plain" was given: the form offers no Preview
 	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
 	hasButton               bool // "button" was given, also as ""
@@ -223,6 +225,8 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.button, o.hasButton = v, true
 		case "class":
 			o.class = v
+		case "autocomplete":
+			o.autocomplete = v
 		case "lead":
 			o.lead = v != ""
 		case "plain":
@@ -274,7 +278,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, NoPreview: o.plain, Lead: o.lead, Focus: o.autofocus,
+	f := &formView{Action: a, Button: a.Title, Class: o.class, Autocomplete: o.autocomplete, ID: o.id, Back: o.back, NoPreview: o.plain, Lead: o.lead, Focus: o.autofocus,
 		prompts: o.placeholders, keys: o.keys, patterns: o.patterns}
 	if o.hasButton {
 		f.Button = o.button

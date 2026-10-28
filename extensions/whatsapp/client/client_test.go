@@ -12,7 +12,7 @@ import (
 	"lifelog-whatsapp/siren"
 )
 
-func TestRemoteSendsTheWriterOnAWriteTheTokenAndAFileByItsPath(t *testing.T) {
+func TestRemoteSendsTheWriterTheTokenAndAFileByItsPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a.png")
 	if err := os.WriteFile(path, []byte("synthetic"), 0o644); err != nil {
 		t.Fatal(err)
@@ -38,30 +38,6 @@ func TestRemoteSendsTheWriterOnAWriteTheTokenAndAFileByItsPath(t *testing.T) {
 	}
 	if _, err := c.Do(t.Context(), act, map[string]string{"nope": "x"}); err == nil {
 		t.Error("a field that the action does not list was sent")
-	}
-}
-
-func TestTheWriterIsSentOnAWriteAndNeverOnARead(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, has := r.Header[http.CanonicalHeaderKey(siren.SourceHeader)]
-		if want := r.Method != "GET"; has != want || r.Header.Get("Authorization") != "Bearer secret" {
-			t.Errorf("%s: source sent %v, want %v; headers %v", r.Method, has, want, r.Header)
-		}
-		w.Write([]byte(`{"title":"ok"}`))
-	}))
-	defer srv.Close()
-	c := Remote(srv.URL, "agent:t", "secret")
-	if _, err := c.Get(t.Context(), "/x"); err != nil {
-		t.Fatal(err)
-	}
-	act := siren.Action{Name: "say", Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{
-		{Name: "day", Type: "date", In: "path"}, {Name: "text", Type: "textarea"}}}
-	if _, err := c.Do(t.Context(), act, map[string]string{"day": "today", "text": "hi"}); err != nil {
-		t.Fatal(err)
-	}
-	get := siren.Action{Name: "open-day", Method: "GET", Href: "/days/{day}", Fields: []siren.Field{{Name: "day", Type: "date", In: "path"}}}
-	if _, err := c.Do(t.Context(), get, map[string]string{"day": "today"}); err != nil {
-		t.Fatal(err)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 )
 
@@ -28,9 +29,9 @@ func withoutChat(page string) string { return chatColumn.ReplaceAllString(page, 
 func TestTheSettingsPageDrawsTheThreeFieldsInOneForm(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	page := browse(t, h, "/settings")
-	form := regexp.MustCompile(`(?s)<form method="POST" action="/settings">.*?</form>`).FindString(page)
+	form := regexp.MustCompile(`(?s)<form method="POST" action="/settings" autocomplete="off">.*?</form>`).FindString(page)
 	for _, want := range []string{`<input type="text" name="model_url" value="">`, `<input type="text" name="model" value="">`,
-		`<input type="password" name="model_key" value="">`, `<button class="primary">Save</button>`} {
+		`<input type="password" name="model_key" value="" autocomplete="off">`, `<button class="primary">Save</button>`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the form of /settings lacks %s:\n%s", want, form)
 		}
@@ -44,7 +45,7 @@ func TestTheSettingsPageDrawsTheThreeFieldsInOneForm(t *testing.T) {
 	}
 	page = browse(t, h, rec.Header().Get("Location"))
 	for _, want := range []string{`class="toast"`, "Settings saved.", `<input type="text" name="model_url" value="http://127.0.0.1:1234/v1">`,
-		`<input type="text" name="model" value="synthetic-model">`, `<input type="password" name="model_key" value="synthetic-key">`} {
+		`<input type="text" name="model" value="synthetic-model">`, `<input type="password" name="model_key" value="synthetic-key" autocomplete="off">`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/settings after a save lacks %s", want)
 		}
@@ -87,11 +88,12 @@ func TestTheConversationViewDrawsTheThreadTheComposerAndTheMargin(t *testing.T) 
 	}
 	page := apitest.Must(t)(c.Get(t.Context(), apitest.Href(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "page")))
 	body := page.Properties.(map[string]any)["body"].(string)
-	body += "\n\n- `search_pages` words=sleep\n- `read_day` day=" + fixedToday + "\n\n**lifelog** (09.30): You slept *well*.\n\nA note the owner typed.\n"
+	body += "\n\n- `search_pages` words=sleep\n- `read_day` day=" + fixedToday + "\n\n**lifelog** (09.30): You slept *well*.\n"
+	body = strings.Replace(body, "**Owner**", "A note the owner typed.\n\n**Owner**", 1) // text before the first marker is a text turn
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, page, "save-body"), map[string]string{"body": body}))
 
 	view := browse(t, h, "/days/"+fixedToday+"/conversation")
-	order := []string{`<li class="turn owner">`, `How did I <strong>sleep</strong>?`, `<li class="turn lifelog">`, "search_pages", "read_day", `You slept <em>well</em>.`, `<li class="turn text">`, "A note the owner typed."}
+	order := []string{`<li class="turn text">`, "A note the owner typed.", `<li class="turn owner">`, `How did I <strong>sleep</strong>?`, `<li class="turn lifelog">`, "search_pages", "read_day", `You slept <em>well</em>.`}
 	at := 0
 	for _, want := range order {
 		i := strings.Index(view[at:], want)
@@ -100,15 +102,31 @@ func TestTheConversationViewDrawsTheThreadTheComposerAndTheMargin(t *testing.T) 
 		}
 		at += i
 	}
-	for _, want := range []string{`<ul class="tools">`, `<form method="POST" action="/days/` + fixedToday + `/say">`, `<textarea name="text" rows="3" required>`,
+	for _, want := range []string{`<ul class="tools">`, `<textarea name="text" rows="3" required>`,
 		`<button class="primary">Say</button>`, `<input type="hidden" name="back" value="/days/` + fixedToday + `/conversation">`,
 		`<summary>Edit</summary>`, `aria-label="Categories"`, `aria-label="Facts"`, `aria-label="More"`} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the conversation view lacks %s", want)
 		}
 	}
-	if strings.Contains(view, `id="chat"`) || strings.Contains(view, "<script") || strings.Contains(view, `class="waiting"`) {
-		t.Error("the conversation view draws the chat column, the script, or a waiting line (the last turn is the agent's)")
+	if strings.Contains(view, `id="chat"`) || strings.Contains(view, `class="waiting"`) {
+		t.Error("the conversation view draws the chat column or a waiting line (the last turn is the agent's)")
+	}
+	conv = apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation"))
+	version := conv.Properties.(map[string]any)["version"].(string)
+	if version == "" || strings.Count(view, "<script") != 1 || !strings.Contains(view, chatScript) {
+		t.Errorf("the conversation view lacks its one script, or the day has no version %q", version)
+	}
+	sheet := `<div class="sheet conversation" id="conversation" data-day="` + fixedToday + `" data-version="` + version + `">`
+	if !strings.Contains(view, sheet) {
+		t.Errorf("the conversation view lacks %s", sheet)
+	}
+	// The composer is the plain chat-form: no Preview in it (the body editor's form below keeps its own Preview).
+	composer := `<form method="POST" action="/days/` + fixedToday + `/say" class="chat-form">`
+	if i := strings.Index(view, composer); i < 0 {
+		t.Errorf("the conversation view lacks the composer %s", composer)
+	} else if form := view[i:]; strings.Contains(form[:strings.Index(form, "</form>")], "Preview") {
+		t.Error("the composer of the conversation view offers Preview; the column's does not: one form of one action")
 	}
 	if strings.Contains(view, `class="page-body"`) {
 		t.Error("the body is drawn twice: as the thread and as the page")
@@ -129,6 +147,33 @@ func TestADayWithNoTurnsSaysWhereTheAgentAnswers(t *testing.T) {
 	}
 }
 
+// TestADayThatOffersNoSayIsToldNothingWasSaid: say is today's alone, so a past day has no composer and no invitation.
+func TestADayThatOffersNoSayIsToldNothingWasSaid(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	view := browse(t, h, "/days/2020-01-01/conversation")
+	if !strings.Contains(view, "Nothing was said on this day.") || strings.Contains(view, "Write to the agent") || strings.Contains(view, `name="text"`) {
+		t.Errorf("the conversation of a past day invites a write, or lacks its empty state:\n%s", view)
+	}
+	if !strings.Contains(view, `id="conversation" data-day="2020-01-01" data-version=""`) {
+		t.Error("the view of a day with no page lacks its empty data-version")
+	}
+}
+
+// TestLoginDrawsNoScriptAndPagesOfTheShellDrawOne: the script rides on the shell, not on every page.
+func TestLoginDrawsNoScriptAndPagesOfTheShellDrawOne(t *testing.T) {
+	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
+	login, _ := publicHandler(t, api.PublicOptions{Token: testToken})
+	rec := request(login, "GET", "/login", "", map[string]string{"Accept": "text/html"})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<form") || strings.Contains(rec.Body.String(), "<script") {
+		t.Errorf("GET /login: %d, want a form page with no script", rec.Code)
+	}
+	for _, p := range []string{"/browse", "/settings", "/days/today/conversation"} {
+		if n := strings.Count(browse(t, h, p), `<script`); n != 1 {
+			t.Errorf("%s has %d script elements, want 1", p, n)
+		}
+	}
+}
+
 // TestEveryPageOfTheShellDrawsTheChatColumn: the column holds today's turns, a waiting line when the last turn is
 // the owner's, a form of say to today whose back is the page, and the version of the conversation page; the script
 // is loaded once, with defer. The composer posts, and the page comes back to where it was.
@@ -136,7 +181,7 @@ func TestEveryPageOfTheShellDrawsTheChatColumn(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	day := "/days/" + fixedToday
 	empty := browse(t, h, day)
-	for _, want := range []string{`<div class="chat" id="chat" popover role="complementary" data-version="" aria-label="Chat">`, "Nothing is said today yet",
+	for _, want := range []string{`<div class="chat" id="chat" popover role="complementary" data-day="today" data-version="" aria-label="Chat">`, "Nothing is said today yet",
 		`<form method="POST" action="/days/today/say" class="chat-form">`, `<input type="hidden" name="back" value="` + day + `">`,
 		`popovertarget="chat"`, chatScript} {
 		if !strings.Contains(empty, want) {
@@ -180,7 +225,7 @@ func TestChatJSIsServedAsJavaScript(t *testing.T) {
 	if lines := strings.Count(rec.Body.String(), "\n"); lines >= 80 {
 		t.Errorf("chat.js has %d lines, want under 80", lines)
 	}
-	if !strings.Contains(rec.Body.String(), "application/vnd.siren+json") || !strings.Contains(rec.Body.String(), "/days/today/conversation") {
-		t.Error("chat.js does not poll the conversation of today")
+	if !strings.Contains(rec.Body.String(), "application/vnd.siren+json") || !strings.Contains(rec.Body.String(), "/conversation") || !strings.Contains(rec.Body.String(), "dataset.day") {
+		t.Error("chat.js does not poll the conversation of the day of its element")
 	}
 }

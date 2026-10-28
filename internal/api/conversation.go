@@ -52,69 +52,67 @@ type Turn struct {
 
 var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)\): ?`)
 
-// ParseTurns reads the turns of the body of the conversation page of day. A paragraph is a block between blank
-// lines (CRLF is read as LF). The first line of a turn is `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `. A
-// paragraph of lines that start with "- `" right before a lifelog turn is that turn's tool lines. The first line of
-// the page, [[day]], is no turn. Any other paragraph is a turn of Who text, shown as it is.
+// ParseTurns reads the turns of the body of the conversation page of day (CRLF is read as LF). A marker line starts
+// with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is outside a fenced code block (a line that starts with
+// three backticks opens or closes a fence). A turn runs from its marker line to the line before the next marker line,
+// or to the end of the page; it keeps its inner blank lines and loses its blank edge. The tool lines of a lifelog
+// turn are the lines that start with "- `" right before its marker: one block, with at most one blank line between
+// it and the marker. They are not part of the turn before. The text before the first marker, after the first line
+// [[day]], is one turn of Who text when it is not blank.
 func ParseTurns(day, body string) []Turn {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	if len(lines) > 0 && strings.TrimRight(lines[0], " \t") == conversationFirstLine(day) {
+		lines = lines[1:]
+	}
+	var marks []int // the index of each marker line
+	fenced := false
+	for i, l := range lines {
+		if strings.HasPrefix(l, "```") {
+			fenced = !fenced
+		} else if !fenced && turnStart.MatchString(l) {
+			marks = append(marks, i)
+		}
+	}
 	turns := []Turn{}
-	var tools []string // a block of tool lines that waits for the paragraph after it
-	flush := func() {  // the block was not followed by a lifelog turn: it is a free paragraph
-		if tools != nil {
-			turns = append(turns, Turn{Who: "text", Text: strings.Join(tools, "\n")})
-			tools = nil
+	// segment is lines[from:to]; it ends where the next marker begins, and the tool lines of that marker leave it.
+	segment := func(from, to int) (seg []string, tools []string) {
+		seg = lines[from:to]
+		if to == len(lines) || !strings.HasPrefix(lines[to], "**lifelog**") {
+			return seg, nil
 		}
+		end := len(seg)
+		if end > 0 && strings.TrimSpace(seg[end-1]) == "" {
+			end--
+		}
+		start := end
+		for start > 0 && strings.HasPrefix(seg[start-1], "- `") {
+			start--
+		}
+		for _, l := range seg[start:end] {
+			tools = append(tools, strings.TrimRight(l, " \t"))
+		}
+		return seg[:start], tools
 	}
-	for i, para := range paragraphs(body) {
-		lines := strings.Split(para, "\n")
-		if i == 0 && para == conversationFirstLine(day) {
-			continue
-		}
-		if toolLines(lines) {
-			flush()
-			tools = lines
-			continue
-		}
-		m := turnStart.FindStringSubmatch(para)
-		if m == nil {
-			flush()
-			turns = append(turns, Turn{Who: "text", Text: para})
-			continue
-		}
-		t := Turn{Who: strings.ToLower(m[1]), At: m[2], Text: strings.TrimSpace(para[len(m[0]):])}
-		if t.Who == "lifelog" {
-			t.Tools, tools = tools, nil
-		}
-		flush()
-		turns = append(turns, t)
+	first := len(lines)
+	if len(marks) > 0 {
+		first = marks[0]
 	}
-	flush()
+	pre, tools := segment(0, first)
+	if t := strings.TrimSpace(strings.Join(pre, "\n")); t != "" {
+		turns = append(turns, Turn{Who: "text", Text: t})
+	}
+	for k, at := range marks {
+		to := len(lines)
+		if k+1 < len(marks) {
+			to = marks[k+1]
+		}
+		m := turnStart.FindStringSubmatch(lines[at])
+		seg, next := segment(at+1, to)
+		words := strings.TrimSpace(lines[at][len(m[0]):] + "\n" + strings.Join(seg, "\n"))
+		turns = append(turns, Turn{Who: strings.ToLower(m[1]), At: m[2], Text: words, Tools: tools})
+		tools = next
+	}
 	return turns
-}
-
-// paragraphs are the blocks of body between blank lines, each without its blank edge.
-func paragraphs(body string) []string {
-	var out, cur []string
-	end := func() {
-		if len(cur) > 0 {
-			out = append(out, strings.Join(cur, "\n"))
-			cur = nil
-		}
-	}
-	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
-		if strings.TrimSpace(line) == "" {
-			end()
-			continue
-		}
-		cur = append(cur, strings.TrimRight(line, " \t"))
-	}
-	end()
-	return out
-}
-
-// toolLines says whether every line starts with "- `": the tool lines of an agent's turn.
-func toolLines(lines []string) bool {
-	return !slices.ContainsFunc(lines, func(l string) bool { return !strings.HasPrefix(l, "- `") })
 }
 
 // say is the owner's turn: it adds the paragraph to the conversation page of the day, made on the first turn.
@@ -126,6 +124,9 @@ func (h *server) say(r *http.Request, act spec, src string) (*siren.Entity, erro
 	day, err := h.conversationDayOf(r)
 	if err != nil {
 		return nil, err
+	}
+	if day != h.s.Today() {
+		return nil, core.Invalid("say is for today: the agent answers today's conversation")
 	}
 	words := strings.TrimSpace(v.Get("text"))
 	if words == "" {
@@ -166,7 +167,10 @@ func (h *server) conversationEntity(ctx context.Context, day string) (*siren.Ent
 	title := ConversationTitle(day)
 	e := &siren.Entity{Class: []string{"conversation"}, Title: title,
 		Links:   []siren.Link{link("self", conversationHref(day), title), link("day", siren.DayHref(day), day), link("index", "/", "Home")},
-		Actions: []siren.Action{action("say", map[string]string{"day": day}, nil)}}
+		Actions: []siren.Action{}}
+	if day == h.s.Today() { // say is for today: the agent answers today's conversation
+		e.Actions = append(e.Actions, action("say", map[string]string{"day": day}, nil))
+	}
 	props := map[string]any{"day": day, "turns": []Turn{}}
 	e.Properties = props
 	id, err := h.s.PageID(ctx, title)

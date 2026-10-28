@@ -43,11 +43,14 @@ var errNoModel = errors.New("no model is set")
 // Agent answers the messages of one owner. The conversation of a day is a page of life.db.
 type Agent struct {
 	Chat   Chat
-	Client *client.Client // writes as siren.AgentPrefix + Source; the model comes from GET /settings at each turn
-	Owner  string         // the number of the owner, digits only
-	State  string         // the path of state.json
-	Now    func() time.Time
-	Log    *log.Logger // nil: the standard logger
+	Client *client.Client // sends siren.AgentPrefix + Source on every request, and so do the tools of the model
+	// Settings reads GET /settings at each turn. It has the owner's token and no source: the settings hold the key
+	// of the model, and the API refuses them to an agent. Only model() uses it. nil: Client.
+	Settings *client.Client
+	Owner    string // the number of the owner, digits only
+	State    string // the path of state.json
+	Now      func() time.Time
+	Log      *log.Logger // nil: the standard logger
 	// Tick gives the moments when the worker looks at today's page. nil: every three seconds.
 	Tick <-chan time.Time
 
@@ -198,9 +201,14 @@ func (a *Agent) ownerSays(ctx context.Context, text string) (*convo, error) {
 }
 
 // model reads the settings of lifelog and makes the client of the model. It is called at each turn, so a change in
-// Settings is seen at once. The read is the owner's: it carries no source. The key is never in an error.
+// Settings is seen at once. The read is the owner's: the client Settings carries no source. The tools of the model
+// use Client, so their read of /settings is an agent's, and the API refuses it. The key is never in an error.
 func (a *Agent) model(ctx context.Context) (*model.Client, error) {
-	e, err := a.Client.Get(ctx, "/settings")
+	c := a.Settings
+	if c == nil {
+		c = a.Client
+	}
+	e, err := c.Get(ctx, "/settings")
 	if err != nil {
 		return nil, fmt.Errorf("settings: %w", err)
 	}
@@ -264,7 +272,8 @@ func (a *Agent) finish(ctx, tctx context.Context, c *convo, at time.Time) {
 }
 
 // watch looks at today's page. A body that grew at the end was continued on another surface: it is an owner's
-// turn. Any other change is adopted and answered with nothing.
+// turn. A page that is new to the extension is answered when its last turn is the owner's. Any other change is
+// adopted and answered with nothing.
 func (a *Agent) watch(ctx context.Context) {
 	err := a.look(ctx)
 	if ctx.Err() != nil {
@@ -282,14 +291,26 @@ func (a *Agent) watch(ctx context.Context) {
 func (a *Agent) look(ctx context.Context) error {
 	at := a.Now()
 	day := at.Format(time.DateOnly)
+	if a.conv != nil && a.conv.Day != day {
+		// The day changed. A turn said before midnight on another surface may be unanswered: answer it on its own page.
+		if err := a.closeDay(ctx, at); err != nil {
+			return err
+		}
+	}
 	c, found, err := a.read(ctx, day)
 	if err != nil {
 		return err
 	}
 	if a.conv == nil || a.conv.Day != day {
-		if found { // a day with no talk has no page yet
-			a.logger.Printf("adopted the conversation of %s", day)
-			return a.adopt(c)
+		if !found { // a day with no talk has no page yet
+			return nil
+		}
+		a.logger.Printf("adopted the conversation of %s", day)
+		if err := a.adopt(c); err != nil {
+			return err
+		}
+		if c.pending { // the first turn of the day was said on another surface
+			a.answerPending(ctx, c, at)
 		}
 		return nil
 	}
@@ -302,17 +323,40 @@ func (a *Agent) look(ctx context.Context) error {
 	old := a.conv.Body
 	if suffix := strings.TrimSpace(strings.TrimPrefix(c.Body, old)); strings.HasPrefix(c.Body, old) && suffix != "" {
 		a.logger.Printf("the page grew by %d bytes elsewhere: a turn", len(suffix))
-		tctx, cancel := context.WithTimeout(ctx, turnTimeout)
-		defer cancel()
-		a.typing(tctx, true)
 		if err := a.adopt(c); err != nil {
 			return err
 		}
-		a.finish(ctx, tctx, c, at)
+		a.answerPending(ctx, c, at)
 		return nil
 	}
 	a.logger.Printf("the page was edited elsewhere: adopted, no answer")
 	return a.adopt(c)
+}
+
+// closeDay reads the page of the day that ended once more and answers its last turn when that is the owner's. Then
+// the extension holds no page, so the next look is on the new day.
+func (a *Agent) closeDay(ctx context.Context, at time.Time) error {
+	c, found, err := a.read(ctx, a.conv.Day)
+	if err != nil {
+		return err
+	}
+	if found && c.pending {
+		a.logger.Printf("answering a turn that waited on the page of %s", c.Day)
+		if err := a.adopt(c); err != nil {
+			return err
+		}
+		a.answerPending(ctx, c, at)
+	}
+	a.conv = nil
+	return nil
+}
+
+// answerPending answers the last turn of c, which the extension has adopted. at is the time of the turn.
+func (a *Agent) answerPending(ctx context.Context, c *convo, at time.Time) {
+	tctx, cancel := context.WithTimeout(ctx, turnTimeout)
+	defer cancel()
+	a.typing(tctx, true)
+	a.finish(ctx, tctx, c, at)
 }
 
 // adopt makes c the page that the extension knows, and keeps it.
@@ -335,7 +379,7 @@ func (a *Agent) read(ctx context.Context, day string) (c *convo, found bool, err
 	return c, err == nil, err
 }
 
-// convoFrom reads the id, the version and the body of a conversation entity or of a page entity. The day is the
+// convoFrom reads the id, the version, the body and whether the last turn is the owner's, of a conversation entity or of a page entity. The day is the
 // property day of a conversation, or fallback. The body's line endings are made LF: a browser submits a textarea
 // with CRLF, and the API stores a body as it was sent, so the saved body and the read body would not be the same
 // text. The next save of the extension writes LF.
@@ -350,7 +394,14 @@ func convoFrom(e *siren.Entity, fallback string) (*convo, error) {
 	if day == "" {
 		day = fallback
 	}
-	return &convo{Day: day, ID: id, Version: version, Body: strings.ReplaceAll(text, "\r\n", "\n")}, nil
+	// The last turn is the owner's: nobody has answered it. A page entity has no turns, so it is never pending.
+	turns, _ := p["turns"].([]any)
+	pending := false
+	if len(turns) > 0 {
+		last, _ := turns[len(turns)-1].(map[string]any)
+		pending = last["who"] == "owner"
+	}
+	return &convo{Day: day, ID: id, Version: version, Body: strings.ReplaceAll(text, "\r\n", "\n"), pending: pending}, nil
 }
 
 // save appends extra to the body of c and saves it with the version of c. A stale version reads the page again

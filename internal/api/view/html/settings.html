@@ -4,6 +4,6 @@
 {{define "settings"}}{{template "head" .}}
 <header class="page-head"><div class="what"><span class="kind">owner</span><h1>Settings</h1></div></header>
 <div class="sheet">
-{{with .Action "settings"}}{{with .Hint}}<p class="desc">{{.}}</p>{{end}}{{template "form" (form . "button" "Save")}}{{end}}
+{{with .Action "settings"}}{{with .Hint}}<p class="desc">{{.}}</p>{{end}}{{template "form" (form . "button" "Save" "autocomplete" "off")}}{{end}}
 </div>
 {{template "foot" .}}{{end}}

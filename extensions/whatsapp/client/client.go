@@ -24,7 +24,7 @@ import (
 type Client struct {
 	hc     *http.Client
 	base   string
-	source string // sent on a write only
+	source string
 	token  string // sent as a bearer credential to a public listener (docs/plans/078-network-server.md)
 }
 
@@ -215,7 +215,7 @@ func (c *Client) Catalog(ctx context.Context) ([]siren.Action, error) {
 
 func (c *Client) send(req *http.Request) (*siren.Entity, error) {
 	req.Header.Set("Accept", "application/vnd.siren+json")
-	if c.source != "" && req.Method != http.MethodGet { // a read writes nothing; the source names the writer of rows
+	if c.source != "" {
 		req.Header.Set(siren.SourceHeader, c.source)
 	}
 	if c.token != "" {

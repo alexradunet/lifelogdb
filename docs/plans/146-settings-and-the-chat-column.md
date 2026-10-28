@@ -11,7 +11,16 @@
   catalog gains two actions (`say`, `settings`), the API two resources (`/days/{day}/conversation`, `/settings`), the
   browser a column on every page, a Settings page and its first script since [plan 116](116-strip-to-the-core.md).
   The core still calls no model: the agent of plan 145 answers.
-- **Status:** PLANNED.
+- **Status:** IN REVIEW (owner). Built in `a04e6a3` (the core and the extension) and `7757184` (the browser); the
+  counter-review's findings are fixed in the commit after them: the model could read the key back through its
+  `get` tool, since the extension sent no source on a read (the source goes on every request again, and the
+  settings are read by a second client of the owner's); the first turn of a day said on another surface was
+  adopted and never answered (an adopted page with the owner's turn last is answered, and a turn said before
+  midnight is answered on its day); the conversation view waited and never updated (the one script serves it too);
+  a turn is now read from its marker line to the next, so the owner's two paragraphs stay one turn and a marker
+  inside a code fence forges nothing; `say` is for today, and the entity of another day offers it not; a
+  conversation page keeps its title (`rename` and `promote` are not offered, and refused); the key input takes no
+  autofill; the README's row and the site say what is true. The install and the restart wait for the owner.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)

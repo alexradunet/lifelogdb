@@ -71,7 +71,7 @@
 </dialog>
 {{template "chat" .}}{{end}}
 </div>
-{{if .Chat}}<script src="/assets/chat.js" defer></script>
+{{if .Shell}}<script src="/assets/chat.js" defer></script>
 {{end}}</body></html>{{end}}
 
 {{/* monthbox is a month as the year draws it: its name, how many of its days are written, and its
@@ -161,7 +161,7 @@
      The optional fields a view folds are under "More fields": still in the form, so they are sent with no script
      (docs/plans/095-the-leaf-and-its-margin.md). A second action of the form (formView.Or) is a button after its own, which
      sends the form to that action's address. */}}
-{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{with .Autocomplete}} autocomplete="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
@@ -181,7 +181,7 @@
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if and .Required .Placeholder}} required{{end}}{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and .Required .Placeholder}}<option value="">{{.Placeholder}}</option>{{else if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if eq .Type "password"}} autocomplete="off"{{end}}{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

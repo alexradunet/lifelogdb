@@ -177,10 +177,13 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	}
 	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), plan, action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
 	if !p.IsDayPage {
-		if p.Type == "page" {
+		keeps := conversationDay(p.Title) != "" // its day names it
+		if p.Type == "page" && !keeps {
 			out = append(out, action("promote", ids, nil))
 		}
-		out = append(out, action("rename", ids, nil))
+		if !keeps {
+			out = append(out, action("rename", ids, nil))
+		}
 		if p.Person != nil {
 			out = append(out, action("edit-person", ids, map[string]any{"name": p.Person.Name, "birth_day": p.Person.Birth, "death_day": p.Person.Death}))
 		}
@@ -523,6 +526,13 @@ func (h *server) rename(r *http.Request, act spec, src string) (*siren.Entity, e
 	id, v, err := idForm(r, act)
 	if err != nil {
 		return nil, err
+	}
+	p, err := h.s.PageByID(r.Context(), id)
+	if err != nil {
+		return nil, err
+	}
+	if conversationDay(p.Title) != "" || conversationDay(strings.TrimSpace(v.Get("title"))) != "" {
+		return nil, core.Conflict("a conversation page keeps its title: its day names it")
 	}
 	to, err := h.s.Rename(r.Context(), src, id, v.Get("title"))
 	if err != nil {

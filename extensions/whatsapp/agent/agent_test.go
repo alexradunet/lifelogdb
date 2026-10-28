@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -78,7 +80,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 	}
 }
 
-func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSource(t *testing.T) {
+func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSourceAndEveryOtherRequestHasTheSource(t *testing.T) {
 	r := start(t, func(n int, _ chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
 	r.chat.say(t, "one")
 	r.chat.reply(t)
@@ -97,13 +99,15 @@ func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSource(t *testing.T
 		switch {
 		case q.Path == "/settings":
 			reads++
-			if q.Method != "GET" || q.Source != "" {
-				t.Errorf("settings request %+v, want a GET with no source", q)
+			if q.Method != "GET" || q.Source != "" || q.Auth != "Bearer "+token {
+				t.Errorf("settings request %+v, want a GET with the token and no source", q)
 			}
-		case q.Method != "GET":
-			writes++
-			if q.Source != "agent:whatsapp" {
-				t.Errorf("write %+v, want the source agent:whatsapp", q)
+		default:
+			if q.Source != "agent:whatsapp" || q.Auth != "Bearer "+token {
+				t.Errorf("request %+v, want the source agent:whatsapp and the token", q)
+			}
+			if q.Method != "GET" {
+				writes++
 			}
 		}
 	}
@@ -545,5 +549,156 @@ func TestACancelledContextEndsTheTurnAndTheWorker(t *testing.T) {
 	}
 	if body := r.api.body(todayTitle); strings.Contains(body, "**lifelog**") {
 		t.Errorf("a cancelled turn wrote a reply: %q", body)
+	}
+}
+
+func TestTheModelCannotReadTheKeyThroughGet(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) {
+		if n == 1 {
+			return toolCall("get", `{"href":"/settings"}`)
+		}
+		return text("I cannot read the settings.")
+	})
+	r.api.setModel(r.api.modelURL, "test-model", "synthetic-key-ABC")
+	r.chat.say(t, "what is my key?")
+	got := r.chat.reply(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	reqs := r.mod.requests()
+	if len(reqs) != 2 {
+		t.Fatalf("%d model requests, want 2", len(reqs))
+	}
+	result := reqs[1].Messages[len(reqs[1].Messages)-1]
+	if result.Role != "tool" || !strings.Contains(result.Content, "forbidden") {
+		t.Errorf("tool result %+v, want the error entity of a 403", result)
+	}
+	body := r.api.body(todayTitle)
+	if !strings.Contains(body, "- `get` failed: forbidden") {
+		t.Errorf("page body %q", body)
+	}
+	for name, text := range map[string]string{"the tool result": result.Content, "the page": body, "the reply": got, "the model request": userOf(reqs[1])} {
+		if strings.Contains(text, "synthetic-key-ABC") {
+			t.Errorf("the key is in %s: %q", name, text)
+		}
+	}
+	// The model server still got the key as its credential: that is the one use of it.
+	for _, q := range r.api.requests() {
+		if q.Path == "/settings" && q.Source == "agent:whatsapp" && q.Method == "GET" {
+			return
+		}
+	}
+	t.Error("the get of the model carried no agent source")
+}
+
+// pendingBody is the page of a day where the owner spoke on another surface and nothing answered.
+func pendingBody(day string) string {
+	return "[[" + day + "]]\n\n**Owner** (08.15): said in the browser"
+}
+
+func TestAPageNewToTheExtensionThatEndsWithAnOwnerTurnIsAnsweredOnce(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.settle(t) // no page yet
+	r.api.add(todayTitle, pendingBody("2031-05-20"))
+	r.poll(t)
+	if got := r.chat.reply(t); got != "answer 1" {
+		t.Errorf("reply %q", got)
+	}
+	r.settle(t)
+	r.settle(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.mod.requests()); n != 1 {
+		t.Errorf("%d model requests, want 1", n)
+	}
+	if got := userOf(r.mod.requests()[0]); !strings.HasSuffix(got, "said in the browser") {
+		t.Errorf("the model read %q", got)
+	}
+	if body := r.api.body(todayTitle); strings.Count(body, "**lifelog**") != 1 || !strings.HasSuffix(body, "**lifelog** (09.30): answer 1") {
+		t.Errorf("page body %q", body)
+	}
+}
+
+func TestARestartWithTheStateFileOfPlan145AnswersThePendingTurnOfToday(t *testing.T) {
+	api := &fakeAPI{}
+	api.add(todayTitle, pendingBody("2031-05-20"))
+	state := t.TempDir() + "/state.json"
+	// The shape of plan 145: a title and no day.
+	old := `{"title":"` + todayTitle + `","id":"1","version":"1","body":"[[2031-05-20]]","saved_at":"2031-05-20T08:00:00Z"}`
+	if err := os.WriteFile(state, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := LastSave(state); ok || err != nil {
+		t.Errorf("LastSave of a state with no day: %v %v, want no state", ok, err)
+	}
+	r := startOn(t, func(int, chatReq) (int, string) { return text("welcome back") }, api, state)
+	r.poll(t)
+	if got := r.chat.reply(t); got != "welcome back" {
+		t.Errorf("reply %q", got)
+	}
+	r.settle(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.mod.requests()); n != 1 {
+		t.Errorf("%d model requests, want 1", n)
+	}
+	if st, err := loadState(state); err != nil || st == nil || st.Day != "2031-05-20" {
+		t.Errorf("state %+v, %v", st, err)
+	}
+}
+
+func TestAPendingTurnOnYesterdaysPageIsAnsweredOnceAtTheDayChange(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.chat.say(t, "good night")
+	r.chat.reply(t)
+	// Said before midnight on another surface; the clock moves past midnight before the watcher looks.
+	r.api.edit(todayTitle, r.api.body(todayTitle)+"\n\n**Owner** (23.59): one more thing")
+	r.setDay(fixedNow.AddDate(0, 0, 1))
+	r.poll(t)
+	if got := r.chat.reply(t); got != "answer 2" {
+		t.Errorf("reply %q", got)
+	}
+	r.settle(t)
+	r.settle(t)
+	r.api.add("Conversation 2031-05-21", "[[2031-05-21]]")
+	r.settle(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.mod.requests()); n != 2 {
+		t.Errorf("%d model requests, want 2", n)
+	}
+	if body := r.api.body(todayTitle); strings.Count(body, "one more thing") != 1 || !strings.HasSuffix(body, "**lifelog** (09.30): answer 2") {
+		t.Errorf("yesterday's page %q", body)
+	}
+	var conv []string
+	for _, q := range r.api.requests() {
+		if q.Method == "GET" && strings.HasSuffix(q.Path, "/conversation") {
+			conv = append(conv, strings.TrimSuffix(strings.TrimPrefix(q.Path, "/days/"), "/conversation"))
+		}
+	}
+	moved := slices.Index(conv, "2031-05-21")
+	if moved < 0 || slices.Contains(conv[moved:], "2031-05-20") {
+		t.Errorf("looks %v: yesterday's page was read again after the move to the new day", conv)
+	}
+}
+
+func TestAPageNewToTheExtensionThatEndsWithTheAgentsTurnIsNotAnswered(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text("answer") })
+	r.api.add(todayTitle, pendingBody("2031-05-20")+"\n\n**lifelog** (08.16): already answered")
+	r.settle(t)
+	r.settle(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(r.mod.requests()); n != 0 {
+		t.Errorf("%d model requests, want none", n)
+	}
+	select {
+	case s := <-r.chat.sent:
+		t.Errorf("an answered page was answered again with %q", s)
+	default:
 	}
 }

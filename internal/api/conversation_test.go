@@ -229,3 +229,77 @@ func TestAConversationPageHasOneViewInABrowser(t *testing.T) {
 		t.Errorf("a tombstoned conversation page: %d, want 200", rec.Code)
 	}
 }
+
+// TestSayIsForToday: say on a day that is not the local today is 422 with its reason and writes nothing; the
+// conversation of another day offers no say; today, and the word today, work.
+func TestSayIsForToday(t *testing.T) {
+	c, _, s := conversationStore(t)
+	today := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation")), "say")
+	for _, day := range []string{"2031-05-13", "2031-05-15"} {
+		e := apitest.Must(t)(c.Get(t.Context(), "/days/"+day+"/conversation"))
+		for _, a := range e.Actions {
+			if a.Name == "say" {
+				t.Errorf("the conversation of %s offers say", day)
+			}
+		}
+		past := today
+		past.Href = "/days/" + day + "/say"
+		_, err := c.Do(t.Context(), past, map[string]string{"text": "Hello"})
+		if apitest.Status(err) != 422 || !strings.Contains(fmt.Sprint(err), "say is for today: the agent answers today's conversation") {
+			t.Errorf("say on %s: %v, want 422 with its reason", day, err)
+		}
+		if id, err := s.PageID(t.Context(), "Conversation "+day); err != nil || id != 0 {
+			t.Errorf("a refused say made the page of %s: %d %v", day, id, err)
+		}
+	}
+	if _, err := say(t, c, convDay, "Hello"); err != nil {
+		t.Errorf("say on today's date: %v", err)
+	}
+	if _, err := say(t, c, "today", "Hello again"); err != nil {
+		t.Errorf("say on today: %v", err)
+	}
+}
+
+// TestAConversationPageKeepsItsTitle: a live conversation page offers no rename and no promote; rename of it, and
+// rename of a plain page to such a title, is 409 and writes nothing; a plain page is renamed as before.
+func TestAConversationPageKeepsItsTitle(t *testing.T) {
+	c, _, s := conversationStore(t)
+	if _, err := say(t, c, convDay, "Hello"); err != nil {
+		t.Fatal(err)
+	}
+	title := "Conversation " + convDay
+	id, _ := s.PageID(t.Context(), title)
+	page := apitest.Must(t)(c.Get(t.Context(), siren.PageHref(id)))
+	for _, a := range page.Actions {
+		if a.Name == "rename" || a.Name == "promote" {
+			t.Errorf("a conversation page offers %s", a.Name)
+		}
+	}
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	plain := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Plain notes"}))
+	rename := apitest.Action(t, plain, "rename")
+	refused := func(href, to string) {
+		t.Helper()
+		a := rename
+		a.Href = href
+		_, err := c.Do(t.Context(), a, map[string]string{"title": to})
+		if apitest.Status(err) != 409 || !strings.Contains(fmt.Sprint(err), "a conversation page keeps its title: its day names it") {
+			t.Errorf("rename to %q at %s: %v, want 409 with its reason", to, href, err)
+		}
+	}
+	refused(siren.PageHref(id)+"/rename", "Something else")
+	refused(rename.Href, "Conversation 2031-05-15")
+	if got, _ := s.PageID(t.Context(), title); got != id {
+		t.Errorf("the conversation page: %d, want %d", got, id)
+	}
+	if got, _ := s.PageID(t.Context(), "Plain notes"); got == 0 {
+		t.Error("a refused rename changed the plain page")
+	}
+	if got, _ := s.PageID(t.Context(), "Conversation 2031-05-15"); got != 0 {
+		t.Error("a refused rename made the title")
+	}
+	renamed := apitest.Must(t)(c.Do(t.Context(), rename, map[string]string{"title": "Plain notes 2"}))
+	if renamed.Title != "Plain notes 2" {
+		t.Errorf("a plain page renamed: %q", renamed.Title)
+	}
+}

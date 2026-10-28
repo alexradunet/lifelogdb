@@ -105,9 +105,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	logger := log.New(stderr, "lifelog-whatsapp: ", log.LstdFlags)
 	a := &agent.Agent{
 		Client: client.Remote(*base, siren.AgentPrefix+agent.Source, token),
-		Owner:  *owner,
-		State:  statePath,
-		Log:    logger,
+		// The settings hold the key of the model: they are read as the owner, with no source.
+		Settings: client.Remote(*base, "", token),
+		Owner:    *owner,
+		State:    statePath,
+		Log:      logger,
 	}
 	if *terminalMode {
 		return serveTerminal(ctx, a, stdin, stdout)

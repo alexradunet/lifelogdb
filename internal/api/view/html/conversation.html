@@ -8,9 +8,9 @@
 {{if $p.id}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
 <p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p></div></header>
 <div class="sheet-margin">
-<div class="sheet conversation">
-{{if $turns}}{{template "thread" $turns}}{{else}}<p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p>{{end}}
-{{with .Action "say"}}<section class="say" aria-label="Say">{{template "form" (form . "button" "Say" "back" $.ReturnHere)}}</section>{{end}}
+<div class="sheet conversation" id="conversation" data-day="{{$p.day}}" data-version="{{$p.version}}">
+{{if $turns}}{{template "thread" $turns}}{{else if .Action "say"}}<p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p>{{else}}<p class="empty">Nothing was said on this day.</p>{{end}}
+{{with .Action "say"}}<section class="say" aria-label="Say">{{template "form" (form . "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}</section>{{end}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 </div>
 {{if $p.id}}<div class="margin">
@@ -36,8 +36,8 @@
      the conversation page, empty when the day has none. chat.js, when it runs, polls it while the last turn is the
      owner's and swaps the column in place; the form posts without it. */}}
 {{define "chat"}}{{with .Chat}}<button type="button" class="button chat-open" popovertarget="chat">{{icon "chat"}}Chat</button>
-<div class="chat" id="chat" popover role="complementary" data-version="{{.Version}}" aria-label="Chat">
+<div class="chat" id="chat" popover role="complementary" data-day="today" data-version="{{.Version}}" aria-label="Chat">
 <div class="chat-head"><span class="label">Chat</span><a href="/days/today/conversation">Open the day</a><button type="button" class="button small" popovertarget="chat" popovertargetaction="hide">Close</button></div>
-<div class="chat-scroll"><div class="chat-turns">{{if .Turns}}{{template "thread" .Turns}}{{else}}<p class="empty">Nothing is said today yet. Write to the agent below. It answers here when it runs.</p>{{end}}</div></div>
-{{template "form" (form .Say "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}
+<div class="chat-scroll"><div class="chat-turns">{{if .Turns}}{{template "thread" .Turns}}{{else if .Say.Name}}<p class="empty">Nothing is said today yet. Write to the agent below. It answers here when it runs.</p>{{else}}<p class="empty">Nothing was said on this day.</p>{{end}}</div></div>
+{{if .Say.Name}}{{template "form" (form .Say "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}{{end}}
 </div>{{end}}{{end}}

@@ -98,7 +98,8 @@ func (b built) setModel(t *testing.T, url, key string) {
 	}
 }
 
-// fakeModel answers the first step with a capture tool call and the second with text.
+// fakeModel answers by the count of requests: the first with a capture tool call, the second with text, the third
+// with a read of /settings (the model tries to read the key), the fourth and later with text.
 type fakeModel struct {
 	mu   sync.Mutex
 	reqs []map[string]any
@@ -119,6 +120,14 @@ func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if n == 1 {
 		io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call1","type":"function","function":{"name":"capture","arguments":"{\"day\":\"2031-05-20\",\"text\":\"Walked by the river, synthetic entry.\"}"}}]},"finish_reason":"tool_calls"}]}`)
+		return
+	}
+	if n == 3 {
+		io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call2","type":"function","function":{"name":"get","arguments":"{\"href\":\"/settings\"}"}}]},"finish_reason":"tool_calls"}]}`)
+		return
+	}
+	if n > 3 {
+		io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"The settings are not mine to read."},"finish_reason":"stop"}]}`)
 		return
 	}
 	io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"Written to 2031-05-20."},"finish_reason":"stop"}]}`)
@@ -160,18 +169,32 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	if _, err := io.WriteString(stdin, "I walked by the river\n"); err != nil {
 		t.Fatal(err)
 	}
-	lines := make(chan string, 1)
-	go func() {
-		line, _ := bufio.NewReader(stdout).ReadString('\n')
-		lines <- strings.TrimSpace(line)
-	}()
-	select {
-	case got := <-lines:
-		if got != "Written to 2031-05-20." {
-			t.Errorf("reply %q; stderr:\n%s", got, stderr.String())
+	reader := bufio.NewReader(stdout)
+	readLine := func() string {
+		lines := make(chan string, 1)
+		go func() {
+			line, _ := reader.ReadString('\n')
+			lines <- strings.TrimSpace(line)
+		}()
+		select {
+		case got := <-lines:
+			return got
+		case <-time.After(wait):
+			t.Fatalf("no reply; stderr:\n%s", stderr.String())
+			return ""
 		}
-	case <-time.After(wait):
-		t.Fatalf("no reply; stderr:\n%s", stderr.String())
+	}
+	if got := readLine(); got != "Written to 2031-05-20." {
+		t.Errorf("reply %q; stderr:\n%s", got, stderr.String())
+	}
+	// A second message: the model calls get on /settings. The tool carries the source agent:whatsapp, so the API
+	// refuses it, and the key reaches no output.
+	if _, err := io.WriteString(stdin, "What is my model key?\n"); err != nil {
+		t.Fatal(err)
+	}
+	second := readLine()
+	if second != "The settings are not mine to read." {
+		t.Errorf("second reply %q; stderr:\n%s", second, stderr.String())
 	}
 	if err := stdin.Close(); err != nil {
 		t.Fatal(err)
@@ -187,15 +210,18 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	case <-time.After(wait):
 		t.Fatal("the agent did not stop after the end of its input")
 	}
-	if strings.Contains(stderr.String(), "synthetic-key") {
-		t.Error("the model key is in the log")
+	if strings.Contains(stderr.String(), "synthetic-key") || strings.Contains(second, "synthetic-key") {
+		t.Error("the model key is in the log or in the reply")
 	}
 
 	// The model read the conversation page as its user message and was offered the tools.
 	model.mu.Lock()
 	defer model.mu.Unlock()
-	if len(model.reqs) != 2 {
-		t.Fatalf("%d model requests, want 2", len(model.reqs))
+	if len(model.reqs) != 4 {
+		t.Fatalf("%d model requests, want 4", len(model.reqs))
+	}
+	if raw, _ := json.Marshal(model.reqs[3]["messages"]); strings.Contains(string(raw), "synthetic-key") || !strings.Contains(string(raw), "forbidden") {
+		t.Errorf("the result of get /settings that the model read: %s", raw)
 	}
 	if model.auth[0] != "Bearer synthetic-key" {
 		t.Errorf("the model got the header %q, want the key from the settings", model.auth[0])
@@ -229,7 +255,7 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	if strings.Contains(string(out), "synthetic-key") {
 		t.Error("the model key is on the conversation page")
 	}
-	for _, want := range []string{"[[" + day + "]]", "**Owner** (", "): I walked by the river", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
+	for _, want := range []string{"[[" + day + "]]", "**Owner** (", "): I walked by the river", "- `get` failed: forbidden", "): The settings are not mine to read.", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the conversation page lacks %q: %q", want, body)
 		}

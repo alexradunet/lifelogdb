@@ -18,9 +18,11 @@ type convo struct {
 	Version string    `json:"version"`
 	Body    string    `json:"body"`
 	SavedAt time.Time `json:"saved_at"`
+
+	pending bool // the last turn is the owner's; read from the API, not kept in the file
 }
 
-// loadState reads the state file. A file that does not exist is no state.
+// loadState reads the state file. A file that does not exist, or that has no day, is no state.
 func loadState(path string) (*convo, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -32,6 +34,9 @@ func loadState(path string) (*convo, error) {
 	var c convo
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("state file %s is not JSON: %w (delete it to start again)", path, err)
+	}
+	if c.Day == "" { // the file of plan 145 had a title and no day: that page is unknown
+		return nil, nil
 	}
 	return &c, nil
 }

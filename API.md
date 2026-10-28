@@ -444,7 +444,7 @@ picture of the page's cover, when it has one), `choose-cover` (the [pictures it 
 is not a file), `make-metric` (a live plain page that is not a day page: the address of the [New metric form](#metrics) with the name filled; registering the metric turns this page into it and keeps its text). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote`, `rename`, `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `edit-metric` (a live metric: `daily` filled with the current mark, 1 or 0; a field left out is 0; a page that is not a live metric is 409), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
+cannot empty a page), `promote` and `rename` (neither on a live [conversation page](#conversation): its day names it, so `rename` of it, and `rename` of any page to a title `Conversation YYYY-MM-DD`, is 409 `a conversation page keeps its title: its day names it`, and writes nothing), `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `edit-metric` (a live metric: `daily` filled with the current mark, 1 or 0; a field left out is 0; a page that is not a live metric is 409), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
 files a page and, with `from`, takes it out; a plain page, whose only kind would be `part-of`, offers neither), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
@@ -837,7 +837,8 @@ no settings file path refuses both routes (500, the message says so).
 `GET /days/{day}/conversation` (`day` is a local day or the word `today`; another value is 422): the talk of a day
 with an agent, as the turns of one plain page. Class `conversation`, and `page` too when the page exists. The core calls
 no model: an agent (an extension) reads the page and writes its own paragraphs in the format below. Links: `self`, `day`
-(the day view), `index`, and `page` (the conversation page) when it exists. Actions: `say` first, with `day` filled in;
+(the day view), `index`, and `page` (the conversation page) when it exists. Actions: `say` first, with `day` filled in,
+only when `day` is the server's local today (the conversation of another day offers none);
 when the page exists, the actions of [the page](#page-person-place-file) after it (`save-body` with the `version`, and
 the others). When the page exists, the answer carries the page as a series carries a metric's page: its properties
 (the rows below that follow `turns`), its links but `self` and `index`, and its embedded links. A page that is
@@ -845,24 +846,28 @@ deleted is no conversation: the answer has no turns, and `say` makes it live aga
 live conversation page is a 303 to this resource, with the query kept; the JSON of the page is the page's own.
 
 `POST /days/{day}/say` (the action `say`, any writer): the field `text` is added to the page of the day as the
-owner's paragraph, with the time of the server's clock in its zone. The page is made on the first turn of the day, in
+owner's turn, with the time of the server's clock in its zone. The page is made on the first turn of the day, in
 the same write. The answer is this entity, and `result` is the [save result](#result-of-capture-create-page-save-body).
-A `text` that is empty or only blanks is 422 and writes nothing.
+`say` is for today: a `day` that is not the server's local today is 422 `say is for today: the agent answers today's
+conversation`, and writes nothing. A `text` that is empty or only blanks is 422 and writes nothing.
 
 **The format of the page.** An agent in any language reads and writes the conversation with `save-body`, or with `say`
 for the owner's turn. The page:
 
 - is titled `Conversation YYYY-MM-DD` (the day), is filed in the category `Conversations`, and starts with the line
   `[[YYYY-MM-DD]]`;
-- is read as paragraphs: a block of lines between blank lines. Line ends are LF; CRLF is read as LF;
-- has a turn in each paragraph whose first line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `, then
-  the words, which may go on in the next lines of the same paragraph. `HH.MM` is the server's local time. The agent
-  writes `**lifelog**`, and `say` writes `**Owner**`;
-- has the tool lines of a `lifelog` turn in the paragraph just before it, each line starting with ``- ` ``, for example
-  ``- `search`: no hits``. A tool block that no `lifelog` paragraph follows is read as a free paragraph;
-- may hold any other paragraph (the owner edited the page). It is a turn of `who` `text`, shown as it is. The first
-  line `[[YYYY-MM-DD]]` is no turn. A reply that has a blank line in it is read as a turn, then free paragraphs:
-  an agent writes a reply with no blank line.
+- is read by lines. Line ends are LF; CRLF is read as LF;
+- has a turn from each marker line. A marker line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is
+  outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH.MM` is the
+  server's local time. The agent writes `**lifelog**`, and `say` writes `**Owner**`;
+- runs a turn from its marker line to the line before the next marker line, or to the end of the page. The words of
+  the turn are the rest of the marker line and the lines after it, with their inner blank lines (a turn may have many
+  paragraphs, and a note that the owner adds after a reply is part of that reply). The blank edge is dropped;
+- has the tool lines of a `lifelog` turn right before its marker: one block of lines that each start with ``- ` ``, for
+  example ``- `search`: no hits``, with at most one blank line between the block and the marker. They are not part of
+  the turn before. Tool lines before an `Owner` marker are part of the text before it;
+- may hold text before the first marker, after the first line `[[YYYY-MM-DD]]`. It is one turn of `who` `text` when it
+  is not blank, shown as it is. The first line is no turn.
 
 | property | type | meaning |
 |---|---|---|

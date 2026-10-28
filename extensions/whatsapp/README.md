@@ -11,7 +11,7 @@ refuses the owner-only actions to such a writer.
 flowchart LR
   P["the owner's phone, WhatsApp"] <-->|"WhatsApp Web protocol, whatsmeow"| W["lifelog-whatsapp: the chat"]
   W --> A["the agent: one turn at a time"]
-  A -->|"GET /settings at each turn, no source"| L
+  A -->|"GET /settings at each turn, owner token, no source"| L
   A <-->|"chat completions with tools, net/http"| M["the model named in Settings"]
   A <-->|"HTTP, Lifelog-Source: agent:whatsapp, Bearer token"| L["lifelog serve, 127.0.0.1:7777"]
 ```
@@ -25,12 +25,16 @@ flowchart LR
   `save-body`, as lines and `**lifelog** (HH.MM): text`. The model reads the whole page on each turn. The extension
   keeps nothing else of the conversation.
 - **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, with the owner's
-  token and no `Lifelog-Source` (the read is the owner's, and a read writes nothing). A change in Settings is seen
+  token and no `Lifelog-Source`, through a second client that only this read uses. Every other request, the tools of
+  the model too, carries `Lifelog-Source: agent:whatsapp`, so the model's own `get /settings` is refused (403): the key
+  of the model never reaches the model, the page or the phone. A change in Settings is seen
   at the next turn. With no model set, the reply of the turn is one line, "No model is set: open Settings in
   lifelog.", on the page and on the phone. The agent keeps running.
 - **Continued anywhere.** Every 3 seconds the extension reads today's conversation. Text added to its end on another surface
   (the browser, `lifelog do save-body`, an MCP tool) is an owner's turn: the reply is added to the page and sent on
-  WhatsApp. Any other change of the page is adopted and answered with nothing. A body is read with its CRLF line
+  WhatsApp. The first turn of a day on any surface is answered too: a page that is new to the extension, on a new day
+  or after a restart, is answered when its last turn is the owner's, and a turn said before midnight is answered on
+  its own page. Any other change of the page is adopted and answered with nothing. A body is read with its CRLF line
   endings made LF (a browser submits a textarea that way), and saved with LF. When the owner saves the page while
   the model runs, the reply is still appended after that text, and one line on WhatsApp says the text was not
   answered.

@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [146](146-settings-and-the-chat-column.md) | Settings and the chat column: the model set in the app, and today's conversation on every page | P1 | L | owner word 2026-10-28; plan 145; `2d7315f` | PLANNED |
+| [146](146-settings-and-the-chat-column.md) | Settings and the chat column: the model set in the app, and today's conversation on every page | P1 | L | owner word 2026-10-28; plan 145; `2d7315f` | IN REVIEW (owner) |
 | [145](145-whatsapp.md) | WhatsApp: an always-on agent outside the core, a client of the API, reached from the owner's phone | P2 | M | owner word 2026-10-28; `dbeea3d` | IN REVIEW (owner) |
 | [144](144-one-view-for-a-metric.md) | One view for a metric: the readings and the page in one place, at /metrics/{name} | P1 | M | owner word 2026-10-23; `07380db` | IN REVIEW (owner) |
 | [143](143-daily-metrics.md) | Daily metrics: a mark on a metric, and its box on every day page | P1 | M | owner word 2026-10-23; `543ba89` | IN REVIEW (owner) |

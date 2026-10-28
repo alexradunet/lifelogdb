@@ -21,6 +21,9 @@ import (
 
 const owner = "40712345678"
 
+// token is the bearer token of the owner, as both clients of the rig send it.
+const token = "owner-token"
+
 // wait is a guard against a deadlock. Nothing waits for it in a green run.
 const wait = 30 * time.Second
 
@@ -36,7 +39,7 @@ type page struct {
 }
 
 // seen is one request that the fake API received.
-type seen struct{ Method, Path, Source, Body string }
+type seen struct{ Method, Path, Source, Auth, Body string }
 
 // fakeAPI serves the catalog and a few pages, and answers every other path with an entity. A path that ends in /big
 // answers a title that is longer than the bound of a result. A page title is redirected to its page, as the real
@@ -69,6 +72,19 @@ func (f *fakeAPI) conversation(day string) siren.Entity {
 	props := map[string]any{"day": day, "turns": []any{}}
 	if p := f.find("Conversation " + day); p != nil {
 		props["id"], props["version"], props["body"] = p.id, p.version, p.body
+		// The turns are the paragraphs of the body, with the mark as who. The real API does the same.
+		turns := []any{}
+		for _, para := range strings.Split(p.body, "\n\n") {
+			who := "text"
+			switch {
+			case strings.HasPrefix(para, "**Owner**"):
+				who = "owner"
+			case strings.HasPrefix(para, "**lifelog**"):
+				who = "lifelog"
+			}
+			turns = append(turns, map[string]any{"who": who, "text": para})
+		}
+		props["turns"] = turns
 	}
 	return siren.Entity{Class: []string{"conversation"}, Properties: props}
 }
@@ -119,7 +135,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.reqs = append(f.reqs, seen{r.Method, r.URL.Path, r.Header.Get(siren.SourceHeader), string(data)})
+	f.reqs = append(f.reqs, seen{r.Method, r.URL.Path, r.Header.Get(siren.SourceHeader), r.Header.Get("Authorization"), string(data)})
 	w.Header().Set("Content-Type", "application/vnd.siren+json")
 	e := siren.Entity{Title: "ok " + r.URL.Path, Links: []siren.Link{{Rel: []string{"self"}, Href: r.URL.Path}}}
 	fail := func(status int, code string) {
@@ -351,8 +367,9 @@ func startOn(t *testing.T, script func(n int, r chatReq) (int, string), api *fak
 	apiSrv := httptest.NewServer(r.api)
 	t.Cleanup(apiSrv.Close)
 	a := &Agent{
-		Chat: r.chat, Client: client.Remote(apiSrv.URL, siren.AgentPrefix+Source, ""),
-		Owner: owner, State: r.state, Now: r.clock, Log: log.New(io.Discard, "", 0), Tick: r.tick,
+		Chat: r.chat, Client: client.Remote(apiSrv.URL, siren.AgentPrefix+Source, token),
+		Settings: client.Remote(apiSrv.URL, "", token),
+		Owner:    owner, State: r.state, Now: r.clock, Log: log.New(io.Discard, "", 0), Tick: r.tick,
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	r.cancel = cancel

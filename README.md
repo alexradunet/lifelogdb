@@ -337,15 +337,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   test) refuses a read and a write. The core calls no model: the agent reads the settings.
 - **The conversation of a day** ([plan 146](docs/plans/146-settings-and-the-chat-column.md), after
   [plan 145](docs/plans/145-whatsapp.md)). The conversation of a day is the plain page `Conversation YYYY-MM-DD`, filed
-  in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn is a paragraph: `**Owner** (HH.MM): text` or
-  `**lifelog** (HH.MM): text`, with the tool lines of the agent (`` - `tool` ``) just before its paragraph. The time is
+  in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn runs from a marker line, `**Owner** (HH.MM): text` or
+  `**lifelog** (HH.MM): text` (outside a fenced code block), to the next marker line, with the tool lines of the agent
+  (`` - `tool` ``) just before its marker. The time is
   the server's local time. [API.md](API.md#conversation) states the format for an agent in any language, and
   `internal/api/conversation.go` holds it in this program. `say` (`POST /days/{day}/say`, `today` allowed) adds the
-  owner's paragraph and makes the page on the first turn of the day, in one write; it is not the owner's alone, so
+  owner's turn and makes the page on the first turn of the day, in one write; it is for today only (another day is
+  422, and that day's conversation offers no `say`); it is not the owner's alone, so
   the WhatsApp extension relays the owner's words with it. `GET /days/{day}/conversation` gives the turns, parsed from
   the body, with the page's properties, links and actions when the page exists (as a series carries a metric's page,
   [plan 144](docs/plans/144-one-view-for-a-metric.md)), and `say`. A browser's `GET /pages/{id}` of a live conversation
-  page is a 303 to it, so there is one view of a conversation. The agent (`lifelog whatsapp`) watches today's page
+  page is a 303 to it, so there is one view of a conversation. A live conversation page keeps its title: it offers no
+  `rename` or `promote`, and `rename` to such a title is 409. The agent (`lifelog whatsapp`) watches today's page
   and answers on it; the core calls no model. In the browser, a right column on every page shows today's turns and the
   composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's; every form
   works without it.
@@ -482,7 +485,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | action | API | CLI | MCP tool | browser |
 |---|---|---|---|---|
 | `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
-| `say` | `POST /days/{day}/say` | `do say` | `say` | every page: the chat column; a day: Chat |
+| `say` | `POST /days/{day}/say` | `do say` | `say` | every page: the chat column; the rail: Chat |
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
 | `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
