@@ -39,8 +39,17 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 	if got := r.api.body(todayTitle); got != want {
 		t.Errorf("page body\n%q\nwant\n%q", got, want)
 	}
-	if p := r.api.find(todayTitle); p.category != Category || p.version != 3 {
+	if p := r.api.find(todayTitle); p.category != "Conversations" || p.version != 3 {
 		t.Errorf("page %+v", p)
+	}
+	var says []seen
+	for _, q := range r.api.requests() {
+		if strings.HasSuffix(q.Path, "/say") {
+			says = append(says, q)
+		}
+	}
+	if len(says) != 1 || says[0].Path != "/days/today/say" || says[0].Source != "agent:whatsapp" || !strings.Contains(says[0].Body, "text=I+walked+by+the+river") {
+		t.Errorf("say requests %+v", says)
 	}
 	w := r.api.writes()
 	if len(w) != 1 || w[0].Path != "/days/2031-05-20/capture" || w[0].Source != "agent:whatsapp" || !strings.Contains(w[0].Body, "text=Walked+by+the+river.") {
@@ -64,8 +73,67 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 		t.Errorf("typing %v, want on then off", got)
 	}
 	st, err := loadState(r.state)
-	if err != nil || st.Title != todayTitle || st.ID != "1" || st.Version != "3" || st.Body != want || st.SavedAt.IsZero() {
+	if err != nil || st.Day != "2031-05-20" || st.ID != "1" || st.Version != "3" || st.Body != want || st.SavedAt.IsZero() {
 		t.Errorf("state %+v, %v", st, err)
+	}
+}
+
+func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSource(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.chat.say(t, "one")
+	r.chat.reply(t)
+	r.api.setModel(r.api.modelURL, "other-model", "synthetic-key")
+	r.chat.say(t, "two")
+	r.chat.reply(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	reqs := r.mod.requests()
+	if len(reqs) != 2 || reqs[0].Model != "test-model" || reqs[1].Model != "other-model" {
+		t.Errorf("model requests %+v, want the change between two turns to be seen", reqs)
+	}
+	reads, writes := 0, 0
+	for _, q := range r.api.requests() {
+		switch {
+		case q.Path == "/settings":
+			reads++
+			if q.Method != "GET" || q.Source != "" {
+				t.Errorf("settings request %+v, want a GET with no source", q)
+			}
+		case q.Method != "GET":
+			writes++
+			if q.Source != "agent:whatsapp" {
+				t.Errorf("write %+v, want the source agent:whatsapp", q)
+			}
+		}
+	}
+	if reads != 2 || writes != 4 {
+		t.Errorf("%d settings reads and %d writes, want 2 and 4", reads, writes)
+	}
+}
+
+func TestATurnWithNoModelGivesOneLineOnThePageAndInTheChatAndTheAgentGoesOn(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text("answer") })
+	url := r.api.modelURL
+	r.api.setModel("", "", "")
+	r.chat.say(t, "hello")
+	const want = "No model is set: open Settings in lifelog."
+	if got := r.chat.reply(t); got != want {
+		t.Errorf("reply %q", got)
+	}
+	if body := r.api.body(todayTitle); !strings.HasSuffix(body, "**lifelog** (09.30): "+want) {
+		t.Errorf("page body %q", body)
+	}
+	if n := len(r.mod.requests()); n != 0 {
+		t.Errorf("%d model requests, want none", n)
+	}
+	r.api.setModel(url, "test-model", "")
+	r.chat.say(t, "again")
+	if got := r.chat.reply(t); got != "answer" {
+		t.Errorf("reply after the model was set: %q", got)
+	}
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -291,19 +359,19 @@ func TestAStaleVersionReadsTheSaveAgainAndAppendsOnce(t *testing.T) {
 	}
 }
 
-func TestASecondStaleVersionIsAnErrorTheOwnerIsToldAbout(t *testing.T) {
+func TestASecondStaleVersionKeepsTheReplyOffThePageButSendsItToTheChat(t *testing.T) {
 	api := &fakeAPI{alwaysStale: true}
 	api.add(todayTitle, "[[2031-05-20]]")
-	r := startOn(t, func(int, chatReq) (int, string) { return text("never") }, api, t.TempDir()+"/state.json")
+	r := startOn(t, func(int, chatReq) (int, string) { return text("answer") }, api, t.TempDir()+"/state.json")
 	r.chat.say(t, "hello")
-	if got := r.chat.reply(t); !strings.Contains(got, "the page changed twice during the save") {
+	if got := r.chat.reply(t); got != "answer" {
 		t.Errorf("reply %q", got)
 	}
 	if err := r.finish(t); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(r.mod.requests()); n != 0 {
-		t.Errorf("%d model requests, want none", n)
+	if body := api.body(todayTitle); strings.Contains(body, "**lifelog**") {
+		t.Errorf("a reply that could not be saved is on the page: %q", body)
 	}
 }
 

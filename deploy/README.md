@@ -7,6 +7,7 @@ keep the settings that are only on the machine (the user, the paths), and then c
 | file | installed as | what it does |
 |---|---|---|
 | `lifelog.service` | `/etc/systemd/system/lifelog.service` | runs `lifelog serve`; `KillSignal=SIGTERM` and `TimeoutStopSec=30` let the server drain its requests |
+| `lifelog-whatsapp.service` | `/etc/systemd/system/lifelog-whatsapp.service` | runs `lifelog whatsapp`, the agent on WhatsApp ([extension](../extensions/whatsapp/README.md)); no `EnvironmentFile`, the model is set in the Settings of lifelog; `RestartPreventExitStatus=2 3` |
 | `lifelog-snapshot` | `/usr/local/bin/lifelog-snapshot` | runs `lifelog snapshot`, tests its exit status, prunes to the newest 14 good snapshots |
 | `lifelog-snapshot.service` | `/etc/systemd/system/lifelog-snapshot.service` | runs the script once; `TimeoutStartSec=30min`; `OnFailure=lifelog-snapshot-failed.service` |
 | `lifelog-snapshot.timer` | `/etc/systemd/system/lifelog-snapshot.timer` | starts the service every night |

@@ -18,7 +18,6 @@ import (
 
 	"lifelog-whatsapp/agent"
 	"lifelog-whatsapp/client"
-	"lifelog-whatsapp/model"
 	"lifelog-whatsapp/siren"
 	"lifelog-whatsapp/terminal"
 	"lifelog-whatsapp/whatsapp"
@@ -87,10 +86,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	if *base == "" {
 		return errors.New("no LIFELOG_URL and no --url: run it as `lifelog whatsapp` on a life.db that exists, or start `lifelog serve` and give --url")
 	}
-	modelURL, modelName := getenv("LIFELOG_MODEL_URL"), getenv("LIFELOG_MODEL")
-	if modelURL == "" || modelName == "" {
-		return errors.New("LIFELOG_MODEL_URL and LIFELOG_MODEL are required: the base URL of an OpenAI-compatible server (ending in /v1) and the model id")
-	}
 	token := getenv("LIFELOG_TOKEN")
 	if token == "" && *tokenFile != "" {
 		data, err := os.ReadFile(*tokenFile)
@@ -110,7 +105,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	logger := log.New(stderr, "lifelog-whatsapp: ", log.LstdFlags)
 	a := &agent.Agent{
 		Client: client.Remote(*base, siren.AgentPrefix+agent.Source, token),
-		Model:  model.New(modelURL, modelName, getenv("LIFELOG_MODEL_KEY")),
 		Owner:  *owner,
 		State:  statePath,
 		Log:    logger,

@@ -30,6 +30,7 @@ lifelog init                               # life.db beside the program; --db PA
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
 lifelog capture "Ran 5k with [[Sam]] #running" --mood 4
+lifelog do settings model_url=http://HOST/v1 model=ID   # the model of the agent: kept in life.settings.json, beside life.db
 lifelog day --human
 lifelog serve                              # http://127.0.0.1:7777 — open it in a browser; this machine only
 lifelog serve --public --token-file ~/life/token   # for your other devices: every request needs the token
@@ -286,18 +287,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
   `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
   action: it writes files beside the program.
-- **Owner-only actions.** `register-metric`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links` are
+- **Owner-only actions.** `register-metric`, `settings`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links` are
   refused to an `agent:*` or `import:*` writer and are never MCP tools. The full-text check of `integrity-check` holds the write
   lock while it runs, so an agent must not start it. `rebuild-search` (`POST /search/rebuild`) is the repair of the
   full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
   rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save
   ([integrity checks](docs/contract/integrity-checks.md)). `GET /integrity` offers the two repairs, so the owner
-  reads what needs them and runs them on one page. An agent that imports with the owner asks for them in the conversation.
+  reads what needs them and runs them on one page. `GET /settings` is owner-only too, and is the one owner-only read that is not an action. An agent that imports with the owner asks for them in the conversation.
 - **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
-  The owner's decision (2026-10-15): `ask`, the Conversations pages, the chat sidebar and the voice note are
-  removed, with the model and transcriber endpoints they needed. The owner talks to `life.db` through a coding
-  agent's MCP tools, and a recording is kept as a file with its text ([D9](docs/decisions/D09-binary-files.md)).
-  The conversation pages already written stay plain pages, filed in `Conversations`.
+  The owner's decision (2026-10-15): `ask` and the voice note are removed, with the model and transcriber
+  endpoints they needed. The core calls no model. The owner talks to `life.db` through a coding agent's MCP tools, and
+  a recording is kept as a file with its text ([D9](docs/decisions/D09-binary-files.md)). A conversation is a plain
+  page that an agent writes to (the decision "The conversation of a day", below).
 - **Renames select a preferred name on the same identity**, retaining direct aliases as
   [titles and wikilinks](docs/contract/titles-and-wikilinks.md) ("Renames") requires and
   [rename a page](docs/cookbook/rename-a-page.md) writes; `lifelog rename` and the API's `rename` action run it.
@@ -313,6 +314,32 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the action in-process, `--snapshots` choosing the folder, as it does for `serve`; with `--url` the server's folder is
   the one, and `--snapshots` is refused.
   Restoring stays the manual procedure of the cookbook.
+- **The settings file** ([plan 146](docs/plans/146-settings-and-the-chat-column.md)). The settings of the application
+  are a JSON file beside the database, `life.settings.json` for `life.db` (the path with `.db` cut and
+  `.settings.json` added), mode 0600, written through a temporary file and a rename. They are not in `life.db`: the
+  model key is a secret, and a snapshot copies the database. They are not in `docs/` either: they belong to this
+  application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
+  chat-completions protocol, ending in `/v1`), `model` (the model id) and `model_key` (a bearer credential, optional);
+  a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
+  `GET /settings` are the owner's: refused to an `agent:*` or `import:*` writer, and the action is never an MCP tool.
+  `GET /actions` offers `settings` with no value, because any writer reads the catalog; only `GET /settings` fills
+  the values, the key too, so the owner's form sends the key back as it is. A field of the type `password` is drawn
+  as one. A field left out of `settings` stays, and an empty one clears the setting. A store with no settings path (a
+  test) refuses a read and a write. The core calls no model: the agent reads the settings.
+- **The conversation of a day** ([plan 146](docs/plans/146-settings-and-the-chat-column.md), after
+  [plan 145](docs/plans/145-whatsapp.md)). The conversation of a day is the plain page `Conversation YYYY-MM-DD`, filed
+  in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn is a paragraph: `**Owner** (HH.MM): text` or
+  `**lifelog** (HH.MM): text`, with the tool lines of the agent (`` - `tool` ``) just before its paragraph. The time is
+  the server's local time. [API.md](API.md#conversation) states the format for an agent in any language, and
+  `internal/api/conversation.go` holds it in this program. `say` (`POST /days/{day}/say`, `today` allowed) adds the
+  owner's paragraph and makes the page on the first turn of the day, in one write; it is not the owner's alone, so
+  the WhatsApp extension relays the owner's words with it. `GET /days/{day}/conversation` gives the turns, parsed from
+  the body, with the page's properties, links and actions when the page exists (as a series carries a metric's page,
+  [plan 144](docs/plans/144-one-view-for-a-metric.md)), and `say`. A browser's `GET /pages/{id}` of a live conversation
+  page is a 303 to it, so there is one view of a conversation. The agent (`lifelog whatsapp`) watches today's page
+  and answers on it; the core calls no model. In the browser, a right column on every page shows today's turns and the
+  composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's; every form
+  works without it.
 - **One delete, of one row or several** ([plan 107](docs/plans/107-delete-several-at-once.md),
   [plan 131](docs/plans/131-the-pareto-pass.md)). `tombstone-pages` (`POST /pages/tombstone`) takes `ids`, separated
   by spaces or commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. A page
@@ -446,6 +473,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | action | API | CLI | MCP tool | browser |
 |---|---|---|---|---|
 | `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
+| `say` | `POST /days/{day}/say` | `do say` | `say` | every page: the chat column; a day: Chat |
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
 | `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
@@ -469,6 +497,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | a reading: Retract |
 | `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | a page, More: Rename |
 | `register-metric` | `POST /metrics` | `do register-metric` | none, the owner's | Metrics: New metric |
+| `settings` | `POST /settings` | `do settings` | none, the owner's | Settings |
 | `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
 | `search` | `GET /search` | `do search`, `search` | `search` | the sidebar: Search (the search dialog) |
 | `browse` | `GET /browse` | `do browse` | `browse` | the sidebar: Browse |
@@ -481,7 +510,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks: Resync links |
 
 The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/weeks/{week}`, `/months/{m}`,
-`/years/{y}`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
+`/years/{y}`, `/days/{day}/conversation`, `/settings`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
 which the CLI's `get` and the MCP tool `get` read, or the browser's presentation (`/render`, the fonts, the manifest,
 the icon and the pictures), which the CLI and the MCP server do not carry.
 

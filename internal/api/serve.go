@@ -114,7 +114,7 @@ func newServer(s *core.Store) *server {
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
 		"search": h.search, "browse": h.browse, "plans": h.plans, "find": h.find, "open-day": h.openDay,
 		"random-page": h.randomPage, "snapshot": h.snapshot,
-		"rebuild-search": h.rebuildSearch, "resync-links": h.resyncLinks,
+		"rebuild-search": h.rebuildSearch, "resync-links": h.resyncLinks, "say": h.say, "settings": h.saveSettings,
 	})
 	// The routes that are not actions: the resources, the editor's helpers and the files of the browser.
 	m.HandleFunc("GET /{$}", h.serve(h.root))
@@ -122,6 +122,8 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /days", h.serve(h.days))
 	m.HandleFunc("GET /days/today", h.serve(h.today))
 	m.HandleFunc("GET /days/{day}", h.serve(h.day))
+	m.HandleFunc("GET /days/{day}/conversation", h.serve(h.conversation))
+	m.HandleFunc("GET /settings", h.serve(h.settings))
 	m.HandleFunc("GET /months/{month}", h.serve(h.month))
 	m.HandleFunc("GET /weeks/today", h.serve(h.currentWeek))
 	m.HandleFunc("GET /weeks/{week}", h.serve(h.week))
@@ -515,7 +517,7 @@ func source(r *http.Request) string {
 var writerRE = regexp.MustCompile(`^[a-z0-9_:.-]{1,64}$`)
 
 // requireOwner refuses a writer that is not the owner: an agent (agent:*) or an import (import:*). The owner-only
-// actions (register-metric, snapshot, integrity-check, rebuild-search, resync-links) are refused to any other writer,
+// actions (register-metric, settings, snapshot, integrity-check, rebuild-search, resync-links) are refused to any other writer,
 // on every surface.
 // It checks the grammar of the name too, which repeats the CHECKs on purpose. An owner-only action can read and meet
 // no CHECK, and the prefix tests below would pass "Agent:x" as the owner. Any other write leaves the name to the

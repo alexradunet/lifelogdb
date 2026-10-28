@@ -582,3 +582,38 @@ func (s *Store) searchNewest(ctx context.Context, q, omit string, args []any, li
 	}
 	return out, nil
 }
+
+// AppendParagraph adds paragraph to the end of the page titled title, after a blank line, in one write. The page is
+// made on the first call, written on day, with head as its first line, and filed in category when that is not empty.
+// A tombstoned page is revived, as a capture revives a day page. A title that a page of another type holds is a 409.
+// It returns the page's id and what the save did to the wikilinks of the body.
+func (s *Store) AppendParagraph(ctx context.Context, source, title, day, category, head, paragraph string) (int64, Sync, error) {
+	m, err := alone(s, ctx, source, func(t *Tx) (made, error) {
+		p, err := t.lookupWithBody(title)
+		if err != nil {
+			return made{}, err
+		}
+		if p == nil {
+			id, r, err := t.CreatePage(title, head+"\n\n"+paragraph, day)
+			if err != nil {
+				return made{}, err
+			}
+			return made{id, r}, t.fileNew(id, category)
+		}
+		if p.Type != "page" {
+			return made{}, Conflict("%q is a %s, not a plain page: a paragraph cannot be added to it", title, p.Type)
+		}
+		if p.Deleted {
+			if err := t.setDeleted(p.ID, false); err != nil {
+				return made{}, err
+			}
+		}
+		body := paragraph
+		if strings.TrimSpace(p.Body) != "" {
+			body = strings.TrimRight(p.Body, "\r\n") + "\n\n" + paragraph
+		}
+		r, err := t.SetBody(p.ID, body)
+		return made{p.ID, r}, err
+	})
+	return m.id, m.sync, err
+}

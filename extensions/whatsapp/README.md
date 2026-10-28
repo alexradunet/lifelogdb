@@ -11,18 +11,24 @@ refuses the owner-only actions to such a writer.
 flowchart LR
   P["the owner's phone, WhatsApp"] <-->|"WhatsApp Web protocol, whatsmeow"| W["lifelog-whatsapp: the chat"]
   W --> A["the agent: one turn at a time"]
-  A <-->|"chat completions with tools, net/http"| M["the model at LIFELOG_MODEL_URL"]
+  A -->|"GET /settings at each turn, no source"| L
+  A <-->|"chat completions with tools, net/http"| M["the model named in Settings"]
   A <-->|"HTTP, Lifelog-Source: agent:whatsapp, Bearer token"| L["lifelog serve, 127.0.0.1:7777"]
 ```
 
 ## How it works
 
-- **One conversation a day, and it is a page.** The page `Conversation YYYY-MM-DD` (the local day of the machine) is
-  made on the first turn of the day, in the category `Conversations`. Its first line is `[[YYYY-MM-DD]]`, so the day
-  page lists it. A message from the phone is added as `**Owner** (HH.MM): text`. The tool calls and the reply are
-  added as lines and `**lifelog** (HH.MM): text`. The model reads the whole page on each turn. The extension keeps
-  nothing else of the conversation.
-- **Continued anywhere.** Every 3 seconds the extension reads today's page. Text added to its end on another surface
+- **One conversation a day, and it is a page.** The core owns the convention (the page `Conversation YYYY-MM-DD`,
+  its category, its first line, the paragraph of a turn: see the conversation class in [API.md](../../API.md)). A
+  message from the phone goes in with the action `say` (`day` = `today`). The extension reads the page with
+  `GET /days/{day}/conversation` and holds no title and no category. The tool calls and the reply are added with
+  `save-body`, as lines and `**lifelog** (HH.MM): text`. The model reads the whole page on each turn. The extension
+  keeps nothing else of the conversation.
+- **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, with the owner's
+  token and no `Lifelog-Source` (the read is the owner's, and a read writes nothing). A change in Settings is seen
+  at the next turn. With no model set, the reply of the turn is one line, "No model is set: open Settings in
+  lifelog.", on the page and on the phone. The agent keeps running.
+- **Continued anywhere.** Every 3 seconds the extension reads today's conversation. Text added to its end on another surface
   (the browser, `lifelog do save-body`, an MCP tool) is an owner's turn: the reply is added to the page and sent on
   WhatsApp. Any other change of the page is adopted and answered with nothing. A body is read with its CRLF line
   endings made LF (a browser submits a textarea that way), and saved with LF. When the owner saves the page while
@@ -71,12 +77,13 @@ From the repository root: `go build -C extensions/whatsapp -o ../../lifelog-what
 
 `--source` is not a flag: the extension always writes as `agent:whatsapp`.
 
-| environment | meaning |
-|---|---|
-| `LIFELOG_MODEL_URL` | The base URL of a server that speaks the OpenAI chat-completions protocol, ending in `/v1`. Required to serve. |
-| `LIFELOG_MODEL` | The model id. Required to serve. |
-| `LIFELOG_MODEL_KEY` | A bearer credential for the model server. Optional. It is never a flag and never in a log line. |
-| `LIFELOG_URL`, `LIFELOG_TOKEN` | Set by `lifelog whatsapp`, or by the owner. |
+The model is not set here. Set it on the Settings page of lifelog (`/settings`), or with
+`lifelog do settings model_url=http://HOST/v1 model=ID model_key=KEY`. `model_url` is the base URL of a server that
+speaks the OpenAI chat-completions protocol, ending in `/v1`. `model` is the model id. `model_key` is a bearer
+credential for the model server, and it is optional. The settings are in a file beside `life.db` (mode 0600). The key
+is never a flag, never an environment variable and never in a log line.
+
+`LIFELOG_URL` and `LIFELOG_TOKEN` are set by `lifelog whatsapp`, or by the owner.
 
 The state folder is `os.UserConfigDir()/lifelog-whatsapp/` (mode 0700). It holds `session.db` (mode 0600), the
 store of the keys of the account, and `state.json`, the id, the version and the body of the conversation page after
@@ -93,39 +100,14 @@ the extension's own last save. To pair again, delete `session.db`.
 
 ## The unit
 
-This unit runs the agent beside `lifelog.service`. `whatsapp.env` has mode 0600 and holds `LIFELOG_MODEL_URL`,
-`LIFELOG_MODEL` and `LIFELOG_MODEL_KEY`. Run `lifelog whatsapp login` once, as the same user, before the unit starts.
-
-```ini
-[Unit]
-Description=lifelog WhatsApp agent
-After=network-online.target lifelog.service
-Wants=lifelog.service
-
-[Service]
-User=cico
-Group=cico
-EnvironmentFile=/home/cico/life/whatsapp.env
-ExecStart=/home/cico/.local/bin/lifelog whatsapp --url http://127.0.0.1:7777 --token-file /home/cico/life/token --owner NUMBER
-Restart=always
-RestartSec=10
-RestartPreventExitStatus=2 3
-KillSignal=SIGTERM
-TimeoutStopSec=30
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/cico/.config/lifelog-whatsapp
-
-[Install]
-WantedBy=multi-user.target
-```
+[`deploy/lifelog-whatsapp.service`](../../deploy/lifelog-whatsapp.service) is a reference copy of the unit that runs
+the agent beside `lifelog.service`. It has no `EnvironmentFile`: the model comes from the Settings of lifelog. Run
+`lifelog whatsapp login` once, as the same user, before the unit starts.
 
 ## Privacy
 
 - The text of the chat, and the text of the pages that the model reads, go to the model server that the owner
-  configures. A hosted model sees them.
+  sets in Settings. A hosted model sees them.
 - The conversation pages are in `life.db`, so every snapshot of it holds them.
 - The session store holds the keys of the account. Keep the state folder private and out of git.
 - A model writes with no approval step. Its rows carry `agent:whatsapp`. Nothing is ever deleted.
@@ -134,7 +116,7 @@ WantedBy=multi-user.target
 
 `go vet ./... && go test ./...` in this folder. The tests of `agent/` run on a fake catalog, a fake model and a fake
 chat. `e2e_test.go` builds the real `lifelog` and `lifelog-whatsapp` into one folder and runs
-`lifelog whatsapp --terminal` against a fake model. It needs the `go` command and the sources of the repository.
+`lifelog whatsapp --terminal` against a fake model. It sets the model with `lifelog do settings`, so it needs a `lifelog` that has the action. It needs the `go` command and the sources of the repository.
 
 **What has no test:** the connection to WhatsApp (`login`, the connection, `Send`, `Typing`, `MarkRead`, the
 `LoggedOut` event). It needs a real number. The filter, the QR renderer and the state folder have tests.

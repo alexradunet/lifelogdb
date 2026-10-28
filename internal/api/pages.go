@@ -74,6 +74,15 @@ func (h *server) page(r *http.Request) (*siren.Entity, error) {
 		}
 		return nil, redirect{to}
 	}
+	// A live conversation page has one view in a browser, the conversation of its day, which carries the page. The
+	// query goes with it, as for a metric.
+	if day := conversationDay(e.Title); wantsHTML(r) && day != "" && !slices.Contains(e.Class, "deleted") {
+		to := conversationHref(day)
+		if r.URL.RawQuery != "" {
+			to += "?" + r.URL.RawQuery
+		}
+		return nil, redirect{to}
+	}
 	return e, nil
 }
 

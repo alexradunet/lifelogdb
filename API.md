@@ -14,7 +14,8 @@ and this page disagree, so a property here is a property on the wire.
   allowed to call it; `--tls-cert`/`--tls-key` serve HTTPS. Without one of them the answer is 401 `token_required`.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
-  or `import:…` is refused the owner-only actions: `register-metric`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links`.
+  or `import:…` is refused the owner-only actions: `register-metric`, `settings`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links`,
+  and the owner-only read `GET /settings` (403 `forbidden`).
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
@@ -46,7 +47,9 @@ that follows `actions` needs no rules of its own. A `required` field that is mis
 `invalid`, the message `missing field <name>`), and nothing is written. `search` is the one exception: with no `q`,
 or a `q` of blanks only, it answers with no hits ([search](#search)). A field of the type `date` takes a local day,
 `YYYY-MM-DD`, or the word `today`: the server's local day, the day that `GET /days/today` redirects to. Any other
-value that is not empty is refused (422 `invalid`).
+value that is not empty is refused (422 `invalid`). A field of the type `password` is a text that the catalog never
+fills in: `GET /actions` leaves its value empty, and only the owner's own resource (`GET /settings`) fills it. A browser
+draws it as a password input.
 
 One read answers `303` to a thing picked at random ([plan 130](docs/plans/130-the-explore-pass.md)): `random-page`
 (`GET /pages/random?kind=`), to a live thing of a Browse kind (`page` by default, or `all`), never a day page and never
@@ -101,6 +104,9 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 `GET /actions`: no properties; `actions` is the whole catalog with templated hrefs. With `new=<action>` and a value
 for each path field of that action (`/actions?new=rename&id=12`), that one action has its `href` filled in, as a
 resource offers it; a browser, which cannot fill a path from a form, opens an action so.
+
+Two actions have a section of their own, as the resource where they are drawn: `say` ([conversation](#conversation))
+and the owner's `settings` ([settings](#settings)).
 
 ### days
 
@@ -809,6 +815,88 @@ cookie (valid for one year) and redirects home; `POST /logout` clears it.
 |---|---|---|
 | `failed` | boolean | the last attempt was refused |
 | `logged_in` | boolean | this browser already carries the cookie |
+
+### settings
+
+`GET /settings` (owner-only: 403 `forbidden` to an `agent:*` or `import:*` writer) and `POST /settings` (the owner's
+action `settings`, refused the same way; the answer is this entity, with `result` the sentence `Settings saved.`). The
+settings are the application's, in a file beside the database (`life.db` gives `life.settings.json`, mode 0600), and
+not rows of `life.db`. Links: `self`, `index`. Actions: `settings`, with the values filled in, the key included, so
+the owner's form sends the key back as it is. `GET /actions` offers `settings` with no value filled in. A field of
+`settings` that a request leaves out stays as it is; an empty one clears that setting. A server that was started with
+no settings file path refuses both routes (500, the message says so).
+
+| property | type | meaning |
+|---|---|---|
+| `model_url` | string | the base URL of a server that speaks the chat-completions protocol, ending in `/v1`; `""` when not set |
+| `model` | string | the model id; `""` when not set |
+| `model_key` | string | a bearer credential for the server; absent when not set |
+
+### conversation
+
+`GET /days/{day}/conversation` (`day` is a local day or the word `today`; another value is 422): the talk of a day
+with an agent, as the turns of one plain page. Class `conversation`, and `page` too when the page exists. The core calls
+no model: an agent (an extension) reads the page and writes its own paragraphs in the format below. Links: `self`, `day`
+(the day view), `index`, and `page` (the conversation page) when it exists. Actions: `say` first, with `day` filled in;
+when the page exists, the actions of [the page](#page-person-place-file) after it (`save-body` with the `version`, and
+the others). When the page exists, the answer carries the page as a series carries a metric's page: its properties
+(the rows below that follow `turns`), its links but `self` and `index`, and its embedded links. A page that is
+deleted is no conversation: the answer has no turns, and `say` makes it live again. A browser's `GET /pages/{id}` of a
+live conversation page is a 303 to this resource, with the query kept; the JSON of the page is the page's own.
+
+`POST /days/{day}/say` (the action `say`, any writer): the field `text` is added to the page of the day as the
+owner's paragraph, with the time of the server's clock in its zone. The page is made on the first turn of the day, in
+the same write. The answer is this entity, and `result` is the [save result](#result-of-capture-create-page-save-body).
+A `text` that is empty or only blanks is 422 and writes nothing.
+
+**The format of the page.** An agent in any language reads and writes the conversation with `save-body`, or with `say`
+for the owner's turn. The page:
+
+- is titled `Conversation YYYY-MM-DD` (the day), is filed in the category `Conversations`, and starts with the line
+  `[[YYYY-MM-DD]]`;
+- is read as paragraphs: a block of lines between blank lines. Line ends are LF; CRLF is read as LF;
+- has a turn in each paragraph whose first line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `, then
+  the words, which may go on in the next lines of the same paragraph. `HH.MM` is the server's local time. The agent
+  writes `**lifelog**`, and `say` writes `**Owner**`;
+- has the tool lines of a `lifelog` turn in the paragraph just before it, each line starting with ``- ` ``, for example
+  ``- `search`: no hits``. A tool block that no `lifelog` paragraph follows is read as a free paragraph;
+- may hold any other paragraph (the owner edited the page). It is a turn of `who` `text`, shown as it is. The first
+  line `[[YYYY-MM-DD]]` is no turn. A reply that has a blank line in it is read as a turn, then free paragraphs:
+  an agent writes a reply with no blank line.
+
+| property | type | meaning |
+|---|---|---|
+| `day` | day | the day of the conversation |
+| `turns[]` | list | the turns, in the order of the page; empty when the page does not exist |
+| `turns[].who` | string | `owner`, `lifelog`, or `text` for a free paragraph |
+| `turns[].at` | string | `HH.MM`; absent for a free paragraph |
+| `turns[].text` | string | the words of the turn, without the mark |
+| `turns[].tools` | list | the tool lines of a `lifelog` turn, as written, with the leading ``- ` ``; absent when none |
+| `id` | integer | only when the page exists: its id, and then the rows of the page that follow |
+| `entity_type` | string | `page` |
+| `title` | string | `Conversation YYYY-MM-DD` |
+| `body` | string | the body, as the page has it |
+| `created_at` | instant | when the page was created |
+| `version` | string | the version token a `save-body` must send back; it changes with every write, so a client that waits for an answer compares it |
+| `is_day_page` | boolean | always false |
+| `cover` | object | the page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover.id` | integer | |
+| `cover.title` | string | |
+| `cover.embed` | string | |
+| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-place-file) |
+| `links[].kind` | string | |
+| `links[].id` | integer | |
+| `links[].title` | string | |
+| `links[].entity_type` | string | |
+| `links[].note` | string | |
+| `links[].context` | string | |
+| `backlinks[]` | list | the links that end at the page, the same shape |
+| `backlinks[].kind` | string | |
+| `backlinks[].id` | integer | |
+| `backlinks[].title` | string | |
+| `backlinks[].entity_type` | string | |
+| `backlinks[].note` | string | |
+| `backlinks[].context` | string | |
 
 ## Result shapes
 

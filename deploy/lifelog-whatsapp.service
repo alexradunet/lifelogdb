@@ -1,0 +1,27 @@
+# Reference copy. Compare it with the installed unit before you replace it (deploy/README.md).
+# The model is not set here: the agent reads it from the Settings of lifelog at each turn.
+[Unit]
+Description=lifelog WhatsApp agent
+After=network-online.target lifelog.service
+Wants=lifelog.service
+
+[Service]
+Type=simple
+# Replace OWNER, NUMBER and the paths. Run `lifelog whatsapp login` once, as the same user, before the first start.
+User=OWNER
+Group=OWNER
+ExecStart=/home/OWNER/.local/bin/lifelog whatsapp --url http://127.0.0.1:7777 --token-file /home/OWNER/lifelog/token --owner NUMBER
+Restart=always
+RestartSec=10
+# Exit 2: not paired. Exit 3: the connection ended for good. The owner acts first.
+RestartPreventExitStatus=2 3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/OWNER/.config/lifelog-whatsapp
+
+[Install]
+WantedBy=multi-user.target

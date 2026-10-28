@@ -69,6 +69,7 @@ func TestAnActionWithAFileFieldIsNotATool(t *testing.T) {
 		{Name: "add-file", Method: "POST", Href: "/files", Fields: []siren.Field{{Name: "original", Type: "file", Title: "The file"}, {Name: "day", Type: "date"}}},
 		{Name: "set-cover", Method: "POST", Href: "/pages/{id}/cover", Fields: []siren.Field{{Name: "id", In: "path", Required: true}, {Name: "picture", Type: "file"}}},
 		{Name: "find", Method: "GET", Href: "/search", Fields: []siren.Field{{Name: "q", Type: "text"}}},
+		{Name: "say", Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{{Name: "day", In: "path", Required: true}, {Name: "text", Type: "textarea", Required: true}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +79,6 @@ func TestAnActionWithAFileFieldIsNotATool(t *testing.T) {
 		names = append(names, tl.name)
 	}
 	if got := strings.Join(names, " "); got != "find get" {
-		t.Errorf("tools %q, want find and get only", got)
+		t.Errorf("tools %q, want find and get only (no file field, no say)", got)
 	}
 }

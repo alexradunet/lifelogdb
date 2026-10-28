@@ -82,10 +82,27 @@ func (b built) run(args ...string) ([]byte, error) {
 	return cmd.Output()
 }
 
+// setModel sets the model in the settings file beside the database, as the owner does with `lifelog do settings`.
+func (b built) setModel(t *testing.T, url, key string) {
+	t.Helper()
+	args := []string{"do", "settings", "--db", b.db, "model_url=" + url, "model=test-model"}
+	if key != "" {
+		args = append(args, "model_key="+key)
+	}
+	if out, err := b.run(args...); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			out = append(out, ee.Stderr...)
+		}
+		t.Fatalf("lifelog do settings: %v\n%s", err, out)
+	}
+}
+
 // fakeModel answers the first step with a capture tool call and the second with text.
 type fakeModel struct {
 	mu   sync.Mutex
 	reqs []map[string]any
+	auth []string // the Authorization header of each request
 }
 
 func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +110,7 @@ func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 	f.mu.Lock()
 	f.reqs = append(f.reqs, req)
+	f.auth = append(f.auth, r.Header.Get("Authorization"))
 	n := len(f.reqs)
 	f.mu.Unlock()
 	if r.URL.Path != "/v1/chat/completions" {
@@ -112,8 +130,10 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	srv := httptest.NewServer(model)
 	defer srv.Close()
 
+	b.setModel(t, srv.URL+"/v1", "synthetic-key")
+
 	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
-	cmd.Env = env(t, "LIFELOG_MODEL_URL="+srv.URL+"/v1", "LIFELOG_MODEL=test-model", "LIFELOG_MODEL_KEY=synthetic-key")
+	cmd.Env = env(t)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -177,6 +197,9 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	if len(model.reqs) != 2 {
 		t.Fatalf("%d model requests, want 2", len(model.reqs))
 	}
+	if model.auth[0] != "Bearer synthetic-key" {
+		t.Errorf("the model got the header %q, want the key from the settings", model.auth[0])
+	}
 	msgs, _ := model.reqs[0]["messages"].([]any)
 	user, _ := msgs[len(msgs)-1].(map[string]any)
 	if s, _ := user["content"].(string); !strings.Contains(s, "[["+day+"]]") || !strings.HasSuffix(s, "I walked by the river") {
@@ -203,6 +226,9 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 		t.Fatalf("lifelog get: %v: %s", err, out)
 	}
 	body, _ := page.Properties.(map[string]any)["body"].(string)
+	if strings.Contains(string(out), "synthetic-key") {
+		t.Error("the model key is on the conversation page")
+	}
 	for _, want := range []string{"[[" + day + "]]", "**Owner** (", "): I walked by the river", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the conversation page lacks %q: %q", want, body)
@@ -214,20 +240,17 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 func TestTheAgentRefusesWhatItCannotRun(t *testing.T) {
 	b := build(t)
 	missing := filepath.Join(b.dir, "missing", "life.db")
-	model := []string{"LIFELOG_MODEL_URL=http://127.0.0.1:1/v1", "LIFELOG_MODEL=m"}
 	for _, tc := range []struct {
 		name string
 		line []string
 		env  []string
 		want string
 	}{
-		{"no model", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db}, nil, "LIFELOG_MODEL_URL and LIFELOG_MODEL"},
-		{"no model id", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db}, []string{"LIFELOG_MODEL_URL=http://127.0.0.1:1/v1"}, "LIFELOG_MODEL_URL and LIFELOG_MODEL"},
-		{"no owner", []string{b.lifelog, "whatsapp", "--terminal", "--db", b.db}, model, "--owner is required"},
-		{"an owner that is not a number", []string{b.lifelog, "whatsapp", "--owner", "me", "--terminal", "--db", b.db}, model, "--owner is required"},
-		{"no server", []string{b.ext, "--owner", "123", "--terminal"}, model, "no LIFELOG_URL and no --url"},
-		{"no file", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", missing}, model, "no LIFELOG_URL and no --url"},
-		{"a source flag", []string{b.lifelog, "whatsapp", "--owner", "123", "--source", "x", "--db", b.db}, model, "flag provided but not defined: -source"},
+		{"no owner", []string{b.lifelog, "whatsapp", "--terminal", "--db", b.db}, nil, "--owner is required"},
+		{"an owner that is not a number", []string{b.lifelog, "whatsapp", "--owner", "me", "--terminal", "--db", b.db}, nil, "--owner is required"},
+		{"no server", []string{b.ext, "--owner", "123", "--terminal"}, nil, "no LIFELOG_URL and no --url"},
+		{"no file", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", missing}, nil, "no LIFELOG_URL and no --url"},
+		{"a source flag", []string{b.lifelog, "whatsapp", "--owner", "123", "--source", "x", "--db", b.db}, nil, "flag provided but not defined: -source"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(tc.line[0], tc.line[1:]...)
@@ -250,7 +273,7 @@ func TestTheAgentRefusesWhatItCannotRun(t *testing.T) {
 func TestServingWithoutAPairingExitsWithTwo(t *testing.T) {
 	b := build(t)
 	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--db", b.db)
-	cmd.Env = env(t, "LIFELOG_MODEL_URL=http://127.0.0.1:1/v1", "LIFELOG_MODEL=m")
+	cmd.Env = env(t)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()
@@ -273,8 +296,9 @@ func TestAnInterruptEndsTheTerminalAgentAtOnce(t *testing.T) {
 	b := build(t)
 	srv := httptest.NewServer(&fakeModel{})
 	defer srv.Close()
+	b.setModel(t, srv.URL+"/v1", "")
 	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
-	cmd.Env = env(t, "LIFELOG_MODEL_URL="+srv.URL+"/v1", "LIFELOG_MODEL=test-model")
+	cmd.Env = env(t)
 	stdin, err := cmd.StdinPipe() // stays open: the read of the agent blocks on it
 	if err != nil {
 		t.Fatal(err)

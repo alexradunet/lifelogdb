@@ -13,7 +13,7 @@ import (
 // convo is today's conversation page as the extension last saw it. The file state.json keeps it after the
 // extension's own last save, so the watcher can tell the extension's saves from the changes of the owner.
 type convo struct {
-	Title   string    `json:"title"`
+	Day     string    `json:"day"`
 	ID      string    `json:"id"`
 	Version string    `json:"version"`
 	Body    string    `json:"body"`

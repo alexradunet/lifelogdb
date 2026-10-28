@@ -32,7 +32,9 @@ func tools(actions []siren.Action) ([]tool, error) {
 	var list []tool
 	for i := range actions {
 		a := &actions[i]
-		if a.Owner || takesFile(a) {
+		if a.Owner || takesFile(a) || a.Name == "say" {
+			// say is the owner's turn: a model that could call it would write owner turns that the watcher answers,
+			// a loop. Plan 102 left ask out of the tools for the same reason.
 			continue
 		}
 		name := toolName(a.Name)

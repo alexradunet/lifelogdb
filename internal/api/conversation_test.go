@@ -1,0 +1,231 @@
+package api_test
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"lifelog/internal/api"
+	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/siren"
+	"lifelog/internal/client"
+	"lifelog/internal/core"
+	"lifelog/internal/db/dbtest"
+)
+
+const convDay = "2031-05-14"
+
+// conversationStore is a store whose clock stands at 09:07 UTC on convDay, and whose zone is UTC+2, so the stamp of a
+// turn is 11.07.
+func conversationStore(t *testing.T) (*client.Client, http.Handler, *core.Store) {
+	t.Helper()
+	at := time.Date(2031, 5, 14, 9, 7, 0, 0, time.UTC)
+	s := &core.Store{DB: dbtest.New(t), Clock: func() time.Time { return at }, Zone: time.FixedZone("test", 2*3600)}
+	h := api.New(s)
+	return client.InProcess(h, "cli"), h, s
+}
+
+func say(t *testing.T, c *client.Client, day, words string) (*siren.Entity, error) {
+	t.Helper()
+	conv := apitest.Must(t)(c.Get(t.Context(), "/days/"+day+"/conversation"))
+	return c.Do(t.Context(), apitest.Action(t, conv, "say"), map[string]string{"text": words})
+}
+
+func bodyOf(t *testing.T, s *core.Store, title string) string {
+	t.Helper()
+	id, err := s.PageID(t.Context(), title)
+	if err != nil || id == 0 {
+		t.Fatalf("the page %s: %d %v", title, id, err)
+	}
+	p, err := s.PageByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p.Body
+}
+
+// TestSayMakesTheConversationPageAndAppendsTurns: the first turn makes the page Conversation DAY in the category
+// Conversations with the first line [[DAY]]; a second turn follows after a blank line; the stamp is the time in the
+// zone of the store; a browser's CRLF becomes LF; today is the store's day.
+func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
+	c, _, s := conversationStore(t)
+	e, err := say(t, c, "today", "How did I sleep?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	title := "Conversation " + convDay
+	want := "[[" + convDay + "]]\n\n**Owner** (11.07): How did I sleep?"
+	if got := bodyOf(t, s, title); got != want {
+		t.Errorf("the body after one turn: %q, want %q", got, want)
+	}
+	if e.Title != title || strings.Join(e.Class, " ") != "conversation page" {
+		t.Errorf("the answer: %q %v, want the conversation of the day, with its page", e.Title, e.Class)
+	}
+	if sync, _ := e.Result.(map[string]any); sync["linked"] == nil || !strings.Contains(fmt.Sprint(sync["linked"]), convDay) {
+		t.Errorf("the result: %v, want the sync of a body save, linking the day", e.Result)
+	}
+	if _, err := say(t, c, convDay, "Line one\r\nline two\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	want += "\n\n**Owner** (11.07): Line one\nline two"
+	if got := bodyOf(t, s, title); got != want {
+		t.Errorf("the body after two turns: %q, want %q", got, want)
+	}
+	id, _ := s.PageID(t.Context(), title)
+	p, err := s.PageByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Day != convDay {
+		t.Errorf("the page is of the day %q, want %s", p.Day, convDay)
+	}
+	filed := false
+	for _, l := range p.Out {
+		filed = filed || l.Kind == "part-of" && l.Title == "Conversations"
+	}
+	if !filed {
+		t.Errorf("the page is not filed in Conversations: %v", p.Out)
+	}
+}
+
+// TestSayRefusesWhatItCannotWrite: an empty text, a text of blanks and a day that is not a day are 422 and write
+// nothing, not even the page.
+func TestSayRefusesWhatItCannotWrite(t *testing.T) {
+	c, _, s := conversationStore(t)
+	conv := apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation"))
+	say := apitest.Action(t, conv, "say")
+	for _, words := range []string{"", "  \r\n ", "\n"} {
+		if _, err := c.Do(t.Context(), say, map[string]string{"text": words}); apitest.Status(err) != 422 {
+			t.Errorf("say %q: %v, want 422", words, err)
+		}
+	}
+	if _, err := c.Get(t.Context(), "/days/tomorrow/conversation"); apitest.Status(err) != 422 {
+		t.Errorf("GET /days/tomorrow/conversation: %v, want 422", err)
+	}
+	bad := say
+	bad.Href = "/days/not-a-day/say"
+	if _, err := c.Do(t.Context(), bad, map[string]string{"text": "Hello"}); apitest.Status(err) != 422 {
+		t.Errorf("say on a day that is not one: %v, want 422", err)
+	}
+	if id, err := s.PageID(t.Context(), "Conversation "+convDay); err != nil || id != 0 {
+		t.Errorf("a refused say made the page: %d %v", id, err)
+	}
+	if id, err := s.PageID(t.Context(), "Conversation not-a-day"); err != nil || id != 0 {
+		t.Errorf("a refused say made a page for a day that is not one: %d %v", id, err)
+	}
+}
+
+// TestTheConversationOfADay: a day with no page has no turns and offers say alone; a day with a page carries the
+// turns, the page's properties, links and actions, and say with its day filled; a tombstoned page is no conversation,
+// and a say revives it.
+func TestTheConversationOfADay(t *testing.T) {
+	c, _, s := conversationStore(t)
+	get := func() *siren.Entity { return apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation")) }
+	e := get()
+	props, _ := e.Properties.(map[string]any)
+	if turns, ok := props["turns"].([]any); !ok || len(turns) != 0 || props["day"] != convDay {
+		t.Errorf("a day with no talk: %v, want day and an empty turns", props)
+	}
+	if strings.Join(e.Class, " ") != "conversation" || len(e.Actions) != 1 || e.Actions[0].Name != "say" || e.Actions[0].Href != "/days/"+convDay+"/say" {
+		t.Errorf("a day with no talk: %v %v, want the class conversation and say alone", e.Class, e.Actions)
+	}
+	if apitest.Href(e, "self") != "/days/"+convDay+"/conversation" {
+		t.Errorf("self: %q", apitest.Href(e, "self"))
+	}
+	if _, err := say(t, c, convDay, "Hello"); err != nil {
+		t.Fatal(err)
+	}
+	// An agent's turn, as an extension writes it: the tool lines, then the paragraph.
+	id, _ := s.PageID(t.Context(), "Conversation "+convDay)
+	p, err := s.PageByID(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveBody(t.Context(), "agent:test", id, p.Body+"\n\n- `search`\n- `get`: no hits\n\n**lifelog** (11.08): Hello.", p.Version); err != nil {
+		t.Fatal(err)
+	}
+	e = get()
+	props, _ = e.Properties.(map[string]any)
+	turns, _ := props["turns"].([]any)
+	if len(turns) != 2 {
+		t.Fatalf("the turns: %v, want two", turns)
+	}
+	reply, _ := turns[1].(map[string]any)
+	if reply["who"] != "lifelog" || reply["at"] != "11.08" || reply["text"] != "Hello." || fmt.Sprint(reply["tools"]) != "[- `search` - `get`: no hits]" {
+		t.Errorf("the reply: %v", reply)
+	}
+	if props["id"] == nil || props["version"] == nil || props["title"] != "Conversation "+convDay || props["body"] == nil {
+		t.Errorf("the properties do not carry the page: %v", props)
+	}
+	if strings.Join(e.Class, " ") != "conversation page" || apitest.Href(e, "page") != siren.PageHref(id) {
+		t.Errorf("the class %v and the link page %q", e.Class, apitest.Href(e, "page"))
+	}
+	selves := 0
+	for _, l := range e.Links {
+		for _, r := range l.Rel {
+			if r == "self" {
+				selves++
+			}
+		}
+	}
+	if selves != 1 || e.Actions[0].Name != "say" {
+		t.Errorf("%d self links; the first action %q, want one and say", selves, e.Actions[0].Name)
+	}
+	apitest.Action(t, e, "save-body")
+	// Tombstone the page: it is no conversation, and a say brings it back with its text.
+	if err := s.Tombstone(t.Context(), "cli", id); err != nil {
+		t.Fatal(err)
+	}
+	if e = get(); strings.Join(e.Class, " ") != "conversation" || len(e.Actions) != 1 {
+		t.Errorf("a tombstoned page: %v %v, want no page", e.Class, e.Actions)
+	}
+	if _, err := say(t, c, convDay, "Back"); err != nil {
+		t.Fatal(err)
+	}
+	if turns, _ := get().Properties.(map[string]any)["turns"].([]any); len(turns) != 3 {
+		t.Errorf("after the say that revived the page: %v, want three turns", turns)
+	}
+}
+
+// TestAConversationPageHasOneViewInABrowser: a browser's GET of a live conversation page is a 303 to the conversation
+// of its day, with the query kept; the JSON of the page is the page's; a tombstoned page stays a page; the view is a
+// whole page for a day with no talk and for a day with a page.
+func TestAConversationPageHasOneViewInABrowser(t *testing.T) {
+	c, h, s := conversationStore(t)
+	browser := func(path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	browse(t, h, "/days/today/conversation")
+	if _, err := say(t, c, convDay, "Hello"); err != nil {
+		t.Fatal(err)
+	}
+	browse(t, h, "/days/today/conversation")
+	id, _ := s.PageID(t.Context(), "Conversation "+convDay)
+	self := siren.PageHref(id)
+	for query, want := range map[string]string{"": "/days/" + convDay + "/conversation", "?new=rename": "/days/" + convDay + "/conversation?new=rename"} {
+		if rec := browser(self + query); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != want {
+			t.Errorf("GET %s%s in a browser: %d %q, want 303 to %s", self, query, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+	if e := apitest.Must(t)(c.Get(t.Context(), self)); strings.Join(e.Class, " ") != "page" || apitest.Href(e, "self") != self {
+		t.Errorf("the JSON of the page: %v %q, want the page", e.Class, apitest.Href(e, "self"))
+	}
+	// A page that is not a conversation, and one with a title that is not of a day, are not redirected.
+	other := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-page"), map[string]string{"title": "Conversation notes"}))
+	if rec := browser(apitest.Href(other, "self")); rec.Code != http.StatusOK {
+		t.Errorf("a page titled Conversation notes: %d, want 200", rec.Code)
+	}
+	if err := s.Tombstone(t.Context(), "cli", id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := browser(self); rec.Code != http.StatusOK {
+		t.Errorf("a tombstoned conversation page: %d, want 200", rec.Code)
+	}
+}

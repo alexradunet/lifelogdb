@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"lifelog-whatsapp/client"
-	"lifelog-whatsapp/model"
 	"lifelog-whatsapp/siren"
 )
 
@@ -50,6 +49,28 @@ type fakeAPI struct {
 	// (the version changes, so the save is stale). alwaysStale does it before every save.
 	sneak       string
 	alwaysStale bool
+	// the settings of the model, as GET /settings answers them (an empty value is absent)
+	modelURL, model, modelKey string
+}
+
+// setModel changes the settings, as the owner would in lifelog.
+func (f *fakeAPI) setModel(url, name, key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.modelURL, f.model, f.modelKey = url, name, key
+}
+
+// today is the day that the fake API calls today.
+const today = "2031-05-20"
+
+// conversation is the entity of GET /days/{day}/conversation and of say: the page's id, version and body when the
+// page exists.
+func (f *fakeAPI) conversation(day string) siren.Entity {
+	props := map[string]any{"day": day, "turns": []any{}}
+	if p := f.find("Conversation " + day); p != nil {
+		props["id"], props["version"], props["body"] = p.id, p.version, p.body
+	}
+	return siren.Entity{Class: []string{"conversation"}, Properties: props}
 }
 
 func (f *fakeAPI) find(title string) *page {
@@ -109,18 +130,32 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/actions":
 		e = siren.Entity{Actions: catalog()}
-	case r.URL.Path == "/pages" && r.Method == "GET":
-		p := f.find(r.URL.Query().Get("title"))
-		if p == nil {
-			fail(404, "not_found")
+	case r.URL.Path == "/settings" && r.Method == "GET":
+		if strings.HasPrefix(r.Header.Get(siren.SourceHeader), "agent:") || strings.HasPrefix(r.Header.Get(siren.SourceHeader), "import:") {
+			fail(403, "forbidden")
 			break
 		}
-		http.Redirect(w, r, fmt.Sprintf("/pages/%d", p.id), http.StatusSeeOther)
-		return
-	case r.URL.Path == "/pages" && r.Method == "POST":
-		p := &page{id: len(f.pages) + 1, title: r.PostForm.Get("title"), body: r.PostForm.Get("body"), category: r.PostForm.Get("category"), version: 1}
-		f.pages = append(f.pages, p)
-		e = p.entity()
+		props := map[string]any{}
+		for k, v := range map[string]string{"model_url": f.modelURL, "model": f.model, "model_key": f.modelKey} {
+			if v != "" {
+				props[k] = v
+			}
+		}
+		e = siren.Entity{Class: []string{"settings"}, Properties: props}
+	case strings.HasSuffix(r.URL.Path, "/conversation") && r.Method == "GET":
+		e = f.conversation(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/days/"), "/conversation"))
+	case strings.HasSuffix(r.URL.Path, "/say") && r.Method == "POST":
+		day := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/days/"), "/say")
+		if day == "today" {
+			day = today
+		}
+		p := f.find("Conversation " + day)
+		if p == nil {
+			p = &page{id: len(f.pages) + 1, title: "Conversation " + day, body: "[[" + day + "]]", category: "Conversations", version: 1}
+			f.pages = append(f.pages, p)
+		}
+		p.body, p.version = p.body+"\n\n**Owner** (09.30): "+r.PostForm.Get("text"), p.version+1
+		e = f.conversation(day)
 	case strings.HasSuffix(r.URL.Path, "/body") && r.Method == "POST":
 		fmt.Sscanf(r.URL.Path, "/pages/%d/body", &id)
 		p := f.pages[id-1]
@@ -134,9 +169,6 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		p.body, p.version = r.PostForm.Get("body"), p.version+1
 		e = p.entity()
-	case strings.HasPrefix(r.URL.Path, "/pages/") && r.Method == "GET":
-		fmt.Sscanf(r.URL.Path, "/pages/%d", &id)
-		e = f.pages[id-1].entity()
 	case strings.HasSuffix(r.URL.Path, "/big"):
 		e.Title = strings.Repeat("é", maxResult)
 	case strings.HasSuffix(r.URL.Path, "/gone"):
@@ -145,13 +177,19 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(e)
 }
 
-// writes are the requests that are not a GET and not a write of a conversation page.
+func (f *fakeAPI) requests() []seen {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]seen(nil), f.reqs...)
+}
+
+// writes are the requests that are not a GET and not a write of a conversation page (save-body or say).
 func (f *fakeAPI) writes() []seen {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []seen
 	for _, r := range f.reqs {
-		if r.Method != "GET" && !strings.HasPrefix(r.Path, "/pages") {
+		if r.Method != "GET" && !strings.HasPrefix(r.Path, "/pages") && !strings.HasSuffix(r.Path, "/say") {
 			out = append(out, r)
 		}
 	}
@@ -163,11 +201,13 @@ func catalog() []siren.Action {
 		{Name: "open-day", Method: "GET", Href: "/days/{day}", Fields: []siren.Field{{Name: "day", Type: "date", In: "path"}}},
 		{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Title: "Text"}}},
-		{Name: "create-page", Method: "POST", Href: "/pages", Fields: []siren.Field{
-			{Name: "title", Type: "text", Required: true}, {Name: "body", Type: "textarea"}, {Name: "category", Type: "text"}}},
+		{Name: "say", Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{
+			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Required: true}}},
 		{Name: "save-body", Method: "POST", Href: "/pages/{id}/body", Fields: []siren.Field{
 			{Name: "id", Type: "number", In: "path", Required: true}, {Name: "body", Type: "textarea", Required: true}, {Name: "version", Type: "hidden", Required: true}}},
 		{Name: "snapshot", Owner: true, Method: "POST", Href: "/snapshot"},
+		{Name: "settings", Owner: true, Method: "POST", Href: "/settings", Fields: []siren.Field{
+			{Name: "model_url", Type: "text"}, {Name: "model", Type: "text"}, {Name: "model_key", Type: "password"}}},
 	}
 }
 
@@ -305,12 +345,13 @@ func startOn(t *testing.T, script func(n int, r chatReq) (int, string), api *fak
 	t.Helper()
 	r := &rig{api: api, mod: &fakeModel{script: script}, chat: newFakeChat(), state: state, tick: make(chan time.Time),
 		done: make(chan error, 1), now: fixedNow}
-	apiSrv := httptest.NewServer(r.api)
-	t.Cleanup(apiSrv.Close)
 	modSrv := httptest.NewServer(r.mod)
 	t.Cleanup(modSrv.Close)
+	r.api.setModel(modSrv.URL, "test-model", "")
+	apiSrv := httptest.NewServer(r.api)
+	t.Cleanup(apiSrv.Close)
 	a := &Agent{
-		Chat: r.chat, Client: client.Remote(apiSrv.URL, siren.AgentPrefix+Source, ""), Model: model.New(modSrv.URL, "test-model", ""),
+		Chat: r.chat, Client: client.Remote(apiSrv.URL, siren.AgentPrefix+Source, ""),
 		Owner: owner, State: r.state, Now: r.clock, Log: log.New(io.Discard, "", 0), Tick: r.tick,
 	}
 	ctx, cancel := context.WithCancel(t.Context())

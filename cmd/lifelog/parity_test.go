@@ -7,7 +7,10 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
+	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -307,6 +310,8 @@ func parityRows() []parityRow {
 		parityRow{"stale save-body", rowStaleSave},
 		parityRow{"save-body at the largest version", rowLargestVersion},
 		parityRow{"register-metric", rowRegisterMetric},
+		parityRow{"settings", rowSettings},
+		parityRow{"say", rowSay},
 		parityRow{"rebuild-search", rowRebuildSearch},
 		parityRow{"resync-links", rowResyncLinks},
 		parityRow{"promote a place", rowPromoteAPlace},
@@ -1297,4 +1302,65 @@ func rowPlanWeek53(x *parityRun) {
 		x.t.Errorf("plan on 2031-W53: %q, want the CHECK entities_period_exists", msg)
 	}
 	x.absent("2031-W53")
+}
+
+// settings is the owner's: an owner saves the model, reads it back with GET /settings, and clears a setting with an empty
+// value while a field left out stays; an agent gets a 403 and no file is written. The file has the mode 0600.
+func rowSettings(x *parityRun) {
+	if !x.owner {
+		x.refused("settings", map[string]string{"model": "x"}, http.StatusForbidden, "forbidden")
+		if _, err := os.Stat(x.store.SettingsPath); !os.IsNotExist(err) {
+			x.t.Errorf("a refused settings wrote the file: %v", err)
+		}
+		return
+	}
+	read := func() map[string]any { return props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/settings"))) }
+	x.ok("settings", map[string]string{"model_url": "http://127.0.0.1:1234/v1", "model": "synthetic-model", "model_key": "synthetic-key"})
+	if p := read(); p["model_url"] != "http://127.0.0.1:1234/v1" || p["model"] != "synthetic-model" || p["model_key"] != "synthetic-key" {
+		x.t.Errorf("GET /settings after a save: %v", p)
+	}
+	if fi, err := os.Stat(x.store.SettingsPath); err != nil {
+		x.t.Fatal(err)
+	} else if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		x.t.Errorf("the settings file has the mode %v, want 0600", fi.Mode().Perm())
+	}
+	x.ok("settings", map[string]string{"model": "other-model"}) // the fields left out stay
+	if p := read(); p["model"] != "other-model" || p["model_key"] != "synthetic-key" {
+		x.t.Errorf("GET /settings after a save of one field: %v", p)
+	}
+	x.ok("settings", map[string]string{"model_key": ""}) // an empty field clears
+	if p := read(); p["model_key"] != nil || p["model"] != "other-model" {
+		x.t.Errorf("GET /settings after clearing the key: %v", p)
+	}
+}
+
+// say is not the owner's: an owner and an agent both write the paragraph of a turn. The first turn makes the page in the
+// category Conversations with the first line; a second turn is appended after a blank line; an empty text is 422 and
+// writes nothing. The stamp is the time of the surface's clock, so the row checks its shape only.
+func rowSay(x *parityRun) {
+	x.refused("say", map[string]string{"day": "today", "text": " \n "}, http.StatusUnprocessableEntity, "invalid")
+	x.absent("Conversation " + parityToday)
+	e := x.ok("say", map[string]string{"day": "today", "text": "Hello."})
+	if !slices.Contains(e.Class, "conversation") || len(props(x.t, e)["turns"].([]any)) != 1 {
+		x.t.Errorf("say: %v %v, want the conversation with one turn", e.Class, e.Properties)
+	}
+	x.ok("say", map[string]string{"day": parityToday, "text": "Again."})
+	pe, err := x.page("Conversation " + parityToday)
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	p := props(x.t, pe)
+	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d\.\d\d\): Hello\.\n\n\*\*Owner\*\* \(\d\d\.\d\d\): Again\.$`)
+	if body, _ := p["body"].(string); !want.MatchString(body) {
+		x.t.Errorf("the body after two turns: %q", body)
+	}
+	id, _ := p["id"].(json.Number)
+	n, _ := id.Int64()
+	if got := x.categories(n); got != "Conversations" {
+		x.t.Errorf("the categories of the conversation: %q, want Conversations", got)
+	}
+	got := apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/today/conversation"))
+	if turns, _ := props(x.t, got)["turns"].([]any); len(turns) != 2 {
+		x.t.Errorf("GET /days/today/conversation: %v, want two turns", turns)
+	}
 }
