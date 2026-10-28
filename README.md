@@ -264,7 +264,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The three faces are open
   fonts (SIL OFL 1.1), latin and latin-ext, embedded with their licences and served by exact name at
   `GET /assets/fonts/{file}` with a cache of a year; like `/render`, the route is presentation and not in the catalog.
-  Nothing is fetched from another host, so a page looks the same offline in fifty years. **Rejected:** a vendored classless sheet (Simple.css, Pico). Its
+  Nothing is fetched from another host, so a page looks the same offline in fifty years. The New menu and the chat screen's menu hang from their buttons by anchor positioning, with the centred box as the fallback ([plan 149](docs/plans/149-the-browser-on-the-current-platform.md)). **Rejected:** a vendored classless sheet (Simple.css, Pico). Its
   `aside` is a floated sidebar and ours is a callout in flow, its `section` a bordered band, its `h2` 2.6rem where
   ours labels a section, its tables bordered and zebra-striped where ours are dense, its form controls carry blanket
   margins where ours sit two to a row, and its `body` is a 45rem grid: keeping one meant overriding most of it, and

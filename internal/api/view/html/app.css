@@ -78,6 +78,13 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   margin:auto; padding:var(--space-4); background:var(--rail); border:2px solid var(--outline); box-shadow:var(--bevel-up),var(--shadow-float);
   & nav ul{display:grid; grid-template-columns:1fr 1fr; gap:2px}
   &::backdrop{background:rgb(0 0 0 / .35)}}
+/* The menu hangs from its button, so it needs no veil. An engine without anchor positioning keeps the centred box above;
+   the phone resets this in its media block below. */
+.rail-new{anchor-name:--new}
+@supports (position-area: block-end){
+  .new-menu:popover-open{position-anchor:--new; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline;
+    margin:var(--space-1) 0 0;
+    &::backdrop{background:none}}}
 .new-menu-head{display:flex; align-items:center; justify-content:space-between;
   & .label{color:var(--rail-accent); font-weight:700}}
 /* The sections are a carved well in the wood; the current one is lit by a gold bar at its left. More, which opens the
@@ -215,6 +222,11 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .more-body:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-3);
   inline-size:min(26rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; box-shadow:var(--parch-bevel),var(--shadow-float);
   & .sub{margin:0}}
+/* The menu hangs from its button; the fixed inset above is the fallback for an engine without anchor positioning.
+   The phone resets this in its media block below. */
+.daybar button.more{anchor-name:--more}
+@supports (position-area: block-end){
+  .more-body:popover-open{position-anchor:--more; position-area:block-end span-inline-start; position-try-fallbacks:flip-block, flip-inline; inset:auto}}
 .more-head{display:flex; align-items:center; justify-content:space-between}
 .thread{display:flex; flex-direction:column-reverse; min-block-size:0; overflow-y:auto; padding:var(--space-4) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-left, 0px))}
 .composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
@@ -258,6 +270,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail .rail-search{display:none}
   .rail .rail-search-link{display:inline-flex; inline-size:var(--control); padding:0; margin-inline-start:auto; background:var(--rail); color:var(--rail-accent); box-shadow:var(--bevel-up),var(--drop-hard)}
   .rail .rail-new.primary{inline-size:auto}
+  .new-menu:popover-open{position-area:none; margin:auto; &::backdrop{background:rgb(0 0 0 / .35)}} /* centred on the phone, where the button is in the top bar */
   .rail>nav{position:fixed; z-index:20; inset-inline:0; inset-block-end:0; border-block-start:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light);
     padding:var(--space-1) calc(var(--space-2) + env(safe-area-inset-right, 0px)) calc(var(--space-1) + env(safe-area-inset-bottom, 0px)) calc(var(--space-2) + env(safe-area-inset-left, 0px));
     & ul{flex-direction:row; justify-content:space-around; gap:0; padding:0; background:none; border:0; box-shadow:none}
@@ -289,7 +302,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .column:has(>main>.chat-screen){flex:1 1 auto; block-size:auto; min-block-size:0; padding:0 0 calc(58px + env(safe-area-inset-bottom, 0px))}
   .daybar{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .daybar h1{font-size:28px}
-  .more-body:popover-open{inset:0 0 auto 0; inline-size:auto; max-block-size:calc(100dvh - 58px - env(safe-area-inset-bottom, 0px));
+  .more-body:popover-open{position-area:none; inset:0 0 auto 0; inline-size:auto; max-block-size:calc(100dvh - 58px - env(safe-area-inset-bottom, 0px));
     padding:calc(var(--space-4) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   .turn{max-inline-size:94%}
   .thread,.composer{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
