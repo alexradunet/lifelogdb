@@ -20,7 +20,9 @@
   a turn is now read from its marker line to the next, so the owner's two paragraphs stay one turn and a marker
   inside a code fence forges nothing; `say` is for today, and the entity of another day offers it not; a
   conversation page keeps its title (`rename` and `promote` are not offered, and refused); the key input takes no
-  autofill; the README's row and the site say what is true. The install and the restart wait for the owner.
+  autofill; the README's row and the site say what is true. Live since 2026-10-28 15:33 (both binaries installed
+  in `~/.local/bin`, the service restarted, the previous `lifelog` kept as `lifelog.prev`). The pairing of the
+  agent's number and its unit wait for the owner.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue.
 
 ## The owner's words (2026-10-28)

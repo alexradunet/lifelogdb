@@ -19,8 +19,10 @@
   and deaf (now it exits 3, or 1 for a failure, so the unit stops or restarts it); the file fields of `add-file`
   and `set-cover` let text on the page name any file the process can read, the token or the session store (an
   action with a file field is no tool now); an owner's text saved while the model ran was adopted in silence (one
-  line on WhatsApp says it was not answered); the time of a turn is read once (midnight). The pairing, the unit and
-  the first reply on the phone wait for the owner: they need the second number and the model endpoint.
+  line on WhatsApp says it was not answered); the time of a turn is read once (midnight). [Plan 146](146-settings-and-the-chat-column.md)
+  moved the model's settings into the app and the conversation's convention into the core. The extension is
+  installed beside `lifelog` since 2026-10-28 15:33; the pairing of the agent's number, its unit and the first
+  reply on the phone wait for the owner: they need the second number.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue: the file is right; the owner wants a way to talk
   to it from a phone.
 
