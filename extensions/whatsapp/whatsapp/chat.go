@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -35,6 +36,20 @@ func Login(ctx context.Context, s *Session, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("pairing: %w", err)
 	}
+	// After the scan the server disconnects the client, which connects again to finish the pairing: a client that
+	// leaves before that connection is logged out at its next one (the Connected event of whatsmeow says to wait
+	// for it). The handler reports the connection that follows the success.
+	var paired atomic.Bool
+	connected := make(chan struct{}, 1)
+	handler := cl.AddEventHandler(func(evt any) {
+		if _, ok := evt.(*events.Connected); ok && paired.Load() {
+			select {
+			case connected <- struct{}{}:
+			default:
+			}
+		}
+	})
+	defer cl.RemoveEventHandler(handler)
 	if err := cl.Connect(); err != nil {
 		return fmt.Errorf("pairing: %w", err)
 	}
@@ -53,7 +68,16 @@ func Login(ctx context.Context, s *Session, out io.Writer) error {
 					return err
 				}
 			case "success":
-				return nil
+				paired.Store(true)
+				fmt.Fprintln(out, "Scanned. Finishing the pairing with the phone...")
+				select {
+				case <-connected:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(pairingWait):
+					return errors.New("pairing: the phone did not confirm the device in time; run lifelog whatsapp login again")
+				}
 			case "timeout":
 				return errors.New("pairing: nobody scanned the code in time")
 			default:
@@ -62,6 +86,9 @@ func Login(ctx context.Context, s *Session, out io.Writer) error {
 		}
 	}
 }
+
+// pairingWait is the longest wait for the connection that finishes a pairing after the scan.
+const pairingWait = 60 * time.Second
 
 // drawCode writes the instruction and the code, black on white on any terminal theme.
 func drawCode(out io.Writer, code string) error {

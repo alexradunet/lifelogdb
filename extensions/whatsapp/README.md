@@ -72,7 +72,7 @@ argument then: the settings of lifelog hold everything.
 
 | line | what happens |
 |---|---|
-| `lifelog whatsapp login` | Pairs the agent's number. It draws a QR code. On the agent's phone, open WhatsApp, Linked devices, Link a device, and scan it. The session is saved. It exits. It needs nothing else. Run it once, as the user of the service, before `serve --with whatsapp`. |
+| `lifelog whatsapp login` | Pairs the agent's number. It draws a QR code. On the agent's phone, open WhatsApp, Linked devices, Link a device, and scan it. After the scan it waits for the connection that finishes the pairing (up to a minute), then the session is saved and it exits. It needs nothing else. Run it once, as the user of the service, before `serve --with whatsapp`. |
 | `lifelog whatsapp [--db FILE]` | A try by hand: answers the owner on WhatsApp. `lifelog` serves the file on a temporary loopback server for it ([extensions/README.md](../README.md)). |
 | `lifelog-whatsapp --url URL [--token-file F]` | The same against a running `lifelog serve` at `URL` (default `$LIFELOG_URL`). With neither, it refuses: a guessed address could be another file's server. |
 | add `--terminal` | Answers on the terminal: a line of input is a message of the owner, a reply is written to the output. It needs no WhatsApp session and no number: the sender and the owner are both the word `terminal`. Use it to try the agent without a phone. An interrupt ends it at once; the read of the terminal is the one part of the program that is not awaited (it ends with the process). |
