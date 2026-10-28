@@ -141,7 +141,7 @@ func TestEveryActionFormSendsToItsAction(t *testing.T) {
 			t.Errorf("the page of today has no form of %s: %+v", name, a)
 		}
 	}
-	for _, m := range regexp.MustCompile(`<form method="POST" action="([^"]*)"`).FindAllStringSubmatch(body, -1) {
+	for _, m := range regexp.MustCompile(`<form method="POST" action="([^"]*)"`).FindAllStringSubmatch(withoutChat(body), -1) {
 		if !posts[m[1]] {
 			t.Errorf("a form of the page of today posts to %s, which is no action of that page", m[1])
 		}

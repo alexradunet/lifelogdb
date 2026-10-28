@@ -72,13 +72,13 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /weeks/today /plans /days /metrics /browse popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /weeks/today /plans /days /metrics /browse /days/today/conversation popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if !strings.Contains(bar[1], `<a href="/browse" aria-current="page">`) || strings.Contains(bar[1], `class="here"`) {
 		t.Errorf("the bottom bar does not mark Browse, or marks More:\n%s", bar[1])
 	}
-	if got := links(sheet[1]); got != "/actions /integrity /actions?new=snapshot" || !strings.Contains(sheet[1], `<a href="/actions?new=snapshot">Snapshot</a>`) {
+	if got := links(sheet[1]); got != "/actions /integrity /settings /actions?new=snapshot" || !strings.Contains(sheet[1], `<a href="/actions?new=snapshot">Snapshot</a>`) {
 		t.Errorf("the sheet: %s", got)
 	}
 	if !strings.Contains(sheet[1], `<button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button>`) {
@@ -166,7 +166,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 				marked = append(marked, m[3])
 			}
 		}
-		if want := "Today=/days/today This week=/weeks/today Plans=/plans Calendar=/days Metrics=/metrics Browse=/browse"; strings.Join(got, " ") != want {
+		if want := "Today=/days/today This week=/weeks/today Plans=/plans Calendar=/days Metrics=/metrics Browse=/browse Chat=/days/today/conversation"; strings.Join(got, " ") != want {
 			t.Errorf("%s: the sections are %v, want %s", path, got, want)
 		}
 		if strings.Join(marked, " ") != current {

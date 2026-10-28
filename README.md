@@ -162,7 +162,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   a second time. Under 900 px it is a phone's layout
   ([plan 093](docs/plans/093-words-phone-and-today.md)): a top bar (the brand, the date, Search, New), a bottom bar of
   the sections of every day and More, and the rest as a sheet over the page (`#sections`): a popover that More
-  opens and Close, Escape or a tap outside closes, with no script. Inside the page a layout asks the width of its column (`@container column`), not of the
+  opens and Close, Escape or a tap outside closes, with no script. The chat column (`#chat`, [plan 146](docs/plans/146-settings-and-the-chat-column.md)) is a popover the same way: a panel at the right edge of a wide screen and a sheet under 900 px, opened by the Chat button (at the corner, or in the phone's bottom bar), with today's turns and the composer; the conversation view has the column's content at full size and no column. Inside the page a layout asks the width of its column (`@container column`), not of the
   screen, so a day beside an open sheet lays out as in a narrow window; the title, the leaf and the sheet's padding
   scale with the column by `clamp()`, with no step at a breakpoint
   ([plan 108](docs/plans/108-the-browser-made-current.md)). The sidebar is the one part of a page that is not the
@@ -222,9 +222,18 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   server is the owner's own. A public listener serves the manifest, the icons and the four pictures of `internal/pixelart` (`GET` and `HEAD`) without the
   token, because a browser fetches them without its cookie and they hold nothing of the database. The fonts stay
   behind the token.
-- **No script** ([plan 108](docs/plans/108-the-browser-made-current.md); the owner's rule of 2026-10-14: as native
-  as HTML can be, even at the cost of a small convenience). A page carries its two sheets and no `script` element,
-  and a test holds it. What the one script once did ([plan 091](docs/plans/091-the-browser-for-daily-use.md),
+- **One script, and every form works without it** ([plan 108](docs/plans/108-the-browser-made-current.md); the
+  owner's rule of 2026-10-14: as native as HTML can be, even at the cost of a small convenience;
+  [plan 146](docs/plans/146-settings-and-the-chat-column.md)). A page carries its two sheets and at most one
+  `script` element: `/assets/chat.js`, loaded with `defer` on a page that has the chat column, under 80 lines, with
+  no framework and no build step. A test holds both. It does three things for the column and nothing else. While
+  the last turn of the column is the owner's, it asks `GET /days/today/conversation` every 3 seconds and, when the
+  `version` differs from the column's `data-version`, fetches the current page and swaps the column's content. It
+  posts the composer with `fetch` and swaps the column from the answer, so the page does not reload. It keeps the open
+  state of the column in `localStorage` and opens it again on load. Any error leaves the column as it is; a request
+  carries the cookie of a public listener (`credentials: 'same-origin'`). Without the script every form still posts and
+  redirects, and the column opens by its button (a popover); the page that comes back shows the new turn when the
+  column is opened, and the reply shows on the next load. What the old script once did ([plan 091](docs/plans/091-the-browser-for-daily-use.md),
   [plan 094](docs/plans/094-the-command-list.md)), the browser does by itself: the **search dialog** is a `dialog`
   the server draws on every page of the shell, with the search form inside, the one search box of the shell: the
   rail's Search and the top bar's open it by their command (`commandfor`), and Escape or a tap outside closes it

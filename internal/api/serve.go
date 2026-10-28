@@ -146,6 +146,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("POST /render", h.render)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
+	m.HandleFunc("GET /assets/chat.js", install("chat.js", "text/javascript; charset=utf-8", "public, max-age=300"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-192.png", install("icon-192.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-512.png", install("icon-512.png", "image/png", "public, max-age=31536000, immutable"))
@@ -454,6 +455,11 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			logFault(r, "the Today strip cannot be read", err)
 		}
 		f.Shell.Strip = strip
+		chat, err := todayChat(r.Context(), fr.shell, f.Shell.Today)
+		if err != nil && status < http.StatusBadRequest {
+			logFault(r, "the chat column cannot be read", err)
+		}
+		f.Shell.Chat = chat
 	}
 	if status >= 400 && r.Method == "POST" {
 		f.Submitted = fr.submitted

@@ -1,0 +1,43 @@
+{{/* The conversation of a day (docs/plans/146-settings-and-the-chat-column.md): the turns as a thread, the composer
+     (say) at the end, and, when the page exists, its margin (page-margin), as the view of a metric draws it
+     (docs/plans/144-one-view-for-a-metric.md). The Edit fold is the page's body editor; the thread is the body, so the
+     body is not drawn a second time. This view is the chat column at full size, so the column is not drawn on it. */}}
+{{define "conversation"}}{{template "head" .}}
+{{$p := .Props}}{{$turns := .Turns}}
+<header class="page-head"><div class="what"><span class="kind">{{$.Date $p.day}}</span><h1>Conversation</h1>
+{{if $p.id}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
+<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p></div></header>
+<div class="sheet-margin">
+<div class="sheet conversation">
+{{if $turns}}{{template "thread" $turns}}{{else}}<p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p>{{end}}
+{{with .Action "say"}}<section class="say" aria-label="Say">{{template "form" (form . "button" "Say" "back" $.ReturnHere)}}</section>{{end}}
+{{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
+</div>
+{{if $p.id}}<div class="margin">
+{{template "page-margin" .}}
+</div>{{end}}
+</div>
+{{template "foot" .}}{{end}}
+
+{{/* thread is the turns of a conversation, in order. The owner's turn and the agent's are told apart by their material
+     (app.css): parchment and a wood well. The words are drawn as a body is, in markdown; a turn of who text (a
+     paragraph the owner edited in) is shown as it is. The tool lines of an agent's turn are small. A line "…" waits
+     under the thread when the last turn is the owner's. It takes the turns. */}}
+{{define "thread"}}<ol class="thread">{{range .}}<li class="turn {{.Who}}">
+{{if eq .Who "text"}}<p class="free">{{.Text}}</p>{{else}}<div class="turn-head"><b>{{if eq .Who "owner"}}Owner{{else}}lifelog{{end}}</b>{{with .At}}<time>{{.}}</time>{{end}}</div>
+{{with .Tools}}<ul class="tools">{{range .}}<li>{{inline (toolWords .)}}</li>{{end}}</ul>{{end}}
+<div class="prose">{{markdown .Text}}</div>{{end}}
+</li>{{end}}</ol>{{if waiting .}}<p class="waiting" role="status" aria-label="The agent has not answered yet">…</p>{{end}}{{end}}
+
+{{/* chat is the chat column (docs/plans/146-settings-and-the-chat-column.md): today's turns and the composer, a form of
+     say whose back is this page, so the page comes back with the owner's paragraph. It is a popover that the button
+     Chat opens (the rail's on a phone, the one at the corner on a wide screen), and that Close, Escape or a tap
+     outside closes: no script. Under 900 px it is a sheet over the page (app.css). Its data-version is the version of
+     the conversation page, empty when the day has none. chat.js, when it runs, polls it while the last turn is the
+     owner's and swaps the column in place; the form posts without it. */}}
+{{define "chat"}}{{with .Chat}}<button type="button" class="button chat-open" popovertarget="chat">{{icon "chat"}}Chat</button>
+<div class="chat" id="chat" popover role="complementary" data-version="{{.Version}}" aria-label="Chat">
+<div class="chat-head"><span class="label">Chat</span><a href="/days/today/conversation">Open the day</a><button type="button" class="button small" popovertarget="chat" popovertargetaction="hide">Close</button></div>
+<div class="chat-scroll"><div class="chat-turns">{{if .Turns}}{{template "thread" .Turns}}{{else}}<p class="empty">Nothing is said today yet. Write to the agent below. It answers here when it runs.</p>{{end}}</div></div>
+{{template "form" (form .Say "button" "Say" "class" "chat-form" "plain" "1" "back" $.ReturnHere)}}
+</div>{{end}}{{end}}

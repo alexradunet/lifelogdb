@@ -15,19 +15,22 @@ import (
 // one with the longest path the page is under.
 func TestNavMarksThePageTheBrowserIsOn(t *testing.T) {
 	for path, want := range map[string]string{
-		"/":                "/",
-		"/days":            "/days",
-		"/days/2026-01-01": "/days",
-		"/days/today":      "/days/today",
-		"/months/2026-10":  "/days",
-		"/years/2026":      "/days",
-		"/integrity":       "/integrity",
-		"/browse":          "/browse",
-		"/metrics":         "/metrics",
-		"/metrics/TSH":     "/metrics",
-		"/pages/7":         "",
-		"/search":          "",
-		"/measurements/1":  "",
+		"/":                             "/",
+		"/days":                         "/days",
+		"/days/2026-01-01":              "/days",
+		"/days/today":                   "/days/today",
+		"/months/2026-10":               "/days",
+		"/years/2026":                   "/days",
+		"/integrity":                    "/integrity",
+		"/browse":                       "/browse",
+		"/metrics":                      "/metrics",
+		"/metrics/TSH":                  "/metrics",
+		"/settings":                     "/settings",
+		"/days/2026-10-28/conversation": "/days/today/conversation",
+		"/days/today/conversation":      "/days/today/conversation",
+		"/pages/7":                      "",
+		"/search":                       "",
+		"/measurements/1":               "",
 	} {
 		var got string
 		for _, it := range (&view{Path: path}).Nav() {
@@ -192,5 +195,34 @@ func TestEveryIconNameIsACellOfTheSheet(t *testing.T) {
 		if got := icon(name); got != "" {
 			t.Errorf("icon(%q) is %q, want nothing", name, got)
 		}
+	}
+}
+
+// TestTheColumnIsTheShellsAndTheConversationHasNone: a page with a shell and a chat has the column; the conversation
+// view (class conversation) has none, and a page with no shell has none. The turns of the conversation view are read
+// from its property turns, and the agent has not answered when the last turn is the owner's.
+func TestTheColumnIsTheShellsAndTheConversationHasNone(t *testing.T) {
+	chat := &Chat{Version: "v1"}
+	shell := &Shell{Today: "2026-10-28", Chat: chat}
+	if got := (&view{Shell: shell, Entity: &siren.Entity{}}).Chat(); got != chat {
+		t.Errorf("a page with a shell has the chat %v, want the shell's", got)
+	}
+	if got := (&view{Shell: shell, Entity: &siren.Entity{Class: []string{"conversation", "page"}}}).Chat(); got != nil {
+		t.Errorf("the conversation view has the chat %v, want none", got)
+	}
+	if got := (&view{}).Chat(); got != nil {
+		t.Errorf("a page with no shell has the chat %v, want none", got)
+	}
+	v := &view{Props: map[string]any{"turns": []any{
+		map[string]any{"who": "owner", "at": "09.07", "text": "Hello"},
+		map[string]any{"who": "lifelog", "at": "09.08", "text": "Hi", "tools": []any{"- `read_day`"}},
+		map[string]any{"who": "owner", "at": "09.09", "text": "Thanks"},
+	}}}
+	turns := v.Turns()
+	if len(turns) != 3 || turns[1].Who != "lifelog" || turns[1].At != "09.08" || turns[1].Text != "Hi" || len(turns[1].Tools) != 1 || toolWords(turns[1].Tools[0]) != "`read_day`" {
+		t.Errorf("the turns: %+v", turns)
+	}
+	if !waiting(turns) || waiting(turns[:2]) || waiting(nil) {
+		t.Error("the agent waits only when the last turn is the owner's")
 	}
 }

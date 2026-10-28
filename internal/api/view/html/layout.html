@@ -18,7 +18,9 @@
      every day (Today, Calendar, Metrics and Browse, docs/plans/117-one-browse-view.md) and the owner's links. This
      month is on Calendar, not here: one view of it. A page with no shell (the login) has none. On a phone (docs/plans/093-words-phone-and-today.md) the head is a top bar, the sections of every
      day a bottom bar with More, and the rest (#sections) a popover sheet over the page that More opens and Close,
-     Escape or a tap outside closes: no script (docs/plans/108-the-browser-made-current.md). New opens a menu of the
+     Escape or a tap outside closes: no script (docs/plans/108-the-browser-made-current.md). Chat is the link to the
+     conversation of today; on a phone the bar shows the button of the chat column (#chat) in its place, except on the
+     conversation, where the link is the one marked. New opens a menu of the
      kinds the same way, each made on its list (docs/plans/114-one-way-to-do-a-thing.md). The access keys (k the
      search, n New, t Today, c the capture, [ and ] the previous and next page) are the browser's own, with its
      modifier. */}}
@@ -31,6 +33,8 @@
 <nav aria-label="New"><ul>{{range .NewKinds}}<li><a href="{{.Href}}">{{icon .Icon}}{{.Title}}</a></li>{{end}}</ul></nav></div>
 <nav aria-label="Sections">
 <ul>{{range $nav}}{{if eq .Group "day"}}<li>{{template "navlink" .}}</li>{{end}}{{end}}
+{{range $nav}}{{if eq .Group "chat"}}<li class="nav-chat">{{template "navlink" .}}</li>{{end}}{{end}}
+{{if .Chat}}<li class="rail-chat-link"><button type="button" popovertarget="chat">{{icon "chat"}}Chat</button></li>{{end}}
 <li class="rail-more-link"><button type="button" popovertarget="sections"{{if .InMore}} class="here"{{end}}>{{icon "more"}}More</button></li></ul>
 </nav>
 <div class="rail-more" id="sections" popover>
@@ -65,9 +69,10 @@
 <form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
 <p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
 </dialog>
-{{end}}
+{{template "chat" .}}{{end}}
 </div>
-</body></html>{{end}}
+{{if .Chat}}<script src="/assets/chat.js" defer></script>
+{{end}}</body></html>{{end}}
 
 {{/* monthbox is a month as the year draws it: its name, how many of its days are written, and its
      days in the rows of a calendar, Monday first; a day with a page is tinted, today is framed. It takes href, name,

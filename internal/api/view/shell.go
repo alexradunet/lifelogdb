@@ -2,6 +2,7 @@ package view
 
 import (
 	"html/template"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +18,56 @@ type Shell struct {
 	Today string
 	Zone  *time.Location // the zone of today: the words for a time use it
 	Strip *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
+	Chat  *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
 }
+
+// Chat is what the chat column shows: today's turns, the version of the conversation page (empty when the day has no
+// page, so the script can tell that the page changed), and the action say, to the address of today.
+type Chat struct {
+	Turns   []Turn
+	Version string
+	Say     siren.Action
+}
+
+// Turn is one turn of a conversation as a page draws it. Who is owner, lifelog or text. A tool line is as the page
+// writes it, with its "- " mark.
+type Turn struct {
+	Who, At, Text string
+	Tools         []string
+}
+
+// Chat is the chat column of the shell. The conversation view is the column at full size, so it has none.
+func (v *view) Chat() *Chat {
+	if v.Shell == nil || v.IsConversation() {
+		return nil
+	}
+	return v.Shell.Chat
+}
+
+// IsConversation reports the view of a conversation (class conversation): the turns of a day and the page they are
+// written on.
+func (v *view) IsConversation() bool { return slices.Contains(v.Class, "conversation") }
+
+// Turns are the turns of the conversation view, read from the property turns of the entity.
+func (v *view) Turns() []Turn {
+	props, _ := v.Props.(map[string]any)
+	var out []Turn
+	for _, x := range anyList(props["turns"]) {
+		m, _ := x.(map[string]any)
+		t := Turn{Who: Num(m["who"]), At: Num(m["at"]), Text: Num(m["text"])}
+		for _, tool := range anyList(m["tools"]) {
+			t.Tools = append(t.Tools, Num(tool))
+		}
+		out = append(out, t)
+	}
+	return out
+}
+
+// toolWords is a tool line without its "- " mark, as a thread draws it.
+func toolWords(line string) string { return strings.TrimPrefix(line, "- ") }
+
+// waiting reports a conversation whose last turn is the owner's: the agent has not answered yet.
+func waiting(turns []Turn) bool { return len(turns) > 0 && turns[len(turns)-1].Who == "owner" }
 
 // Strip is the Today strip of the rail: what is done today, and how many days in a row the owner wrote. The server
 // fills it once a page, so the rail and the head of the day read the same streak.
@@ -88,9 +138,10 @@ func (v *view) Streak() int {
 }
 
 // navItems are the sidebar's links, in order, by group: "home" is the brand, "day" the sections of every day (on a
-// phone, the bottom bar with More), "owner" the links at its foot. Each stands for the pages under its paths, so the
+// phone, the bottom bar with More), "chat" Chat (a phone has the button of the column in its place, except on the
+// conversation), "owner" the links at its foot. Each stands for the pages under its paths, so the
 // one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template places them
-// from the entity's links. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7). Key is
+// from the entity's links. Chat is the conversation of any day. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7). Key is
 // the access key of an item, "" for none: t is Today.
 var navItems = []struct {
 	Title, Href, Icon string
@@ -104,8 +155,10 @@ var navItems = []struct {
 	{"Calendar", "/days", "calendar", []string{"/months", "/years", "/days"}, "day", ""},
 	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day", ""},
 	{"Browse", "/browse", "browse", []string{"/browse"}, "day", ""},
+	{"Chat", "/days/today/conversation", "chat", []string{"/days/today/conversation"}, "chat", ""},
 	{"Every action", "/actions", "", []string{"/actions"}, "owner", ""},
 	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner", ""},
+	{"Settings", "/settings", "", []string{"/settings"}, "owner", ""},
 }
 
 // navItem is one sidebar link, marked when the browser is on a page it stands for.
@@ -136,6 +189,9 @@ func (v *view) Nav() []navItem {
 	path := v.Path
 	if today := v.Today(); today != "" && path == siren.DayHref(today) {
 		path = "/days/today"
+	}
+	if strings.HasPrefix(path, "/days/") && strings.HasSuffix(path, "/conversation") { // the conversation of any day is Chat
+		path = "/days/today/conversation"
 	}
 	out := make([]navItem, len(navItems))
 	best, at, length := -1, 0, 0

@@ -20,6 +20,10 @@ func TestEveryActionOpensInABrowser(t *testing.T) {
 	if strings.Contains(body, "%7b") || regexp.MustCompile(`action="[^"]*\{`).MatchString(body) {
 		t.Fatalf("/actions draws a form that posts to a templated href:\n%s", body)
 	}
+	// settings has no path field: it opens on its resource, the Settings page, which draws its form (plan 146).
+	if page := browse(t, h, "/settings"); !strings.Contains(page, `<form method="POST" action="/settings">`) {
+		t.Errorf("the action settings does not open on /settings:\n%s", page)
+	}
 	values := map[string]string{"id": "7", "day": "2031-05-03"}
 	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
 		q := url.Values{"new": {a.Name}}

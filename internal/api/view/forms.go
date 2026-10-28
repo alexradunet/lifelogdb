@@ -65,6 +65,7 @@ type formView struct {
 	ID            string // the form's id, which the controls outside it name (form="pick")
 	Focus         string
 	Back          string
+	NoPreview     bool          // the form has a text area but offers no Preview (the chat column)
 	Asked         bool          // the form the page's link asked for (?new=<name>): open
 	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
 	Lead          bool          // boxed draws the button as the primary one with the new icon
@@ -100,6 +101,9 @@ func (f *formView) Or(g *formView) *formView {
 // Preview reports a form with a text area: it offers Preview, a second button that sends the form to POST /render
 // in a new tab, where the body shows as its page will show it, and nothing is saved.
 func (f *formView) Preview() bool {
+	if f.NoPreview {
+		return false
+	}
 	for _, fd := range append(f.Shown[:len(f.Shown):len(f.Shown)], f.More...) {
 		if fd.Type == "textarea" {
 			return true
@@ -183,6 +187,7 @@ func (f *formView) MoreOpen() bool {
 // template cannot build a struct, so the pairs stay its syntax; this is the one place that knows the names.
 type formOptions struct {
 	button, class, id, back string
+	plain                   bool // "plain" was given: the form offers no Preview
 	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
 	hasButton               bool // "button" was given, also as ""
 	autofocus               string
@@ -220,6 +225,8 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.class = v
 		case "lead":
 			o.lead = v != ""
+		case "plain":
+			o.plain = v != ""
 		case "id":
 			o.id = v
 		case "back":
@@ -267,7 +274,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, Lead: o.lead, Focus: o.autofocus,
+	f := &formView{Action: a, Button: a.Title, Class: o.class, ID: o.id, Back: o.back, NoPreview: o.plain, Lead: o.lead, Focus: o.autofocus,
 		prompts: o.placeholders, keys: o.keys, patterns: o.patterns}
 	if o.hasButton {
 		f.Button = o.button

@@ -321,7 +321,7 @@ func TestThePlansPageGroupsTheOpenLinesByDayAndByPage(t *testing.T) {
 	for _, a := range entity.Actions {
 		allowed = append(allowed, regexp.MustCompile("^"+strings.ReplaceAll(regexp.QuoteMeta(a.Href), `\{id\}`, "[0-9]+")+"$"))
 	}
-	forms := regexp.MustCompile(`<form\b[^>]*\saction="([^"]+)"`).FindAllStringSubmatch(page, -1)
+	forms := regexp.MustCompile(`<form\b[^>]*\saction="([^"]+)"`).FindAllStringSubmatch(withoutChat(page), -1)
 	seen := map[string]bool{}
 	for _, f := range forms {
 		ok := false

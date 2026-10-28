@@ -32,13 +32,14 @@ import (
 // this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the two apart.
 // The two are one cascade in four layers (tokens, base, components, utilities), declared once in base.css, and
 // every rule is in logical properties (docs/plans/108-the-browser-made-current.md).
-// The three faces are embedded files that /assets/fonts/ serves. There is no script: what a page does beyond
-// its links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
+// The three faces are embedded files that /assets/fonts/ serves. There is one script, chat.js, which only helps the chat
+// column; every form works without it (docs/plans/146-settings-and-the-chat-column.md). What a page does beyond its
+// links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
-// Files are the files of html/: the templates, the two stylesheets, the icons (one SVG and two PNG), the manifest,
+// Files are the files of html/: the templates, the two stylesheets, the script, the icons (one SVG and two PNG), the manifest,
 // and the fonts with their licences.
 //
-//go:embed html/*.html html/*.css html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
+//go:embed html/*.html html/*.css html/*.js html/*.svg html/*.png html/*.webmanifest html/fonts/*.woff2 html/fonts/*.txt
 var Files embed.FS
 
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
@@ -95,6 +96,8 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"alert":         alertOf,
 	"beyond":        beyond,
 	"kindIcon":      kindIcon,
+	"waiting":       waiting,
+	"toolWords":     toolWords,
 }).ParseFS(Files, "html/*.html"))
 
 // newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one
@@ -134,7 +137,7 @@ var viewOf = map[string]string{
 	"day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
 	"days": "stream", "search": "search", "browse": "browse", "plans": "plans",
 
-	"metrics": "metrics", "series": "metric", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
+	"metrics": "metrics", "series": "metric", "conversation": "conversation", "settings": "settings", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "year": "year", "week": "week",
 	"preview": "preview", "cover-choice": "cover-choice",
 }

@@ -1,0 +1,9 @@
+{{/* The settings of the application (docs/plans/146-settings-and-the-chat-column.md), the owner's alone: one form of
+     the action settings, the key as a password input with its value. A save is a redirect back here with the toast.
+     The generic view would list the properties, the key among them, so this view draws the form only. */}}
+{{define "settings"}}{{template "head" .}}
+<header class="page-head"><div class="what"><span class="kind">owner</span><h1>Settings</h1></div></header>
+<div class="sheet">
+{{with .Action "settings"}}{{with .Hint}}<p class="desc">{{.}}</p>{{end}}{{template "form" (form . "button" "Save")}}{{end}}
+</div>
+{{template "foot" .}}{{end}}
