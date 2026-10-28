@@ -251,7 +251,7 @@ func (h *server) serve(f func(*http.Request) (*siren.Entity, error)) http.Handle
 				w.Header().Set("Referrer-Policy", "no-referrer")
 			}
 		}
-		answer(w, r, status, e, frame{shell: h.s, submitted: submittedText(r)})
+		answer(w, r, status, e, frame{shell: h.s, submitted: submittedText(r), srv: h})
 	}
 }
 
@@ -417,6 +417,8 @@ type frame struct {
 	// submitted is the long text that a refused browser form sent (submittedText), which the page of the refusal shows
 	// again. It is used only when the answer is the error of a POST.
 	submitted string
+	// srv is the server whose own handler the chat asks for its cards (cards.go); nil: the page draws no cards.
+	srv *server
 }
 
 // answer is the one way an entity leaves the API: the answer of every route, guard and error. A program gets Siren
@@ -460,6 +462,9 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			logFault(r, "the chat column cannot be read", err)
 		}
 		f.Shell.Chat = chat
+		if fr.srv != nil && status < http.StatusBadRequest {
+			f.Cards, f.ChatDays = fr.srv.chatExtras(r, e, chat, f.Shell.Today)
+		}
 	}
 	if status >= 400 && r.Method == "POST" {
 		f.Submitted = fr.submitted

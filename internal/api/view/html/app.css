@@ -16,7 +16,7 @@
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
 .rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.chat:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:url(/assets/wood.png),var(--grain-ground); background-size:252px 480px,4px 4px; image-rendering:pixelated}
-.sheet,.panel,.leaf,.month-box,.turn.owner,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,.day-card,
+.sheet,.panel,.leaf,.month-box,.owner>.bubble,.card,.more-body,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,.day-card,
 main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
 
@@ -127,21 +127,100 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .chat .empty{color:var(--rail-ink)}
 .chat-form{display:flex; flex-direction:column; gap:var(--space-2);
   & label>span{color:var(--rail-ink)}}
-.thread{display:flex; flex-direction:column; gap:var(--space-3); margin:0; padding:0; list-style:none}
-.turn{display:flex; flex-direction:column; gap:var(--space-1); padding:var(--space-2) var(--space-3); min-inline-size:0;
-  &.owner{margin-inline-start:var(--space-8); box-shadow:var(--parch-bevel)}
-  &.lifelog{margin-inline-end:var(--space-8); --text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
-    color:var(--text); background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in)}
-  &.text{border:2px dotted var(--rule)}
-  & .turn-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2);
-    & b{font:700 12px/16px var(--sans); letter-spacing:.12em; text-transform:uppercase; color:var(--text-strong)}
-    & time{font:400 12px/16px var(--mono); color:var(--text-muted)}}
-  & .tools{display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; font:400 12px/16px var(--mono); color:var(--text-muted); overflow-wrap:anywhere}
-  & .prose{font-size:15px; line-height:22px}
-  & .free{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text)}}
-.waiting{margin:0; font:400 20px/24px var(--mono); color:var(--text-muted)}
-.chat .waiting{color:var(--rail-ink)}
-.conversation .say{padding-block-start:var(--space-2)}
+/* The thread of the chat (docs/plans/148-the-chat-screen.md), on the screen and in the column alike. A turn is a meta line
+   (who, the relay, the time), the tool lines as chips, a bubble and the cards of the things it touched. The owner's
+   bubble is parchment at the right, the agent's a carved well of the wood at the left. A [[link]] in a bubble is a
+   chip. The three dots wait while the agent answers; they blink only for a reader who allows motion. */
+.turns{display:flex; flex-direction:column; gap:14px; max-inline-size:72ch; inline-size:100%; margin-block:0; margin-inline:auto; padding:0; list-style:none}
+.turn{display:flex; flex-direction:column; gap:6px; min-inline-size:0; max-inline-size:86%;
+  &.owner{align-self:flex-end}
+  &.agent{align-self:flex-start}
+  &.text{align-self:stretch; max-inline-size:none; padding:var(--space-2) var(--space-3); border:2px dotted var(--rule)}
+  & .free{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text)}
+  & .meta{display:flex; align-items:baseline; gap:10px; padding:0 4px; font:400 12px/16px var(--mono); color:var(--text-muted)}
+  &.owner .meta{justify-content:flex-end}
+  & .from{font-weight:500; letter-spacing:.08em; text-transform:uppercase}
+  & .tools{display:flex; flex-wrap:wrap; gap:6px; margin:0; padding:0 2px; list-style:none}
+  &.owner .tools{justify-content:flex-end}
+  & .tools li{padding:2px 8px; border:1px dashed var(--text-muted); font:400 12px/16px var(--mono); color:var(--text-muted); overflow-wrap:anywhere}
+  & .tools b{font-weight:500; color:var(--text)}}
+.bubble{min-inline-size:0; max-inline-size:none; padding:10px 14px; border:2px solid var(--outline); font-size:15px; line-height:22px;
+  & a.wikilink:not(.embed){padding:0 6px; border:1px solid currentColor; white-space:nowrap}
+  & a.wikilink:not(.embed):hover{text-decoration:none; background:var(--accent-tint)}}
+.owner>.bubble{box-shadow:var(--parch-bevel)}
+.agent>.bubble{--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
+  color:var(--text); background:var(--rail-deep); box-shadow:var(--bevel-in)}
+.thinking{display:flex; gap:5px; align-items:center; inline-size:max-content; padding:12px 16px; background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in);
+  & i{display:block; inline-size:7px; block-size:7px; background:var(--rail-accent); opacity:.8}}
+@keyframes blink{0%,60%,100%{opacity:.25} 30%{opacity:1}}
+@media (prefers-reduced-motion:no-preference){
+  .thinking i{animation:blink 1.2s infinite}
+  .thinking i:nth-child(2){animation-delay:.2s}
+  .thinking i:nth-child(3){animation-delay:.4s}}
+.datesep{align-self:center; padding:4px 0; font:400 12px/16px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted)}
+.hint{margin:0; font:400 12px/16px var(--mono); color:var(--text-muted)}
+
+/* A card is a thing the agent touched, one link on parchment. The full form is on the screen; the compact form, in the
+   column, is one line: the icon, the title and one value. */
+.cards{display:flex; flex-direction:column; gap:var(--space-2); max-inline-size:34rem}
+.card{display:flex; align-items:flex-start; gap:var(--space-3); min-inline-size:0; padding:var(--space-2) var(--space-3); box-shadow:var(--parch-bevel); color:var(--text); text-decoration:none;
+  &:hover{border-color:var(--accent-ink); text-decoration:none}
+  &.card-link{color:var(--text-link); overflow-wrap:anywhere}
+  & .card-icon{flex:none; color:var(--text-muted)}
+  & .card-icon img{display:block; inline-size:40px; block-size:40px; object-fit:cover; border:1px solid var(--edge)}
+  & .card-main{display:flex; flex-direction:column; gap:var(--space-1); flex:1 1 auto; min-inline-size:0}
+  & .card-top{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px var(--space-3)}
+  & .card-title{color:var(--text-strong); overflow-wrap:anywhere}
+  & .card-value{font:400 13px/18px var(--mono); color:var(--text-muted)}
+  & .card-extra{display:flex; flex-direction:column; gap:var(--space-1); min-inline-size:0}
+  & .card-extra:empty{display:none}
+  & .card-line{font-size:14px; line-height:20px; color:var(--text-muted); overflow-wrap:anywhere}
+  & .card-tiles{display:flex; flex-wrap:wrap; gap:var(--space-2)}
+  & .reading-tile{flex-direction:row; align-items:baseline; gap:var(--space-2); padding:2px var(--space-2); box-shadow:none; border-width:1px}
+  & .card-reading{font:400 22px/24px var(--display); font-variant-numeric:tabular-nums; color:var(--ink)}
+  & svg.trend{max-inline-size:160px}
+  & .leaf{inline-size:48px; box-shadow:none; view-transition-name:none}
+  & .leaf-day{padding:2px 0 4px; font-size:26px}}
+.card-day .card-icon{display:none}
+.compact{
+  & .turn{max-inline-size:94%}
+  & .turns{max-inline-size:none}
+  & .bubble{font-size:14px; line-height:20px}
+  & .cards{gap:var(--space-1)}
+  & .card{align-items:center; gap:var(--space-2); padding:2px var(--space-2)}
+  & .card-extra,& .card-leaf{display:none}
+  & .card-day .card-icon{display:block}
+  & .card-top{flex-wrap:nowrap; min-inline-size:0}
+  & .card-title{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  & .card-value{flex:none}
+  & .card-icon img{inline-size:20px; block-size:20px}}
+
+/* The screen: the day bar, the thread and the composer in three rows that fill the height under the shell. The column
+   of the shell keeps no padding and no footer on it, and takes the height of the screen (under the bars of a phone,
+   below). The thread is a reversed column, so it starts at its newest turn with no script. */
+.column:has(>main>.chat-screen){padding:0; block-size:100dvh; overflow:hidden;
+  &>main{max-inline-size:none; gap:0; min-block-size:0}
+  &>footer{display:none}}
+.chat-screen{flex:1; min-block-size:0; min-inline-size:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto}
+.daybar{display:flex; align-items:center; gap:var(--space-3) var(--space-4); padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-3) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-end:2px solid var(--line);
+  & h1{margin:0; font:400 34px/1 var(--display); letter-spacing:.5px; color:var(--text-strong)}
+  & .day{font:400 13px/18px var(--mono); color:var(--text-muted)}
+  & .days{display:flex; align-items:center; gap:6px; margin-inline-start:auto}
+  & .days a{padding:5px 9px; border:2px solid var(--line); font:400 12px/16px var(--mono); color:var(--text); text-decoration:none}
+  & .days a[aria-current]{border-color:var(--accent); color:var(--accent); font-weight:500}}
+.more-menu{position:relative;
+  &>summary.more{justify-content:center; inline-size:34px; block-size:30px; min-block-size:0; margin:0; padding:0; border:2px solid var(--line); font:700 16px/1 var(--sans); color:var(--text)}
+  &>summary.more::before{content:none}
+  &[open]>summary.more{margin:0; border-color:var(--accent)}
+  & .more-body{position:absolute; z-index:5; inset-block-start:calc(100% + var(--space-2)); inset-inline-end:0; display:flex; flex-direction:column; gap:var(--space-3); inline-size:min(26rem, calc(100vw - 2rem)); padding:var(--space-3); box-shadow:var(--parch-bevel),var(--shadow-float)}
+  & .more-body .sub{margin:0}}
+.thread{display:flex; flex-direction:column-reverse; min-block-size:0; overflow-y:auto; padding:var(--space-4) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-left, 0px))}
+.composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
+  & .chat-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; max-inline-size:72ch; margin-inline:auto}
+  & .chat-form label>span{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
+  & textarea{inline-size:100%; min-block-size:46px; max-block-size:40vh; resize:none; field-sizing:content}
+  & .chat-form button{block-size:46px; padding:0 18px}
+  & .hint{max-inline-size:72ch; margin-block-start:var(--space-2); margin-inline:auto}}
 
 /* A month of the year: a parchment slip; a written day is tinted, today is framed. */
 .month-box{display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3) 10px; box-shadow:var(--parch-bevel)}
@@ -202,6 +281,15 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   .rail,.rail>nav{background-image:url(/assets/wood.png),var(--grain-ground); background-size:252px 480px,4px 4px; background-repeat:repeat} /* the bars carry no shade of the tall rail */
   .column{padding:var(--space-5) calc(var(--space-4) + env(safe-area-inset-right, 0px)) calc(72px + env(safe-area-inset-bottom, 0px)) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     &>footer{margin-block-start:var(--space-6)}}
+  /* The top bar is in the flow above the column, so the screen takes what is left of the viewport, less the bottom
+     bar, which is fixed. */
+  .shell:has(.chat-screen){display:flex; flex-direction:column; block-size:100dvh}
+  .column:has(>main>.chat-screen){flex:1 1 auto; block-size:auto; min-block-size:0; padding:0 0 calc(58px + env(safe-area-inset-bottom, 0px))}
+  .daybar{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
+  .daybar h1{font-size:28px}
+  .daybar .days a:not([aria-current]){display:none}
+  .turn{max-inline-size:94%}
+  .thread,.composer{padding-inline-start:calc(var(--space-4) + env(safe-area-inset-left, 0px))}
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
   footer .keys{display:none}
 }

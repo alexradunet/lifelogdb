@@ -214,15 +214,84 @@ func TestTheColumnIsTheShellsAndTheConversationHasNone(t *testing.T) {
 		t.Errorf("a page with no shell has the chat %v, want none", got)
 	}
 	v := &view{Props: map[string]any{"turns": []any{
-		map[string]any{"who": "owner", "at": "09.07", "text": "Hello"},
-		map[string]any{"who": "lifelog", "at": "09.08", "text": "Hi", "tools": []any{"- `read_day`"}},
+		map[string]any{"who": "owner", "at": "09.07", "via": "whatsapp", "text": "Hello"},
+		map[string]any{"who": "lifelog", "at": "09.08", "text": "Hi", "tools": []any{"- `read_day`"}, "refs": []any{"/days/2026-10-28"}},
 		map[string]any{"who": "owner", "at": "09.09", "text": "Thanks"},
 	}}}
 	turns := v.Turns()
-	if len(turns) != 3 || turns[1].Who != "lifelog" || turns[1].At != "09.08" || turns[1].Text != "Hi" || len(turns[1].Tools) != 1 || toolWords(turns[1].Tools[0]) != "`read_day`" {
+	if len(turns) != 3 || turns[1].Who != "lifelog" || turns[1].At != "09.08" || turns[1].Text != "Hi" || len(turns[1].Tools) != 1 || toolChip(turns[1].Tools[0]) != (tool{Name: "read_day"}) {
 		t.Errorf("the turns: %+v", turns)
+	}
+	if turns[0].Via != "whatsapp" || len(turns[1].Refs) != 1 || turns[1].Refs[0] != "/days/2026-10-28" || turns[1].Via != "" {
+		t.Errorf("the relay and the addresses of the turns: %+v", turns)
 	}
 	if !waiting(turns) || waiting(turns[:2]) || waiting(nil) {
 		t.Error("the agent waits only when the last turn is the owner's")
+	}
+}
+
+// TestAToolLineIsAChip: the name of the tool and the words after it, without the arrow and the mark of a link.
+func TestAToolLineIsAChip(t *testing.T) {
+	for line, want := range map[string]tool{
+		"- `read_day`": {"read_day", ""},
+		"- `open_day` → [/days/2026-10-27](/days/2026-10-27)": {"open_day", "/days/2026-10-27"},
+		"- `get` → /pages/12":                                 {"get", "/pages/12"},
+		"- `get` failed: forbidden":                           {"get", "failed: forbidden"},
+		"- `search_pages` words=sleep":                        {"search_pages", "words=sleep"},
+		"- not a tool line":                                   {"not a tool line", ""},
+	} {
+		if got := toolChip(line); got != want {
+			t.Errorf("toolChip(%q) = %+v, want %+v", line, got, want)
+		}
+	}
+}
+
+// TestTheDayBarMarksTheDayShown: the chips are the days before today that have a conversation, oldest first, and
+// Today last; a day that is not among them (a link from the day view) is a chip too; the day shown is marked.
+func TestTheDayBarMarksTheDayShown(t *testing.T) {
+	shell := &Shell{Today: "2026-10-28"}
+	chips := func(shown string) string {
+		v := &view{Shell: shell, Props: map[string]any{"day": shown}, chatDays: []string{"2026-10-25", "2026-10-27"}}
+		var out []string
+		for _, c := range v.ChatDays() {
+			mark := ""
+			if c.Current {
+				mark = "*"
+			}
+			out = append(out, c.Text+mark+" "+c.Href)
+		}
+		return strings.Join(out, ", ")
+	}
+	if got, want := chips("2026-10-28"), "Sun 25 /days/2026-10-25/conversation, Tue 27 /days/2026-10-27/conversation, Today* /days/today/conversation"; got != want {
+		t.Errorf("today: %s, want %s", got, want)
+	}
+	if got, want := chips("2026-10-27"), "Sun 25 /days/2026-10-25/conversation, Tue 27* /days/2026-10-27/conversation, Today /days/today/conversation"; got != want {
+		t.Errorf("a day of the list: %s, want %s", got, want)
+	}
+	if got, want := chips("2026-10-01"), "Thu 1* /days/2026-10-01/conversation, Sun 25 /days/2026-10-25/conversation, Tue 27 /days/2026-10-27/conversation, Today /days/today/conversation"; got != want {
+		t.Errorf("another day: %s, want %s", got, want)
+	}
+}
+
+// TestACardIsDrawnOnlyForAnAddressTheServerResolved: an address that is not in the facts has no card; one that is
+// there with no entity is the plain link; the entity picks the card by its class.
+func TestACardIsDrawnOnlyForAnAddressTheServerResolved(t *testing.T) {
+	v := &view{Shell: &Shell{Today: "2026-10-28"}, cards: map[string]*siren.Entity{
+		"/gone":    nil,
+		"/pages/3": {Class: []string{"person", "page"}, Title: "Sam", Properties: map[string]any{"body": "# Sam\n\nMy **friend** from [[Lisbon]].", "cover": map[string]any{"id": 9}}},
+		"/odd":     {Class: []string{"settings"}, Title: "Settings"},
+	}}
+	cards := v.CardsOf([]string{"/unasked", "/gone", "/pages/3", "/odd"})
+	if len(cards) != 3 {
+		t.Fatalf("%d cards, want 3: %+v", len(cards), cards)
+	}
+	if c := cards[0]; c.Kind != "link" || c.Title != "/gone" {
+		t.Errorf("the plain link: %+v", c)
+	}
+	if c := cards[1]; c.Kind != "person" || c.Title != "Sam" || c.Icon != "people" || c.Picture != "/pages/9/preview" || len(c.Lines) != 1 || c.Lines[0] != "Sam" {
+		t.Errorf("the person: %+v", c)
+	}
+	if c := cards[2]; c.Kind != "other" || c.Title != "Settings" || c.Value != "settings" {
+		t.Errorf("a class without a card: %+v", c)
 	}
 }

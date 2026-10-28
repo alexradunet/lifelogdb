@@ -117,7 +117,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/search?q=ran&kind=day", http.StatusOK, []string{`aria-current="page">Days</a>`, `aria-label="Pages by their words"`, `<input type="hidden" name="kind" value="day">`}},
 		{"/integrity", http.StatusOK, []string{`action="/search/rebuild"`, `action="/links/resync"`}},
 		{"/settings", http.StatusOK, []string{"<h1>Settings</h1>", `type="password"`}},
-		{"/days/today/conversation", http.StatusOK, []string{"<h1>Conversation</h1>", `/say"`, "Nothing is said on this day yet"}},
+		{"/days/today/conversation", http.StatusOK, []string{"<h1>Chat</h1>", `/say"`, "Nothing is said on this day yet"}},
 		{apitest.Href(gone, "self"), http.StatusOK, []string{"Deleted", `action="` + apitest.Href(gone, "self") + `/revive"`}},
 		{"/years/2026", http.StatusOK, []string{`<a href="/years/2026" aria-current="page">Year</a>`}},
 		{"/months/2026-09", http.StatusOK, []string{`<a href="/months/2026-09" aria-current="page">Month</a>`, `<a href="/days">Days</a>`}},

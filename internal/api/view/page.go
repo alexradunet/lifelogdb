@@ -97,7 +97,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"beyond":        beyond,
 	"kindIcon":      kindIcon,
 	"waiting":       waiting,
-	"toolWords":     toolWords,
+	"toolChip":      toolChip,
 }).ParseFS(Files, "html/*.html"))
 
 // newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one
@@ -155,6 +155,8 @@ type view struct {
 	Back      string
 	Shell     *Shell     // the sidebar's read; nil when the page is drawn without it
 	query     url.Values // the page's own query: ?new=<action> and the fields it fills
+	cards     map[string]*siren.Entity
+	chatDays  []string
 }
 
 // IsSeries reports the view of a metric (class series): it carries the metric's page (docs/plans/144-one-view-for-a-metric.md),
@@ -203,6 +205,11 @@ type Facts struct {
 	Shell     *Shell   // the sidebar's read; nil when the page is drawn without it
 	Submitted string   // the body (or the text) that a refused form sent
 	Back      string   // the page that a refused form came from, when it is a page of this server
+	// Cards are the entities that the addresses of a conversation's tool lines answer, by address (docs/plans/148-the-chat-screen.md).
+	// An address that answered an error, or no entity, is in the map with a nil entity: it is drawn as a plain link.
+	Cards map[string]*siren.Entity
+	// ChatDays are the days before today that have a conversation page, oldest first: the chips of the chat screen.
+	ChatDays []string
 }
 
 // pageView is the view of a page: the entity and the facts of the page. It reads nothing, so the same arguments give
@@ -214,7 +221,7 @@ func pageView(e *siren.Entity, f Facts) (*view, error) {
 		return nil, err
 	}
 	v := &view{Entity: e, Props: shape, Path: f.URL.Path, Here: hereOf(f.URL), Submitted: f.Submitted, Back: f.Back,
-		Shell: f.Shell, query: f.URL.Query()}
+		Shell: f.Shell, query: f.URL.Query(), cards: f.Cards, chatDays: f.ChatDays}
 	return v, nil
 }
 

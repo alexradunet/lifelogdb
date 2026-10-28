@@ -8,6 +8,7 @@ import (
 
 	"lifelog/internal/api/siren"
 	"lifelog/internal/pixelart"
+	"lifelog/internal/text"
 )
 
 // The shell is the frame of every page a browser gets (docs/plans/092-the-app-shell.md): the sidebar, with today's
@@ -30,10 +31,11 @@ type Chat struct {
 }
 
 // Turn is one turn of a conversation as a page draws it. Who is owner, lifelog or text. A tool line is as the page
-// writes it, with its "- " mark.
+// writes it, with its "- " mark. Via is the writer that relayed the turn, "" with none. Refs are the addresses that
+// the tool lines name: the thread draws a card for each (cards.go).
 type Turn struct {
-	Who, At, Text string
-	Tools         []string
+	Who, At, Via, Text string
+	Tools, Refs        []string
 }
 
 // Chat is the chat column of the shell. The conversation view is the column at full size, so it has none.
@@ -54,17 +56,69 @@ func (v *view) Turns() []Turn {
 	var out []Turn
 	for _, x := range anyList(props["turns"]) {
 		m, _ := x.(map[string]any)
-		t := Turn{Who: Num(m["who"]), At: Num(m["at"]), Text: Num(m["text"])}
+		t := Turn{Who: Num(m["who"]), At: Num(m["at"]), Via: Num(m["via"]), Text: Num(m["text"])}
 		for _, tool := range anyList(m["tools"]) {
 			t.Tools = append(t.Tools, Num(tool))
+		}
+		for _, ref := range anyList(m["refs"]) {
+			t.Refs = append(t.Refs, Num(ref))
 		}
 		out = append(out, t)
 	}
 	return out
 }
 
-// toolWords is a tool line without its "- " mark, as a thread draws it.
-func toolWords(line string) string { return strings.TrimPrefix(line, "- ") }
+// dayChip is a day of the day bar of the chat screen: the conversation of that day, marked when it is the one drawn.
+type dayChip struct {
+	Href, Text string
+	Current    bool
+}
+
+// ChatDays are the chips of the day bar: the days before today that have a conversation page (Facts.ChatDays), the
+// day of the view when it is another day, and Today last. The chip of the day of the view is marked.
+func (v *view) ChatDays() []dayChip {
+	props, _ := v.Props.(map[string]any)
+	shown, today := Num(props["day"]), v.Today()
+	days := slices.Clone(v.chatDays)
+	if shown != today && !slices.Contains(days, shown) && text.IsDay(shown) {
+		days = append(days, shown)
+		slices.Sort(days)
+	}
+	var out []dayChip
+	for _, d := range days {
+		t, _ := text.ParseDay(d)
+		out = append(out, dayChip{Href: siren.DayHref(d) + "/conversation", Text: t.Format("Mon 2"), Current: d == shown})
+	}
+	if today != "" {
+		out = append(out, dayChip{Href: siren.DayHref("today") + "/conversation", Text: "Today", Current: today == shown})
+	}
+	return out
+}
+
+// tool is a tool line as a chip says it: the name of the tool and the words after it.
+type tool struct{ Name, Words string }
+
+// toolChip reads a tool line as the page writes it (API.md, conversation): “- `name` “, “- `name` → [href](href)“
+// or “- `name` failed: code“. The words are what follows the name, without the arrow and the mark of a link. A line
+// that is no such line is a name alone.
+func toolChip(line string) tool {
+	line = strings.TrimSpace(strings.TrimPrefix(line, "- "))
+	rest, ok := strings.CutPrefix(line, "`")
+	if !ok {
+		return tool{Name: line}
+	}
+	name, words, ok := strings.Cut(rest, "`")
+	if !ok {
+		return tool{Name: line}
+	}
+	words = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(words), "→"))
+	if inner, ok := strings.CutPrefix(words, "["); ok {
+		if label, _, ok := strings.Cut(inner, "]("); ok {
+			words = label
+		}
+	}
+	return tool{Name: name, Words: words}
+}
 
 // waiting reports a conversation whose last turn is the owner's: the agent has not answered yet.
 func waiting(turns []Turn) bool { return len(turns) > 0 && turns[len(turns)-1].Who == "owner" }
