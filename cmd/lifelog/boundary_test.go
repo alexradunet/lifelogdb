@@ -17,7 +17,7 @@ import (
 
 // thirdParties are the products and companies the core never names. A thing that names one is an extension; the
 // change that moves it out adds its name here.
-var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "opencode", "anthropic", "openai", "modelcontextprotocol"}
+var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "opencode", "anthropic", "openai", "modelcontextprotocol", "whatsapp", "whatsmeow"}
 
 // dialPackages are the packages a Go program talks to a server with. The core imports them under their own names only,
 // so that the words of dials below cannot hide behind an alias or a dot import.

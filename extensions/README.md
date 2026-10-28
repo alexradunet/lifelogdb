@@ -83,3 +83,4 @@ the rule that exists already ([API.md](../API.md)). `GET /actions` of the server
 | `extensions/googlephotos` | `lifelog-gphotos` | `lifelog gphotos [--addr A] [--credentials F] [--zone Z]` | `import:google-photos` | yes |
 | `extensions/agentic` | `lifelog-agentic-init` | `lifelog agentic-init [--force]` | nothing | no: it reads `LIFELOG_EXE` and `LIFELOG_DB`, and refuses to run without them |
 | `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `--source` is refused as today |
+| `extensions/whatsapp` | `lifelog-whatsapp` | `lifelog whatsapp login` and `lifelog whatsapp --owner NUMBER [--token-file F] [--url U] [--terminal]` | `agent:whatsapp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `login` needs none |

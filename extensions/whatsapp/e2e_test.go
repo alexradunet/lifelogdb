@@ -1,0 +1,263 @@
+package main_test
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"lifelog-whatsapp/siren"
+)
+
+// The end-to-end test builds the real lifelog and lifelog-whatsapp into one folder and runs
+// `lifelog whatsapp --owner 123 --terminal --db F` against a fake model. That line holds the discovery of the
+// extension (lifelog finds lifelog-whatsapp beside itself), the temporary server of the extension contract
+// (extensions/README.md), the conversation page and the tool calls over HTTP. The tests of ./agent hold the turns
+// on a fake catalog; this test holds the surface against the real writer. The connection to WhatsApp has no test.
+
+// wait is a guard against a deadlock.
+const wait = 2 * time.Minute
+
+// built is the folder with lifelog, lifelog-whatsapp and a new life.db.
+type built struct{ dir, lifelog, ext, db string }
+
+func build(t *testing.T) built {
+	t.Helper()
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		t.Skipf("no go command to build lifelog: %v", err)
+	}
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "cmd", "lifelog")); err != nil {
+		t.Skipf("the lifelog sources are not at %s: %v", root, err)
+	}
+	b := built{dir: t.TempDir()}
+	exe := ""
+	if runtime.GOOS == "windows" {
+		exe = ".exe"
+	}
+	b.lifelog, b.ext, b.db = filepath.Join(b.dir, "lifelog"+exe), filepath.Join(b.dir, "lifelog-whatsapp"+exe), filepath.Join(b.dir, "life.db")
+	for _, args := range [][]string{
+		{"build", "-C", root, "-o", b.lifelog, "./cmd/lifelog"},
+		{"build", "-o", b.ext, "./cmd/lifelog-whatsapp"},
+	} {
+		if out, err := exec.Command(goBin, args...).CombinedOutput(); err != nil {
+			t.Fatalf("go %v: %v\n%s", args, err, out)
+		}
+	}
+	if out, err := b.run("init", b.db); err != nil {
+		t.Fatalf("lifelog init: %v\n%s", err, out)
+	}
+	return b
+}
+
+// env is the environment of a child: the inherited one without any variable that could point it at another file,
+// server or model than the ones of the test, and with a state folder of its own.
+func env(t *testing.T, extra ...string) []string {
+	home := t.TempDir()
+	e := slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		return strings.HasPrefix(kv, "LIFELOG_") || strings.HasPrefix(kv, "XDG_CONFIG_HOME=") || strings.HasPrefix(kv, "HOME=") || strings.HasPrefix(kv, "APPDATA=")
+	})
+	return append(e, append([]string{"XDG_CONFIG_HOME=" + home, "HOME=" + home, "APPDATA=" + home}, extra...)...)
+}
+
+func (b built) run(args ...string) ([]byte, error) {
+	cmd := exec.Command(b.lifelog, args...)
+	cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, "LIFELOG_") })
+	return cmd.Output()
+}
+
+// fakeModel answers the first step with a capture tool call and the second with text.
+type fakeModel struct {
+	mu   sync.Mutex
+	reqs []map[string]any
+}
+
+func (f *fakeModel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var req map[string]any
+	json.NewDecoder(r.Body).Decode(&req)
+	f.mu.Lock()
+	f.reqs = append(f.reqs, req)
+	n := len(f.reqs)
+	f.mu.Unlock()
+	if r.URL.Path != "/v1/chat/completions" {
+		http.NotFound(w, r)
+		return
+	}
+	if n == 1 {
+		io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call1","type":"function","function":{"name":"capture","arguments":"{\"day\":\"2031-05-20\",\"text\":\"Walked by the river, synthetic entry.\"}"}}]},"finish_reason":"tool_calls"}]}`)
+		return
+	}
+	io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"Written to 2031-05-20."},"finish_reason":"stop"}]}`)
+}
+
+func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
+	b := build(t)
+	model := &fakeModel{}
+	srv := httptest.NewServer(model)
+	defer srv.Close()
+
+	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
+	cmd.Env = env(t, "LIFELOG_MODEL_URL="+srv.URL+"/v1", "LIFELOG_MODEL=test-model", "LIFELOG_MODEL_KEY=synthetic-key")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := false
+	defer func() {
+		if !waited {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
+	day := time.Now().Format(time.DateOnly)
+
+	if _, err := io.WriteString(stdin, "I walked by the river\n"); err != nil {
+		t.Fatal(err)
+	}
+	lines := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(stdout).ReadString('\n')
+		lines <- strings.TrimSpace(line)
+	}()
+	select {
+	case got := <-lines:
+		if got != "Written to 2031-05-20." {
+			t.Errorf("reply %q; stderr:\n%s", got, stderr.String())
+		}
+	case <-time.After(wait):
+		t.Fatalf("no reply; stderr:\n%s", stderr.String())
+	}
+	if err := stdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		waited = true
+		if err != nil {
+			t.Fatalf("exit: %v; stderr:\n%s", err, stderr.String())
+		}
+	case <-time.After(wait):
+		t.Fatal("the agent did not stop after the end of its input")
+	}
+	if strings.Contains(stderr.String(), "synthetic-key") {
+		t.Error("the model key is in the log")
+	}
+
+	// The model read the conversation page as its user message and was offered the tools.
+	model.mu.Lock()
+	defer model.mu.Unlock()
+	if len(model.reqs) != 2 {
+		t.Fatalf("%d model requests, want 2", len(model.reqs))
+	}
+	msgs, _ := model.reqs[0]["messages"].([]any)
+	user, _ := msgs[len(msgs)-1].(map[string]any)
+	if s, _ := user["content"].(string); !strings.Contains(s, "[["+day+"]]") || !strings.HasSuffix(s, "I walked by the river") {
+		t.Errorf("the model read %q", s)
+	}
+	if tools, _ := model.reqs[0]["tools"].([]any); len(tools) < 10 {
+		t.Errorf("%d tools offered", len(tools))
+	}
+
+	// The file holds the capture and the conversation (read after the run, with the CLI).
+	out, err := b.run("get", "/days/2031-05-20", "--db", b.db)
+	if err != nil {
+		t.Fatalf("lifelog get: %v", err)
+	}
+	if !strings.Contains(string(out), "Walked by the river, synthetic entry.") {
+		t.Errorf("the day page does not hold the capture: %s", out)
+	}
+	out, err = b.run("get", "/pages?title=Conversation%20"+day, "--db", b.db)
+	if err != nil {
+		t.Fatalf("lifelog get: %v", err)
+	}
+	var page siren.Entity
+	if err := json.Unmarshal(out, &page); err != nil {
+		t.Fatalf("lifelog get: %v: %s", err, out)
+	}
+	body, _ := page.Properties.(map[string]any)["body"].(string)
+	for _, want := range []string{"[[" + day + "]]", "**Owner** (", "): I walked by the river", "- `capture` → [/days/2031-05-20", "**lifelog** (", "): Written to 2031-05-20."} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the conversation page lacks %q: %q", want, body)
+		}
+	}
+}
+
+// TestTheAgentRefusesWhatItCannotRun: each missing piece is refused with its name or the line that says what to run.
+func TestTheAgentRefusesWhatItCannotRun(t *testing.T) {
+	b := build(t)
+	missing := filepath.Join(b.dir, "missing", "life.db")
+	model := []string{"LIFELOG_MODEL_URL=http://127.0.0.1:1/v1", "LIFELOG_MODEL=m"}
+	for _, tc := range []struct {
+		name string
+		line []string
+		env  []string
+		want string
+	}{
+		{"no model", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db}, nil, "LIFELOG_MODEL_URL and LIFELOG_MODEL"},
+		{"no model id", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db}, []string{"LIFELOG_MODEL_URL=http://127.0.0.1:1/v1"}, "LIFELOG_MODEL_URL and LIFELOG_MODEL"},
+		{"no owner", []string{b.lifelog, "whatsapp", "--terminal", "--db", b.db}, model, "--owner is required"},
+		{"an owner that is not a number", []string{b.lifelog, "whatsapp", "--owner", "me", "--terminal", "--db", b.db}, model, "--owner is required"},
+		{"no server", []string{b.ext, "--owner", "123", "--terminal"}, model, "no LIFELOG_URL and no --url"},
+		{"no file", []string{b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", missing}, model, "no LIFELOG_URL and no --url"},
+		{"a source flag", []string{b.lifelog, "whatsapp", "--owner", "123", "--source", "x", "--db", b.db}, model, "flag provided but not defined: -source"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(tc.line[0], tc.line[1:]...)
+			cmd.Env = env(t, tc.env...)
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			err := cmd.Run()
+			var ee *exec.ExitError
+			if !errors.As(err, &ee) || ee.ExitCode() == 0 {
+				t.Fatalf("%v: %v, want a non-zero status", tc.line[1:], err)
+			}
+			if !strings.Contains(stderr.String(), tc.want) {
+				t.Errorf("stderr %q, want %q", stderr.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestServingWithoutAPairingExitsWithTwo: the session store is new, so the device is not paired (no network).
+func TestServingWithoutAPairingExitsWithTwo(t *testing.T) {
+	b := build(t)
+	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--db", b.db)
+	cmd.Env = env(t, "LIFELOG_MODEL_URL=http://127.0.0.1:1/v1", "LIFELOG_MODEL=m")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) || ee.ExitCode() != 2 {
+		t.Fatalf("%v, want exit status 2; stderr %s", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not paired: run lifelog whatsapp login") {
+		t.Errorf("stderr %q", stderr.String())
+	}
+}

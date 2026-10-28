@@ -25,6 +25,7 @@ The database it writes is specified independently of it, so another program — 
 go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
 go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp   # the MCP server, beside lifelog (an extension)
 go build -C extensions/agentic -o ../../lifelog-agentic-init ./cmd/lifelog-agentic-init   # agentic-init, beside lifelog (an extension)
+go build -C extensions/whatsapp -o ../../lifelog-whatsapp ./cmd/lifelog-whatsapp   # the WhatsApp agent, beside lifelog (an extension)
 lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
@@ -78,7 +79,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
       K["internal/api and cmd/lifelog: the API, the browser, the CLI"]
     end
     subgraph R3["ring 3: extensions"]
-      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos: clients of API.md"]
+      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos, lifelog-whatsapp: clients of API.md"]
     end
     S --> C --> K --> X
   ```
@@ -537,6 +538,9 @@ the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`.
   catalog that is not the owner's is a tool.
 - [`extensions/agentic`](extensions/agentic/README.md): `lifelog agentic-init [--force]`. It writes `AGENTS.md`, the
   skills and the MCP configs for a coding agent opened in the folder of the program.
+- [`extensions/whatsapp`](extensions/whatsapp/README.md): an always-on agent on WhatsApp, `lifelog whatsapp`. It answers
+  the owner's number through a model at an OpenAI-compatible endpoint and writes through the catalog as
+  `agent:whatsapp`.
 
 ## Engineering references
 

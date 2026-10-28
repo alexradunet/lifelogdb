@@ -239,6 +239,7 @@ cd lifelogdb
 go build -o lifelog ./cmd/lifelog
 go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp
 go build -C extensions/agentic -o ../../lifelog-agentic-init ./cmd/lifelog-agentic-init
+go build -C extensions/whatsapp -o ../../lifelog-whatsapp ./cmd/lifelog-whatsapp
 
 <span class="c"># make life.db beside the program</span>
 lifelog init
