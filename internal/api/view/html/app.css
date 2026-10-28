@@ -220,7 +220,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
   & .chat-form{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; max-inline-size:72ch; margin-inline:auto}
   & .chat-form label>span{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
-  & textarea{inline-size:100%; min-block-size:46px; max-block-size:40vh; resize:none; field-sizing:content}
+  & textarea{inline-size:100%; min-block-size:46px; max-block-size:40vh; resize:none}
   & .chat-form button{block-size:46px; padding:0 18px}
   & .hint{max-inline-size:72ch; margin-block-start:var(--space-2); margin-inline:auto}}
 
@@ -582,9 +582,9 @@ fieldset.segmented.faces label:has(input[value="5"]) span::before{background-pos
   & form{flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between;
     &>label{flex:1 1 100%}
     &>button{margin-inline-start:auto}}
-  /* The box grows with its text (a browser without field-sizing keeps its rows). The least height is four lines of
-     the textarea (26 px each), its padding and its border; base.css caps it at 45vh on a phone. */
-  & textarea{field-sizing:content; min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
+  /* The least height is four lines of the textarea (26 px each), its padding and its border; base.css grows the box
+     and caps it. */
+  & textarea{min-block-size:calc(4 * 26px + 2 * 10px + 2 * 2px); border-style:dashed; background:var(--surface);
     &:focus-visible{border-style:solid; border-color:var(--accent-ink); outline:0}}}
 /* Writing mode: while the box has the focus and holds words, the rest of the page steps back and the box takes a
    halo. The box takes the focus on arrival, so the focus alone is not the sign: the first word is. */

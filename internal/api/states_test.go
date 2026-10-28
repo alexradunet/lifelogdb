@@ -29,7 +29,7 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 	}
 	stale := submit(h, save.Href, url.Values{"body": {"my draft"}, "version": {version}}, apitest.Href(p, "self")).Body.String()
 	for _, want := range []string{`<span class="date">409 · stale version</span>`,
-		`<div class="alert" role="alert"><p><strong>Not saved. The page changed since you opened it.</strong> `, ">my draft</textarea>"} {
+		`<div class="alert" role="alert" tabindex="-1" autofocus><p><strong>Not saved. The page changed since you opened it.</strong> `, ">my draft</textarea>"} {
 		if !strings.Contains(stale, want) {
 			t.Errorf("a stale save lacks %s", want)
 		}
@@ -41,12 +41,15 @@ func TestAnErrorIsAnAlertInWords(t *testing.T) {
 	req.Header.Set(siren.SourceHeader, "agent:synthetic")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `<div class="alert danger" role="alert"><p><strong>Refused.</strong> `) {
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `<div class="alert danger" role="alert" tabindex="-1" autofocus><p><strong>Refused.</strong> `) {
 		t.Errorf("an agent's snapshot: %d, no refusal in words", rec.Code)
 	}
 
-	if body := browseStatus(t, h, "/pages/999999", http.StatusNotFound); !strings.Contains(body, `<div class="alert" role="alert"><p>no page 999999</p></div>`) {
-		t.Errorf("a missing page is not an alert of its message alone")
+	if body := browseStatus(t, h, "/pages/999999", http.StatusNotFound); !strings.Contains(body, `<div class="alert" role="alert" tabindex="-1" autofocus><p>no page 999999</p></div>`) {
+		t.Errorf("a missing page is not an alert of its message alone, which takes the focus")
+	}
+	if body := browseStatus(t, h, "/pages/999999", http.StatusNotFound); strings.Count(body, "autofocus") != 1 {
+		t.Errorf("the error page has %d autofocus, want the alert's only", strings.Count(body, "autofocus"))
 	}
 }
 

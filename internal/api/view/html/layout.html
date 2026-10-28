@@ -66,7 +66,7 @@
 <footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>{{end}}</footer>
 </div>
 {{if .Shell}}<dialog class="palette" id="palette" closedby="any" aria-label="Search">
-<form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form>
+<search><form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form></search>
 <p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
 </dialog>
 {{template "chat" .}}{{end}}
@@ -180,13 +180,14 @@
 {{else if segmented .Field}}<fieldset class="segmented{{if eq .Name "mood"}} faces{{end}}"><legend>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</legend>{{$v := num .Value}}{{$n := .Name}}{{$req := .Required}}{{$f := .}}{{range .Options}}{{$o := .}}{{$w := $f.Word $o}}<label{{with $w}} title="{{.}}"{{end}}><input type="radio" name="{{$n}}" value="{{$o}}"{{if eq $o $v}} checked{{end}}{{if $req}} required{{end}}><span>{{if $f.Spoken}}{{$w}}{{else}}{{$o}}{{with $w}} <small>{{.}}</small>{{end}}{{end}}</span></label>{{end}}</fieldset>
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if and .Required .Placeholder}} required{{end}}{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and .Required .Placeholder}}<option value="">{{.Placeholder}}</option>{{else if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
-{{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{num .Value}}</textarea>
+{{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}{{if .Send}} enterkeyhint="send"{{end}}>{{num .Value}}</textarea>
 {{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if eq .Type "password"}} autocomplete="off"{{end}}{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a
-     closed <details>. An owner-only action carries the owner mark. */}}
-{{define "boxed"}}{{with .}}<details class="action"{{if .Asked}} open{{end}}><summary class="button{{if .Lead}} primary{{end}}">{{if .Lead}}{{icon "new"}}{{end}}{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with or .Hint .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
+     closed <details>. An owner-only action carries the owner mark. A form with a group (the option "group") shares
+     its name with the others of the group, so the browser keeps one of them open. */}}
+{{define "boxed"}}{{with .}}<details class="action"{{with .Group}} name="{{.}}"{{end}}{{if .Asked}} open{{end}}><summary class="button{{if .Lead}} primary{{end}}">{{if .Lead}}{{icon "new"}}{{end}}{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with or .Hint .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
      An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}

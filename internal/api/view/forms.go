@@ -53,7 +53,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 // button, "class" styles the form, "autocomplete" sets its autocomplete attribute, "id" names it (the controls outside it name it), "hide" lists fields kept with their
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
-// "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
+// "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md), "group" names the exclusive group of a boxed form (the browser keeps one form of a name open), "send" (any word) marks the text areas as the ones whose Enter key sends (enterkeyhint), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
 // page the browser returns to after the write (no field of the action: the server reads it, see backOf), "label"
 // ("field=words") gives a field a title in this form only (the score form calls its unit Range), "placeholder"
 // ("field=words") and "key" ("field=letter") give a field its prompt and its access key, "required" lists fields
@@ -69,6 +69,8 @@ type formView struct {
 	NoPreview     bool          // the form has a text area but offers no Preview (the chat column)
 	Asked         bool          // the form the page's link asked for (?new=<name>): open
 	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
+	Group         string        // boxed gives its <details> this name: of the forms with one name, one is open
+	Send          bool          // the Enter key of a text area sends the form (the chat)
 	Lead          bool          // boxed draws the button as the primary one with the new icon
 	Primary       bool          // the button is the primary one: a form with fields to fill
 	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
@@ -131,6 +133,7 @@ type fieldView struct {
 	Key         string            // the field's access key, which the browser's own modifier reaches
 	List        string            // the id of the datalist of a field of page titles with options (Pages): see Fields
 	Pattern     string            // the browser sends the form only when the value matches it
+	Send        bool              // the Enter key sends the form (enterkeyhint of a text area)
 	Sole        bool              // the only field the form draws: it needs no mark "required"
 	Labels      map[string]string // the words shown beside each option of the datalist (formView.Labels)
 }
@@ -146,7 +149,7 @@ func (f *formView) Fields(folded bool) []fieldView {
 	out := make([]fieldView, len(list))
 	sole := len(f.Shown)+len(f.More) == 1
 	for i, fd := range list {
-		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name], sole, f.labels[fd.Name]}
+		out[i] = fieldView{fd, fd.Name == f.Focus, f.prompts[fd.Name], f.keys[fd.Name], "", f.patterns[fd.Name], f.Send, sole, f.labels[fd.Name]}
 		if fd.Pages && len(fd.Options) > 0 {
 			out[i].List = cmp.Or(f.ID, f.Name) + "-" + fd.Name
 		}
@@ -190,6 +193,8 @@ type formOptions struct {
 	button, class, id, back string
 	autocomplete            string
 	plain                   bool // "plain" was given: the form offers no Preview
+	group                   string
+	send                    bool // "send" was given
 	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
 	hasButton               bool // "button" was given, also as ""
 	autofocus               string
@@ -229,6 +234,10 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.autocomplete = v
 		case "lead":
 			o.lead = v != ""
+		case "group":
+			o.group = v
+		case "send":
+			o.send = v != ""
 		case "plain":
 			o.plain = v != ""
 		case "id":
@@ -278,7 +287,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title, Class: o.class, Autocomplete: o.autocomplete, ID: o.id, Back: o.back, NoPreview: o.plain, Lead: o.lead, Focus: o.autofocus,
+	f := &formView{Action: a, Button: a.Title, Class: o.class, Autocomplete: o.autocomplete, ID: o.id, Back: o.back, NoPreview: o.plain, Group: o.group, Send: o.send, Lead: o.lead, Focus: o.autofocus,
 		prompts: o.placeholders, keys: o.keys, patterns: o.patterns}
 	if o.hasButton {
 		f.Button = o.button
