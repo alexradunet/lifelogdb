@@ -91,6 +91,40 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 	}
 }
 
+// TestSayNamesTheRelayInTheOwnersParagraph: an agent or an import writer gives `, via NAME` (its prefix cut) in the
+// marker and the entity's turn has `via`; the owner's own surfaces give the marker without it and no `via`.
+func TestSayNamesTheRelayInTheOwnersParagraph(t *testing.T) {
+	for _, tc := range []struct{ source, marker, via string }{
+		{"agent:x", "**Owner** (11.07, via x): Hi", "x"},
+		{"import:y.z", "**Owner** (11.07, via y.z): Hi", "y.z"},
+		{"cli", "**Owner** (11.07): Hi", ""},
+		{"ui", "**Owner** (11.07): Hi", ""},
+		{"app:phone", "**Owner** (11.07): Hi", ""},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			_, h, s := conversationStore(t)
+			c := client.InProcess(h, tc.source)
+			e, err := say(t, c, "today", "Hi")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "[[" + convDay + "]]\n\n" + tc.marker; bodyOf(t, s, "Conversation "+convDay) != want {
+				t.Errorf("the body: %q, want %q", bodyOf(t, s, "Conversation "+convDay), want)
+			}
+			props, _ := e.Properties.(map[string]any)
+			turns, _ := props["turns"].([]any)
+			if len(turns) != 1 {
+				t.Fatalf("the turns: %v, want one", turns)
+			}
+			turn, _ := turns[0].(map[string]any)
+			via, has := turn["via"]
+			if tc.via == "" && has || tc.via != "" && via != tc.via {
+				t.Errorf("the turn: %v, want via %q", turn, tc.via)
+			}
+		})
+	}
+}
+
 // TestSayRefusesWhatItCannotWrite: an empty text, a text of blanks and a day that is not a day are 422 and write
 // nothing, not even the page.
 func TestSayRefusesWhatItCannotWrite(t *testing.T) {

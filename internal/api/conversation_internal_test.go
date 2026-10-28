@@ -44,6 +44,22 @@ func TestParseTurnsReadsAHandWrittenBody(t *testing.T) {
 			[]Turn{{Who: "lifelog", At: "09.08", Text: "Hi", Tools: []string{"- `get`"}}}},
 		{"a mark that is not a turn", "**Owner** 09.07: no brackets\n\n**lifelog** (9.7): bad time",
 			[]Turn{{Who: "text", Text: "**Owner** 09.07: no brackets\n\n**lifelog** (9.7): bad time"}}},
+		{"a marker with via", "**Owner** (14.37, via whatsapp): Hi\n\n**lifelog** (14.38): Hello",
+			[]Turn{{Who: "owner", At: "14.37", Via: "whatsapp", Text: "Hi"}, {Who: "lifelog", At: "14.38", Text: "Hello"}}},
+		{"a via with a dot and a dash", "**Owner** (14.37, via a.b-c_1): Hi",
+			[]Turn{{Who: "owner", At: "14.37", Via: "a.b-c_1", Text: "Hi"}}},
+		{"a bracket part that is not via", "**Owner** (14.37, from whatsapp): Hi\n\n**Owner** (14.37, via WhatsApp): Hi\n\n**Owner** (14.37, via ): Hi",
+			[]Turn{{Who: "text", Text: "**Owner** (14.37, from whatsapp): Hi\n\n**Owner** (14.37, via WhatsApp): Hi\n\n**Owner** (14.37, via ): Hi"}}},
+		{"the refs of the tool lines", "**Owner** (09.07): Q\n\n" +
+			"- `get` \u2192 [/days/2031-05-14](/days/2031-05-14)\n- `search` \u2192 /search?q=x\n- `get` failed: not_found\n" +
+			"- `get` \u2192 [/days/2031-05-14](/days/2031-05-14)\n\n**lifelog** (09.08): A",
+			[]Turn{{Who: "owner", At: "09.07", Text: "Q"}, {Who: "lifelog", At: "09.08", Text: "A", Tools: []string{
+				"- `get` \u2192 [/days/2031-05-14](/days/2031-05-14)", "- `search` \u2192 /search?q=x", "- `get` failed: not_found",
+				"- `get` \u2192 [/days/2031-05-14](/days/2031-05-14)"},
+				Refs: []string{"/days/2031-05-14", "/search?q=x"}}}},
+		{"a ref that is not a path", "**lifelog** (09.08): A\n\n- `get` \u2192 [http://x.test/a](http://x.test/a)\n- `get` \u2192 days/1\n- `get` \u2192 [broken\n\n**lifelog** (09.09): B",
+			[]Turn{{Who: "lifelog", At: "09.08", Text: "A"}, {Who: "lifelog", At: "09.09", Text: "B", Tools: []string{
+				"- `get` \u2192 [http://x.test/a](http://x.test/a)", "- `get` \u2192 days/1", "- `get` \u2192 [broken"}}}},
 		{"a first line that names another day is text", "[[2031-05-13]]", []Turn{{Who: "text", Text: "[[2031-05-13]]"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

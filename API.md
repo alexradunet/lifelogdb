@@ -861,13 +861,18 @@ for the owner's turn. The page:
 - is read by lines. Line ends are LF; CRLF is read as LF;
 - has a turn from each marker line. A marker line starts with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is
   outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH.MM` is the
-  server's local time. The agent writes `**lifelog**`, and `say` writes `**Owner**`;
+  server's local time. The agent writes `**lifelog**`, and `say` writes `**Owner**`. The brackets may also name the
+  writer that relayed the turn: `**Owner** (HH.MM, via whatsapp): `, where the name is `[a-z0-9_.-]+`. `say` writes
+  it when the writer is an `agent:*` or `import:*` source (the name is the source without its prefix), and writes
+  no such part for any other writer;
 - runs a turn from its marker line to the line before the next marker line, or to the end of the page. The words of
   the turn are the rest of the marker line and the lines after it, with their inner blank lines (a turn may have many
   paragraphs, and a note that the owner adds after a reply is part of that reply). The blank edge is dropped;
 - has the tool lines of a `lifelog` turn right before its marker: one block of lines that each start with ``- ` ``, for
   example ``- `search`: no hits``, with at most one blank line between the block and the marker. They are not part of
-  the turn before. Tool lines before an `Owner` marker are part of the text before it;
+  the turn before. Tool lines before an `Owner` marker are part of the text before it. A tool line names the address
+  of what the agent touched as ``- `name` → [href](href)`` (or ``- `name` → href``); the browser draws it as a card.
+  A failed call is ``- `name` failed: code`` and names no address;
 - may hold text before the first marker, after the first line `[[YYYY-MM-DD]]`. It is one turn of `who` `text` when it
   is not blank, shown as it is. The first line is no turn.
 
@@ -877,8 +882,10 @@ for the owner's turn. The page:
 | `turns[]` | list | the turns, in the order of the page; empty when the page does not exist |
 | `turns[].who` | string | `owner`, `lifelog`, or `text` for a free paragraph |
 | `turns[].at` | string | `HH.MM`; absent for a free paragraph |
+| `turns[].via` | string | the writer that relayed the turn, its prefix cut; absent when the owner wrote it on a surface of lifelog |
 | `turns[].text` | string | the words of the turn, without the mark |
 | `turns[].tools` | list | the tool lines of a `lifelog` turn, as written, with the leading ``- ` ``; absent when none |
+| `turns[].refs` | list | the addresses of the turn's tool lines (paths that start with `/`), in order, unique; absent when none |
 | `id` | integer | only when the page exists: its id, and then the rows of the page that follow |
 | `entity_type` | string | `page` |
 | `title` | string | `Conversation YYYY-MM-DD` |

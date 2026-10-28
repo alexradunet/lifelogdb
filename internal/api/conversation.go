@@ -27,9 +27,16 @@ func ConversationTitle(day string) string { return "Conversation " + day }
 func conversationFirstLine(day string) string { return "[[" + day + "]]" }
 
 // ownerParagraph is the paragraph of one turn of the owner: the stamp is the time in the server's zone, HH.MM. The
-// text has LF line ends (a browser sends CRLF) and no blank edge.
-func ownerParagraph(stamp, words string) string {
-	return "**Owner** (" + stamp + "): " + strings.TrimSpace(strings.ReplaceAll(words, "\r\n", "\n"))
+// text has LF line ends (a browser sends CRLF) and no blank edge. When a relay wrote the turn (an agent or an import
+// source), the marker names it, its prefix cut: `**Owner** (HH.MM, via NAME): `.
+func ownerParagraph(stamp, source, words string) string {
+	via := ""
+	for _, prefix := range []string{siren.AgentPrefix, siren.ImportPrefix} {
+		if name, ok := strings.CutPrefix(source, prefix); ok {
+			via = ", via " + name
+		}
+	}
+	return "**Owner** (" + stamp + via + "): " + strings.TrimSpace(strings.ReplaceAll(words, "\r\n", "\n"))
 }
 
 // conversationDay is the day of a conversation page, from its title; "" when the title is not one.
@@ -43,17 +50,47 @@ func conversationDay(title string) string {
 
 // Turn is one turn of a conversation, as ParseTurns reads it. Who is owner, lifelog, or text for a paragraph that no
 // turn starts (the owner edited the page): At is then empty. Tools are the tool lines of a lifelog turn.
+// Refs are the addresses that the tool lines name, in order, each once. Via is the writer that relayed the turn.
 type Turn struct {
 	Who   string   `json:"who"`
 	At    string   `json:"at,omitempty"`
+	Via   string   `json:"via,omitempty"`
 	Text  string   `json:"text"`
 	Tools []string `json:"tools,omitempty"`
+	Refs  []string `json:"refs,omitempty"`
 }
 
-var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)\): ?`)
+var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d\.\d\d)(?:, via ([a-z0-9_.-]+))?\): ?`)
+
+// toolRefs are the addresses that the tool lines name after an arrow: `- `name` → [href](href)` or
+// `- `name` → href`. A value that does not start with a slash is no address. An address is listed once.
+func toolRefs(tools []string) []string {
+	var refs []string
+	for _, l := range tools {
+		_, after, ok := strings.Cut(l, " → ")
+		if !ok {
+			continue
+		}
+		ref := after
+		if rest, isLink := strings.CutPrefix(after, "["); isLink {
+			_, inner, ok := strings.Cut(rest, "](")
+			if !ok {
+				continue
+			}
+			ref, _, _ = strings.Cut(inner, ")")
+		} else if f := strings.Fields(after); len(f) > 0 {
+			ref = f[0]
+		}
+		if strings.HasPrefix(ref, "/") && !slices.Contains(refs, ref) {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
 
 // ParseTurns reads the turns of the body of the conversation page of day (CRLF is read as LF). A marker line starts
-// with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): ` and is outside a fenced code block (a line that starts with
+// with `**Owner** (HH.MM): ` or `**lifelog** (HH.MM): `, and may name the relaying writer inside the brackets,
+// `**Owner** (HH.MM, via NAME): ` (NAME is [a-z0-9_.-]+), and is outside a fenced code block (a line that starts with
 // three backticks opens or closes a fence). A turn runs from its marker line to the line before the next marker line,
 // or to the end of the page; it keeps its inner blank lines and loses its blank edge. The tool lines of a lifelog
 // turn are the lines that start with "- `" right before its marker: one block, with at most one blank line between
@@ -109,7 +146,7 @@ func ParseTurns(day, body string) []Turn {
 		m := turnStart.FindStringSubmatch(lines[at])
 		seg, next := segment(at+1, to)
 		words := strings.TrimSpace(lines[at][len(m[0]):] + "\n" + strings.Join(seg, "\n"))
-		turns = append(turns, Turn{Who: strings.ToLower(m[1]), At: m[2], Text: words, Tools: tools})
+		turns = append(turns, Turn{Who: strings.ToLower(m[1]), At: m[2], Via: m[3], Text: words, Tools: tools, Refs: toolRefs(tools)})
 		tools = next
 	}
 	return turns
@@ -133,7 +170,7 @@ func (h *server) say(r *http.Request, act spec, src string) (*siren.Entity, erro
 		return nil, core.Invalid("missing field text")
 	}
 	_, sync, err := h.s.AppendParagraph(r.Context(), src, ConversationTitle(day), day, conversationCategory,
-		conversationFirstLine(day), ownerParagraph(h.s.Local().Format("15.04"), words))
+		conversationFirstLine(day), ownerParagraph(h.s.Local().Format("15.04"), src, words))
 	if err != nil {
 		return nil, err
 	}
