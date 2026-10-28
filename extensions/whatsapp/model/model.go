@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // maxAnswer is the largest answer body that Chat reads. A larger body is an error, never a cut body.
@@ -38,8 +39,25 @@ type ToolCall struct {
 
 // FunctionCall is the name of a function and its arguments as the JSON text that the model wrote.
 type FunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Name      string    `json:"name"`
+	Arguments Arguments `json:"arguments"`
+}
+
+// Arguments is the JSON text of the arguments of a call. The protocol sends it as a JSON string; some local servers
+// send the object itself. Both are read; it is sent back as a string, as the protocol says.
+type Arguments string
+
+func (a *Arguments) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		*a = Arguments(s)
+		return nil
+	}
+	*a = Arguments(data)
+	return nil
 }
 
 // Tool is a function that the model may call. Parameters is a JSON Schema.
@@ -155,14 +173,18 @@ func (c *Client) Chat(ctx context.Context, messages []Message, tools []Tool) (Re
 	return Reply{Message: c0.Message, FinishReason: c0.FinishReason}, nil
 }
 
-// firstLine is the first line of s, cut at 200 bytes.
+// firstLine is the first line of s, cut at 200 bytes on a character boundary.
 func firstLine(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
 	if len(s) > 200 {
-		s = s[:200]
+		n := 200
+		for n > 0 && !utf8.RuneStart(s[n]) {
+			n--
+		}
+		s = s[:n]
 	}
 	return s
 }

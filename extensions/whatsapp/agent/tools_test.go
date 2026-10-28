@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -62,19 +61,23 @@ func TestArgumentsFlattenToFormValues(t *testing.T) {
 	}
 }
 
-// TestAFileFieldIsTheIsPathOfALocalFile: a file field of an action (a recording, a picture) is a string in the
-// tool's schema, the path of a local file, which the agent reads and sends as the CLI does
-// (docs/plans/131-the-pareto-pass.md, part 1).
-func TestAFileFieldIsThePathOfALocalFile(t *testing.T) {
-	list, err := tools([]siren.Action{{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
-		{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea"},
-		{Name: "audio", Type: "file", Title: "A recording"}}}})
+// TestAnActionWithAFileFieldIsNotATool: the MCP server offers a file field as the path of a local file, which it
+// reads and sends. This agent acts on text that any surface wrote to the page, so a path would let that text name
+// the owner's token or the session store: an action with a file field is left out.
+func TestAnActionWithAFileFieldIsNotATool(t *testing.T) {
+	list, err := tools([]siren.Action{
+		{Name: "add-file", Method: "POST", Href: "/files", Fields: []siren.Field{{Name: "original", Type: "file", Title: "The file"}, {Name: "day", Type: "date"}}},
+		{Name: "set-cover", Method: "POST", Href: "/pages/{id}/cover", Fields: []siren.Field{{Name: "id", In: "path", Required: true}, {Name: "picture", Type: "file"}}},
+		{Name: "find", Method: "GET", Href: "/search", Fields: []siren.Field{{Name: "q", Type: "text"}}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	props, _ := list[0].schema["properties"].(map[string]any)
-	audio, _ := props["audio"].(map[string]any)
-	if audio["type"] != "string" || !strings.Contains(fmt.Sprint(audio["description"]), "path of a local file") || props["text"] == nil || props["day"] == nil {
-		t.Errorf("the tool's properties: %v", props)
+	var names []string
+	for _, tl := range list {
+		names = append(names, tl.name)
+	}
+	if got := strings.Join(names, " "); got != "find get" {
+		t.Errorf("tools %q, want find and get only", got)
 	}
 }

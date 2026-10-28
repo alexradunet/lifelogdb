@@ -23,15 +23,16 @@ type Chat struct {
 	out  io.Writer
 	mu   sync.Mutex // one reply at a time on out
 	msgs chan agent.Message
-	done chan struct{}
 }
 
 // New starts to read lines from in. Each line that is not blank is a text of owner, at the time now gives.
-// The channel of Messages closes when in ends. The reading belongs to the Chat: Close stops it.
+// The channel of Messages closes when in ends. The reading goroutine is the one goroutine of the program that is
+// not awaited: a read of a terminal or a pipe blocks until a line comes, and a close of the file does not end it
+// (the file is not in the poller of Go). It ends with the process, which is what an interrupt means; the lines it
+// could still read go to a channel that nobody reads then.
 func New(ctx context.Context, in io.ReadCloser, out io.Writer, owner string, now func() time.Time) *Chat {
-	c := &Chat{in: in, out: out, msgs: make(chan agent.Message), done: make(chan struct{})}
+	c := &Chat{in: in, out: out, msgs: make(chan agent.Message)}
 	go func() {
-		defer close(c.done)
 		defer close(c.msgs)
 		sc := bufio.NewScanner(in)
 		sc.Buffer(nil, maxLine)
@@ -64,9 +65,5 @@ func (c *Chat) Send(_ context.Context, text string) error {
 // Typing does nothing: a terminal has no typing mark.
 func (c *Chat) Typing(context.Context, bool) error { return nil }
 
-// Close closes the input, waits for the reading to end and returns the error of the close.
-func (c *Chat) Close() error {
-	err := c.in.Close()
-	<-c.done
-	return err
-}
+// Close closes the input and returns the error of the close. It does not wait for the reading (New says why).
+func (c *Chat) Close() error { return c.in.Close() }

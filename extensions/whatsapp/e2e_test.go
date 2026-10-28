@@ -129,7 +129,8 @@ func TestTheTerminalAgentWritesACaptureAndKeepsTheConversation(t *testing.T) {
 	}
 	waited := false
 	defer func() {
-		if !waited {
+		if !waited { // the input first: the extension holds the output until its read of the input ends
+			stdin.Close()
 			cmd.Process.Kill()
 			cmd.Wait()
 		}
@@ -260,4 +261,67 @@ func TestServingWithoutAPairingExitsWithTwo(t *testing.T) {
 	if !strings.Contains(stderr.String(), "not paired: run lifelog whatsapp login") {
 		t.Errorf("stderr %q", stderr.String())
 	}
+}
+
+// TestAnInterruptEndsTheTerminalAgentAtOnce: the read of the terminal blocks until a line comes, and a close of the
+// file does not end it. The agent does not wait for it: an interrupt ends the run now, with exit 0, and not after
+// the ten seconds that lifelog gives an extension before it kills it.
+func TestAnInterruptEndsTheTerminalAgentAtOnce(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("an interrupt cannot be sent to a process on Windows")
+	}
+	b := build(t)
+	srv := httptest.NewServer(&fakeModel{})
+	defer srv.Close()
+	cmd := exec.Command(b.lifelog, "whatsapp", "--owner", "123", "--terminal", "--db", b.db)
+	cmd.Env = env(t, "LIFELOG_MODEL_URL="+srv.URL+"/v1", "LIFELOG_MODEL=test-model")
+	stdin, err := cmd.StdinPipe() // stays open: the read of the agent blocks on it
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := false
+	defer func() {
+		if !waited { // the input first: the extension holds the output until its read of the input ends
+			stdin.Close()
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
+	if _, err := io.WriteString(stdin, "hello\n"); err != nil { // a reply shows that the agent runs
+		t.Fatal(err)
+	}
+	lines := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(stdout).ReadString('\n')
+		lines <- strings.TrimSpace(line)
+	}()
+	select {
+	case <-lines:
+	case <-time.After(wait):
+		t.Fatalf("no reply; stderr:\n%s", stderr.String())
+	}
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		waited = true
+		if err != nil {
+			t.Errorf("exit after an interrupt: %v; stderr:\n%s", err, stderr.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the agent did not stop within 5 seconds of an interrupt; stderr:\n%s", stderr.String())
+	}
+	stdin.Close()
 }

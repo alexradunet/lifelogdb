@@ -24,10 +24,17 @@ flowchart LR
   nothing else of the conversation.
 - **Continued anywhere.** Every 3 seconds the extension reads today's page. Text added to its end on another surface
   (the browser, `lifelog do save-body`, an MCP tool) is an owner's turn: the reply is added to the page and sent on
-  WhatsApp. Any other change of the page is adopted and answered with nothing.
+  WhatsApp. Any other change of the page is adopted and answered with nothing. A body is read with its CRLF line
+  endings made LF (a browser submits a textarea that way), and saved with LF. When the owner saves the page while
+  the model runs, the reply is still appended after that text, and one line on WhatsApp says the text was not
+  answered.
 - **Earlier days** are pages. The model reads them with `get` on `/pages?title=Conversation%20YYYY-MM-DD`.
 - **One number may talk.** A message from any other number, and any group message, is logged and ignored. A photo,
-  a voice note or a document from the owner gets one line: the agent reads text for now.
+  a voice note or a document from the owner gets one line: the agent reads text for now. WhatsApp can deliver a
+  message from a hidden id (a lid) without the number; then the sender does not match `--owner` and the message
+  is logged as ignored. The log line shows the id.
+- **No file.** An action with a file field (`add-file`, `set-cover`) is not a tool of the model. Its value would be
+  the path of any file the process can read, and the model acts on text that any surface wrote to the page.
 - **A reply only.** The agent sends nothing on its own.
 - A turn has at most 16 model steps and 5 minutes. Up to 32 messages wait for the turn in progress.
 
@@ -53,7 +60,7 @@ From the repository root: `go build -C extensions/whatsapp -o ../../lifelog-what
 | `lifelog whatsapp login` | Pairs the agent's number. It draws a QR code. On the agent's phone, open WhatsApp, Linked devices, Link a device, and scan it. The session is saved. It exits. It needs nothing else. |
 | `lifelog whatsapp --owner NUMBER [--db FILE]` | Serves: answers the owner on WhatsApp. `lifelog` serves the file on a temporary loopback server for it ([extensions/README.md](../README.md)). |
 | `lifelog-whatsapp --owner NUMBER --url URL [--token-file F]` | The same against a running `lifelog serve` at `URL` (default `$LIFELOG_URL`). With neither, it refuses: a guessed address could be another file's server. |
-| add `--terminal` | Answers on the terminal: a line of input is a message of the owner, a reply is written to the output. It needs no WhatsApp session. Use it to try the agent without a phone. |
+| add `--terminal` | Answers on the terminal: a line of input is a message of the owner, a reply is written to the output. It needs no WhatsApp session. Use it to try the agent without a phone. An interrupt ends it at once; the read of the terminal is the one part of the program that is not awaited (it ends with the process). |
 
 | flag | meaning |
 |---|---|
@@ -80,9 +87,9 @@ the extension's own last save. To pair again, delete `session.db`.
 | code | meaning |
 |---|---|
 | 0 | An interrupt or SIGTERM, or (with `--terminal`) the end of the input. |
-| 1 | An error. |
+| 1 | An error, or a failure of the connection that a new process may try again. The unit restarts it. |
 | 2 | Not paired: run `lifelog whatsapp login`. |
-| 3 | Logged out: the owner unlinked the device on the phone. |
+| 3 | The connection ended for good: logged out (the owner unlinked the device on the phone), the session taken over by another client, the number banned for a time, or the client refused as outdated. The unit does not restart it: act first (the line on stderr says what), then start it. |
 
 ## The unit
 

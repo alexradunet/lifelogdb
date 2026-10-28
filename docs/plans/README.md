@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [145](145-whatsapp.md) | WhatsApp: an always-on agent outside the core, a client of the API, reached from the owner's phone | P2 | M | owner word 2026-10-28; `dbeea3d` | PLANNED |
+| [145](145-whatsapp.md) | WhatsApp: an always-on agent outside the core, a client of the API, reached from the owner's phone | P2 | M | owner word 2026-10-28; `dbeea3d` | IN REVIEW (owner) |
 | [144](144-one-view-for-a-metric.md) | One view for a metric: the readings and the page in one place, at /metrics/{name} | P1 | M | owner word 2026-10-23; `07380db` | IN REVIEW (owner) |
 | [143](143-daily-metrics.md) | Daily metrics: a mark on a metric, and its box on every day page | P1 | M | owner word 2026-10-23; `543ba89` | IN REVIEW (owner) |
 | [142](142-the-fall-back-pass.md) | The fall-back pass: the parsers at their edges, and what a refusal must not write | P2 | M | owner word 2026-10-22; `1b3d78e` | IN REVIEW (owner) |

@@ -166,10 +166,11 @@ func (a *Agent) stamp(t time.Time) string { return t.In(a.Now().Location()).Form
 func (a *Agent) phoneTurn(ctx context.Context, m Message) {
 	tctx, cancel := context.WithTimeout(ctx, turnTimeout)
 	defer cancel()
+	at := a.Now() // one time for the turn: its page, its day and its stamp do not change at midnight
 	a.typing(tctx, true)
-	c, err := a.today(tctx)
+	c, err := a.today(tctx, at)
 	if err == nil {
-		err = a.save(tctx, c, fmt.Sprintf("\n\n**Owner** (%s): %s", a.stamp(m.At), m.Text))
+		_, err = a.save(tctx, c, fmt.Sprintf("\n\n**Owner** (%s): %s", a.stamp(m.At), m.Text))
 	}
 	if ctx.Err() != nil {
 		return
@@ -180,12 +181,13 @@ func (a *Agent) phoneTurn(ctx context.Context, m Message) {
 		a.say(ctx, "I could not use today's conversation page: "+firstLine(err.Error())+".")
 		return
 	}
-	a.finish(ctx, tctx, c)
+	a.finish(ctx, tctx, c, at)
 }
 
-// finish runs the model on the page c, appends the tool lines and the reply, and sends the reply.
-func (a *Agent) finish(ctx, tctx context.Context, c *convo) {
-	reply, lines, err := a.answer(tctx, c.Body)
+// finish runs the model on the page c, appends the tool lines and the reply, and sends the reply. at is the time
+// of the turn.
+func (a *Agent) finish(ctx, tctx context.Context, c *convo, at time.Time) {
+	reply, lines, err := a.answer(tctx, c.Body, at)
 	if ctx.Err() != nil {
 		return
 	}
@@ -196,11 +198,12 @@ func (a *Agent) finish(ctx, tctx context.Context, c *convo) {
 	if len(lines) > 0 {
 		extra += strings.Join(lines, "\n") + "\n\n"
 	}
-	extra += fmt.Sprintf("**lifelog** (%s): %s", a.stamp(a.Now()), reply)
+	extra += fmt.Sprintf("**lifelog** (%s): %s", a.stamp(at), reply)
 	// The save has its own limit: the timeout of the turn may be spent, and the reply must reach the page.
 	sctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := a.save(sctx, c, extra); err != nil && ctx.Err() == nil {
+	retried, err := a.save(sctx, c, extra)
+	if err != nil && ctx.Err() == nil {
 		a.logger.Printf("conversation page: %v", err)
 	}
 	if ctx.Err() != nil {
@@ -209,6 +212,9 @@ func (a *Agent) finish(ctx, tctx context.Context, c *convo) {
 	a.logger.Printf("turn answered: %d bytes out, %d tool calls", len(reply), len(lines))
 	a.typing(ctx, false)
 	a.say(ctx, reply)
+	if retried { // the owner wrote on another surface while the model ran: that text is on the page, unanswered
+		a.say(ctx, "You wrote on another surface while I answered. Say it again if it needs an answer.")
+	}
 }
 
 // watch looks at today's page. A body that grew at the end was continued on another surface: it is an owner's
@@ -228,7 +234,8 @@ func (a *Agent) watch(ctx context.Context) {
 }
 
 func (a *Agent) look(ctx context.Context) error {
-	title := a.title()
+	at := a.Now()
+	title := a.title(at)
 	if a.conv == nil || a.conv.Title != title {
 		c, found, err := a.lookup(ctx, title)
 		if err != nil || !found {
@@ -257,7 +264,7 @@ func (a *Agent) look(ctx context.Context) error {
 		if err := a.adopt(c); err != nil {
 			return err
 		}
-		a.finish(ctx, tctx, c)
+		a.finish(ctx, tctx, c, at)
 		return nil
 	}
 	a.logger.Printf("the page was edited elsewhere: adopted, no answer")
@@ -271,12 +278,12 @@ func (a *Agent) adopt(c *convo) error {
 	return saveState(a.State, c)
 }
 
-// title is the title of today's conversation page.
-func (a *Agent) title() string { return "Conversation " + a.Now().Format(time.DateOnly) }
+// title is the title of the conversation page of the day of at.
+func (a *Agent) title(at time.Time) string { return "Conversation " + at.Format(time.DateOnly) }
 
-// today is today's page, read now. It is made when the day has none.
-func (a *Agent) today(ctx context.Context) (*convo, error) {
-	title := a.title()
+// today is the page of the day of at, read now. It is made when the day has none.
+func (a *Agent) today(ctx context.Context, at time.Time) (*convo, error) {
+	title := a.title(at)
 	if a.conv != nil && a.conv.Title == title {
 		e, err := a.Client.Get(ctx, "/pages/"+url.PathEscape(a.conv.ID))
 		if err != nil {
@@ -294,7 +301,7 @@ func (a *Agent) today(ctx context.Context) (*convo, error) {
 		return nil, err
 	}
 	if !found {
-		day := a.Now().Format(time.DateOnly)
+		day := at.Format(time.DateOnly)
 		e, err := a.Client.Do(ctx, a.actions["create-page"], map[string]string{"title": title, "body": "[[" + day + "]]", "category": Category})
 		if err != nil {
 			return nil, err
@@ -321,7 +328,9 @@ func (a *Agent) lookup(ctx context.Context, title string) (*convo, bool, error) 
 	return c, err == nil, err
 }
 
-// pageFrom reads the id, the version and the body of a page entity.
+// pageFrom reads the id, the version and the body of a page entity. The body's line endings are made LF: a browser
+// submits a textarea with CRLF, and the API stores a body as it was sent, so the saved body and the read body
+// would not be the same text. The next save of the extension writes LF.
 func pageFrom(e *siren.Entity, title string) (*convo, error) {
 	p, _ := e.Properties.(map[string]any)
 	id, version, body := fmt.Sprint(p["id"]), fmt.Sprint(p["version"]), p["body"]
@@ -329,13 +338,14 @@ func pageFrom(e *siren.Entity, title string) (*convo, error) {
 	if p["id"] == nil || p["version"] == nil || !ok {
 		return nil, errors.New("the answer is not a page with an id, a version and a body")
 	}
-	return &convo{Title: title, ID: id, Version: version, Body: text}, nil
+	return &convo{Title: title, ID: id, Version: version, Body: strings.ReplaceAll(text, "\r\n", "\n")}, nil
 }
 
 // save appends extra to the body of c and saves it with the version of c. A stale version reads the page again
-// and appends once more. A second stale version is an error. On success c holds the saved page and the state
-// file holds it too.
-func (a *Agent) save(ctx context.Context, c *convo, extra string) error {
+// and appends once more, and retried says so: what the owner saved meanwhile is on the page before the appended
+// text, and the caller says it was not answered. A second stale version is an error. On success c holds the saved
+// page and the state file holds it too.
+func (a *Agent) save(ctx context.Context, c *convo, extra string) (retried bool, err error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		body := strings.TrimRight(c.Body, "\n") + extra
 		e, err := a.Client.Do(ctx, a.actions["save-body"], map[string]string{"id": c.ID, "body": body, "version": c.Version})
@@ -344,31 +354,32 @@ func (a *Agent) save(ctx context.Context, c *convo, extra string) error {
 		case err == nil:
 			saved, perr := pageFrom(e, c.Title)
 			if perr != nil {
-				return perr
+				return retried, perr
 			}
 			*c = *saved
-			return a.adopt(c)
+			return retried, a.adopt(c)
 		case errors.As(err, &ce) && ce.Code() == "stale_version":
 			e, gerr := a.Client.Get(ctx, "/pages/"+url.PathEscape(c.ID))
 			if gerr != nil {
-				return gerr
+				return retried, gerr
 			}
 			fresh, perr := pageFrom(e, c.Title)
 			if perr != nil {
-				return perr
+				return retried, perr
 			}
 			*c = *fresh
+			retried = true
 		default:
-			return err
+			return retried, err
 		}
 	}
-	return errors.New("the page changed twice during the save")
+	return retried, errors.New("the page changed twice during the save")
 }
 
-// answer runs the steps of one turn on the body of the page. It returns the reply and one line for each tool
-// call. Its error is the error of ctx.
-func (a *Agent) answer(ctx context.Context, body string) (string, []string, error) {
-	msgs := []model.Message{model.Text("system", systemText(a.Now())), model.Text("user", tail(body))}
+// answer runs the steps of one turn on the body of the page, at the time at. It returns the reply and one line for
+// each tool call. Its error is the error of ctx.
+func (a *Agent) answer(ctx context.Context, body string, at time.Time) (string, []string, error) {
+	msgs := []model.Message{model.Text("system", systemText(at)), model.Text("user", tail(body))}
 	fns := make([]model.Tool, len(a.tools))
 	for i, t := range a.tools {
 		fns[i] = model.Tool{Name: t.name, Description: t.description, Parameters: t.schema}
@@ -397,7 +408,7 @@ func (a *Agent) answer(ctx context.Context, body string) (string, []string, erro
 		}
 		msgs = append(msgs, r.Message)
 		for _, c := range calls {
-			result, line := a.call(ctx, c.Function.Name, c.Function.Arguments)
+			result, line := a.call(ctx, c.Function.Name, string(c.Function.Arguments))
 			if ctx.Err() != nil {
 				return "", nil, ctx.Err()
 			}

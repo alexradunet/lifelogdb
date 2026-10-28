@@ -78,18 +78,27 @@ func drawCode(out io.Writer, code string) error {
 	return err
 }
 
+// Ended says why the connection ended for good: whatsmeow does not connect again after these events. Retry says
+// whether a new process may try again (a failure of the connection) or not (the device is unlinked, replaced,
+// banned or outdated: the owner must act first).
+type Ended struct {
+	Reason string
+	Retry  bool
+}
+
 // Chat is the chat of the owner on WhatsApp.
 type Chat struct {
-	cl       *whatsmeow.Client
-	owner    types.JID
-	after    time.Time
-	log      *log.Logger
-	msgs     chan agent.Message
-	handler  uint32
-	done     chan struct{}
-	stop     sync.Once
-	loggedMu sync.Once
-	out      chan struct{}
+	cl      *whatsmeow.Client
+	owner   types.JID
+	after   time.Time
+	log     *log.Logger
+	msgs    chan agent.Message
+	handler uint32
+	done    chan struct{}
+	stop    sync.Once
+	endOnce sync.Once
+	ended   chan Ended
+	reads   sync.WaitGroup // the read receipts in flight: Close waits for them
 	// ctx is the context of the run. whatsmeow calls the handler with no context, so the handler takes this one.
 	ctx context.Context
 }
@@ -102,7 +111,7 @@ func Connect(ctx context.Context, s *Session, owner string, after time.Time, l *
 	}
 	c := &Chat{
 		cl: whatsmeow.NewClient(s.dev, libraryLog()), owner: types.NewJID(owner, types.DefaultUserServer), after: after, log: l,
-		msgs: make(chan agent.Message, 32), done: make(chan struct{}), out: make(chan struct{}), ctx: ctx,
+		msgs: make(chan agent.Message, 32), done: make(chan struct{}), ended: make(chan Ended, 1), ctx: ctx,
 	}
 	c.handler = c.cl.AddEventHandler(c.handle)
 	if err := c.cl.Connect(); err != nil {
@@ -112,15 +121,20 @@ func Connect(ctx context.Context, s *Session, owner string, after time.Time, l *
 	return c, nil
 }
 
-// LoggedOut is closed when the owner unlinks the device on the phone.
-func (c *Chat) LoggedOut() <-chan struct{} { return c.out }
+// Ended gives the end of the connection, once, when it ends for good.
+func (c *Chat) Ended() <-chan Ended { return c.ended }
 
-// Close disconnects. The channel of Messages stays open: the agent ends with its context.
+// end records the end of the connection: the first reason only.
+func (c *Chat) end(e Ended) { c.endOnce.Do(func() { c.ended <- e }) }
+
+// Close disconnects and waits for the read receipts in flight. The channel of Messages stays open: the agent ends
+// with its context.
 func (c *Chat) Close() {
 	c.stop.Do(func() {
 		c.cl.RemoveEventHandler(c.handler)
 		c.cl.Disconnect()
 		close(c.done)
+		c.reads.Wait()
 	})
 }
 
@@ -146,7 +160,15 @@ func (c *Chat) Typing(ctx context.Context, on bool) error {
 func (c *Chat) handle(evt any) {
 	switch e := evt.(type) {
 	case *events.LoggedOut:
-		c.loggedMu.Do(func() { close(c.out) })
+		c.end(Ended{Reason: "logged out: the device was unlinked on the phone; run lifelog whatsapp login again"})
+	case *events.StreamReplaced:
+		c.end(Ended{Reason: "another client took this session over; one agent runs on a session"})
+	case *events.TemporaryBan:
+		c.end(Ended{Reason: fmt.Sprintf("WhatsApp banned the number for %s (reason %v)", e.Expire, e.Code)})
+	case *events.ClientOutdated:
+		c.end(Ended{Reason: "WhatsApp refused this client as outdated: build lifelog-whatsapp with a newer whatsmeow"})
+	case *events.ConnectFailure:
+		c.end(Ended{Reason: fmt.Sprintf("the connection failed: %v %s", e.Reason, e.Message), Retry: true})
 	case *events.Message:
 		if e.Info.Sender.Server == types.HiddenUserServer && e.Info.SenderAlt.User == "" {
 			if pn, err := c.cl.Store.LIDs.GetPNForLID(c.ctx, e.Info.Sender); err == nil {
@@ -158,11 +180,18 @@ func (c *Chat) handle(evt any) {
 			return
 		}
 		if m.Sender == c.owner.User { // the owner sees that the message arrived
-			rctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
-			if err := c.cl.MarkRead(rctx, []types.MessageID{e.Info.ID}, time.Now(), e.Info.Chat, e.Info.Sender); err != nil {
-				c.log.Printf("mark read failed: %v", err)
-			}
-			cancel()
+			// The receipt is a call to the server: it runs beside the handler, which whatsmeow calls one event at a
+			// time, so a slow receipt does not hold the next event. Close waits for it; it ends in 10 seconds at most.
+			id, chat, sender := e.Info.ID, e.Info.Chat, e.Info.Sender
+			c.reads.Add(1)
+			go func() {
+				defer c.reads.Done()
+				rctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+				defer cancel()
+				if err := c.cl.MarkRead(rctx, []types.MessageID{id}, time.Now(), chat, sender); err != nil && c.ctx.Err() == nil {
+					c.log.Printf("mark read failed: %v", err)
+				}
+			}()
 		}
 		select {
 		case c.msgs <- m:

@@ -23,9 +23,6 @@ import (
 // ErrNotPaired is the error of a store with no device: run the login first.
 var ErrNotPaired = errors.New("not paired: run lifelog whatsapp login")
 
-// ErrLoggedOut is the error of a device that the owner unlinked on the phone.
-var ErrLoggedOut = errors.New("logged out: the device was unlinked on the phone; run lifelog whatsapp login again after you delete the session file")
-
 // StateDir is the state folder of the agent: os.UserConfigDir()/lifelog-whatsapp.
 func StateDir() (string, error) {
 	base, err := os.UserConfigDir()

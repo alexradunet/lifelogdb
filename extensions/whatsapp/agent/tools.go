@@ -22,14 +22,17 @@ type tool struct {
 	action      *siren.Action // the action that the tool runs; nil for get
 }
 
-// tools is the tool list of the catalog: one tool for each action that is not the owner's, then get. The owner's
-// actions are never a tool (AGENTS.md). A tool name that two actions share is refused.
+// tools is the tool list of the catalog: one tool for each action that is not the owner's and takes no file, then
+// get. The owner's actions are never a tool (AGENTS.md). An action with a file field (a recording, a picture) is
+// not offered: its value would be the path of any file the process can read, and the model acts on text that any
+// surface wrote to the page; a chat has no files for now (docs/plans/145-whatsapp.md, "text only"). A tool name
+// that two actions share is refused.
 func tools(actions []siren.Action) ([]tool, error) {
 	seen := map[string]string{"get": "built-in tool get"}
 	var list []tool
 	for i := range actions {
 		a := &actions[i]
-		if a.Owner {
+		if a.Owner || takesFile(a) {
 			continue
 		}
 		name := toolName(a.Name)
@@ -44,6 +47,16 @@ func tools(actions []siren.Action) ([]tool, error) {
 			schema: map[string]any{"type": "object", "required": []string{"href"},
 				"properties": map[string]any{"href": map[string]any{"type": "string"}}}},
 	), nil
+}
+
+// takesFile says whether an action has a file field.
+func takesFile(a *siren.Action) bool {
+	for _, f := range a.Fields {
+		if f.Type == "file" {
+			return true
+		}
+	}
+	return false
 }
 
 // toolName is the tool name of an action: a hyphen is not allowed in every model's function names.

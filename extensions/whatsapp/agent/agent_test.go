@@ -332,6 +332,28 @@ func TestTheWatcherAnswersATurnThatWasWrittenOnAnotherSurface(t *testing.T) {
 	}
 }
 
+// TestTheWatcherReadsABodyThatABrowserSaved: a browser submits a textarea with CRLF line endings, and the API
+// stores the body as sent. The read body is made LF, so it still has the saved body as its prefix, and the
+// extension's next save writes LF.
+func TestTheWatcherReadsABodyThatABrowserSaved(t *testing.T) {
+	r := start(t, func(n int, _ chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.chat.say(t, "from the phone")
+	r.chat.reply(t)
+	r.settle(t)
+	crlf := strings.ReplaceAll(r.api.body(todayTitle), "\n", "\r\n") + "\r\n\r\nFrom the browser: hello?"
+	r.api.edit(todayTitle, crlf)
+	r.poll(t)
+	if got := r.chat.reply(t); got != "answer 2" {
+		t.Errorf("reply %q", got)
+	}
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	if body := r.api.body(todayTitle); strings.Contains(body, "\r") || !strings.HasSuffix(body, "From the browser: hello?\n\n**lifelog** (09.30): answer 2") {
+		t.Errorf("page body %q", body)
+	}
+}
+
 func TestTheWatcherAdoptsAnEditAndAnswersNothing(t *testing.T) {
 	r := start(t, func(n int, _ chatReq) (int, string) { return text("answer") })
 	r.chat.say(t, "hi")

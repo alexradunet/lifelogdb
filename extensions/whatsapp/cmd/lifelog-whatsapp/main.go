@@ -24,11 +24,12 @@ import (
 	"lifelog-whatsapp/whatsapp"
 )
 
-// Exit codes: 0 an interrupt or the end of the input, 1 an error, 2 not paired, 3 logged out.
+// Exit codes: 0 an interrupt or the end of the input, 1 an error (a new process may try again), 2 not paired,
+// 3 the connection ended for good (logged out, replaced, banned, outdated: the owner acts first).
 const (
 	exitError     = 1
 	exitNotPaired = 2
-	exitLoggedOut = 3
+	exitEnded     = 3
 )
 
 // exitCode carries the exit status of the process with the error.
@@ -72,7 +73,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	base := fs.String("url", getenv("LIFELOG_URL"), "address of lifelog (default $LIFELOG_URL)")
 	tokenFile := fs.String("token-file", "", "a file with the bearer token ($LIFELOG_TOKEN wins when it is set)")
 	terminalMode := fs.Bool("terminal", false, "answer on this terminal, not on WhatsApp")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
+		return nil // the usage is printed: help is not an error
+	} else if err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
@@ -100,7 +103,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	if err != nil {
 		return err
 	}
-	_, statePath, err := whatsapp.Prepare(dir)
+	sessionPath, statePath, err := whatsapp.Prepare(dir)
 	if err != nil {
 		return err
 	}
@@ -115,7 +118,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	if *terminalMode {
 		return serveTerminal(ctx, a, stdin, stdout)
 	}
-	return serveWhatsApp(ctx, a, dir, logger)
+	return serveWhatsApp(ctx, a, sessionPath, logger)
 }
 
 func login(ctx context.Context, stdout io.Writer) (err error) {
@@ -146,11 +149,7 @@ func serveTerminal(ctx context.Context, a *agent.Agent, stdin io.ReadCloser, std
 	return a.Run(ctx)
 }
 
-func serveWhatsApp(ctx context.Context, a *agent.Agent, dir string, logger *log.Logger) (err error) {
-	sessionPath, _, err := whatsapp.Prepare(dir)
-	if err != nil {
-		return err
-	}
+func serveWhatsApp(ctx context.Context, a *agent.Agent, sessionPath string, logger *log.Logger) (err error) {
 	s, err := whatsapp.Open(ctx, sessionPath)
 	if err != nil {
 		return err
@@ -177,13 +176,13 @@ func serveWhatsApp(ctx context.Context, a *agent.Agent, dir string, logger *log.
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
-	loggedOut := make(chan struct{})
+	var ended *whatsapp.Ended
 	wg.Add(1)
-	go func() { // ends the run when the owner unlinks the device
+	go func() { // ends the run when the connection ends for good: the unit restarts it, or stops
 		defer wg.Done()
 		select {
-		case <-chat.LoggedOut():
-			close(loggedOut)
+		case e := <-chat.Ended():
+			ended = &e
 			cancel()
 		case <-runCtx.Done():
 		}
@@ -191,10 +190,12 @@ func serveWhatsApp(ctx context.Context, a *agent.Agent, dir string, logger *log.
 	runErr := a.Run(runCtx)
 	cancel()
 	wg.Wait()
-	select {
-	case <-loggedOut:
-		return &exitCode{exitLoggedOut, whatsapp.ErrLoggedOut}
-	default:
+	if ended != nil {
+		code := exitEnded
+		if ended.Retry {
+			code = exitError
+		}
+		return &exitCode{code, errors.New(ended.Reason)}
 	}
 	return runErr
 }

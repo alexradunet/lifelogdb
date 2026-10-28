@@ -12,7 +12,15 @@
   `agent:whatsapp`, the owner-only actions are refused to it by the API, and nothing is ever deleted. The transport
   is the unofficial WhatsApp Web protocol: it can break when the protocol changes, and the paired number can be
   banned, so the agent has its own number.
-- **Status:** PLANNED.
+- **Status:** IN REVIEW (owner). Built in `82d2d43`; the counter-review's findings are fixed in the commit after
+  it: a browser's textarea submits CRLF and the API stores a body as sent, so a body is read with LF (the watcher's
+  prefix held only for the CLI); an interrupt in `--terminal` waited for a read that never ends; whatsmeow does not
+  connect again after a replaced stream, a ban, an outdated client or an unknown failure, and the agent stayed alive
+  and deaf (now it exits 3, or 1 for a failure, so the unit stops or restarts it); the file fields of `add-file`
+  and `set-cover` let text on the page name any file the process can read, the token or the session store (an
+  action with a file field is no tool now); an owner's text saved while the model ran was adopted in silence (one
+  line on WhatsApp says it was not answered); the time of a turn is read once (midnight). The pairing, the unit and
+  the first reply on the phone wait for the owner: they need the second number and the model endpoint.
 - **Resolves:** the owner's words of 2026-10-28 (below). No issue: the file is right; the owner wants a way to talk
   to it from a phone.
 
@@ -39,7 +47,7 @@ in CLI or in any other API capability."
 | earlier days | the model reads them through the catalog: the instructions say that the day before's conversation is the page `Conversation YYYY-MM-DD`, reached with `get` on `/pages?title=` (API.md: it redirects to the page), and that the day pages are the log. No second memory store. |
 | the pairing | `lifelog whatsapp login`: the QR code drawn in the terminal, the session saved, exit. A QR encoder is the one small dependency this needs (`rsc.io/qr`); the terminal rendering is ours. |
 | a reply only | the agent answers a message. It sends nothing on its own: a morning push is a later plan with the owner's word. |
-| text only | a photo, a voice note or a document from the owner is answered with one line that says the agent reads text for now ("refused, never ignored"). Media is a later plan. |
+| text only | a photo, a voice note or a document from the owner is answered with one line that says the agent reads text for now ("refused, never ignored"). An action with a file field (`add-file`, `set-cover`) is not a tool of the model: the MCP server offers it as the path of a local file, which the owner's own coding agent reads, but this model acts on text that any surface wrote to the page, and a path there could name the token or the session store. Media is a later plan. |
 
 ## The design
 
@@ -131,9 +139,11 @@ the owner's number and the transcript path.
    one line per tool call (`- \`capture\` → [/days/2026-10-28](/days/2026-10-28)`, the href of the answer's `self`;
    an error: `- \`capture\` failed: <code>`), as [plan 102](102-a-conversation-with-lifelog.md) wrote them; saved
    with `save-body` and the version read at the start of the turn. A `stale_version` (the owner saved meanwhile)
-   reads the page again and appends once more; a second one is an error. Then the reply is sent on WhatsApp. Typing
-   off. The state file `state.json` in the extension's folder keeps the page id, the version and the body after the
-   extension's own last save.
+   reads the page again and appends once more, and one line on WhatsApp says that what the owner saved was not
+   answered; a second one is an error. Then the reply is sent on WhatsApp. Typing off. The state file `state.json`
+   in the extension's folder keeps the page id, the version and the body after the extension's own last save or
+   adoption. A body is read with CRLF made LF: a browser submits a textarea with CRLF and the API stores a body as
+   sent. The time of a turn is read once, at its start: its page, its day and its stamps do not change at midnight.
 5. The watcher: every 3 seconds, the worker reads today's page (`GET /pages/{id}`; a new day looks the title up
    again) and compares its `version` with the state file's. A changed page whose body has the saved body as a
    prefix was continued elsewhere: the suffix, trimmed, is the owner's turn, and the turn runs as in 2 to 4 with
@@ -166,9 +176,11 @@ in at each turn.
   of the channel ends it: `success` saves the session and exits 0; `timeout` or an error is said and exits 1. A
   store that already has a device refuses: "already paired as <number>; delete <session.db> to pair again."
 - The serve path: a store with no device refuses with "not paired: run lifelog whatsapp login" and exits 2.
-  `Connect`, then the handler. whatsmeow reconnects on its own when the socket drops. A `LoggedOut` event (the owner
-  unlinked the device from the phone) is said and exits 3, so a unit with `RestartPreventExitStatus=3` does not
-  loop on it.
+  `Connect`, then the handler. whatsmeow reconnects on its own when the socket drops, and not after `LoggedOut`
+  (the owner unlinked the device), `StreamReplaced` (another client took the session), `TemporaryBan`,
+  `ClientOutdated` or a `ConnectFailure` with an unknown reason. Each ends the run with its reason on stderr: the
+  first four exit 3, so a unit with `RestartPreventExitStatus=3` does not loop on what the owner must fix; a
+  failure of the connection exits 1, and the unit starts a new process.
 - The filter, a pure function with its own test: an event is a `Message` when it is not from this device
   (`Info.IsFromMe`), not from a history sync (`SourceWebMsg == nil`), not a group (`Info.IsGroup`), and its
   timestamp is after the start of the process or the time of the state file's last save, whichever is earlier (an
@@ -196,7 +208,8 @@ in at each turn.
 - `LIFELOG_MODEL_URL` and `LIFELOG_MODEL` are required to serve; without them it refuses with the two names.
   `LIFELOG_MODEL_KEY` is optional.
 - `--source` is not a flag: the extension writes as `agent:whatsapp` ([the contract](../../extensions/README.md)).
-- Exit: 0 on an interrupt or SIGTERM; 1 an error; 2 not paired; 3 logged out.
+- Exit: 0 on an interrupt or SIGTERM; 1 an error, or a failure of the connection; 2 not paired; 3 the connection
+  ended for good (logged out, replaced, banned, outdated).
 
 ### The unit
 

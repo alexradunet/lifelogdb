@@ -153,3 +153,21 @@ func TestACancelledContextEndsTheCall(t *testing.T) {
 		t.Fatalf("error %v, want context.Canceled", err)
 	}
 }
+
+// TestArgumentsComeAsAStringOrAsTheObject: the protocol sends the arguments as a JSON string; some local servers
+// send the object itself. Both are read, and the call goes back to the model as a string.
+func TestArgumentsComeAsAStringOrAsTheObject(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`"{\"day\":\"today\"}"`, `{"day":"today"}`},
+		{`{"day":"today"}`, `{"day":"today"}`},
+	} {
+		var a Arguments
+		if err := json.Unmarshal([]byte(tc.in), &a); err != nil || string(a) != tc.want {
+			t.Errorf("Unmarshal(%s) = %q, %v; want %q", tc.in, a, err, tc.want)
+		}
+	}
+	out, err := json.Marshal(FunctionCall{Name: "x", Arguments: `{"a":1}`})
+	if err != nil || string(out) != `{"name":"x","arguments":"{\"a\":1}"}` {
+		t.Errorf("Marshal = %s, %v", out, err)
+	}
+}
