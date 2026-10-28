@@ -325,7 +325,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   Restoring stays the manual procedure of the cookbook.
 - **The settings file** ([plan 146](docs/plans/146-settings-and-the-chat-column.md)). The settings of the application
   are a JSON file beside the database, `life.settings.json` for `life.db` (the path with `.db` cut and
-  `.settings.json` added), mode 0600, written through a temporary file and a rename. They are not in `life.db`: the
+  `.settings.json` added), mode 0600, written through a temporary file and a rename, and never in git (`.gitignore`). They are not in `life.db`: the
   model key is a secret, and a snapshot copies the database. They are not in `docs/` either: they belong to this
   application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
   chat-completions protocol, ending in `/v1`), `model` (the model id) and `model_key` (a bearer credential, optional);

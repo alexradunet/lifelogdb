@@ -6,6 +6,8 @@ life.db-shm
 *.db-wal
 *.db-shm
 *.db-journal
+# the settings file beside it holds the model key (README, the settings file)
+*.settings.json
 
 # the built binary and editor/Windows backup files
 /lifelog
