@@ -11,8 +11,8 @@
 - **Status:** IN REVIEW (owner). Built 2026-10-29 on master by a sub-agent in a worktree and reviewed before the merge;
   in `extensions/ticktick`: `go mod tidy -diff` empty, `go vet`, `go test ./...` (the end-to-end test on the real
   `lifelog serve --with ticktick` and a fake TickTick, both ways of finding the done tasks) and `staticcheck` pass; at
-  the root `go vet ./...` and the tests of `cmd/lifelog` and `tests` pass. `~/.local/bin/lifelog-ticktick` is built
-  beside the installed `lifelog`. Three things differ from the plan as written: a `Poller` type owns the clients, the
+  the root `go vet ./...` and the tests of `cmd/lifelog` and `tests` pass. The owner builds `lifelog-ticktick` beside the
+  installed `lifelog` (the Tests section). Three things differ from the plan as written: a `Poller` type owns the clients, the
   state and the one lock (the plan's `Sync` had no home for a mutex); `Task.Done()` and `Due()` take no argument;
   `GET /tasks/{id}` is an outer route around `app.Catalog`, which has no hook for a route that is not an action. Two
   limits are in the extension's README: the Open API lists no Inbox project, so the home and the vanish-and-fetch way
