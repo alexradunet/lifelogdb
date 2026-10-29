@@ -24,18 +24,22 @@ main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text
 .rail,.rail>nav{background-image:url(/assets/wood.png),var(--rail-shade),var(--rail-foot-shade),var(--grain-ground);
   background-size:252px 480px,auto,auto,4px 4px; background-repeat:repeat,no-repeat,no-repeat,repeat}
 
-/* The shell: the sidebar, then the column of the page. Under 900 px the sidebar is a bar over the page. */
-.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh}
+/* The shell: the sidebar, then the column of the page. It is a frame: at most --frame wide and centred, so the sidebar and
+   the column move together, and the floor shows at both sides on a wide screen. Its outline is the edge of the frame,
+   and the sidebar's own border stays as the seam between wood and oak. Under 900 px the sidebar is a bar over the page. */
+.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh; max-inline-size:var(--frame); margin-inline:auto; border-inline:2px solid var(--outline)}
 .shell.bare{display:block}
 /* The ground: a faint tile of boards under the page, a third of the rail's strength. It is pixel art, so it is drawn
    unsmoothed; the column sets smoothing back, so a picture in the page is drawn as a picture. */
 body{background-image:url(/assets/ground.png),var(--grain-ground); background-size:480px 288px,4px 4px; image-rendering:pixelated}
-/* The column is a container: a layout inside it asks the width of the column, not of the screen. */
-.column{image-rendering:auto; container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);
-  &>main{flex:1; inline-size:100%; max-inline-size:1200px; display:flex; flex-direction:column; gap:var(--space-4);
+/* The column is a slab of oak laid on the floor, so nothing written sits on bare floor. It is also a container: a layout
+   inside it asks the width of the column, not of the screen. */
+.column{image-rendering:auto; background-color:var(--desk); background-image:var(--grain-ground); background-size:4px 4px; box-shadow:var(--bevel-up); container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);
+  &>main{flex:1; inline-size:100%; max-inline-size:var(--block); display:flex; flex-direction:column; gap:var(--space-4);
     &>h2{margin-block-start:var(--space-4)}}
-  &>footer{inline-size:100%; max-inline-size:1200px; margin-block-start:var(--space-10); padding-block-start:var(--space-3); border-block-start:2px dotted var(--line)}}
-.shell.bare>.column{max-inline-size:34rem; margin:0 auto}
+  &>footer{inline-size:100%; max-inline-size:var(--block); margin-block-start:var(--space-10); padding-block-start:var(--space-3); border-block-start:2px dotted var(--line)}}
+.shell.bare{max-inline-size:none; border-inline:0}
+.shell.bare>.column{max-inline-size:34rem; margin:0 auto; border-inline:2px solid var(--outline)}
 
 /* An icon is a glyph of icons.png (10 by 10 pixels in a cell of 16 by 16, 15 cells in a row: 240 by 16), used as a
    mask over the colour of the text, so it takes the ink of the place it is in. It is drawn at 2 screen pixels a
@@ -124,6 +128,16 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   &:hover{background:var(--rail); color:var(--rail-accent); filter:brightness(1.12)}}
 .chat:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset-block:0; inset-inline:auto 0; margin:0; inline-size:min(26rem, 100vw); block-size:auto;
   padding:var(--space-4); border:0; border-inline-start:2px solid var(--outline); box-shadow:var(--shadow-float); overflow:hidden}
+/* The button and the open column are fixed to the viewport, so on a screen wider than the frame they take the frame's
+   edge: the inset is the floor at the side of the frame. A browser with anchor positioning reads the edge of the shell
+   itself, which stays exact when a scrollbar takes part of 100vw; the floor is its fallback when the shell is not an
+   anchor it accepts. */
+.chat-open{inset-inline-end:calc(max(0px, calc((100vw - var(--frame)) / 2)) + var(--space-4))}
+.chat:popover-open{inset-inline-end:max(0px, calc((100vw - var(--frame)) / 2))}
+@supports (anchor-name:--a){
+  .shell{anchor-name:--shell}
+  .chat-open,.chat:popover-open{inset-inline-end:anchor(--shell end, max(0px, calc((100vw - var(--frame)) / 2)))}
+  .chat-open{margin-inline-end:var(--space-4)}}
 /* The page makes room for the open column on a wide screen, so a form or a list does not run under it: the column
    of the shell gets the panel's width as its end padding, and its content lays out as in a narrower window
    (@container column). Under 900 px the column is a sheet over the page, and the padding goes back (below). */
@@ -245,7 +259,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
    sheets ask. A layout inside the page asks its column instead (@container column), at the screen's width less
    the column's padding (899 → 867). */
 @media (max-width:899px){
-  .shell{display:block}
+  .shell{display:block; border-inline:0}
   .rail{position:sticky; inset-block-start:0; z-index:20; block-size:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
     padding:calc(var(--space-2) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-2) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     border-inline-end:0; border-block-end:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark)}
@@ -292,7 +306,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
   footer .keys{display:none}
 }
-@media print{.rail,.skip,.chat,.chat-open{display:none} .shell{display:block} .column{padding:0} body{background-image:none} .sheet::after,.day-card::after{display:none}}
+@media print{.rail,.skip,.chat,.chat-open{display:none} .shell{display:block; border-inline:0} .column{padding:0; background:none; box-shadow:none; border-inline:0} body{background-image:none} .sheet::after,.day-card::after{display:none}}
 
 /* Type helpers: the mono styles of the design system. A component restyles them, so they are not utilities. */
 .date,.meta,.value,.reading{font-family:var(--mono); font-variant-numeric:tabular-nums}

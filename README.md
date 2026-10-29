@@ -176,8 +176,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   mode). A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
   bound in Hearthwood, the materials of the owner's Balaur design system
-  ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is dark oak, the sidebar and the phone's bars are
-  wood, and everything written is parchment with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
+  ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is a slab of oak on a floor of boards, centred in a
+  frame of 1512 px on a wide screen, the sidebar and the phone's bars are wood, and everything written is parchment
+  with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
   blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen,
   teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the

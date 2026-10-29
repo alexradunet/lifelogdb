@@ -27,8 +27,8 @@
 @font-face{font-family:"Jersey 15"; font-style:normal; font-weight:400; font-display:swap; src:url(/assets/fonts/jersey-15-400-latin.woff2) format("woff2"); unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Jersey 15"; font-style:normal; font-weight:400; font-display:swap; src:url(/assets/fonts/jersey-15-400-latin-ext.woff2) format("woff2"); unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
 
-/* The tokens: the materials (oak for the page, wood for the rail, parchment for what is written), the text of each
-   material, the accents (gold for where the owner is and what is today, ember for the one loud button, teal for a
+/* The tokens: the materials (a slab of oak for the page, the boards of the floor under it, wood for the rail,
+   parchment for what is written), the text of each material, the accents (gold for where the owner is and what is today, ember for the one loud button, teal for a
    link and the focus ring), the shapes (bevels and hard drops, no radius) and the faces. Every pair a use names
    holds 4.5:1 for text and 3:1 for an edge and the focus ring, in both themes; a test reads this one block and
    checks it. A material sets its own text through the aliases --text, --text-strong, --text-muted, --text-link and
@@ -38,7 +38,7 @@
 @layer tokens{
 :root{
   color-scheme:light;
-  --ground:light-dark(#efe2bd, #140c06); --rail:light-dark(#3a2210, #2a1709); --rail-deep:light-dark(#2c1a0c, #1d0f06); --surface:light-dark(#f4e9c4, #e8d9ae); --surface-deep:light-dark(#e4d49e, #d6c188);
+  --ground:light-dark(#efe2bd, #140c06); --desk:light-dark(#e6d4a4, #211408); --rail:light-dark(#3a2210, #2a1709); --rail-deep:light-dark(#2c1a0c, #1d0f06); --surface:light-dark(#f4e9c4, #e8d9ae); --surface-deep:light-dark(#e4d49e, #d6c188);
   --edge:light-dark(#8c7240, #7f663a); --outline:light-dark(#241708, #120a04); --line:light-dark(#c8b488, #3b2a16); --line-soft:light-dark(#cdb983, #c2aa72);
   --ink:#2c2012; --muted:light-dark(#5c4c2f, #463a24); --page-ink:light-dark(#3a2c18, #c9b894); --page-strong:light-dark(#241a0c, #ecdcb2); --page-muted:light-dark(#6a5838, #bfb19c); --rail-ink:light-dark(#d6bb92, #cbb18e);
   --accent:light-dark(#6f4e0e, #f2c14e); --rail-accent:#f2c14e; --accent-ink:light-dark(#6b4a0c, #4f3709); --accent-soft:light-dark(#e9d38c, #e9c974); --on-accent:light-dark(#fff3dc, #1c0d04);
@@ -64,7 +64,7 @@
   --sans:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
-  --rail-width:248px; --control:40px; --control-small:32px; --measure:70ch; --measure-read:62ch;
+  --rail-width:248px; --block:1200px; --frame:calc(var(--rail-width) + var(--block) + 2 * var(--space-8)); --control:40px; --control-small:32px; --measure:70ch; --measure-read:62ch;
 }
 @media (prefers-color-scheme:dark){:root{color-scheme:dark}}
 @media (max-width:899px){:root{--control:44px; --control-small:40px}}

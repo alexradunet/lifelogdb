@@ -227,6 +227,40 @@ func TestTheStuckEdgeIsAnEnhancement(t *testing.T) {
 	}
 }
 
+// TestTheShellIsAFrame: the shell is a frame, at most --frame wide and centred, and the column is a slab of oak on the
+// floor (docs/plans/152-the-frame.md); the chat parts take the frame's edge, and the phone and print rules undo what
+// they must. Each check reads the rule that owns the property.
+func TestTheShellIsAFrame(t *testing.T) {
+	app := cssComments.ReplaceAllString(string(appCSS), "")
+	shell := regexp.MustCompile(`(?m)^\.shell\{([^}]*)\}`).FindStringSubmatch(app)
+	if shell == nil {
+		t.Fatal("app.css: no rule for .shell")
+	}
+	for _, want := range []string{"max-inline-size:var(--frame)", "margin-inline:auto"} {
+		if !strings.Contains(shell[1], want) {
+			t.Errorf("app.css: .shell lacks %s", want)
+		}
+	}
+	if !regexp.MustCompile(`\.column\{[^}]*background-color:var\(--desk\)`).MatchString(app) {
+		t.Error("app.css: .column is not filled with var(--desk)")
+	}
+	for _, sel := range []string{".chat-open", ".chat:popover-open"} {
+		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(sel) + `\{[^}]*var\(--frame\)`).MatchString(app) {
+			t.Errorf("app.css: %s is not placed from var(--frame)", sel)
+		}
+	}
+	if !regexp.MustCompile(`anchor\(--shell end, [^)]*var\(--frame\)`).MatchString(app) {
+		t.Error("app.css: the chat parts do not take the edge of the shell as the anchor, with the floor as the fallback")
+	}
+	if !regexp.MustCompile(`@media \(max-width:899px\)\{\s*\.shell\{[^}]*border-inline:0`).MatchString(app) {
+		t.Error("app.css: under 900 px the shell keeps its outline")
+	}
+	print := regexp.MustCompile(`@media print\{.*`).FindString(app)
+	if !strings.Contains(print, "box-shadow:none") || !strings.Contains(print, "background:none") || strings.Count(print, "border-inline:0") < 2 {
+		t.Error("app.css: the print rule keeps the slab, the bevel or the outline")
+	}
+}
+
 // TestTheMotionsAreOffUnderReducedMotion: every entry, exit and scroll-driven motion of the sheets is inside a block
 // that asks for motion (prefers-reduced-motion:no-preference), and the scroll-driven one inside @supports as well,
 // so a browser that does not want motion, or cannot drive it by the scroll, gets none.
@@ -359,15 +393,15 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 	}
 	text("ink", "surface", "surface-deep", "accent-soft", "mark", "danger-soft")
 	text("muted", "surface", "surface-deep")
-	text("page-ink", "ground")
-	text("page-strong", "ground")
-	text("page-muted", "ground")
+	text("page-ink", "desk")
+	text("page-strong", "desk")
+	text("page-muted", "desk")
 	text("rail-ink", "rail", "rail-deep")
 	text("rail-accent", "rail", "rail-deep")
-	text("accent", "ground")
+	text("accent", "desk")
 	text("accent-ink", "surface", "surface-deep")
 	text("link", "surface", "surface-deep")
-	text("link-page", "ground")
+	text("link-page", "desk")
 	text("on-accent", "accent", "primary", "primary-hover")
 	text("warn", "surface")
 	text("warn-ink", "surface")
@@ -379,7 +413,7 @@ func TestTheTokensHoldTheirContrast(t *testing.T) {
 	mark("edge", "surface")
 	mark("outline", "surface", "surface-deep")
 	mark("danger-line", "surface")
-	mark("focus", "ground", "rail", "surface")
+	mark("focus", "desk", "rail", "surface")
 	themes := []struct {
 		name   string
 		tokens map[string]string
