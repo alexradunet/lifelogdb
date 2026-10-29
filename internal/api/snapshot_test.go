@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -180,4 +181,75 @@ func TestOnlyARefusedSnapshotIsSnapshotRefused(t *testing.T) {
 			t.Errorf("the message of a 500 is %q, want internal error", msg)
 		}
 	})
+}
+
+// TestASnapshotIsDownloadedByTheOwner: the answer of a snapshot links to its download, which sends the file as it was
+// written. Only a good snapshot's name in the snapshot folder is sent: not the live file, not a failed copy, not a
+// path. An agent is refused. Settings links to the snapshot form, and the toast offers the download.
+func TestASnapshotIsDownloadedByTheOwner(t *testing.T) {
+	d := dbtest.New(t)
+	dir := t.TempDir()
+	clock := func() time.Time { return time.Date(2026, 10, 2, 14, 30, 5, 0, time.UTC) }
+	h := api.New(&core.Store{DB: d, SnapshotDir: dir, Clock: clock, Zone: time.UTC, SettingsPath: filepath.Join(t.TempDir(), "life.settings.json")})
+	owner := client.InProcess(h, "cli")
+	e := apitest.Must(t)(owner.Do(t.Context(), apitest.Action(t, apitest.Must(t)(owner.Get(t.Context(), "/")), "snapshot"), nil))
+	if got := apitest.Href(e, "download"); got != "/snapshots/life-2026-10-02.db" {
+		t.Fatalf("the download link: %q", got)
+	}
+	if got := e.Properties.(map[string]any)["download"]; got != "/snapshots/life-2026-10-02.db" {
+		t.Fatalf("the download property: %v", got)
+	}
+	want, err := os.ReadFile(filepath.Join(dir, "life-2026-10-02.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func(path, src string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", path, nil)
+		if src != "" {
+			req.Header.Set(siren.SourceHeader, src)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get("/snapshots/life-2026-10-02.db", "")
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "application/vnd.sqlite3" ||
+		rec.Header().Get("Content-Disposition") != `attachment; filename=life-2026-10-02.db` {
+		t.Fatalf("the download: %d %v", rec.Code, rec.Header())
+	}
+	if !bytes.Equal(rec.Body.Bytes(), want) {
+		t.Fatalf("the download sent %d bytes, the file has %d", rec.Body.Len(), len(want))
+	}
+	if rec := get("/snapshots/life-2026-10-02.db", "agent:lmstudio"); rec.Code != 403 {
+		t.Errorf("an agent's download: %d, want 403", rec.Code)
+	}
+
+	// Files beside the snapshots that are not good snapshots, and names that are not snapshot names, are 404.
+	for _, name := range []string{"life.db", "life-2026-10-01.failed.db", "notes.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "life-2026-10-03.db"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/snapshots/life.db", "/snapshots/life-2026-10-01.failed.db", "/snapshots/notes.txt",
+		"/snapshots/life-2026-10-03.db", "/snapshots/life-2026-10-04.db", "/snapshots/..%2Flife-2026-10-02.db"} {
+		if rec := get(path, ""); rec.Code != 404 {
+			t.Errorf("GET %s: %d, want 404", path, rec.Code)
+		}
+	}
+
+	// The browser: Settings links to the snapshot form, and the toast of the snapshot offers the download.
+	if body := browse(t, h, "/settings"); !strings.Contains(body, `<a class="button" href="/actions?new=snapshot">Take a snapshot</a>`) {
+		t.Errorf("Settings has no link to the snapshot form:\n%.1500s", body)
+	}
+	req := httptest.NewRequest("POST", "/snapshots", nil)
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if body := browse(t, h, rec.Header().Get("Location")); !strings.Contains(body, `<a href="/snapshots/life-2026-10-02T143005.db" download>Download it</a>`) {
+		t.Errorf("the toast does not offer the download:\n%.1500s", body)
+	}
 }

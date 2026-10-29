@@ -15,6 +15,7 @@
           { "not": { "href_matches": "/pages/*/preview" } },
           { "not": { "href_matches": "/previews" } },
           { "not": { "href_matches": "/integrity" } },
+          { "not": { "href_matches": "/snapshots/*" } },
           { "not": { "href_matches": "/manifest.webmanifest" } }
         ]
       },

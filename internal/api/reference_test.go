@@ -53,7 +53,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			"id": int64(0), "entity_type": "", "title": "", "body": "", "created_at": "", "version": "", "is_day_page": false,
 			"links": []core.Edge{}, "backlinks": []core.Edge{}, "cover": core.Cover{}},
 		"metrics":    map[string]any{"metrics": []metricRow{}, "groups": []metricGroup{}, "categories": []core.Category{}, "today": ""},
-		"snapshot":   map[string]any{"snapshot": "", "restore_check": core.IntegrityResult{}},
+		"snapshot":   map[string]any{"snapshot": "", "download": "", "restore_check": core.IntegrityResult{}},
 		"rebuilt":    map[string]any{"documents": 0},
 		"resynced":   core.Resync{Created: []string{}, Revived: []string{}, Skipped: []string{}},
 		"tombstoned": map[string]any{"ids": []int64{}, "count": 0},

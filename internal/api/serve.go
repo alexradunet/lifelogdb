@@ -124,6 +124,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /days/{day}", h.serve(h.day))
 	m.HandleFunc("GET /days/{day}/conversation", h.serve(h.conversation))
 	m.HandleFunc("GET /settings", h.serve(h.settings))
+	m.HandleFunc("GET /snapshots/{name}", h.snapshotFile)
 	m.HandleFunc("GET /months/{month}", h.serve(h.month))
 	m.HandleFunc("GET /weeks/today", h.serve(h.currentWeek))
 	m.HandleFunc("GET /weeks/{week}", h.serve(h.week))
@@ -150,7 +151,7 @@ func newServer(s *core.Store) *server {
 	// ?feedback= receipt is read once, and ?new= opens a form. The pattern is "/*\?*=*", with the "=" every query of
 	// this app has: a URLPattern "/*\?*" alone has the search "*", which an empty search matches too, so it would
 	// exclude every address (probed with a URLPattern implementation on 2026-10-28; no Go test can run one). The
-	// others are the routes that redirect (today, go, random, find), the pictures, the install file and the integrity
+	// others are the routes that redirect (today, go, random, find), the pictures, the downloads of a snapshot, the install file and the integrity
 	// check, which a hover must not run. A browser without speculation rules ignores the header.
 	m.HandleFunc("GET /assets/speculation.json", install("speculation.json", "application/speculationrules+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/chat.js", install("chat.js", "text/javascript; charset=utf-8", "public, max-age=300"))

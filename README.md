@@ -306,7 +306,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
   rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save
   ([integrity checks](docs/contract/integrity-checks.md)). `GET /integrity` offers the two repairs, so the owner
-  reads what needs them and runs them on one page. `GET /settings` is owner-only too, and is the one owner-only read that is not an action. An agent that imports with the owner asks for them in the conversation.
+  reads what needs them and runs them on one page. `GET /settings` and `GET /snapshots/{name}` are owner-only too, and are the owner-only reads that are not actions. An agent that imports with the owner asks for them in the conversation.
 - **No conversation inside the writer** ([plan 116](docs/plans/116-strip-to-the-core.md), [RFC 0015](docs/rfcs/0015-no-conversation.md)).
   The owner's decision (2026-10-15): `ask` and the voice note are removed, with the model and transcriber
   endpoints they needed. The core calls no model. The owner talks to `life.db` through a coding agent's MCP tools, and
@@ -323,7 +323,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   (`POST /snapshots`): refused to an `agent:*` or `import:*` writer, never an MCP tool, offered at the root to the owner, and in a browser by the rail's Snapshot link (`/actions?new=snapshot`). It takes
   no path: the file lands in the folder `serve --snapshots DIR` names, or beside `life.db`, named by the local day
   and never overwritten; it refuses a folder inside a git work tree, and its restore check opens the snapshot with
-  `Close` skipping `PRAGMA optimize`. The answer carries the path and the check. `lifelog snapshot [--snapshots DIR]` is
+  `Close` skipping `PRAGMA optimize`. The answer carries the path, the check and the link `download`:
+  `GET /snapshots/{name}` sends the file, so a browser on another device keeps a copy of `life.db`. It sends only a
+  good snapshot of the folder by its name (opened through `os.Root`), never the live file; the toast of the answer
+  says "Download it", and Settings links to the snapshot form under Backup. `lifelog snapshot [--snapshots DIR]` is
   the action in-process, `--snapshots` choosing the folder, as it does for `serve`; with `--url` the server's folder is
   the one, and `--snapshots` is refused.
   Restoring stays the manual procedure of the cookbook.

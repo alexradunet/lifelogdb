@@ -15,7 +15,7 @@ and this page disagree, so a property here is a property on the wire.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
   or `import:…` is refused the owner-only actions: `register-metric`, `settings`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links`,
-  and the owner-only read `GET /settings` (403 `forbidden`).
+  and the owner-only reads `GET /settings` and `GET /snapshots/{name}` (403 `forbidden`).
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as
   `application/x-www-form-urlencoded`, `application/json` (one object; a non-string value is sent as its JSON text) or,
@@ -718,14 +718,16 @@ The class of an answer that is not a resource: the `record` of a reading whose `
 ### snapshot
 
 `POST /snapshots` (the owner's action `snapshot`, refused to an `agent:*` writer): a dated copy of the database into
-the server's snapshot folder, then its restore check. The same two values are in `result`; `self` is `/`, so a
+the server's snapshot folder, then its restore check. The same values are in `result`; `self` is `/`, so a
 browser form is answered home with them as feedback. A refusal (no folder, a folder inside a git work tree, a name in
 use) is 422 `snapshot_refused`. A copy that fails its restore check is kept as `life-YYYY-MM-DD.failed.db` and answered 500 `restore_check_failed`.
-A timeout is 504 `timeout`, and any other failure is 500 `internal`.
+A timeout is 504 `timeout`, and any other failure is 500 `internal`. Links: `self`, `index`, `download` (the
+address of the file, below).
 
 | property | type | meaning |
 |---|---|---|
 | `snapshot` | string | the file written, on the server's machine |
+| `download` | string | the address of its download, `/snapshots/life-YYYY-MM-DD.db` |
 | `restore_check` | object | the integrity result of the copy (the integrity shape); `ok` says whether it is one to restore |
 | `restore_check.ok` | boolean | |
 | `restore_check.integrity_check` | list | |
@@ -742,6 +744,12 @@ A timeout is 504 `timeout`, and any other failure is 500 `internal`.
 | `restore_check.schema_drift` | list | |
 | `restore_check.full_text_index_ok` | boolean | |
 | `restore_check.full_text_error` | string | |
+
+`GET /snapshots/{name}` (owner-only: 403 `forbidden` to an `agent:*` or `import:*` writer) sends a snapshot that the
+action wrote, as `application/vnd.sqlite3` with `Content-Disposition: attachment`, so a browser saves it on its own
+device. It is the file as written, never the live `life.db`. `name` is a name that the action gives
+(`life-YYYY-MM-DD.db` or `life-YYYY-MM-DDTHHMMSS.db`) of a file in the server's snapshot folder; any other name, a
+`.failed.db` copy and a name with no file are 404 `not_found`. A `Range` request is answered in part.
 
 ### rebuilt
 

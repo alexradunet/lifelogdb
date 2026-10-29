@@ -21,7 +21,10 @@ func settingsEntity(s core.Settings) *siren.Entity {
 		props["model_key"] = s.ModelKey
 	}
 	return &siren.Entity{Class: []string{"settings"}, Title: "Settings", Properties: props,
-		Links: []siren.Link{link("self", "/settings", "Settings"), link("index", "/", "Home")},
+		// The backup of life.db is a snapshot (one way to do a thing): the link opens its form, and the answer of the
+		// snapshot offers the file for download.
+		Links: []siren.Link{link("self", "/settings", "Settings"), link("index", "/", "Home"),
+			link("snapshot", "/actions?new=snapshot", "Take a snapshot")},
 		Actions: []siren.Action{action("settings", nil,
 			map[string]any{"model_url": s.ModelURL, "model": s.Model, "model_key": s.ModelKey, "owner_number": s.OwnerNumber})}}
 }

@@ -213,6 +213,9 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 	// snapshot.
 	if p, ok := take("snapshot"); ok {
 		say("Took a snapshot: <code>%s</code>.", esc(fmt.Sprint(p)))
+		if d, ok := take("download"); ok {
+			say(`<a href="%s" download>Download it</a>.`, esc(fmt.Sprint(d)))
+		}
 	}
 
 	if len(out) == 0 && len(left) == 0 {

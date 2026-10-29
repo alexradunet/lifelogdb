@@ -4,7 +4,10 @@ package api
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
+	"net/url"
+	"path/filepath"
 
 	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
@@ -23,9 +26,39 @@ func (h *server) snapshot(r *http.Request, _ spec, _ string) (*siren.Entity, err
 		return nil, &core.Error{Status: http.StatusInternalServerError, Code: siren.CodeRestoreCheckFailed,
 			Msg: fmt.Sprintf("%s failed its restore check: it is kept under this .failed.db name, and it is not one to restore", path)}
 	}
-	props := map[string]any{"snapshot": path, "restore_check": res}
+	download := snapshotHref(filepath.Base(path))
+	props := map[string]any{"snapshot": path, "download": download, "restore_check": res}
 	return &siren.Entity{Class: []string{"snapshot"}, Title: "Snapshot", Properties: props, Result: props,
-		Links: []siren.Link{link("self", "/", "Home"), link("index", "/", "Home")}}, nil
+		Links: []siren.Link{link("self", "/", "Home"), link("index", "/", "Home"), link("download", download, "Download the snapshot")}}, nil
+}
+
+// snapshotHref is the address of the download of the snapshot named name.
+func snapshotHref(name string) string { return "/snapshots/" + url.PathEscape(name) }
+
+// snapshotFile is GET /snapshots/{name}: the owner's download of a snapshot that the action wrote, so a browser on
+// another device keeps a copy of life.db. It is the copy, never the live file: a copy has no -wal beside it and passed
+// its restore check. Like GET /settings it is the owner's read: an agent or an import is refused.
+func (h *server) snapshotFile(w http.ResponseWriter, r *http.Request) {
+	if err := requireOwner(source(r)); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	name := r.PathValue("name")
+	f, err := h.s.OpenSnapshot(name)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/vnd.sqlite3")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	w.Header().Set("Cache-Control", "private, no-cache")
+	http.ServeContent(w, r, name, fi.ModTime(), f)
 }
 
 func (h *server) integrity(r *http.Request, _ spec, _ string) (*siren.Entity, error) {

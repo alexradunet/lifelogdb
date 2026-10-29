@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -19,11 +20,7 @@ import (
 // a folder inside a git work tree, a name in use) is a 422 with the code snapshot_refused; any other error is a
 // failure.
 func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *IntegrityResult, error) {
-	dir := s.SnapshotDir
-	if dir == "" {
-		dir = filepath.Dir(s.DB.Path())
-	}
-	path, err := db.Snapshot(ctx, s.DB.Path(), dir, now)
+	path, err := db.Snapshot(ctx, s.DB.Path(), s.snapshotDir(), now)
 	if errors.Is(err, db.ErrRefused) {
 		return "", nil, &Error{Status: http.StatusUnprocessableEntity, Msg: err.Error(), Code: CodeSnapshotRefused, Err: err}
 	}
@@ -42,6 +39,43 @@ func (s *Store) TakeSnapshot(ctx context.Context, now time.Time) (string, *Integ
 		return failedSnapshot(path, res, nil)
 	}
 	return path, res, nil
+}
+
+// snapshotDir is the folder of the snapshots: SnapshotDir, or the folder of the database when none is set.
+func (s *Store) snapshotDir() string {
+	if s.SnapshotDir != "" {
+		return s.SnapshotDir
+	}
+	return filepath.Dir(s.DB.Path())
+}
+
+// OpenSnapshot opens the good snapshot named name in the snapshot folder, for the owner's download. Only a name that
+// the action gives (db.IsSnapshotName) is opened, inside the folder only (os.Root): not the live file, not a
+// .failed.db and not a path. Such a name, or a name with no regular file, is a 404. The caller closes the file.
+func (s *Store) OpenSnapshot(name string) (*os.File, error) {
+	if !db.IsSnapshotName(name) {
+		return nil, NotFound("no snapshot %q: a snapshot is named life-YYYY-MM-DD.db or life-YYYY-MM-DDTHHMMSS.db", name)
+	}
+	root, err := os.OpenRoot(s.snapshotDir())
+	if err != nil {
+		return nil, fmt.Errorf("open the snapshot folder: %w", err)
+	}
+	defer root.Close() // a file opened through the root stays open
+	f, err := root.Open(name)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, NotFound("no snapshot %s in the snapshot folder", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("open the snapshot %s: %w", name, err)
+	}
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read the snapshot %s: %w", name, err)
+		}
+		return nil, NotFound("no snapshot %s in the snapshot folder", name)
+	}
+	return f, nil
 }
 
 // failedSnapshot keeps a snapshot that did not pass its restore check, for the owner to read, under the failed name

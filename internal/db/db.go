@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -403,6 +404,13 @@ func Snapshot(ctx context.Context, from, dir string, now time.Time) (string, err
 	}
 	return to, Copy(ctx, from, to)
 }
+
+// snapshotName is the name that Snapshot gives a good snapshot. A .failed.db name, the live file and its -wal and -shm
+// do not match it.
+var snapshotName = regexp.MustCompile(`^life-[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{6})?\.db$`)
+
+// IsSnapshotName says whether name is the name of a good snapshot, as Snapshot writes it.
+func IsSnapshotName(name string) bool { return snapshotName.MatchString(name) }
 
 // MarkFailed renames a snapshot that did not pass its restore check from NAME.db to NAME.failed.db
 // (life-2026-10-02.failed.db, life-2026-10-02T143005.failed.db), and returns the new path. The old name is then free,
