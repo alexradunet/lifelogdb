@@ -137,15 +137,20 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
   & label>span{color:var(--rail-ink)}}
 /* The thread of the chat (docs/plans/148-the-chat-screen.md), on the screen and in the column alike. Every turn is
    one parchment card, the owner's and the agent's alike: a meta line (who, the relay, the time) beside a small avatar
-   that tells them apart, and the card under the line. The owner's avatar is the person glyph in ink on a parchment
-   slab, the agent's the chat glyph in gold on wood (the owner's word, 2026-10-29: cards only, no bubble of a second
-   material). The tool lines are badges in the head of the card, above the words; a card is as wide as its words, up
-   to the column. A [[link]] in the words is a chip. The three dots wait in a card of their own while the agent
+   that tells them apart, and the card under the line. The agent's turn is at the left, the owner's at the right, each
+   with its avatar at the outer edge. The owner's avatar is the person glyph in ink on a parchment slab, the agent's
+   the chat glyph in gold on wood (the owner's word, 2026-10-29: cards only, no bubble of a second material). The tool
+   lines are badges in the head of the card, above the words; a card is as wide as its words, up to the column. A [[link]] in the words is a chip. The three dots wait in a card of their own while the agent
    answers; they blink only for a reader who allows motion. */
 .turns{display:flex; flex-direction:column; gap:16px; max-inline-size:72ch; inline-size:100%; margin-block:0; margin-inline:auto; padding:0; list-style:none}
 .turn{display:grid; grid-template-columns:28px minmax(0,1fr); grid-template-rows:auto auto; column-gap:12px; row-gap:6px; min-inline-size:0;
   &.text{display:block; padding:var(--space-2) var(--space-3); border:2px dotted var(--rule)}
   & .free{margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text)}
+  &.owner{grid-template-columns:minmax(0,1fr) 28px}
+  &.owner .avatar{grid-column:2}
+  &.owner .meta,&.owner .turn-card{grid-column:1; justify-self:end}
+  &.owner .meta{justify-content:flex-end}
+  &.owner .tools{justify-content:flex-end}
   & .avatar{grid-row:1/-1; align-self:start; display:inline-flex; align-items:center; justify-content:center; inline-size:28px; block-size:28px; border:2px solid var(--outline); box-shadow:var(--drop-hard)}
   &.owner .avatar{color:var(--ink); background:var(--surface-deep)}
   &.agent .avatar{color:var(--rail-accent); background-color:var(--rail); background-image:url(/assets/wood.png); background-size:252px 480px; image-rendering:pixelated}

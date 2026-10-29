@@ -10,9 +10,9 @@
   the conversation entity gains two derived properties of a turn (`via`, `refs`); the owner's paragraph of `say`
   gains the writer's name when a relay wrote it. No table, no action, no route; the core still calls no model.
 - **Status:** IN REVIEW (owner). The owner's review of 2026-10-29: the two materials of the turns (the owner's
-  parchment at the right, the agent's wood well at the left) are gone; every turn is one parchment card at the
-  left, with a small avatar beside its meta line that tells the owner (the person glyph on a slab) from the agent
-  (the chat glyph in gold on wood). The owner's review of 2026-10-28: the cards under the agent's words were
+  parchment at the right, the agent's wood well at the left) are gone; every turn is one parchment card, the
+  agent's at the left and the owner's at the right, with a small avatar at the outer edge of its meta line that
+  tells the owner (the person glyph on a slab) from the agent (the chat glyph in gold on wood). The owner's review of 2026-10-28: the cards under the agent's words were
   too much; the words are now the lowest part of a turn, and each tool line is one small badge above them that
   carries the thing it touched (the icon or a small picture, the title, one value) in place of the full card: the
   leaf, the first lines, the reading tiles, the trend and the hits are gone. Built in `cbc25ad` (via and refs) and `127d11d` (the screen and the cards); the
