@@ -118,6 +118,7 @@ var installFiles = map[string]bool{
 	"/assets/icon-512.png":  true,
 	"/assets/wood.png":      true,
 	"/assets/ground.png":    true,
+	"/assets/embers.png":    true,
 	"/assets/sprites.png":   true,
 	"/assets/icons.png":     true,
 }

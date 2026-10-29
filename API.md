@@ -838,6 +838,7 @@ no settings file path refuses both routes (500, the message says so).
 | `model` | string | the model id; `""` when not set |
 | `model_key` | string | a bearer credential for the server; absent when not set |
 | `owner_number` | string | the digits of the owner's phone number with the country code, the one number the agent on the phone answers; absent when not set. A value that is not digits is 422 `owner_number: digits with the country code, such as 40712345678` |
+| `ground` | string | the floor under the pages of the browser: `boards`, `oak`, `firelight` or `embers`; `""` when not set, which is `boards`. Another value is 422 |
 
 ### conversation
 

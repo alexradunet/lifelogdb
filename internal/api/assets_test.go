@@ -146,7 +146,7 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 	if r := get(pub, "GET", "/assets/fonts/OFL-jersey-15.txt", nil); r.Code == http.StatusOK { // the fonts stay behind the token
 		t.Errorf("a public listener serves a font with no token: %d", r.Code)
 	}
-	for _, path := range []string{"/manifest.webmanifest", "/assets/icon.svg", "/assets/icon-192.png", "/assets/icon-512.png", "/assets/wood.png", "/assets/ground.png", "/assets/sprites.png", "/assets/icons.png"} {
+	for _, path := range []string{"/manifest.webmanifest", "/assets/icon.svg", "/assets/icon-192.png", "/assets/icon-512.png", "/assets/wood.png", "/assets/ground.png", "/assets/embers.png", "/assets/sprites.png", "/assets/icons.png"} {
 		for _, method := range []string{"GET", "HEAD"} {
 			if r := get(pub, method, path, nil); r.Code != http.StatusOK {
 				t.Errorf("a public listener refuses %s %s with no token: %d", method, path, r.Code)

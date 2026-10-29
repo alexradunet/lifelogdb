@@ -20,6 +20,9 @@ type Settings struct {
 	// OwnerNumber is the digits of the owner's phone number with the country code: the one number that the agent on
 	// the phone answers. The action settings refuses a value that is not digits.
 	OwnerNumber string `json:"owner_number,omitempty"`
+	// Ground is the floor of the browser: boards, oak, firelight or embers. Empty is boards. The catalog lists the
+	// four values, and the action settings refuses any other.
+	Ground string `json:"ground,omitempty"`
 }
 
 // SettingsPathFor is the settings file of the database at dbPath: the path with .db cut and .settings.json added

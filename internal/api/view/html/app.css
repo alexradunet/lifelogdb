@@ -32,6 +32,28 @@ main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text
 /* The ground: a faint tile of boards under the page, a third of the rail's strength. It is pixel art, so it is drawn
    unsmoothed; the column sets smoothing back, so a picture in the page is drawn as a picture. */
 body{background-image:url(/assets/ground.png),var(--grain-ground); background-size:480px 288px,4px 4px; image-rendering:pixelated}
+/* The ground is the owner's choice (settings: ground). The shell sets data-ground on the body; boards is the floor of
+   a page with no choice. oak drops the tile and keeps the grain. firelight and embers keep the boards and lay two
+   fixed layers over the viewport, under the frame: the layers take no click, and a page that asks for less motion sees
+   them at rest. */
+body[data-ground=oak]{background-image:var(--grain-ground); background-size:4px 4px}
+body:is([data-ground=firelight],[data-ground=embers])::before,body:is([data-ground=firelight],[data-ground=embers])::after{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none}
+/* Two warm glows low on the floor, one on each side, each on its own cycle so they are never in step. */
+body[data-ground=firelight]::before{background:radial-gradient(ellipse 60% 45% at 22% 100%, light-dark(rgb(255 140 40 / .35), rgb(255 120 30 / .30)), transparent); transform-origin:22% 100%}
+body[data-ground=firelight]::after{background:radial-gradient(ellipse 55% 40% at 78% 100%, light-dark(rgb(255 170 60 / .30), rgb(255 150 50 / .26)), transparent); transform-origin:78% 100%}
+/* The sparks are one picture of 96 by 96 pixels drawn at 3 screen pixels a pixel (288 px). It slides up by its own
+   height, in whole picture pixels, so the loop has no seam and a spark moves by whole pixels. The second layer is
+   slower, fainter and shifted, so the two do not repeat each other. */
+body[data-ground=embers]::before,body[data-ground=embers]::after{background-image:url(/assets/embers.png); background-size:288px 288px; image-rendering:pixelated}
+body[data-ground=embers]::after{background-position-x:144px; opacity:.5}
+@keyframes glow{from{opacity:.55; scale:1} to{opacity:1; scale:1.07}}
+@keyframes rise{to{background-position-y:-288px}}
+@media (prefers-reduced-motion:no-preference){
+  body[data-ground=firelight]::before{animation:glow 7s ease-in-out infinite alternate}
+  body[data-ground=firelight]::after{animation:glow 11s ease-in-out infinite alternate}
+  body[data-ground=embers]::before{animation:rise 12s steps(96) infinite}
+  body[data-ground=embers]::after{animation:rise 20s steps(96) infinite}}
 /* The column is a slab of oak laid on the floor, so nothing written sits on bare floor. It is also a container: a layout
    inside it asks the width of the column, not of the screen. */
 .column{image-rendering:auto; background-color:var(--desk); background-image:var(--grain-ground); background-size:4px 4px; box-shadow:var(--bevel-up); container:column / inline-size; min-inline-size:0; display:flex; flex-direction:column; padding:var(--space-6) var(--space-8);

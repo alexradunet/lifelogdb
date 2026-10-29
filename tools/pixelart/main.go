@@ -1,5 +1,5 @@
 // Command pixelart writes the pictures of internal/pixelart to internal/api/view/html: the wood tile of the rail, the
-// ground tile of the page, the sprite sheet and the icon sheet. Run it from the repository root after a change to a drawing; a test
+// ground tile of the page, the sparks of the embers ground, the sprite sheet and the icon sheet. Run it from the repository root after a change to a drawing; a test
 // of internal/api/view compares each file with its drawing.
 package main
 
@@ -20,6 +20,7 @@ func main() {
 	}{
 		{"wood.png", pixelart.Wood()},
 		{"ground.png", pixelart.Ground()},
+		{"embers.png", pixelart.Embers()},
 		{"sprites.png", pixelart.Sprites()},
 		{"icons.png", pixelart.Icons()},
 	} {

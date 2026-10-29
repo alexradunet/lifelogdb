@@ -17,9 +17,12 @@ import (
 // Shell is what the sidebar knows: today, and its zone, and the Today strip.
 type Shell struct {
 	Today string
-	Zone  *time.Location // the zone of today: the words for a time use it
-	Strip *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
-	Chat  *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
+	// Ground is the floor the owner chose (settings: boards, oak, firelight or embers). The shell is built with the
+	// empty setting already read as boards, so the layout and the sheet never see an empty value.
+	Ground string
+	Zone   *time.Location // the zone of today: the words for a time use it
+	Strip  *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
+	Chat   *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
 }
 
 // Chat is what the chat column shows: today's turns, the version of the conversation page (empty when the day has no

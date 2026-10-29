@@ -176,10 +176,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   mode). A page drawn before the handler
   (the login, a refusal of the token) has no sidebar, so it shows nothing of the database. The look is the Almanac
   bound in Hearthwood, the materials of the owner's Balaur design system
-  ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is a slab of oak on a floor of boards, centred in a
+  ([plan 096](docs/plans/096-bound-in-hearthwood.md)): the page is a slab of oak on a floor, centred in a
   frame of 1512 px on a wide screen, the sidebar and the phone's bars are wood, and everything written is parchment
   with ink; square corners, 2 px edges, bevels and 3 px hard drops, no
-  blur and no gradient; gold marks where the owner is and what is today, ember is the one loud button of a screen,
+  blur and no gradient (the glows of the firelight floor are the one exception); the floor is the owner's choice
+  (Settings: boards, oak, firelight or embers), and the last two move only when the system does not ask for less motion; gold marks where the owner is and what is today, ember is the one loud button of a screen,
   teal is a link. Words are in Atkinson Hyperlegible, every day, time and number in IBM Plex Mono,
   and a page's title, the leaf's number and a reading's value in Jersey 15; dark is the identity and light the
   daylight study of the same room, by `prefers-color-scheme`. Its tokens are custom properties of `base.css`; a
@@ -260,7 +261,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
 - **The stylesheet is this application's own: two embedded sheets, three embedded faces, four embedded pictures (the
-  wood tile, the ground tile, the sprite sheet and the icon sheet, drawn by `internal/pixelart`), no vendored framework and no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
+  wood tile, the ground tile, the sparks of the embers floor, the sprite sheet and the icon sheet, drawn by `internal/pixelart`), no vendored framework and no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
   print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
   components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two sheets are one
   cascade in four layers, `tokens`, `base`, `components` and `utilities`, declared once at the top of `base.css`
@@ -337,8 +338,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `.settings.json` added), mode 0600, written through a temporary file and a rename, and never in git (`.gitignore`). They are not in `life.db`: the
   model key is a secret, and a snapshot copies the database. They are not in `docs/` either: they belong to this
   application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
-  chat-completions protocol, ending in `/v1`), `model` (the model id), `model_key` (a bearer credential, optional) and `owner_number` (the digits of the owner's phone number with the
-  country code: the one number that the agent on the phone answers; a value that is not digits is 422); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
+  chat-completions protocol, ending in `/v1`), `model` (the model id), `model_key` (a bearer credential, optional), `owner_number` (the digits of the owner's phone number with the
+  country code: the one number that the agent on the phone answers; a value that is not digits is 422) and `ground` (the floor under the
+  pages of the browser: `boards`, `oak`, `firelight` or `embers`; empty is `boards`; another value is 422); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
   `GET /settings` are the owner's: refused to an `agent:*` or `import:*` writer, and the action is never an MCP tool.
   `GET /actions` offers `settings` with no value, because any writer reads the catalog; only `GET /settings` fills
   the values, the key too, so the owner's form sends the key back as it is. A field of the type `password` is drawn

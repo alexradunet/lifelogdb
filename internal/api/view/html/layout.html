@@ -5,7 +5,7 @@
 <title>{{.Title}} · Lifelog</title>
 <style data-sheet="base">{{basecss}}</style>
 <style data-sheet="app">{{appcss}}</style>
-</head><body>
+</head><body{{if .Shell}} data-ground="{{.Shell.Ground}}"{{end}}>
 <a class="skip" href="#main">Skip to the content</a>
 <div class="shell{{if not .Shell}} bare{{end}}">
 {{if .Shell}}{{template "rail" .}}{{end}}

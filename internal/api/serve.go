@@ -159,6 +159,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /assets/icon-512.png", install("icon-512.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/wood.png", install("wood.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/ground.png", install("ground.png", "image/png", "public, max-age=31536000, immutable"))
+	m.HandleFunc("GET /assets/embers.png", install("embers.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/sprites.png", install("sprites.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icons.png", install("icons.png", "image/png", "public, max-age=31536000, immutable"))
 	return h
@@ -468,6 +469,13 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 	if fr.shell != nil {
 		now := fr.shell.Local() // one read of the clock, so today and the zone of the words agree
 		f.Shell = &view.Shell{Today: now.Format(time.DateOnly), Zone: now.Location()}
+		// A failed read draws the boards, as a failed strip draws no strip: the floor is a help. The page of an error has
+		// logged its own cause.
+		ground, err := shellGround(fr.shell)
+		if err != nil && status < http.StatusBadRequest {
+			logFault(r, "the settings cannot be read", err)
+		}
+		f.Shell.Ground = ground
 		// A failed read draws the page with no strip: the strip is a help. The page of an error has logged its own
 		// cause, so only the page of a good answer logs this one.
 		strip, err := todayStrip(r.Context(), fr.shell, f.Shell.Today)

@@ -302,13 +302,14 @@ func motionsAskFirst(t *testing.T, app string, scroll bool) {
 		}
 		return false
 	}
-	for _, token := range []string{"@starting-style", "allow-discrete", "animation-timeline:scroll(root)"} {
+	for _, token := range []string{"@starting-style", "allow-discrete", "animation-timeline:scroll(root)", "animation:"} {
 		if !strings.Contains(app, token) && (scroll || token != "animation-timeline:scroll(root)") {
 			t.Errorf("the sheet has no %s", token)
 		}
 		for at := strings.Index(app, token); at >= 0; at = strings.Index(app, token) {
 			stack := enclosing(at)
-			if !within(stack, "prefers-reduced-motion:no-preference") {
+			// animation:none under reduce is the sheet's own switch, so it is the one place this token may stand.
+			if !within(stack, "prefers-reduced-motion:no-preference") && !(token == "animation:" && within(stack, "prefers-reduced-motion:reduce")) {
 				t.Errorf("%s at %q is outside a block that asks for motion", token, strings.Join(stack, " > "))
 			}
 			if strings.HasPrefix(token, "animation-timeline:") && !within(stack, "@supports (animation-timeline:scroll())") {
@@ -559,7 +560,7 @@ func TestThePicturesAreTheDrawings(t *testing.T) {
 	for _, c := range []struct {
 		file string
 		want *image.NRGBA
-	}{{"wood.png", pixelart.Wood()}, {"ground.png", pixelart.Ground()}, {"sprites.png", pixelart.Sprites()}, {"icons.png", pixelart.Icons()}} {
+	}{{"wood.png", pixelart.Wood()}, {"ground.png", pixelart.Ground()}, {"embers.png", pixelart.Embers()}, {"sprites.png", pixelart.Sprites()}, {"icons.png", pixelart.Icons()}} {
 		got, err := png.Decode(bytes.NewReader(MustFile(c.file)))
 		if err != nil {
 			t.Fatal(err)

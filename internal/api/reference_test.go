@@ -47,7 +47,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 			// and the page of the metric (plan 144): the properties of a page but its `metric` object
 			"id": int64(0), "entity_type": "", "title": "", "body": "", "created_at": "", "version": "", "is_day_page": false,
 			"links": []core.Edge{}, "backlinks": []core.Edge{}, "cover": core.Cover{}},
-		"settings": map[string]any{"model_url": "", "model": "", "model_key": "", "owner_number": ""},
+		"settings": map[string]any{"model_url": "", "model": "", "model_key": "", "owner_number": "", "ground": ""},
 		"conversation": map[string]any{"day": "", "turns": []Turn{},
 			// and the page of the conversation (plan 146): the properties of a page
 			"id": int64(0), "entity_type": "", "title": "", "body": "", "created_at": "", "version": "", "is_day_page": false,
