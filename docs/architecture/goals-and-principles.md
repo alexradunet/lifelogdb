@@ -3,8 +3,8 @@
 **The goal:** one database that a single human writes to for ~50 years and that remains
 readable and meaningful long after the current application is gone. The dominant risk is
 not SQLite durability (settled — see [D1](../decisions/D01-single-sqlite-file.md)); it is *meaning living only in application code*,
-and *canonical data being corrupted by uncontrolled writers*. A plan is a line of a page
-([D23](../decisions/D23-no-tasks.md), [D29](../decisions/D29-plan-lines.md)); nothing turns an intention into an observed fact: a ticked line says when it was done, and a reading is recorded on its own.
+and *canonical data being corrupted by uncontrolled writers*. A plan lives outside the file
+([D23](../decisions/D23-no-tasks.md), [D29](../decisions/D29-plan-lines.md)); nothing turns an intention into an observed fact: a reading is recorded on its own.
 
 **Principles, in priority order:**
 

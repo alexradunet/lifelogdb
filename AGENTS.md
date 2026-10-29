@@ -14,7 +14,7 @@ The docs state the current truth only.
 **What `life.db` is for: a life log and its backup.** It keeps
 what happened and what was measured: a journal of day pages, notes, the people and places in them,
 where the owner was, health readings, and the files the owner keeps — as their text and a small picture, the
-original left outside ([D9](docs/decisions/D09-binary-files.md)). A plan is a line of a page ([D23](docs/decisions/D23-no-tasks.md), [D29](docs/decisions/D29-plan-lines.md)): there is no tasks table.
+original left outside ([D9](docs/decisions/D09-binary-files.md)). A plan lives outside the file, in the app the owner plans in ([D23](docs/decisions/D23-no-tasks.md), [D29](docs/decisions/D29-plan-lines.md)): there is no tasks table and no plan line.
 A span of life or a session is a plain page or a reading, not a table of its own ([D22](docs/decisions/D22-events.md)); money and a location track remain deferred
 ([D18](docs/decisions/D18-money.md), [D21](docs/decisions/D21-location-history.md)). A proposal that adds project
 workflows, notification delivery or a finance ledger needs a real incident and the owner's word first.
@@ -343,7 +343,7 @@ won>.`
 - **Language-neutral.** The contract must be implementable without reading any application's code. Anything a writer
   must compute identically in every language (the title predicate, `title_key`, wikilink and `#tag`
   extraction) is specified in [titles and wikilinks](docs/contract/titles-and-wikilinks.md) with its vectors
-  (the suites read them from that page: it is their only copy). [Plan lines](docs/contract/plan-lines.md) is the second page of computed rules with vectors (the grammar of a line, the next date of a repeat); an implementation may be an example, never the only statement of a rule.
+  (the suites read them from that page: it is their only copy). An implementation may be an example, never the only statement of a rule.
 - **Self-consistency.** Every change to `schema.sql` keeps the contract pages, the entity model, the decisions,
   the cookbook and the totals line in `docs/schema/README.md` in step. The mermaid diagrams are checked by
   the `diagrams` suite: the ER diagrams draw tables, key columns and foreign keys only, and the link map must

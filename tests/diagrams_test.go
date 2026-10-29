@@ -35,8 +35,7 @@ func diagrams(s *S) {
 		}
 	}
 	want := map[string]string{"er-core": "erDiagram", "er-facts": "erDiagram", "link-map": "flowchart", "page-life": "stateDiagram-v2",
-		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart", "capture-key": "flowchart",
-		"plan-line": "stateDiagram-v2", "plan-a-project": "flowchart"}
+		"correct-measurement": "stateDiagram-v2", "writers": "flowchart", "save-flow": "flowchart", "capture-key": "flowchart"}
 	once := len(byID) == len(want)
 	counts := map[string]int{}
 	for k, v := range byID {

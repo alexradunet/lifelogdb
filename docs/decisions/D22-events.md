@@ -11,6 +11,6 @@
 - **Why.** A stored span needs a boundary grammar (partial dates, qualifiers, an ongoing end) and answers that are
   definite, possible or incomparable for a day. A stored session needs its own clock and a scope for readings. Both
   cost more than they gave: the owner asked neither question, and the day page already says where they were.
-- **No generic events.** No events or attendance framework. An intention is a plan line of a page ([D23](D23-no-tasks.md), [D29](D29-plan-lines.md));
+- **No generic events.** No events or attendance framework. An intention lives outside the file ([D23](D23-no-tasks.md), [D29](D29-plan-lines.md));
   nothing done makes a span, a reading or presence. Day pages record ordinary
   outings with prose and links ([D5](D05-pages-and-day-pages.md)).

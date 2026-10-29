@@ -28,5 +28,4 @@ The order below is the order the suites run the recipes in; the key is how a sui
 | [Import a row once: insert it, re-run it, update a changed one](import-a-row-once.md) | `import-a-row-once` |
 | [Metrics by category: file a metric, nest a category, a category's metrics, every metric grouped (D26)](metrics-by-category.md) | `metrics-by-category` |
 | [Take a snapshot, check it, restore it (D25)](take-a-snapshot.md) | `take-a-snapshot` |
-| [Plan a project: a page, a target line, a reading, the live plan lines (D26, D29)](plan-a-project.md) | `plan-a-project` |
 | [The streak: days written in a row, ending today or yesterday](streaks.md) | `streaks` |
