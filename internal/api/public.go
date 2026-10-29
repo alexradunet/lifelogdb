@@ -30,6 +30,7 @@ type PublicOptions struct {
 	Token   string   // the owner's token, at least tokenMinLength characters, one line
 	Origins []string // browser origins (scheme://host[:port]) allowed to read and write
 	TLS     bool     // the listener serves TLS: the login cookie is marked Secure
+	Apps    *Apps    // the connected apps, the same value as the local handler has (NewWith); nil: none
 }
 
 // CheckToken reports whether t may be a public listener's token: one line of at least tokenMinLength characters.
@@ -100,7 +101,10 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 		}
 		p.origins[origin] = true
 	}
-	p.next = newOn(s, p.guard)
+	if o.Apps == nil {
+		o.Apps = NewApps()
+	}
+	p.next = newOn(s, p.guard, o.Apps)
 	return p, nil
 }
 

@@ -27,6 +27,7 @@ type server struct {
 	s        *core.Store
 	feedback feedbackStore
 	mux      *http.ServeMux
+	with     *Apps // the connected apps (with.go); shared with the other handler of the same serve
 }
 
 // New returns the whole API as one handler: lifelog serve mounts it on a socket, the CLI and the MCP server
@@ -34,13 +35,20 @@ type server struct {
 // API with the origins that the owner allows (docs/plans/078-network-server.md). A test gives a store with a fixed
 // clock, so today is a fixed day and a time is written in fixed words.
 func New(s *core.Store) http.Handler {
-	return newOn(s, http.NewCrossOriginProtection())
+	return NewWith(s, NewApps())
+}
+
+// NewWith is New with the connected apps of apps: their actions are in the catalog, and /with/NAME leads to them. A
+// serve with a public listener gives the same apps to this handler and to Public (PublicOptions.Apps).
+func NewWith(s *core.Store, apps *Apps) http.Handler {
+	return newOn(s, http.NewCrossOriginProtection(), apps)
 }
 
 // newOn builds the API behind guard, which refuses a browser write from an origin that it does not trust. Public
 // gives the guard that trusts the allowed origins; New gives one that trusts no other origin.
-func newOn(s *core.Store, guard *http.CrossOriginProtection) http.Handler {
+func newOn(s *core.Store, guard *http.CrossOriginProtection, apps *Apps) http.Handler {
 	h := newServer(s)
+	h.with = apps
 	guard.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 	}))
@@ -103,7 +111,7 @@ func (b stallBody) Read(p []byte) (int, error) {
 // newServer is the server with its routes: mount gives each action of the catalog its route, then the routes that are
 // not actions follow.
 func newServer(s *core.Store) *server {
-	h := &server{s: s, feedback: feedbackStore{now: s.Now}}
+	h := &server{s: s, feedback: feedbackStore{now: s.Now}, with: NewApps()}
 	m := http.NewServeMux()
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{
@@ -144,6 +152,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /metrics/{name}", h.serve(h.series))
 	m.HandleFunc("GET /measurements/{id}", h.serve(h.measurement))
 	m.HandleFunc("POST /render", h.render)
+	h.mountWith(m)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	// The rules of speculation. JSON has no comments, so the reasons are here. No address with a query string: a
@@ -491,6 +500,9 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			logFault(r, "the chat column cannot be read", err)
 		}
 		f.Shell.Chat = chat
+		if fr.srv != nil {
+			f.Shell.Apps = fr.srv.with.links()
+		}
 		if fr.srv != nil && status < http.StatusBadRequest {
 			f.Cards, f.ChatDays = fr.srv.chatExtras(r, e, chat, f.Shell.Today)
 		}
@@ -578,9 +590,9 @@ func requireOwner(source string) error {
 func (h *server) actions(r *http.Request) (*siren.Entity, error) {
 	q := r.URL.Query()
 	e := &siren.Entity{Class: []string{"actions"}, Title: "Actions", Links: []siren.Link{link("self", "/actions", "Actions"), link("index", "/", "Home")}}
-	for _, s := range catalog {
+	for _, s := range append(slices.Clone(catalog), h.with.specs()...) { // the actions of the connected apps follow
 		if params, ok := pathValues(s, q); ok && s.Name == q.Get("new") {
-			e.Actions = append(e.Actions, action(s.Name, params, nil))
+			e.Actions = append(e.Actions, filled(s, params, nil))
 			continue
 		}
 		e.Actions = append(e.Actions, templated(s))

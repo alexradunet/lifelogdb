@@ -17,7 +17,7 @@ import (
 
 // thirdParties are the products and companies the core never names. A thing that names one is an extension; the
 // change that moves it out adds its name here.
-var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "opencode", "anthropic", "openai", "modelcontextprotocol", "whatsapp", "whatsmeow"}
+var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "opencode", "anthropic", "openai", "modelcontextprotocol", "whatsapp", "whatsmeow", "ticktick"}
 
 // dialPackages are the packages a Go program talks to a server with. The core imports them under their own names only,
 // so that the words of dials below cannot hide behind an alias or a dot import.
@@ -61,7 +61,19 @@ func TestTheCoreDialsOnlyItsServer(t *testing.T) {
 				t.Errorf("%s uses %s: outside client the core dials nothing (AGENTS.md, the four rings)", path, d)
 			}
 		}
+		if strings.Contains(text, "client.Remote(") && !remoteAllowed[filepath.ToSlash(path)] {
+			t.Errorf("%s makes a client.Remote: only a server that the core started or was told of may be dialled (AGENTS.md, the four rings)", path)
+		}
 	}
+}
+
+// remoteAllowed are the files that may call client.Remote. Each names a server that the core itself started, or was
+// told of by the owner. No other file of the core dials a server, so a new one is a decision of the owner.
+var remoteAllowed = map[string]bool{
+	"cmd/lifelog/main.go":             true, // the --url of the owner: the lifelog server that the command line talks to
+	"internal/api/apitest/apitest.go": true, // the server that a test started over its own handler
+	"internal/api/with.go":            true, // a connected app that `serve --with` started, on the loopback address it gave (plan 154)
+	"cmd/lifelog/with.go":             true, // the same children, when serve probes them before it registers them (plan 154)
 }
 
 // coreSources is the Go source of internal/, cmd/, siren/, client/ and app/ that is not a test, by its path relative to the repo root.

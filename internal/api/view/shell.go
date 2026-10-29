@@ -23,7 +23,11 @@ type Shell struct {
 	Zone   *time.Location // the zone of today: the words for a time use it
 	Strip  *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
 	Chat   *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
+	Apps   []AppLink      // the connected apps that run (docs/plans/154-connected-apps-through-the-catalog.md): a link each in the rail
 }
+
+// AppLink is a connected app in the rail: its name, which is its address /with/NAME, and the title of its home.
+type AppLink struct{ Name, Title string }
 
 // Chat is what the chat column shows: today's turns, the version of the conversation page (empty when the day has no
 // page, so the script can tell that the page changed), and the action say, to the address of today.
@@ -270,8 +274,34 @@ func (v *view) Nav() []navItem {
 			}
 		}
 	}
+	for _, app := range v.apps() { // after the table: the apps change while the server runs
+		href := "/with/" + app.Name
+		out = append(out, navItem{Title: app.Title, Href: href, Icon: "browse", Group: "apps"})
+		if n := navMatch(path, href); n > at || n == at && n > 0 && len(href) > length {
+			best, at, length = len(out)-1, n, len(href)
+		}
+	}
 	if best >= 0 {
 		out[best].Current = true
+	}
+	return out
+}
+
+// apps are the connected apps that run; none on a page with no shell.
+func (v *view) apps() []AppLink {
+	if v.Shell == nil {
+		return nil
+	}
+	return v.Shell.Apps
+}
+
+// Apps are the nav items of the connected apps, for the sheet that More opens on a phone.
+func (v *view) Apps() []navItem {
+	var out []navItem
+	for _, it := range v.Nav() {
+		if it.Group == "apps" {
+			out = append(out, it)
+		}
 	}
 	return out
 }

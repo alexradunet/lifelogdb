@@ -312,7 +312,11 @@ func (s spec) base() siren.Action {
 // action instantiates a catalog action: path fields fill the href (escaped for a path) and drop out, values prefill
 // the rest.
 func action(name string, params map[string]string, values map[string]any) siren.Action {
-	s := specOf(name)
+	return filled(specOf(name), params, values)
+}
+
+// filled is action for a row that the caller holds, such as the row of an action of a connected app.
+func filled(s spec, params map[string]string, values map[string]any) siren.Action {
 	a := s.base()
 	for _, f := range s.Fields {
 		if f.In == "path" {

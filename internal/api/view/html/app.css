@@ -131,7 +131,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 /* On a wide screen the rest of the sidebar is in its flow: More, its head and the search link are the phone's. */
 .rail-more{display:contents; overscroll-behavior:contain}
 .today-inline{display:none}
-.rail-more-link,.rail-more-head,.rail .rail-search-link,.rail-chat-link{display:none}
+.rail-more-link,.rail-more-head,.rail .rail-search-link,.rail-chat-link,.rail-apps{display:none}
 /* The Today strip: a carved well under the sections (in the More sheet on a phone, before the owner's links). A chip
    is a link to the form that does the thing; a done one is gold with a check. */
 .rail-today{display:flex; flex-direction:column; gap:6px; padding:10px; background:var(--rail-deep); border:1px solid var(--outline); box-shadow:var(--bevel-in); color:var(--rail-ink); font-size:13px; line-height:18px;
@@ -304,6 +304,9 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
     & :is(a,button){position:relative; inline-size:100%; flex-direction:column; gap:2px; padding:6px 0; font-size:12px; line-height:16px;
       &[aria-current=page],&.here{background:none; box-shadow:none; color:var(--rail-accent); font-weight:700}}}
   .rail-more-link,.rail-chat-link{display:block}
+  .rail-apps{display:block}
+  .nav-app{display:none} /* the bar has room for the sections of the day; the apps are in the sheet of More, and the link of the page that is open shows here */
+  .nav-app:has(a[aria-current=page]){display:block}
   .nav-chat:not(:has(a[aria-current=page])){display:none} /* the bar has the button of the column in its place; the link shows on the conversation */
   .chat-open{display:none}
   .shell:has(.chat:popover-open)>.column{padding-inline-end:calc(var(--space-4) + env(safe-area-inset-right, 0px))}

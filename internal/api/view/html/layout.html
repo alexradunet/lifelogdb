@@ -33,6 +33,7 @@
 <nav aria-label="New"><ul>{{range .NewKinds}}<li><a href="{{.Href}}">{{icon .Icon}}{{.Title}}</a></li>{{end}}</ul></nav></div>
 <nav aria-label="Sections">
 <ul>{{range $nav}}{{if eq .Group "day"}}<li>{{template "navlink" .}}</li>{{end}}{{end}}
+{{range $nav}}{{if eq .Group "apps"}}<li class="nav-app">{{template "navlink" .}}</li>{{end}}{{end}}
 {{range $nav}}{{if eq .Group "chat"}}<li class="nav-chat">{{template "navlink" .}}</li>{{end}}{{end}}
 {{if .Chat}}<li class="rail-chat-link"><button type="button" popovertarget="chat">{{icon "chat"}}Chat</button></li>{{end}}
 <li class="rail-more-link"><button type="button" popovertarget="sections"{{if .InMore}} class="here"{{end}}>{{icon "more"}}More</button></li></ul>
@@ -40,6 +41,7 @@
 <div class="rail-more" id="sections" popover>
 <div class="rail-more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="sections" popovertargetaction="hide">Close</button></div>
 {{template "today-strip" .}}
+{{with .Apps}}<nav class="rail-apps" aria-label="Apps"><ul>{{range .}}<li>{{template "navlink" .}}</li>{{end}}</ul></nav>{{end}}
 <p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/actions?new=snapshot">Snapshot</a></p>
 </div>
 </aside>{{end}}

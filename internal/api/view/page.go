@@ -245,10 +245,16 @@ func TemplateOf(e *siren.Entity) string {
 	return "generic"
 }
 
-// htmlOf is the page of a view, drawn by the template of its entity's class.
+// htmlOf is the page of a view, drawn by the template of its entity's class. A page of a connected app (its address is
+// under /with/) is always drawn by generic: the class is the app's word, and it may be the name of a class of this
+// server.
 func htmlOf(v *view) ([]byte, error) {
+	name := TemplateOf(v.Entity)
+	if strings.HasPrefix(v.Path, "/with/") {
+		name = "generic"
+	}
 	var b bytes.Buffer
-	if err := templates.ExecuteTemplate(&b, TemplateOf(v.Entity), v); err != nil {
+	if err := templates.ExecuteTemplate(&b, name, v); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
