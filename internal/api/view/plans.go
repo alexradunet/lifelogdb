@@ -7,7 +7,7 @@ package view
 import (
 	"fmt"
 	"html/template"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 	"net/url"
 	"slices"
 	"strconv"

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestAnErrorIsAnAlertInWords: the browser draws an error entity as an alert whose first words and tone its code

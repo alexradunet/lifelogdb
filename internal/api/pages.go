@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 func (h *server) find(r *http.Request, act spec, _ string) (*siren.Entity, error) {

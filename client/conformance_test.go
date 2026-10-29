@@ -11,10 +11,10 @@ import (
 	"regexp"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // TestTheTwoTransportsGiveEqualAnswers is the conformance test of the client: the same requests, sent in process and

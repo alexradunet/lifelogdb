@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestNumWritesNumbersInFull keeps an id a path can carry: the JSON client reads every number as a float64.

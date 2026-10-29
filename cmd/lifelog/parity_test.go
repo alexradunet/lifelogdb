@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/photo/phototest"
+	"lifelog/siren"
 )
 
 // TestParityOfTheSurfaces is the parity table of the surfaces (AGENTS.md: client parity is a first-class contract). A

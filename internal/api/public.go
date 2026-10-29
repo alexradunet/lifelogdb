@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // A public listener (docs/plans/078-network-server.md, "The decision") is opened by `lifelog serve --public`

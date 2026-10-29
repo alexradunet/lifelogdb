@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // plannedLimit is how many open lines a day shows; planned_more counts the rest.

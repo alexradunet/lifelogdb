@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
+	"lifelog/siren"
 )
 
 // The cards of the chat (docs/plans/148-the-chat-screen.md): each address that a tool line of the agent names is

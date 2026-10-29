@@ -71,7 +71,7 @@ func absoluteForm(r *http.Request) bool {
 }
 
 // NetworkAuthority wraps only socket serving; api.New remains usable by the
-// in-process CLI/MCP. The listener's actual port includes ephemeral port binds.
+// in-process CLI (client.InProcess). The listener's actual port includes ephemeral port binds.
 func NetworkAuthority(addr net.Addr, next http.Handler) (http.Handler, error) {
 	_, port, ok := loopbackAuthority(addr.String(), false)
 	if !ok {

@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/client"
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/siren"
 )
 
 // The one page of a metric (docs/plans/100-one-page-a-metric.md): Record, every reading and the metric's own page.

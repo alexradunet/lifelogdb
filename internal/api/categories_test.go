@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
+	"lifelog/siren"
 )
 
 // The categories (D26). A category page shows what is filed in it and opens in Browse, and a new page is filed where

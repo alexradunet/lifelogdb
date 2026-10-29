@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestAClosedLineShowsItsBoxAsAGlyph: a done, a dropped and a carried line each draw one box as an image with the

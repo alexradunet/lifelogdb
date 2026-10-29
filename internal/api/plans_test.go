@@ -2,14 +2,14 @@ package api_test
 
 import (
 	"fmt"
-	"lifelog/internal/client"
+	"lifelog/client"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // plannedTitles are the page and the text of each line of a list of plan lines (planned of a day, lines of a month).

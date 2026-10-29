@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/client"
 )
 
 // lifeOf makes a fresh life around fixedToday, and a function that does an action of a page as the CLI would.

@@ -12,9 +12,9 @@ import (
 	"slices"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
+	"lifelog/siren"
 )
 
 // conversationCategory is the category page that every conversation page is filed in.

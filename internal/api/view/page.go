@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
+	"lifelog/siren"
 )
 
 // The browser view is a template per class of entity (html/*.html), and the generic one for any other class:

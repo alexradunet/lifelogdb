@@ -6,8 +6,8 @@ import (
 	"strings"
 	"unicode"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // maxTombstoneIDs bounds one tombstone-pages: a list page shows 200 rows at most.

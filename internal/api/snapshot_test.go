@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/client"
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/siren"
 )
 
 // The owner's snapshot action, from the client and from a browser form; refused to an agent.

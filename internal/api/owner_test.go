@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
 )

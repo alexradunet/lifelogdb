@@ -15,9 +15,9 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
 	"lifelog/internal/photo"
 	"lifelog/internal/photo/phototest"
+	"lifelog/siren"
 )
 
 // jpegFile writes a synthetic w×h JPEG and returns its path and the SHA-256 of its bytes.

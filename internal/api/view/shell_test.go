@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/pixelart"
+	"lifelog/siren"
 )
 
 // TestNavMarksThePageTheBrowserIsOn says one navigation link is current: the one whose path is the page's, else the

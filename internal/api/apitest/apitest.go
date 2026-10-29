@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"lifelog/client"
 	"lifelog/internal/api"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/siren"
 )
 
 // Fresh makes a fresh life.db (dbtest.New), the handler of the program over it, and an in-process client with the

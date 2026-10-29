@@ -1,5 +1,5 @@
 // Lifelog is the writing application of a life.db (docs/guides/building-a-writer.md). It is one binary that serves
-// the API, the MCP server and the CLI, all three through the same handler (internal/api).
+// the API and the CLI through one handler (internal/api). The MCP server is the extension lifelog-mcp.
 //
 // The table commands in this file is the one list of its commands: the usage, the dispatch and the check of the
 // flags read it, and "lifelog help" prints it. "lifelog actions" lists the actions of the catalog, and "lifelog do"
@@ -19,11 +19,11 @@ import (
 	"syscall"
 	"time"
 
+	"lifelog/client"
 	"lifelog/internal/api"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db"
+	"lifelog/siren"
 )
 
 const version = "0.1.0"

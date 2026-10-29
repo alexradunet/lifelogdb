@@ -11,9 +11,9 @@ import (
 	"slices"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // recordAction offers every live metric of ms by name, and the metric the view is of (and, when given, selects it).

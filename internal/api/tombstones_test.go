@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/client"
 )
 
 // idOfSelf is the id at the end of an entity's self link.

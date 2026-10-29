@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // Browse (docs/plans/117-one-browse-view.md): one list with two filters, the kind of the rows and where they are

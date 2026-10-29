@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // backCases are the values of the field back that a browser form can send, and what backOf keeps of each: the value

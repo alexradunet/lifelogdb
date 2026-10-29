@@ -1,4 +1,5 @@
-// Package client is the hypermedia client the CLI and the MCP server share. It speaks HTTP to the API, either
+// Package client is the hypermedia client of the API. The CLI and the Go extensions share it: the extensions import it
+// from the root module. It speaks HTTP to the API, either
 // to a running `lifelog serve` or to the same handler in-process, so every surface goes through one code path. It is
 // transport only: what a surface makes of an answer (the MCP tools, the output of the CLI) is that surface's own.
 package client
@@ -19,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 type Client struct {
@@ -79,6 +80,16 @@ func (t handlerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 type Error struct {
 	Status int
 	Entity *siren.Entity
+}
+
+// Code is the code of the error entity (property code; API.md, Errors), "" when the entity has none. A client branches
+// on the code, never on the message.
+func (e *Error) Code() string {
+	if p, ok := e.Entity.Properties.(map[string]any); ok {
+		code, _ := p["code"].(string)
+		return code
+	}
+	return ""
 }
 
 func (e *Error) Error() string {

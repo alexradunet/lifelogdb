@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestHumanWritesAReadableSummary: --human writes the title and the classes, the result of a write, the properties in

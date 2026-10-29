@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/text"
+	"lifelog/siren"
 )
 
 // The result of a write in sentences (docs/plans/093-words-phone-and-today.md), by the result shapes of API.md.

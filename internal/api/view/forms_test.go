@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // drawForm draws the action with the template form, as a page draws it, with the options of formOf.

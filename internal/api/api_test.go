@@ -15,10 +15,10 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // scalar reads one text value from the file: a probe, never the behaviour under test.

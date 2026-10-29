@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 func listActions(ctx context.Context, e env) error {

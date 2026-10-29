@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 func receiptToken(location string) string {

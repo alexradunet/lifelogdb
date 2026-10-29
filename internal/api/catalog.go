@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 const formType = "application/x-www-form-urlencoded"

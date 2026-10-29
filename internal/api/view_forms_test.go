@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // formRE finds a POST form of a page: its action and what it holds. This application's own markup is regular enough

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
+	"lifelog/siren"
 )
 
 // TestSetCoverFromAnyPage: every page offers set-cover and a link to its picker, a file page and the lists do not. A

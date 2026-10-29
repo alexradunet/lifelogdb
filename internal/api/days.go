@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
+	"lifelog/siren"
 )
 
 // recentDays is how many of the newest day pages the root shows.

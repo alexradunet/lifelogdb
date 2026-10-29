@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/siren"
 )
 
 const testToken = "synthetic-token-0123456789abcdefghij" // 36 characters

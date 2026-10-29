@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // TestPageActionsByTypeAndState: the actions that a page offers, in order, by its type, its state and its links.

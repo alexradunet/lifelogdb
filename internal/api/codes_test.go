@@ -3,8 +3,8 @@ package api_test
 import (
 	"testing"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // siren holds the codes for the clients, which must not import core; core holds the codes it sends. The two copies of

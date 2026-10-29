@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"lifelog/client"
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
-	"lifelog/internal/client"
+	"lifelog/siren"
 )
 
 // chatScript is the one script element a page may carry.

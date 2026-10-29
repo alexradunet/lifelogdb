@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestMediaListsPicturesVideosAndRecordings: the media list of Browse is the files of the three kinds, newest day

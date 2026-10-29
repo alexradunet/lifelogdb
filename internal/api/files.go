@@ -13,10 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/photo"
 	"lifelog/internal/preview"
+	"lifelog/siren"
 )
 
 const (

@@ -13,7 +13,7 @@ import (
 
 // The two tests of this file keep the rings of plan 135 (AGENTS.md, "The four rings"): the core is the file, the
 // writer and the catalog, and everything that names a third party or talks to one is an extension. Both read the Go
-// source of internal/ and cmd/ that is not a test.
+// source of internal/, cmd/, siren/ and client/ that is not a test.
 
 // thirdParties are the products and companies the core never names. A thing that names one is an extension; the
 // change that moves it out adds its name here.
@@ -23,7 +23,7 @@ var thirdParties = []string{"google", "apple", "telegram", "claude", "codex", "o
 // so that the words of dials below cannot hide behind an alias or a dot import.
 var dialPackages = []string{"net", "net/http", "crypto/tls"}
 
-// dials are the ways a Go program opens a connection. Only internal/client, the client of lifelog's own server, may
+// dials are the ways a Go program opens a connection. Only client, the client of lifelog's own server, may
 // use them: so every integration with the outside world is an extension by force. A server (net.Listen, http.Server)
 // is not a dial.
 var dials = []string{"http.Client", "http.DefaultClient", "http.DefaultTransport", "http.Transport", "http.Get(", "http.Head(",
@@ -53,23 +53,23 @@ func TestTheCoreDialsOnlyItsServer(t *testing.T) {
 				t.Errorf("%s imports %s as %s: the core imports it under its own name, so a dial cannot hide", path, pkg, imp.Name.Name)
 			}
 		}
-		if strings.HasPrefix(filepath.ToSlash(path), "internal/client/") {
+		if strings.HasPrefix(filepath.ToSlash(path), "client/") {
 			continue
 		}
 		for _, d := range dials {
 			if strings.Contains(text, d) {
-				t.Errorf("%s uses %s: outside internal/client the core dials nothing (AGENTS.md, the four rings)", path, d)
+				t.Errorf("%s uses %s: outside client the core dials nothing (AGENTS.md, the four rings)", path, d)
 			}
 		}
 	}
 }
 
-// coreSources is the Go source of internal/ and cmd/ that is not a test, by its path relative to the repo root.
+// coreSources is the Go source of internal/, cmd/, siren/ and client/ that is not a test, by its path relative to the repo root.
 func coreSources(t *testing.T) map[string]string {
 	t.Helper()
 	root := filepath.Join("..", "..")
 	out := map[string]string{}
-	for _, dir := range []string{"internal", "cmd"} {
+	for _, dir := range []string{"internal", "cmd", "siren", "client"} {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err

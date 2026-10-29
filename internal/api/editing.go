@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // Editing (docs/plans/091-the-browser-for-daily-use.md): a body rendered as the browser shows it saved, and an

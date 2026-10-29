@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/api/view"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // server is the API on one store. The store's clock is the server's one clock: today is core.Store.Today, the words

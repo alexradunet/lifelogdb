@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestADayIsADate: a day in words against today, with the year only when it is not this year.

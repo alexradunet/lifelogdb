@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"lifelog/internal/api/apitest"
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt: the answer 409 keeps "open it" and adds a link to the

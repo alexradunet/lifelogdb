@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
+	"lifelog/siren"
 )
 
 // The parsers of a request: its fields, its ids, its numbers and flags, and the page of a list. Every handler reads

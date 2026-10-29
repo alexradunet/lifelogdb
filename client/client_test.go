@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"lifelog/internal/api"
-	"lifelog/internal/api/siren"
 	"lifelog/internal/core"
 	"lifelog/internal/db/dbtest"
+	"lifelog/siren"
 )
 
 func wait(t *testing.T, ch <-chan struct{}) {
@@ -211,5 +211,16 @@ func TestClientCancellationEarlyRefusal(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("producer hung after refusal")
+	}
+}
+
+func TestErrorCodeIsTheCodeOfTheErrorEntity(t *testing.T) {
+	withCode := &Error{Status: 409, Entity: &siren.Entity{Properties: map[string]any{"code": "exists", "message": "m"}}}
+	if got := withCode.Code(); got != "exists" {
+		t.Errorf("Code() = %q, want %q", got, "exists")
+	}
+	without := &Error{Status: 500, Entity: &siren.Entity{Properties: map[string]any{"message": "m"}}}
+	if got := without.Code(); got != "" {
+		t.Errorf("Code() = %q, want empty", got)
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"lifelog/internal/api/siren"
+	"lifelog/siren"
 )
 
 // TestAPanicInAHandlerAnswers500AndIsLogged: a handler that panics does not drop the connection. The client gets the
