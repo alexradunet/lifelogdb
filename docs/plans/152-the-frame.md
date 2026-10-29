@@ -8,8 +8,15 @@
 - **Date / baseline:** 2026-10-29, `49d2006` (master), after [plan 151](151-no-places.md).
 - **Priority:** P2. **Effort:** S. **Risk:** LOW. Nothing for the schema, the contract, the catalog or the API: two
   stylesheets, one token, one test and one paragraph of the README. The browser stays in ring 2.
-- **Status:** PLANNED. The mock-up the owner approved (2026-10-29) is a private artifact of the session that wrote this
-  plan: the light theme of it, with the oak slab, the outline and no moving ground, is the target.
+- **Status:** IN REVIEW (owner). Built in `4a485d8`; the counter-review's findings are fixed in `e4debdf`: the frame's
+  edge is an outline that takes no width (main was 4 px short of `--block`, and the column 4 px narrower than before
+  at 1440 and below); on the phone the shell is a flex column of 100dvh and the column fills it, so the floor never
+  shows under a short page; one rule for the bare shell; the skip link takes the frame's start edge. Live since
+  2026-10-29 17:05 (`~/.local/bin/lifelog`, the service restarted, the previous binary kept as `lifelog.prev`).
+  Two findings wait for the owner: in the dark theme the outline (`--outline` on `--ground`, 1.01:1) is invisible
+  and the slab's bevel is the only edge; the login's slab is as tall as its form, not the screen. The mock-up the
+  owner approved (2026-10-29) is a private artifact of the session that wrote this plan: the light theme of it,
+  with the oak slab, the outline and no moving ground, was the target.
 - **Resolves:** the owner's words of 2026-10-29 (below). No issue.
 
 ## The owner's words (2026-10-29)
