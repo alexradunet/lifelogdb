@@ -37,7 +37,7 @@ The rules gate closes only when the folder rules change. A tombstoned name is de
 - [importing with a model](../guides/importing.md), "The workspace" (`rules.md`, `questions.md`), "Gates", "The checks",
   "The procedure for the model" (steps 6d, 7, 8)
 - [D11](../decisions/D11-tombstones.md) — revival clears a tombstone
-- [a person or a place](../cookbook/person-or-place.md)
+- [a person](../cookbook/person.md)
 
 ## Resolution
 

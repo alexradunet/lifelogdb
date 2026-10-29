@@ -10,7 +10,7 @@
 - **Priority:** P2. **Effort:** M. **Risk:** MEDIUM: a cut of one entity type, one link kind and three actions
   across the schema, the contract, the writer, the browser and the suites; the live file is converted by a one-off
   program before the new binary runs (Part 4, local).
-- **Status:** PLANNED.
+- **Status:** IN REVIEW (owner). Parts 0 to 3 built on 2026-10-29 on branch plan-151 and counter-reviewed; Part 4 waits for the owner's run on the live file.
 - **Resolves:** [issue 0091](../issues/0091-places-cost-more-than-they-give.md) through
   [RFC 0024](../rfcs/0024-no-places.md), which rewrites [D16](../decisions/D16-places.md) and
   [D21](../decisions/D21-location-history.md) in place.
@@ -151,26 +151,47 @@ and the change of the DDL and the pages.
 ## Part 4 — The live file (local; not for a cloud session)
 
 The owner's file holds thirty places and the `at` links of five. It follows by a one-off program in the pattern of
-plan 143 (`~/.local/share/lifelog-oneoff/plan143/`, `OLD.sql NEW.sql LIFE.db [--dry-run]`): a fresh file from each
-SQL in a temporary folder, the live file accepted only when equal to the fresh OLD file, one `BEGIN IMMEDIATE`
-transaction, the result compared with the fresh NEW file, the integrity checks run, the dry run rolled back.
+plan 143: `~/.local/share/lifelog-oneoff/plan151/` holds `generic.go` (plan 143's state reader, comparer, text
+rewriter and checks, unchanged), `change.go` (the change), `main_test.go`, `OLD.sql` (`schema.sql` at master, equal
+to plan 143's NEW.sql) and `NEW.sql` (`schema.sql` at the commit of Part 0), and the binary `plan151-bin OLD.sql
+NEW.sql LIFE.db [--dry-run]`. It makes a fresh file from each SQL in a temporary folder, accepts only the exact
+difference of plan 151 (three table texts, two trigger texts, the schema row, the `at` row gone and the wikilink
+row's types), accepts the live file only when equal to the fresh OLD file, and runs one `BEGIN IMMEDIATE`
+transaction, in this order, which the triggers force:
 
-1. OLD.sql is plan 143's NEW.sql, or `schema.sql` at the last commit applied live if a later docs-only change
-   landed (the dry run says). NEW.sql is `schema.sql` at the commit of Part 0.
-2. In the transaction: (a) for each `at` link, when the day page's body does not already hold `[[Title]]` of the
-   place (by `title_key`, through the writer's own extraction), append `I was at [[Title]]`, with the link's note
-   after a comma when there is one, as a last paragraph, through `core.SaveBody` with the page's version, so the
-   wikilink row and the revision follow the save contract (D19); (b) `DELETE FROM links WHERE kind = 'at'`, then
-   `DELETE FROM link_kinds WHERE kind = 'at'` (allowed once unreferenced); (c) `DROP TRIGGER
-   entities_promote_from_page`, `UPDATE entities SET entity_type = 'page' WHERE entity_type = 'place'`, then the
-   trigger with NEW's text; (d) `UPDATE link_kinds SET from_types = 'page,person,metric,file', to_types = ...
-   WHERE kind = 'wikilink'` with `link_kinds_structure_fixed` dropped and made again from NEW's text; (e) the
-   `entities` and `links` table texts and the `schema` meta row by the writable_schema rewrite, as meta124 did;
-   (f) compare with the fresh NEW file; (g) the integrity checks with the staged new binary.
-3. The owner runs it with `!`: stop the service, `mkdir -p /home/cico/life/snapshots/2026-MM-DD-plan-151`, snapshot
-   there, dry run, run, integrity, install the staged binary (`cp` to `lifelog.new`, `mv -f`), start, read the
-   `serving` line of `journalctl -o short-iso`. The counts before and after (places, `at` rows, the pages touched)
-   go in the plan's status line.
+1. The survey: the places, and each `at` link with its day page and place. A tombstoned day page or place among
+   them stops the program before any write: the owner decides those by hand.
+2. For each `at` link whose day page has no wikilink row to the place: `I was at [[Title]]`, with the note after a
+   comma, appended as a last paragraph by the statement `capture` appends an entry with, and the wikilink row the
+   save contract derives from it ([D19](../decisions/D19-wikilink-save-contract.md)), with the link's own `source`.
+   A day that names the place already gets nothing. `entities_touch` advances the day's revision for the line.
+3. `DELETE FROM links WHERE kind = 'at'` (each row is an edit of its day page: `links_touch_delete` advances the
+   revision once per link, as `unlink` did), then `DELETE FROM link_kinds WHERE kind = 'at'` (RESTRICT allows it
+   once unreferenced). This comes before any type change: `entities_endpoint_types` refuses place to page while an
+   `at` row ends at the place.
+4. `link_kinds_structure_fixed` dropped, the wikilink row's types set to NEW's, the trigger made again.
+5. `entities_promote_from_page` dropped (its WHEN fires on place to page), `UPDATE entities SET entity_type =
+   'page' WHERE entity_type = 'place'` (`entities_touch` advances each place's revision: a type change is an edit),
+   the trigger made again with NEW's text; `links_endpoint_types` dropped and made again with NEW's text.
+6. The stored texts of `entities`, `links` and `link_kinds` set to NEW's through `PRAGMA writable_schema` (shapes
+   equal; the one change outside a comment is the CHECK, which every row satisfies once no place is left), and the
+   `schema` row of `lifelog_meta` set to NEW's. The writer's drift check folds white space and keeps comments, so
+   the texts are made byte-equal.
+7. The counts (no place, no `at`, pages plus thirty), the rows of `link_kinds` against NEW's seed, the whole state
+   against the fresh NEW file, `PRAGMA integrity_check` and `foreign_key_check`, and a trial write (a place refused
+   by `entities_entity_type`, an `at` link refused as not registered, a wikilink between pages accepted, a person
+   kept by D20) rolled back; then COMMIT, or ROLLBACK on `--dry-run`; after COMMIT the file is opened again and
+   checked again.
+
+Rehearsed on 2026-10-29 on a copy of a synthetic file made by the master binary (two places, three `at` links, one
+without a wikilink): dry run, run, a second run refused as made already; then the branch binary's `/integrity` was
+ok with no schema drift, and `resync-links` changed nothing. `go test` of the program covers the written line, the
+revisions, the types, the kinds and the tombstone refusal.
+
+The owner runs it with `!`: stop the service, `mkdir -p /home/cico/life/snapshots/2026-MM-DD-plan-151`, snapshot
+there, dry run, run, `get /integrity --human` with the staged new binary, install the staged binary (`cp` to
+`lifelog.new`, `mv -f`), start, read the `serving` line of `journalctl -o short-iso`. The counts before and after
+(places, `at` rows, the days that got a line) go in the status line below.
 
 ## Tests
 

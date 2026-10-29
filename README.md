@@ -47,7 +47,7 @@ and the snapshot script, as a reference to compare with the installed copies bef
 
 An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a coding agent
 with the owner, in a conversation: the agent reads a source with its own tools and writes through the catalog's MCP
-tools, and the owner says yes or no to each person and link ([plan 089](docs/plans/089-no-import-process.md)).
+tools, and the owner says yes or no to each person ([plan 089](docs/plans/089-no-import-process.md)).
 `lifelog agentic-init` prepares the folder for it ([plan 090](docs/plans/090-agentic-init.md)); then open Claude
 Code, Codex, OpenCode or Pi in the folder.
 
@@ -415,12 +415,12 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   rows out of it. The bar also deletes pages, media and documents. After a write the browser returns to the quiet
   list, with no bar open. Metrics keeps its own board at `/metrics`. Days are not in Browse: a day is the time axis, found in the Calendar and by
   Search, and it meets the things through its mentions (the owner's word, 2026-10-15); a day page is never filed
-  ([D26](docs/decisions/D26-metric-categories.md)), so a day page's `link` does not offer `part-of`. The sidebar has Today, Calendar,
+  ([D26](docs/decisions/D26-metric-categories.md)). The sidebar has Today, Calendar,
   Metrics and Browse; a phone's bottom bar is the same four with More. A category page has one section, Filed here: the
   sub-categories first, then the rest by title, a type badge on what is not a page, and Open in Browse; its
   margin's Backlinks does not list `part-of`. One way files a thing ([plan 131](docs/plans/131-the-pareto-pass.md),
   [plan 132](docs/plans/132-browse-the-notion-way.md)): `file-pages` files a thing and, with `from`, takes it out
-  (the x of a category badge, Remove from here in the pick bar); `link` and `unlink` do not offer `part-of`. `create-page` takes an optional `category`: the page is made and filed there in one write, a missing
+  (the x of a category badge, Remove from here in the pick bar). `create-page` takes an optional `category`: the page is made and filed there in one write, a missing
   category made as `file-pages` makes it, and a day as the category refuses the whole write (`entities_day_page`
   when the day has no page, `links_endpoint_types` when it has one). Browse in a category fills it in its New page,
   and a category page offers New page here.

@@ -137,12 +137,6 @@ SELECT what, at, detail FROM (
     FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
    WHERE p.day = :day AND NOT p.is_journal AND p.deleted_at IS NULL
   UNION ALL
-  SELECT 'at', NULL, pl_name.title
-    FROM entities d
-    JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
-    JOIN entities pl ON pl.id = l.to_id JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key AND pl.deleted_at IS NULL
-   WHERE d.id = (SELECT entity_id FROM entity_names WHERE name_key = :day) AND d.deleted_at IS NULL
-  UNION ALL
   SELECT p_name.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id JOIN entities p ON p.id = m.id AND p.deleted_at IS NULL JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
    WHERE me.day = :day

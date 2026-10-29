@@ -111,7 +111,7 @@ func TestDayPartsSplitTheViewByPart(t *testing.T) {
 func TestCategoriesAreThePartOfLinks(t *testing.T) {
 	health := map[string]any{"kind": "part-of", "title": "Health"}
 	sport := map[string]any{"kind": "part-of", "title": "Sport"}
-	lisbon := map[string]any{"kind": "at", "title": "Lisbon"}
+	lisbon := map[string]any{"kind": "follows", "title": "Lisbon"}
 	for _, c := range []struct {
 		name  string
 		props any
@@ -132,7 +132,7 @@ func TestCategoriesAreThePartOfLinks(t *testing.T) {
 // and the part-of links are not among them: Filed here lists those.
 func TestBacklinksLeaveOutPartOf(t *testing.T) {
 	link := func(kind, title string) any { return map[string]any{"kind": kind, "title": title} }
-	a, b, c, d := link("wikilink", "A"), link("part-of", "B"), link("at", "C"), link("wikilink", "D")
+	a, b, c, d := link("wikilink", "A"), link("part-of", "B"), link("follows", "C"), link("wikilink", "D")
 	for _, tc := range []struct {
 		name  string
 		props any
@@ -140,7 +140,7 @@ func TestBacklinksLeaveOutPartOf(t *testing.T) {
 	}{
 		{"no properties", nil, nil},
 		{"only part-of", map[string]any{"backlinks": []any{b}}, nil},
-		{"every kind", map[string]any{"backlinks": []any{a, b, c, d}}, []bucket{{"wikilink", []any{a, d}}, {"at", []any{c}}}},
+		{"every kind", map[string]any{"backlinks": []any{a, b, c, d}}, []bucket{{"wikilink", []any{a, d}}, {"follows", []any{c}}}},
 	} {
 		if got := (&view{Props: tc.props}).Backlinks(); !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)

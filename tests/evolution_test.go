@@ -160,6 +160,12 @@ func evolution(s *S) {
 	w := c.page("Lakeside")
 	lakes := c.page("Lakes")
 	s.K("the page [[Lakeside]] is filed in the category [[Lakes]]", c.link(w, lakes, "part-of") == "OK")
+	// The outgoing edge needs a kind that restricts from_types: the shipped registry has none (a wikilink leaves any
+	// type, a part-of leaves any entity), so the probe registers one, as a writer may (D8).
+	c.must("INSERT INTO link_kinds(kind, from_types, to_types) VALUES ('authored', 'page', NULL)")
+	author := c.page("Author")
+	s.K("the page [[Author]] authored [[Lakeside]] by a registered kind that leaves a page only", c.link(author, w, "authored") == "OK")
+	s.K("type change refuses a retained outgoing typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", author), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", author) == "page")
 	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", lakes), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", lakes) == "page" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='part-of'", lakes) == 1)
 
 	// ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL

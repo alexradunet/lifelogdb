@@ -16,8 +16,8 @@
 - **Alternatives.**
   - *Keep the type and the kind `at`, for the difference between naming a place and being at it*: rejected. The
     difference is not used, and the words of the day say it.
-  - *A `visited` link from a person to a place*: rejected before. It has no date, and no import used it.
-  - *A `place_id` column on pages*: rejected before. A day has several places, and the column would be empty on every
+  - *A `visited` link from a person to a place*: rejected. It has no date, and no import used it.
+  - *A `place_id` column on pages*: rejected. A day has several places, and the column would be empty on every
     page that is not a day.
 - **Trade accepted.** A day that names a place it was not at reads the same as a day on which the owner was there.
   The reader of the words tells them apart.

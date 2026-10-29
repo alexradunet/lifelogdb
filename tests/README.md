@@ -190,7 +190,7 @@ It never opens an existing user database. Ctrl-C cancels construction and normal
 Profiles have fixed parameters: **small** is 14 days, four readings/day, one file/day and eight imported notes;
 **lifetime** is 1970-01-01 through 2019-12-31 (18,262 days), 20 readings/day, three files/day and 4,000 notes;
 **stress** uses the same calendar, 80 readings/day, six files/day, 16,000 notes and four times the text sizes.
-Recorded dates include gaps, bursts and later writes of older facts. The fixture includes a journal, person/place
+Recorded dates include gaps, bursts and later writes of older facts. The fixture includes a journal, person
 references, a popular topic, rare search terms, a habit, Unicode notes, keyed retries, value corrections,
 retractions and a malformed batch with a valid prefix that must roll back. Notes arrive in batches of 50.
 The JSON records generator version, seed, payload-size schedule and a digest of the ordered logical inputs;

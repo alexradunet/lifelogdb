@@ -63,9 +63,7 @@
 {{template "links" .}}
 {{template "backlinks" .}}
 
-{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "link") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
-{{template "boxed" (form (.Action "link") "button" "Add a typed link" "group" "more")}}
-{{template "boxed" (form (.Action "unlink") "button" "Remove a typed link" "group" "more")}}
+{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "group" "more" "more" "*" "back" $.Here)}}{{end}}
 {{template "boxed" (form (.Action "rename") "group" "more")}}
 {{template "boxed" (form (.Action "edit-person") "group" "more" "placeholder" "name=Samuel Ortiz")}}

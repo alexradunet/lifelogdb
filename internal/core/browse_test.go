@@ -467,7 +467,13 @@ func TestReadersPage(t *testing.T) {
 		name          string
 		limit, offset int
 		want          string
-	}{} {
+	}{
+		{"first page", 2, 0, "Person 1,Person 2"},
+		{"second page", 2, 2, "Person 3,Person 4"},
+		{"last page", 2, 4, "Person 5"},
+		{"past the end", 2, 5, ""},
+		{"all", 50, 0, "Person 1,Person 2,Person 3,Person 4,Person 5"},
+	} {
 		got, err := s.NamedMentions(ctx, Scope{}, tc.limit, tc.offset)
 		var list []string
 		for _, r := range got {

@@ -8,7 +8,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| [151](151-no-places.md) | No places: the type `place` and the link kind `at` go; a place is a plain page | P2 | M | owner word 2026-10-29; issue 0091; RFC 0024; `577fde7` | PLANNED |
+| [151](151-no-places.md) | No places: the type `place` and the link kind `at` go; a place is a plain page | P2 | M | owner word 2026-10-29; issue 0091; RFC 0024; `577fde7` | IN REVIEW (owner) |
 | [150](150-one-code-set-one-catalog.md) | One code set, one catalog: the duplication between the surfaces goes | P1 | L | owner word 2026-10-28; plan 135; `bc46b76` | IN REVIEW (owner) |
 | [149](149-the-browser-on-the-current-platform.md) | The browser on the current platform: HTML and CSS in place of a library | P2 | M | owner word 2026-10-28; plan 108; `f59554d` | IN REVIEW (owner) |
 | [148](148-the-chat-screen.md) | The chat screen: the conversation as a chat, with a card for each thing the agent touched | P1 | L | owner word 2026-10-28; plan 146; `87a7133` | IN REVIEW (owner) |

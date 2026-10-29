@@ -5,7 +5,7 @@ filed in a category by a `part-of` link to the category's page. `:metric_id` is 
 `:parent_id` the page of the category it belongs to; `:source` is the writer.
 
 ```sql
--- file the metric :metric_id in the category :page_id; a re-run inserts nothing (unlink to take it out)
+-- file the metric :metric_id in the category :page_id; a re-run inserts nothing (file-pages with from takes it out)
 INSERT INTO links(from_id, to_id, kind, created_at, source)
 VALUES (:metric_id, :page_id, 'part-of', strftime('%Y-%m-%dT%H:%M:%fZ','now'), :source)
 ON CONFLICT(from_id, to_id, kind) DO NOTHING;
