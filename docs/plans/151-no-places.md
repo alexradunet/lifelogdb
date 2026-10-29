@@ -10,7 +10,7 @@
 - **Priority:** P2. **Effort:** M. **Risk:** MEDIUM: a cut of one entity type, one link kind and three actions
   across the schema, the contract, the writer, the browser and the suites; the live file is converted by a one-off
   program before the new binary runs (Part 4, local).
-- **Status:** IN REVIEW (owner). Parts 0 to 3 built on 2026-10-29 on branch plan-151 and counter-reviewed; Part 4 waits for the owner's run on the live file.
+- **Status:** IN REVIEW (owner). Parts 0 to 3 built on 2026-10-29 on branch plan-151 and counter-reviewed; live since 2026-10-29 15:02 (Part 4, shipped). The live run: snapshot to `/home/cico/life/snapshots/2026-10-29-plan-151`, dry run, run; 55 places (25 tombstoned) became pages (1717 to 1772), 19 `at` links became a last paragraph of their day (no day named its place already), `schema_version` 195 to 196; the new binary's `/integrity` ok with no drift; installed and the service restarted.
 - **Resolves:** [issue 0091](../issues/0091-places-cost-more-than-they-give.md) through
   [RFC 0024](../rfcs/0024-no-places.md), which rewrites [D16](../decisions/D16-places.md) and
   [D21](../decisions/D21-location-history.md) in place.

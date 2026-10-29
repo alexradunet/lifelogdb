@@ -1,7 +1,7 @@
 # 0091 — Places and the `at` link cost more than they give
 
 - **Date:** 2026-10-29
-- **Status:** open
+- **Status:** resolved
 - **Seen in:** the owner's review of the day view on 2026-10-29. The Where box of a day ("No place on this day. I was
   at a place") is the one surface of the `at` link, and the owner said they do not use it. The owner then counted
   the places of the live file with the writer's own Browse list (`GET /browse?kind=place`); the counts are below.
@@ -67,4 +67,4 @@ happens before the freeze ([D13](../decisions/D13-migrations-and-freeze.md)).
 ## Resolution
 
 [RFC 0024](../rfcs/0024-no-places.md), accepted by the owner on 2026-10-29: the type `place` and the kind `at` are
-removed; a place is a plain page, and where a day was is the words of the day page. The issue closes with the change.
+removed; a place is a plain page, and where a day was is the words of the day page. Resolved 2026-10-29 by [plan 151](../plans/151-no-places.md): the contract, the writer and the browser changed on master, and the owner's file followed (55 places became pages, 19 `at` links became a line of their day).

@@ -91,4 +91,4 @@ The boundary tests of `cmd/lifelog` hold. `go vet ./... && go test ./...` passes
 ## Outcome
 
 Accepted 2026-10-29, option C, as the owner decided. It rewrites [D16](../decisions/D16-places.md) and
-[D21](../decisions/D21-location-history.md) in place; the change and the one-off program follow in a plan.
+[D21](../decisions/D21-location-history.md) in place; the change and the one-off program are [plan 151](../plans/151-no-places.md).
