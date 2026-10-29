@@ -3,6 +3,7 @@ package view
 import (
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -150,22 +151,30 @@ func TestBacklinksLeaveOutPartOf(t *testing.T) {
 // TestAnErrorCodePicksItsWords: the first words and the tone of each error code of API.md.
 func TestAnErrorCodePicksItsWords(t *testing.T) {
 	for code, want := range map[string]alertView{
-		"stale_version":  {"Not saved. The page changed since you opened it.", false},
-		"exists":         {"Not created.", false},
-		"forbidden":      {"Refused.", true},
-		"cross_origin":   {"Refused.", true},
-		"token_required": {"Refused.", true},
-		"unauthorized":   {"Refused.", true},
-		"too_large":      {"Not done.", true},
-		"timeout":        {"Not done.", true},
-		"internal":       {"Not done.", true},
-		"invalid":        {},
-		"bad_request":    {},
-		"not_found":      {},
-		"conflict":       {},
+		"stale_version":        {"Not saved. The page changed since you opened it.", false},
+		"exists":               {"Not created.", false},
+		"forbidden":            {"Refused.", true},
+		"cross_origin":         {"Refused.", true},
+		"token_required":       {"Refused.", true},
+		"unauthorized":         {"Refused.", true},
+		"too_large":            {"Not done.", true},
+		"timeout":              {"Not done.", true},
+		"internal":             {"Not done.", true},
+		"snapshot_refused":     {"Not taken.", false},
+		"restore_check_failed": {"Taken, but the restore check failed.", true},
+		"invalid":              {},
+		"bad_request":          {},
+		"not_found":            {},
+		"conflict":             {},
 	} {
 		if got := alertOf(code); got != want {
 			t.Errorf("alertOf(%q) = %+v, want %+v", code, got, want)
+		}
+	}
+	for _, code := range siren.Codes() {
+		hasWords := alertOf(code) != alertView{}
+		if inList := slices.Contains(messageIsTheAlert, code); hasWords == inList {
+			t.Errorf("code %q: has words %v, is in messageIsTheAlert %v; it must be exactly one", code, hasWords, inList)
 		}
 	}
 	for _, words := range []string{alertOf("stale_version").Words, alertOf("forbidden").Words} {

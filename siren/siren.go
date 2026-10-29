@@ -51,6 +51,16 @@ const (
 	CodeBusy = "busy"
 )
 
+// Codes is the one list of the codes. The tests hold it equal to the constants above, to API.md (Errors) and to
+// the tables of the API and of the view.
+func Codes() []string {
+	return []string{
+		CodeBadRequest, CodeUnauthorized, CodeForbidden, CodeNotFound, CodeConflict, CodeTooLarge,
+		CodeUnsupportedMedia, CodeInvalid, CodeTimeout, CodeInternal, CodeExists, CodeCrossOrigin,
+		CodeTokenRequired, CodeStaleVersion, CodeSnapshotRefused, CodeRestoreCheckFailed, CodeBusy,
+	}
+}
+
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
 type Entity struct {
 	Class      []string `json:"class,omitempty"`

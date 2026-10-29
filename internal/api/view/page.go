@@ -402,8 +402,15 @@ type alertView struct {
 	Danger bool
 }
 
+// messageIsTheAlert lists the codes whose message is the whole alert: the message already says what to do, so these
+// codes add no first words.
+var messageIsTheAlert = []string{siren.CodeBadRequest, siren.CodeNotFound, siren.CodeConflict, siren.CodeInvalid}
+
 // alertOf picks an error's first words and tone by its code (API.md, Errors); the message follows them.
 func alertOf(code any) alertView {
+	if c, ok := code.(string); ok && slices.Contains(messageIsTheAlert, c) {
+		return alertView{}
+	}
 	switch code {
 	case siren.CodeForbidden, siren.CodeCrossOrigin, siren.CodeTokenRequired, siren.CodeUnauthorized:
 		return alertView{"Refused.", true}
@@ -413,6 +420,10 @@ func alertOf(code any) alertView {
 		return alertView{"Not saved. The page changed since you opened it.", false}
 	case siren.CodeExists:
 		return alertView{"Not created.", false}
+	case siren.CodeSnapshotRefused:
+		return alertView{"Not taken.", false}
+	case siren.CodeRestoreCheckFailed:
+		return alertView{"Taken, but the restore check failed.", true}
 	case siren.CodeBusy:
 		return alertView{"Not done. The file is busy. Nothing was written, and a retry is safe.", false}
 	}
