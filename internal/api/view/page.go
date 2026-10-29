@@ -97,7 +97,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"beyond":        beyond,
 	"kindIcon":      kindIcon,
 	"waiting":       waiting,
-	"toolChip":      toolChip,
+	"toolChip":      ToolChip,
 }).ParseFS(Files, "html/*.html"))
 
 // newKey is a new key for one draw of a capture form (D28): 26 characters of crypto/rand, so a form sent twice is one

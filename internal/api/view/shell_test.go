@@ -215,33 +215,38 @@ func TestTheColumnIsTheShellsAndTheConversationHasNone(t *testing.T) {
 	}
 	v := &view{Props: map[string]any{"turns": []any{
 		map[string]any{"who": "owner", "at": "09.07", "via": "whatsapp", "text": "Hello"},
-		map[string]any{"who": "lifelog", "at": "09.08", "text": "Hi", "tools": []any{"- `read_day`"}, "refs": []any{"/days/2026-10-28"}},
+		map[string]any{"who": "lifelog", "at": "09.08", "text": "Hi", "tools": []any{"- `read_day`"}},
 		map[string]any{"who": "owner", "at": "09.09", "text": "Thanks"},
 	}}}
 	turns := v.Turns()
-	if len(turns) != 3 || turns[1].Who != "lifelog" || turns[1].At != "09.08" || turns[1].Text != "Hi" || len(turns[1].Tools) != 1 || toolChip(turns[1].Tools[0]) != (tool{Name: "read_day"}) {
+	if len(turns) != 3 || turns[1].Who != "lifelog" || turns[1].At != "09.08" || turns[1].Text != "Hi" || len(turns[1].Tools) != 1 || ToolChip(turns[1].Tools[0]) != (Tool{Name: "read_day"}) {
 		t.Errorf("the turns: %+v", turns)
 	}
-	if turns[0].Via != "whatsapp" || len(turns[1].Refs) != 1 || turns[1].Refs[0] != "/days/2026-10-28" || turns[1].Via != "" {
-		t.Errorf("the relay and the addresses of the turns: %+v", turns)
+	if turns[0].Via != "whatsapp" || turns[1].Via != "" {
+		t.Errorf("the relay of the turns: %+v", turns)
 	}
 	if !waiting(turns) || waiting(turns[:2]) || waiting(nil) {
 		t.Error("the agent waits only when the last turn is the owner's")
 	}
 }
 
-// TestAToolLineIsAChip: the name of the tool and the words after it, without the arrow and the mark of a link.
-func TestAToolLineIsAChip(t *testing.T) {
-	for line, want := range map[string]tool{
-		"- `read_day`": {"read_day", ""},
-		"- `open_day` → [/days/2026-10-27](/days/2026-10-27)": {"open_day", "/days/2026-10-27"},
-		"- `get` → /pages/12":                                 {"get", "/pages/12"},
-		"- `get` failed: forbidden":                           {"get", "failed: forbidden"},
-		"- `search_pages` words=sleep":                        {"search_pages", "words=sleep"},
-		"- not a tool line":                                   {"not a tool line", ""},
+// TestAToolLineIsABadge: the name of the tool, the words after it without the arrow and the mark of a link, and
+// the address after the arrow when it is one of this server.
+func TestAToolLineIsABadge(t *testing.T) {
+	for line, want := range map[string]Tool{
+		"- `read_day`": {"read_day", "", ""},
+		"- `open_day` → [/days/2026-10-27](/days/2026-10-27)": {"open_day", "/days/2026-10-27", "/days/2026-10-27"},
+		"- `open_day` → [the day](/days/2026-10-27)":          {"open_day", "the day", "/days/2026-10-27"},
+		"- `get` → /pages/12":                                 {"get", "/pages/12", "/pages/12"},
+		"- `get` → /pages/12 and more":                        {"get", "/pages/12 and more", "/pages/12"},
+		"- `fetch` → https://example.org/x":                   {"fetch", "https://example.org/x", ""},
+		"- `fetch` → [x](https://example.org/x)":              {"fetch", "x", ""},
+		"- `get` failed: forbidden":                           {"get", "failed: forbidden", ""},
+		"- `search_pages` words=sleep":                        {"search_pages", "words=sleep", ""},
+		"- not a tool line":                                   {"not a tool line", "", ""},
 	} {
-		if got := toolChip(line); got != want {
-			t.Errorf("toolChip(%q) = %+v, want %+v", line, got, want)
+		if got := ToolChip(line); got != want {
+			t.Errorf("ToolChip(%q) = %+v, want %+v", line, got, want)
 		}
 	}
 }
@@ -283,33 +288,24 @@ func TestACardIsDrawnOnlyForAnAddressTheServerResolved(t *testing.T) {
 		"/odd":     {Class: []string{"settings"}, Title: "Settings"},
 	}}
 	long := "/search?q=" + strings.Repeat("a", 100)
-	cards := v.CardsOf([]string{"/unasked", "/gone", "/pages/3", "/odd", long})
-	if len(cards) != 5 {
-		t.Fatalf("%d cards, want 5: %+v", len(cards), cards)
-	}
-	for i, href := range []string{"/unasked", "/gone"} {
-		if c := cards[i]; c.Kind != "link" || c.Title != href || c.Href != href {
+	for _, href := range []string{"/unasked", "/gone"} {
+		if c := v.CardOf(href); c.Kind != "link" || c.Title != href || c.Href != href {
 			t.Errorf("the plain link of %s: %+v", href, c)
 		}
 	}
-	if c := cards[4]; c.Kind != "link" || c.Href != long || c.Title != long[:80]+"…" {
+	if c := v.CardOf(long); c.Kind != "link" || c.Href != long || c.Title != long[:80]+"…" {
 		t.Errorf("a long plain link: %+v", c)
 	}
-	if c := cards[2]; c.Kind != "person" || c.Title != "Sam" || c.Icon != "people" || c.Picture != "/pages/9/preview" || len(c.Lines) != 1 || c.Lines[0] != "Sam" {
+	if c := v.CardOf("/pages/3"); c.Kind != "person" || c.Title != "Sam" || c.Icon != "people" || c.Picture != "/pages/9/preview" || c.Value != "" {
 		t.Errorf("the person: %+v", c)
 	}
-	if c := cards[3]; c.Kind != "other" || c.Title != "Settings" || c.Value != "settings" {
+	if c := v.CardOf("/odd"); c.Kind != "other" || c.Title != "Settings" || c.Value != "settings" {
 		t.Errorf("a class without a card: %+v", c)
 	}
 }
 
-// TestAPlainLineIsNotAnEmbed: a body that starts with an embed (a cover) gives the first line with words, and the
-// date above a thread is in full words.
-func TestAPlainLineIsNotAnEmbed(t *testing.T) {
-	got := plainLines("![[River.jpg]]\n\nA path along the water.\nA heron.", 1)
-	if len(got) != 1 || got[0] != "A path along the water." {
-		t.Errorf("plainLines: %q, want the first line with words", got)
-	}
+// TestTheDateAboveAThreadIsInFullWords: the date above a thread names the weekday, and the year when it is not this year.
+func TestTheDateAboveAThreadIsInFullWords(t *testing.T) {
 	v := &view{Shell: &Shell{Today: "2026-10-28"}}
 	if got := v.LongDate("2026-10-28"); got != "Wednesday 28 October" {
 		t.Errorf("LongDate: %q", got)

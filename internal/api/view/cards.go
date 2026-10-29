@@ -1,7 +1,6 @@
 package view
 
 import (
-	"html/template"
 	"slices"
 	"strings"
 
@@ -11,35 +10,25 @@ import (
 
 // The cards of a thread (docs/plans/148-the-chat-screen.md): each address that an agent's tool line names is a thing
 // of the database. The server asks its own handler for the entity at the address (Facts.Cards); this file draws the
-// entity as a card by its class, as the browser draws a value by its type. A card is one link to the thing.
+// entity as a badge by its class, as the browser draws a value by its type. A card is one link to the thing, on the
+// badge of the tool line that named it, above the words of the turn.
 
-// CardsPerTurn is how many cards a turn draws, and so how many of its addresses the server resolves.
+// CardsPerTurn is how many of a turn's addresses the server resolves; a badge beyond them draws the plain link.
 const CardsPerTurn = 6
 
-// Card is one address of a turn, as the thread draws it. Kind picks the parts: link (the address alone), day,
-// page, person, place, file, metric, series, measurement, plan, search, conversation or other. A part that a kind does not use stays empty. The
-// compact form of the column draws the icon, the title and the value; the rest is the full form's.
+// Card is one address of a turn, as a badge of the thread draws it: an icon (or a small picture), a title and one
+// value. Kind picks the icon and the words: link (the address alone), day, page, person, place, file, metric, series,
+// measurement, plan, search, conversation or other. A part that a kind does not use stays empty.
 type Card struct {
 	Href, Kind, Title string
 	Icon              string
-	Value             string // the one value of the compact form: a mood, a reading, a count
-	Day               string // the day of a leaf
-	Lines             []string
-	Tiles             []readingTile
+	Value             string // a mood, a reading, a count, the state of a plan line
 	Picture           string
-	Spark             template.HTML
-	Rows              []string
 }
 
-// CardsOf are the cards of a turn's addresses, in order, at most CardsPerTurn. An address that the server did not
-// resolve (an older turn, beyond the bound of the view) is the plain link, as an address that answered an error.
-func (v *view) CardsOf(refs []string) []Card {
-	var out []Card
-	for _, ref := range refs[:min(len(refs), CardsPerTurn)] {
-		out = append(out, v.cardOf(ref, v.cards[ref]))
-	}
-	return out
-}
+// CardOf is the card of one address of a turn. An address that the server did not resolve (an older turn, beyond
+// the bound of the view, or beyond CardsPerTurn) is the plain link, as an address that answered an error.
+func (v *view) CardOf(href string) Card { return v.cardOf(href, v.cards[href]) }
 
 // cardIcons are the icons of the kinds of a card that is not a leaf.
 var cardIcons = map[string]string{"page": "files", "person": "people", "place": "places", "file": "image", "metric": "metrics",
@@ -73,8 +62,8 @@ func (v *view) cardOf(href string, e *siren.Entity) Card {
 	case kind == "search":
 		c = cv.searchCard(c, props)
 	case kind == "conversation":
-		c.Kind, c.Day = "conversation", Num(props["day"])
-		c.Title = "Chat, " + cv.Date(c.Day)
+		c.Kind = "conversation"
+		c.Title = "Chat, " + cv.Date(Num(props["day"]))
 		c.Value = Count(len(anyList(props["turns"])), "turn", "turns")
 	case kind != "":
 		c = cv.pageCard(c, props, kind)
@@ -123,57 +112,27 @@ func (v *view) valueWords(value any, unit, day string) string {
 	return words
 }
 
-// plainLines are the first n lines of a body with words in them, without their CommonMark. A line that is an embed
-// (`![[…]]`) has none.
-func plainLines(body string, n int) []string {
-	var out []string
-	for line := range strings.SplitSeq(body, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "![[") { // an embed (a cover) is a picture, not a line
-			continue
-		}
-		if w := plainSnippet(line); w != "" {
-			out = append(out, w)
-			if len(out) == n {
-				break
-			}
-		}
-	}
-	return out
-}
-
-// dayCard is a day, or a day page: the leaf, the mood, the first two lines of the journal and the readings.
+// dayCard is a day, or a day page: the date, and the mood of a day.
 func (v *view) dayCard(c Card, props map[string]any, kind string) Card {
-	c.Kind, c.Day = "day", Num(props["day"])
-	if !text.IsDay(c.Day) {
-		c.Day = c.Title
+	c.Kind = "day"
+	day := Num(props["day"])
+	if !text.IsDay(day) {
+		day = c.Title
 	}
-	c.Title = v.Date(c.Day)
-	if kind == "day" {
-		if journal := v.DayParts().Journal; len(journal) > 0 {
-			c.Lines = plainLines(journal[0], 2)
+	c.Title = v.Date(day)
+	if mood := anyList(props["mood"]); kind == "day" && len(mood) > 0 {
+		c.Value = "mood " + Num(mood[0])
+		for _, m := range mood[1:] {
+			c.Value += ", " + Num(m)
 		}
-		for _, t := range v.ReadingTiles() {
-			if t.ID != "" {
-				c.Tiles = append(c.Tiles, t)
-			}
-		}
-		if mood := anyList(props["mood"]); len(mood) > 0 {
-			c.Value = "mood " + Num(mood[0])
-			for _, m := range mood[1:] {
-				c.Value += ", " + Num(m)
-			}
-		}
-		return c
 	}
-	c.Lines = plainLines(Num(props["body"]), 2)
 	return c
 }
 
-// pageCard is a page, a person, a place, a file or a metric's page: its title, the first line of its body and its
-// cover (a file's own picture when it has no cover).
+// pageCard is a page, a person, a place, a file or a metric's page: its title and its cover (a file's own picture
+// when it has no cover).
 func (v *view) pageCard(c Card, props map[string]any, kind string) Card {
 	c.Kind = kind
-	c.Lines = plainLines(Num(props["body"]), 1)
 	if cover, _ := props["cover"].(map[string]any); cover != nil {
 		c.Picture = "/pages/" + Num(cover["id"]) + "/preview"
 	} else if kind == "file" {
@@ -182,41 +141,29 @@ func (v *view) pageCard(c Card, props map[string]any, kind string) Card {
 	return c
 }
 
-// seriesCard is a metric: its name, its latest reading with the unit and the day, and the line of the recent readings.
+// seriesCard is a metric: its name and its latest reading with the unit and the day.
 func (v *view) seriesCard(c Card, props map[string]any) Card {
 	c.Kind = "series"
-	unit := Num(props["unit"])
 	readings := anyList(props["readings"])
 	if n := len(readings); n > 0 {
 		last, _ := readings[n-1].(map[string]any)
-		c.Value = v.valueWords(last["value"], unit, Num(last["day"]))
-		c.Spark = sparkLine(v.clock(), c.Title, unit, readings[max(0, n-30):])
+		c.Value = v.valueWords(last["value"], Num(props["unit"]), Num(last["day"]))
 	}
 	return c
 }
 
-// searchCard is a search: the count of its hits and the first three of them.
+// searchCard is a search: its words and the count of its hits.
 func (v *view) searchCard(c Card, props map[string]any) Card {
 	c.Kind = "search"
-	hits := anyList(props["hits"])
 	c.Title = "Search: " + Num(props["q"])
-	c.Value = Count(len(hits), "hit", "hits")
-	for _, h := range hits[:min(3, len(hits))] {
-		m, _ := h.(map[string]any)
-		c.Rows = append(c.Rows, v.Date(m["title"]))
-	}
+	c.Value = Count(len(anyList(props["hits"])), "hit", "hits")
 	return c
 }
 
-// planCard is one plan line: its words, its box and its dates.
+// planCard is one plan line: its words and its box.
 func (v *view) planCard(c Card, line map[string]any) Card {
 	c.Kind, c.Title = "plan", Num(line["text"])
 	c.Value = map[string]string{" ": "open", "x": "done", "-": "dropped", ">": "carried"}[Num(line["box"])]
-	for _, d := range []struct{ key, word string }{{"on", "on"}, {"due", "due"}, {"done", "done"}} {
-		if day := Num(line[d.key]); day != "" {
-			c.Lines = append(c.Lines, d.word+" "+v.Date(day))
-		}
-	}
 	return c
 }
 

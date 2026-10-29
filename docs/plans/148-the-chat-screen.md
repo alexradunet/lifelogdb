@@ -9,7 +9,13 @@
 - **Priority:** P1. **Effort:** L. **Risk:** LOW to MEDIUM. The browser's conversation view and its column change;
   the conversation entity gains two derived properties of a turn (`via`, `refs`); the owner's paragraph of `say`
   gains the writer's name when a relay wrote it. No table, no action, no route; the core still calls no model.
-- **Status:** IN REVIEW (owner). Built in `cbc25ad` (via and refs) and `127d11d` (the screen and the cards); the
+- **Status:** IN REVIEW (owner). The owner's review of 2026-10-29: the two materials of the turns (the owner's
+  parchment at the right, the agent's wood well at the left) are gone; every turn is one parchment card at the
+  left, with a small avatar beside its meta line that tells the owner (the person glyph on a slab) from the agent
+  (the chat glyph in gold on wood). The owner's review of 2026-10-28: the cards under the agent's words were
+  too much; the words are now the lowest part of a turn, and each tool line is one small badge above them that
+  carries the thing it touched (the icon or a small picture, the title, one value) in place of the full card: the
+  leaf, the first lines, the reading tiles, the trend and the hits are gone. Built in `cbc25ad` (via and refs) and `127d11d` (the screen and the cards); the
   counter-review's findings are fixed in the commit after them: the card fetch carried the page's own source, so a
   tool line on the page could make the owner's browser run an owner-only read (the fetch carries `agent:card` now,
   which the owner-only rule refuses: a plain link); the `⋯` menu was clipped by the screen, so Edit and Delete were

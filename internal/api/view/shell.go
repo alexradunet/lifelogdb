@@ -31,11 +31,11 @@ type Chat struct {
 }
 
 // Turn is one turn of a conversation as a page draws it. Who is owner, lifelog or text. A tool line is as the page
-// writes it, with its "- " mark. Via is the writer that relayed the turn, "" with none. Refs are the addresses that
-// the tool lines name: the thread draws a card for each (cards.go).
+// writes it, with its "- " mark: the thread draws each as a badge, with the thing its address names (cards.go). Via is
+// the writer that relayed the turn, "" with none.
 type Turn struct {
 	Who, At, Via, Text string
-	Tools, Refs        []string
+	Tools              []string
 }
 
 // Chat is the chat column of the shell. The conversation view is the column at full size, so it has none.
@@ -59,9 +59,6 @@ func (v *view) Turns() []Turn {
 		t := Turn{Who: Num(m["who"]), At: Num(m["at"]), Via: Num(m["via"]), Text: Num(m["text"])}
 		for _, tool := range anyList(m["tools"]) {
 			t.Tools = append(t.Tools, Num(tool))
-		}
-		for _, ref := range anyList(m["refs"]) {
-			t.Refs = append(t.Refs, Num(ref))
 		}
 		out = append(out, t)
 	}
@@ -95,29 +92,43 @@ func (v *view) ChatDays() []dayChip {
 	return out
 }
 
-// tool is a tool line as a chip says it: the name of the tool and the words after it.
-type tool struct{ Name, Words string }
+// Tool is a tool line as a badge says it: the name of the tool, the words after it and, when the words are an
+// address of this server, that address.
+type Tool struct{ Name, Words, Href string }
 
-// toolChip reads a tool line as the page writes it (API.md, conversation): “- `name` “, “- `name` → [href](href)“
-// or “- `name` failed: code“. The words are what follows the name, without the arrow and the mark of a link. A line
-// that is no such line is a name alone.
-func toolChip(line string) tool {
+// ToolChip reads a tool line as the page writes it (API.md, conversation): “- `name` “, “- `name` → [href](href)“,
+// “- `name` → href“ or “- `name` failed: code“. The words are what follows the name, without the arrow and the mark
+// of a link; Href is the address after the arrow when it starts with a slash, else "". The API's refs of a turn and
+// the badges of the thread read the line through this one function. A line that is no such line is a name alone.
+func ToolChip(line string) Tool {
 	line = strings.TrimSpace(strings.TrimPrefix(line, "- "))
 	rest, ok := strings.CutPrefix(line, "`")
 	if !ok {
-		return tool{Name: line}
+		return Tool{Name: line}
 	}
 	name, words, ok := strings.Cut(rest, "`")
 	if !ok {
-		return tool{Name: line}
+		return Tool{Name: line}
 	}
-	words = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(words), "→"))
+	words = strings.TrimSpace(words)
+	after, arrow := strings.CutPrefix(words, "→")
+	words = strings.TrimSpace(after)
+	t := Tool{Name: name, Words: words}
+	if !arrow {
+		return t
+	}
 	if inner, ok := strings.CutPrefix(words, "["); ok {
-		if label, _, ok := strings.Cut(inner, "]("); ok {
-			words = label
+		if label, href, ok := strings.Cut(inner, "]("); ok {
+			t.Words = label
+			t.Href, _, _ = strings.Cut(href, ")")
 		}
+	} else if f := strings.Fields(words); len(f) > 0 {
+		t.Href = f[0]
 	}
-	return tool{Name: name, Words: words}
+	if !strings.HasPrefix(t.Href, "/") {
+		t.Href = ""
+	}
+	return t
 }
 
 // waiting reports a conversation whose last turn is the owner's: the agent has not answered yet.

@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 	"lifelog/internal/text"
 	"lifelog/siren"
@@ -75,26 +76,11 @@ type Turn struct {
 
 var turnStart = regexp.MustCompile(`^\*\*(Owner|lifelog)\*\* \((\d\d[:.]\d\d)(?:, via ([a-z0-9_:.-]+))?\): ?`)
 
-// toolRefs are the addresses that the tool lines name after an arrow: `- `name` → [href](href)` or
-// `- `name` → href`. A value that does not start with a slash is no address. An address is listed once.
+// toolRefs are the addresses that the tool lines name after an arrow (view.ToolChip), in order, each once.
 func toolRefs(tools []string) []string {
 	var refs []string
 	for _, l := range tools {
-		_, after, ok := strings.Cut(l, " → ")
-		if !ok {
-			continue
-		}
-		ref := after
-		if rest, isLink := strings.CutPrefix(after, "["); isLink {
-			_, inner, ok := strings.Cut(rest, "](")
-			if !ok {
-				continue
-			}
-			ref, _, _ = strings.Cut(inner, ")")
-		} else if f := strings.Fields(after); len(f) > 0 {
-			ref = f[0]
-		}
-		if strings.HasPrefix(ref, "/") && !slices.Contains(refs, ref) {
+		if ref := view.ToolChip(l).Href; ref != "" && !slices.Contains(refs, ref) {
 			refs = append(refs, ref)
 		}
 	}

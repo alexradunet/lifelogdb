@@ -63,7 +63,7 @@ func (h *server) chatExtras(r *http.Request, e *siren.Entity, chat *view.Chat, t
 	}
 	perTurn := make([][]string, len(chat.Turns))
 	for i, t := range chat.Turns {
-		perTurn[i] = t.Refs
+		perTurn[i] = toolRefs(t.Tools)
 	}
 	return h.cards(r, cardRefs(perTurn, cardsPerColumn)), nil
 }

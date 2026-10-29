@@ -320,8 +320,8 @@ func cardsOf(page string) [][]string {
 
 // TestTheConversationDrawsACardForEachThingTheAgentTouched: the tool lines of an agent's turn name a day, a page, a
 // person, a metric, a plan line and a search, each made by the API first. The turn draws one card each, in that
-// order, each a link to the thing with the parts of its class. An address that answers 404 draws the plain link, and
-// the seventh address of a turn draws no card.
+// order, each a link to the thing with the icon, the title and the value of its class, on the badge of its tool line
+// above the words. An address that answers 404 draws the plain link, and so does the seventh address of a turn.
 func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	refs := cardsWorld(t, c)
@@ -342,12 +342,12 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 		t.Errorf("the cards link to %s, want %s", got, want)
 	}
 	for i, want := range [][]string{
-		{`<span class="leaf-day">14</span>`, `<span class="leaf-month">May 2031</span>`, "mood 4", "Saw a heron at the river", "Wed 14 May"},
-		{"River walk", "A long path along the water."},
-		{"Sam"},
-		{"Weight", "71.2 kg · yesterday", `<svg class="trend"`},
-		{"Call the bank", "open", "on Wed 14 May"},
-		{"Search: heron", "3 hits"}, // the day page, the page and the conversation itself, which says heron in its tool line
+		{`<span class="icon icon-calendar"`, `<b class="card-title">Wed 14 May</b>`, `<span class="card-value">mood 4</span>`},
+		{`<span class="icon icon-files"`, `<b class="card-title">River walk</b>`},
+		{`<span class="icon icon-people"`, `<b class="card-title">Sam</b>`},
+		{`<span class="icon icon-metrics"`, `<b class="card-title">Weight</b>`, `<span class="card-value">71.2 kg · yesterday</span>`},
+		{`<span class="icon icon-plans"`, `<b class="card-title">Call the bank</b>`, `<span class="card-value">open</span>`},
+		{`<span class="icon icon-search"`, `<b class="card-title">Search: heron</b>`, `<span class="card-value">3 hits</span>`}, // the day page, the page and the conversation itself, which says heron in its tool line
 	} {
 		for _, part := range want {
 			if !strings.Contains(cards[i][3], part) {
@@ -355,27 +355,33 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 			}
 		}
 	}
-	// The second turn names a 404 and six days: the plain link and five cards, and the seventh address is not drawn.
+	// The second turn names a 404 and six days: the plain link, five day cards, and the seventh address is the plain
+	// link too, since the server resolves six a turn.
 	if cards[6][1] != "link" || cards[6][2] != "/pages/999999" || cards[6][3] != "/pages/999999" {
 		t.Errorf("the card of a 404 is %q, want the plain link", cards[6][0])
 	}
-	if got := len(cards) - 7; got != 6 { // the first turn, this one, and the one of today by the word
-		t.Errorf("the turn of seven addresses draws %d cards, want 6", got)
-	}
-	for _, card := range cards[6:12] {
-		if card[2] == seven[6] {
-			t.Error("the seventh address of a turn is drawn")
+	for _, card := range cards[7:12] {
+		if card[1] != "day" {
+			t.Errorf("the card of %s is %s, want a day", card[2], card[1])
 		}
 	}
+	if cards[12][1] != "link" || cards[12][2] != seven[6] || cards[12][3] != seven[6] {
+		t.Errorf("the seventh address of a turn is %v, want the plain link", cards[12][:3])
+	}
 	// The third turn names today by the word: the redirect is followed, and the card is the day's.
-	if len(cards) != 13 || cards[12][1] != "day" || cards[12][2] != "/days/today" || !strings.Contains(cards[12][3], `<span class="leaf-day">14</span>`) {
+	if len(cards) != 14 || cards[13][1] != "day" || cards[13][2] != "/days/today" || !strings.Contains(cards[13][3], `<b class="card-title">Wed 14 May</b>`) {
 		t.Errorf("the card of /days/today: %d cards, the last %v; want the day card of the 14th", len(cards), cards[len(cards)-1][:3])
+	}
+	// The badges stand above the words of the turn, on the badge of the tool line that named the thing.
+	turn := page[strings.Index(page, `<li class="turn agent">`):]
+	turn = turn[:strings.Index(turn, `<div class="words prose">`)] // the turn up to its words
+	if !strings.Contains(turn, `<ul class="tools">`) || !strings.Contains(turn, "<li><b>tool1</b><a class=\"card card-day\"") {
+		t.Errorf("the badges, each with its card, are not above the words of the turn:\n%s", turn)
 	}
 }
 
-// TestTheColumnDrawsTheCompactCards: the column of any page draws the newest cards in the class compact, as
-// the same markup; only the stylesheet makes them one line.
-func TestTheColumnDrawsTheCompactCards(t *testing.T) {
+// TestTheColumnDrawsTheCards: the column of any page draws the newest cards, the same markup as the screen.
+func TestTheColumnDrawsTheCards(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	refs := cardsWorld(t, c)
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "Show me"}))

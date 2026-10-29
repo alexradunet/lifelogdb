@@ -25,7 +25,7 @@ func todayChat(ctx context.Context, s *core.Store, today string) (*view.Chat, er
 	}
 	chat.Version = p.Version
 	for _, t := range ParseTurns(today, p.Body) {
-		chat.Turns = append(chat.Turns, view.Turn{Who: t.Who, At: t.At, Via: t.Via, Text: t.Text, Tools: t.Tools, Refs: t.Refs})
+		chat.Turns = append(chat.Turns, view.Turn{Who: t.Who, At: t.At, Via: t.Via, Text: t.Text, Tools: t.Tools})
 	}
 	return chat, nil
 }
