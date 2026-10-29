@@ -1,4 +1,4 @@
-# Everything about a person or a place (the ark query)
+# Everything about a person (the ark query)
 
 A link has a direction, so query both. The pages that write `[[Bob Sample]]`, day pages included, link to the
 person's own id ([D20](../decisions/D20-named-pages.md)), so they are in the first leg; what the person's page body

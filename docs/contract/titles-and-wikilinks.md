@@ -43,7 +43,7 @@ below:
   tombstoned target is revived*, not duplicated: the unique index covers tombstoned pages, so the
   save un-tombstones the page it resolves — any save that names it, an old day page edited years
   later included, so the UI tells the owner.
-- *Named pages.* A person's, a place's, a metric's or a file's page is a page like any other, so `[[Bob
+- *Named pages.* A person's, a metric's or a file's page is a page like any other, so `[[Bob
   Sample]]` is an ordinary wikilink and nothing in the save contract knows about people ([D20](../decisions/D20-named-pages.md)).
 - *Embeds.* `![[Lake.jpg]]` is the wikilink `[[Lake.jpg]]` with a `!` before it: the `!` is ordinary text, so the
   link is the same row. Showing the picture of a file page there ([D9](../decisions/D09-binary-files.md)) is a

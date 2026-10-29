@@ -105,7 +105,6 @@ func files(s *S) {
 	s.K("a caption that names a person links it from the file page", c.link(f, bob, "wikilink") == "OK")
 	s.K("a file may be filed in a category", c.link(f, c.page("Scans"), "part-of") == "OK")
 	s.K("a file may be filed in a category page (an album)", c.link(f, c.page("Holidays"), "part-of") == "OK")
-	s.K("a file page is not a day page: it starts no at link", err(c.link(f, c.named("place", "Lakeside"), "at")))
 	s.K("redirect is not a registered kind", err(c.link(c.page("Lake photo"), f, "redirect")))
 	sd, _ := c.savePage("![[2026-06-01 Lake.jpg|the lake]] and ![[Unseen.png]]", "")
 	s.K("the writer's save links an embed to the file page, and makes a ghost of a file not kept yet",

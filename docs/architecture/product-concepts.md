@@ -4,11 +4,11 @@
 |---|---|
 | Journaling | the day page, titled `YYYY-MM-DD`: capture appends to it ([capture](../cookbook/capture.md)); the day view adds what else that day holds ([the day view](../cookbook/day-view.md)) |
 | "Which journal days mention Ana or Lakeside?" | the day pages that link `[[Ana]]` or `[[Lakeside]]`; a mention alone does not establish a meeting or visit ([the days that name someone](../cookbook/days-that-name.md)) |
-| "Where was I that day?" | `links(kind='at')` from the day page to each place; the days at a place are its `at` backlinks ([where was I](../cookbook/where-was-i.md), [D16](../decisions/D16-places.md)) |
+| "Where was I that day?" | the words of the day page, `I was at [[Lakeside]]`; the days at a place are the backlinks of its page ([days that name](../cookbook/days-that-name.md), [D16](../decisions/D16-places.md)) |
 | Mood tracking | the `mood` metric in `measurements`, each row optionally pointing at its day page ([mood over time](../cookbook/mood-over-time.md)) |
 | Notes, wiki and tags | `entities.body` + `links(kind='wikilink')` kept equal to what the body names ([titles and wikilinks](../contract/titles-and-wikilinks.md), [save a body](../cookbook/save-a-body.md)); `#health` names `health` without rewriting the body |
 | Backlinks | `links WHERE to_id = ?` ([backlinks](../cookbook/backlinks.md)) |
-| People and places in prose | `[[Bob Sample]]` links to the person itself, because the person is a page ([D20](../decisions/D20-named-pages.md), [a person or a place](../cookbook/person-or-place.md)) |
+| People in prose | `[[Bob Sample]]` links to the person itself, because the person is a page ([D20](../decisions/D20-named-pages.md), [a person](../cookbook/person.md)) |
 | Life graph ("everything about my son") | `links` in both directions from his id ([everything about](../cookbook/everything-about.md)) |
 | Sleep, workouts and other recorded activities | a reading on the reporting day, under a metric of its own when it must not add to a daily total (`workout-steps` beside `steps`); anything else is day-page prose ([D22](../decisions/D22-events.md)) |
 | A span of life (a trip, a job, a home) | a plain page: its body says when; the day pages inside it link it, so its backlinks list those days ([D22](../decisions/D22-events.md)) |

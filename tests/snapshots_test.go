@@ -100,10 +100,9 @@ func snapshots(s *S) {
 	}
 	dp := w.dayPage("2026-09-28", "Lunch with [[Sam]] at [[Lakeside]].")
 	sam := w.named("person", "Sam", M{"name": "Sam"})
-	lake := w.named("place", "Lakeside")
+	lake := w.page("Lakeside")
 	w.link(dp, sam, "wikilink")
 	w.link(dp, lake, "wikilink")
-	w.link(dp, lake, "at")
 	wt := w.metric("weight", "kg")
 	w.measure(wt, "2026-09-28", 71.2)
 	w.must("COMMIT")

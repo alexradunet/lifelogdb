@@ -26,6 +26,6 @@ COMMIT;
 
 No body or edge is rewritten. Old spellings resolve directly to the same id, including old embeds and
 backlinks. Selecting an owned alias creates no additional row; selecting the current spelling is a no-op.
-A person, place, metric or file uses the same operation and keeps its typed details, readings and provenance.
+A person, metric or file uses the same operation and keeps its typed details, readings and provenance.
 A dated ordinary note/file is not a journal identity and remains renameable. `#REDIRECT` is ordinary prose,
 not a stub or a second identity; names require no redirect traversal.

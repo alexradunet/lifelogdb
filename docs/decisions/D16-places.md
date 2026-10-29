@@ -1,22 +1,24 @@
-# D16 — Places: a page of type `place`; where the owner was is an `at` link from the day page.
+# D16 — No places: a place is a plain page, and where a day was is the words of the day page.
 
 **Status:** accepted
 
-- **Decision.** A place is an entity and a page ([D20](D20-named-pages.md)) with `entity_type = 'place'`: its name is the
-  page title, and what the owner knows about it is the page's text; it has no point ([D21](D21-location-history.md)).
-  Where the owner was on a day is a link `at` from that day's page to the place (several
-  places a day are several links; the link's `note` may say when) — so "where was I on 7 August" and
-  "when was I at Lakeside" are one link query each ([where was I](../cookbook/where-was-i.md)). There is no `lives-in` kind and no `located-in`
-  ([RFC 0017](../rfcs/0017-no-typed-links.md)): where the owner lived, and what is inside what, is prose.
-- **Why `at` and not the day page's `[[Lakeside]]`.** A wikilink says the day *names* Lakeside — "we
-  talked about going to Lakeside" and "I was at Lakeside" would be the same row. The owner asked to
-  register the place they were at on the day itself, so it is a link kind of its own.
+- **Context.** [Issue 0091](../issues/0091-places-cost-more-than-they-give.md): of thirty places in the owner's file,
+  five are linked from a day page. A place has no typed row and no point ([D21](D21-location-history.md)), so the type
+  holds nothing but a label and the link kind `at`.
+- **Decision.** There is no entity type `place` and no link kind `at`. A place is a plain page ([D5](D05-pages-and-day-pages.md)):
+  a page of a city, a lake or a shop has a title, aliases, text and backlinks like any page. Where the owner was on a
+  day is the words of the day page, `I was at [[Lakeside]]`. The wikilink is extracted on save ([D19](D19-wikilink-save-contract.md)),
+  so the days at a place are the backlinks of its page ([days that name](../cookbook/days-that-name.md)). The rule of
+  the types is `entities_entity_type`; the rule of the kinds is the registry `link_kinds`.
+- **Why.** One type and one kind existed for one difference: a day that names a place, and a day on which the owner
+  was at the place. The file shows that the owner does not use the difference. The owner's words say it, and a
+  wikilink holds the words.
 - **Alternatives.**
-  - *A `visited` link (person → place)*: rejected — undated, and never used by a real import.
-  - *A `place_id` column on pages*: rejected — a day has several places, and a column for day pages
-    only would sit empty on every other page.
-  - *A place as plain text in prose, not a page*: the place queries fail, and backfilling 10 years of
-    free text is the painful path.
-- **Costs accepted.** `link_kinds` can say "from a page", not "from a *day* page": `links_endpoint_types` refuses an
-  `at` from any other page by `entities.is_journal` ([titles and wikilinks](../contract/titles-and-wikilinks.md) says how a day page is recognised).
-- **Sources.** [R46](../research/references.md#r46).
+  - *Keep the type and the kind `at`, for the difference between naming a place and being at it*: rejected. The
+    difference is not used, and the words of the day say it.
+  - *A `visited` link from a person to a place*: rejected before. It has no date, and no import used it.
+  - *A `place_id` column on pages*: rejected before. A day has several places, and the column would be empty on every
+    page that is not a day.
+- **Trade accepted.** A day that names a place it was not at reads the same as a day on which the owner was there.
+  The reader of the words tells them apart.
+- **Sources.** Executed: the `named` and `links` suites.

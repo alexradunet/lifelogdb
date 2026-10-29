@@ -331,7 +331,7 @@ func diagrams(s *S) {
 	known := true
 	for _, ts := range nodes {
 		for _, t := range ts {
-			known = known && slices.Contains([]string{"any", "page", "person", "place", "metric", "file"}, t)
+			known = known && slices.Contains([]string{"any", "page", "person", "metric", "file"}, t)
 		}
 	}
 	s.K("every node of the map names entity types or `any entity`", known, nodes)

@@ -45,7 +45,6 @@ func newIntegrityFile(s *S, pageRows int) *integrityFile {
 		}
 	}
 	c.thing("person") // one row of every domain type, so a query that forgets one table reports a false orphan
-	c.thing("place")
 	c.thing("metric")
 	c.thing("file")
 	c.must("COMMIT")
@@ -307,7 +306,8 @@ func integrity(s *S) {
 		stop("typed edge fixture: %s", result)
 	}
 	typed.must("DROP TRIGGER entities_endpoint_types")
-	typed.must("UPDATE entities SET entity_type='place' WHERE id=?", target)
+	typed.must("UPDATE entities SET entity_type='person' WHERE id=?", target)
+	typed.must("INSERT INTO people(id,name) VALUES (?,'P')", target) // a complete person, so only the edge is damaged
 	s.K("typed-edge semantic query detects deliberate endpoint damage", typed.integrityOK() && typed.tab(orphan) == "" && typed.tab(sts[3]) != "")
 
 	// ---- the fourth check: the FTS index against pages (it writes, so a writer connection)
@@ -398,20 +398,18 @@ func semanticIntegrity(s *S, checks []string) {
 
 	// The rules that only a trigger holds (links_endpoint_types, measurements_scale_range) have a query each.
 	c = s.fresh()
-	start, day, category, place := c.page("Start"), c.dayPage("2026-10-02", ""), c.page("Category"), c.thing("place")
+	start, day, category := c.page("Start"), c.dayPage("2026-10-02", ""), c.page("Category")
 	link := func(id int64, from, to int64, kind string) {
 		c.must("INSERT INTO links(id,from_id,to_id,kind,created_at,source) VALUES(?,?,?,?,"+NOW+",'ui')", id, from, to, kind)
 	}
-	link(500, day, place, "at")
 	link(501, start, category, "part-of")
-	s.K("the link-rule query accepts an at link from a day page and a part-of link between plain pages", c.tab(checks[7]) == "")
+	s.K("the link-rule query accepts a part-of link between plain pages", c.tab(checks[7]) == "")
 	bypass(c, "links_endpoint_types", func() {
-		link(510, start, place, "at")
 		link(511, start, day, "part-of")
 		link(512, day, category, "part-of")
 	})
-	s.K("the link-rule query detects an at link from a plain page and a part-of link to or from a day page, while the registry query sees nothing",
-		c.integrityOK() && c.tab(checks[7]) == "510; 511; 512" && c.tab(checks[3]) == "")
+	s.K("the link-rule query detects a part-of link to or from a day page, while the registry query sees nothing",
+		c.integrityOK() && c.tab(checks[7]) == "511; 512" && c.tab(checks[3]) == "")
 
 	c = s.fresh()
 	scale := c.n("SELECT entity_id FROM entity_names WHERE name_key = 'mood'")

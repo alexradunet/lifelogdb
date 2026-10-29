@@ -374,7 +374,7 @@ table and a `lifelog_meta` key are in [schema.sql](docs/schema/schema.sql).
 
 - **Time**: `lifelog_meta.instants` and `.days`, [D10](docs/decisions/D10-time-model.md).
 - **Identity and provenance**: the tables `entities` and `entity_names`, the typed extensions and
-  `lifelog_meta.source`; [a person or a place](docs/cookbook/person-or-place.md); [imports](docs/contract/imports.md).
+  `lifelog_meta.source`; [a person](docs/cookbook/person.md); [imports](docs/contract/imports.md).
   Review owned names, direct typed foreign keys, stable identity and provenance together.
 - **No deletes**: `lifelog_meta.deletes`, [D11](docs/decisions/D11-tombstones.md).
 - **Append-only facts**: [D7](docs/decisions/D07-measurements.md),

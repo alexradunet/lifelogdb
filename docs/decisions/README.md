@@ -21,11 +21,11 @@ reused, and a decision that changes is rewritten in place (git is its history).
 | [D13](D13-migrations-and-freeze.md) | Migrations: numbered plain SQL + `PRAGMA user_version`; freeze-and-migrate. | accepted |
 | [D14](D14-ui-and-tools.md) | UI: thin custom app for capture/browse; off-the-shelf tools for exploration. | accepted |
 | [D15](D15-recurrence.md) | No recurrence table: a repeat is a phrase of a plan line, computed when it is ticked. | accepted |
-| [D16](D16-places.md) | Places: a page of type `place`; where the owner was is an `at` link from the day page. | accepted |
+| [D16](D16-places.md) | No places: a place is a plain page, and where a day was is the words of the day page. | accepted |
 | [D17](D17-contract-as-data.md) | The contract as data: `lifelog_meta`, comments inside the statements, in-DB guards. | accepted |
 | [D18](D18-money.md) | Money: DEFERRED out of v1. The design is kept here for the day it returns. | deferred |
 | [D19](D19-wikilink-save-contract.md) | The wikilink save contract: one transaction, links follow the body, a bad target never blocks a save. | accepted |
-| [D20](D20-named-pages.md) | A person or a place is a page: one id, and `[[Name]]` reaches it directly. | accepted |
+| [D20](D20-named-pages.md) | A person is a page: one id, and `[[Name]]` reaches it directly. | accepted |
 | [D21](D21-location-history.md) | No location: a place has no point, a photo's position is never read, and there is no track. | accepted |
 | [D22](D22-events.md) | No recorded spans, sessions or events: the day page and plain pages hold them | accepted |
 | [D23](D23-no-tasks.md) | No tasks table: a plan is a line of a page. | accepted |

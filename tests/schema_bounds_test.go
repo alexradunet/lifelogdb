@@ -247,12 +247,6 @@ func lookupPlans(s *S) {
 
 	plan = c.plan(s.d.Block("day-view"), P{"day": "2026-09-29"})
 	s.K("cookbook/day-view reads the pages of a day through entities_day", strings.Contains(plan, "entities_day"), plan)
-	st := statements(s.d.Block("where-was-i"))
-	if len(st) < 3 {
-		stop("cookbook/where-was-i has %d statements, not 3", len(st))
-	}
-	plan = c.plan(st[1], P{"day": "2026-09-29"})
-	s.K("cookbook/where-was-i finds the day page through entities_day", strings.Contains(plan, "entities_day"), plan)
 	plan = c.plan(s.d.Block("backlinks"), P{"page_id": target})
 	s.K("cookbook/backlinks is served by links_to", strings.Contains(plan, "SEARCH") && strings.Contains(plan, "links_to"), plan)
 }

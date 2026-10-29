@@ -9,9 +9,9 @@ import (
 	"lifelog/internal/text"
 )
 
-// journal: the journal (D5, D15, D16, D22, D23) — the day page and its CHECK, capture that appends to it
+// journal: the journal (D5, D15, D22, D23) — the day page and its CHECK, capture that appends to it
 // (cookbook/capture), the cookbook/day-view day view, the days that name someone or somewhere
-// (cookbook/days-that-name), where the owner was (cookbook/where-was-i), and what stands in for recurrence,
+// (cookbook/days-that-name), and what stands in for recurrence,
 // events, with explicit planning kept separate from observed habits.
 func journal(s *S) {
 	journalDefinition(s)
@@ -108,10 +108,8 @@ func journal(s *S) {
 	// ---- cookbook/day-view
 	DV := s.d.Block("day-view")
 	c = s.fresh()
-	d29, d28 := c.dayPage("2026-09-29", "a day of work"), c.dayPage("2026-09-28", "yesterday")
-	office, home := c.named("place", "Office"), c.named("place", "Home")
-	c.link(d29, office, "at")
-	c.link(d28, home, "at")
+	c.dayPage("2026-09-29", "a day of work")
+	c.dayPage("2026-09-28", "yesterday")
 	essay := c.pageW("Essay", "2026-09-29", "text")
 	// a page whose creation wrote two different clocks (an import keeps the note's own creation time) was never edited
 	imported, importErr := c.tryIdentity("page", "Imported note", M{"day": "2026-09-29", "body": "kept", "created_at": "2020-05-01T08:00:00.000Z", "updated_at": "2026-10-01T09:00:00.000Z", "source": "import:vault", "import_key": "notes/imported.md"})
@@ -131,8 +129,8 @@ func journal(s *S) {
 		kinds = append(kinds, val(r[0]))
 		items = append(items, val(r[2]))
 	}
-	s.K("cookbook/day-view shows the day page, the page written that day, where I was and the corrected reading",
-		slices.Contains(got, "day page|a day of work") && slices.Contains(got, "page|Essay") && slices.Contains(got, "at|Office") && slices.Contains(got, "weight|70.0 kg"), tab(rows))
+	s.K("cookbook/day-view shows the day page, the page written that day and the corrected reading",
+		slices.Contains(got, "day page|a day of work") && slices.Contains(got, "page|Essay") && slices.Contains(got, "weight|70.0 kg"), tab(rows))
 	nDay := 0
 	for _, k := range kinds {
 		if k == "day page" {
@@ -141,10 +139,10 @@ func journal(s *S) {
 	}
 	s.K("...the day page once, as the day page and not again as a page written that day", nDay == 1 && !slices.Contains(got, "page|2026-09-29"), tab(rows))
 	none := true
-	for _, x := range []string{"yesterday", "Home", "Link target", "Sam", "Yesterday essay", "71.2 kg"} {
+	for _, x := range []string{"yesterday", "Link target", "Sam", "Yesterday essay", "71.2 kg"} {
 		none = none && !slices.Contains(items, x)
 	}
-	s.K("...not another day's page or place, a link target, a person's page, a page of another day or the superseded reading", none, tab(rows))
+	s.K("...not another day's page, a link target, a person's page, a page of another day or the superseded reading", none, tab(rows))
 	order := len(rows) > 0 && rows[0][0] == "day page"
 	seenDated := false
 	for _, r := range rows {
@@ -172,51 +170,18 @@ func journal(s *S) {
 	// ---- cookbook/days-that-name: the days that name someone or somewhere
 	c = s.fresh()
 	ana := c.named("person", "Ana", M{"name": "Ana"})
-	par := c.named("place", "Lakeside")
+	par := c.page("Lakeside")
 	c.capture("with [[Ana]] at [[Lakeside]]", "2026-07-31")
 	d2 := c.capture("called [[Ana]]", "2026-08-02")
 	c.capture("alone", "2026-08-03")
 	c.savePage("an essay about [[Ana]]", "Friends")
 	Q := s.d.Block("days-that-name")
 	s.K("cookbook/days-that-name lists the day pages that link Ana, newest first, and not an essay that names her", slices.Equal(c.col(Q, P{"entity_id": ana}), []string{"2026-08-02", "2026-07-31"}))
-	s.K("cookbook/days-that-name lists the days at a place the same way", slices.Equal(c.col(Q, P{"entity_id": par}), []string{"2026-07-31"}))
+	s.K("cookbook/days-that-name lists the days that name a plain page the same way", slices.Equal(c.col(Q, P{"entity_id": par}), []string{"2026-07-31"}))
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", d2)
 	s.K("...and drops a tombstoned day", slices.Equal(c.col(Q, P{"entity_id": ana}), []string{"2026-07-31"}))
 	plan = c.plan(Q, P{"entity_id": ana})
 	s.K("cookbook/days-that-name is served by links_to", strings.Contains(plan, "links_to"), plan)
-
-	// ---- cookbook/where-was-i: at links from the day page
-	c = s.fresh()
-	par, cor, spa := c.named("place", "Lakeside"), c.named("place", "Northgate"), c.named("place", "Southpark")
-	d7 := c.capture("am fost in northgate, apoi la southpark", "2026-08-07")
-	d31 := c.capture("seara la lakeside", "2026-07-31")
-	st := statements(s.d.Block("where-was-i"))
-	if len(st) < 3 {
-		stop("cookbook/where-was-i has %d statements, not 3", len(st))
-	}
-	_, e = c.runBlock(st[0], P{"day_page_id": d31, "place_id": par}, nil)
-	s.K("cookbook/where-was-i inserts the at link from a day page (links_endpoint_types reads is_journal)", e == nil, e)
-	s.K("cookbook/where-was-i records an at link from the day page to the place, with its note", c.str("select note from links where from_id=? and to_id=? and kind='at'", d31, par) == "evening")
-	s.K("...and again is a no-op (ON CONFLICT DO NOTHING)", c.tryx(st[0], P{"day_page_id": d31, "place_id": par}) == "OK" && c.n("select count(*) from links where kind='at'") == 1)
-	c.link(d7, cor, "at")
-	c.link(d7, spa, "at")
-	d8 := c.capture("iar la lakeside", "2026-08-08")
-	c.link(d8, par, "at")
-	s.K("cookbook/where-was-i where was I on 2026-08-07: both places, by title", slices.Equal(c.col(st[1], P{"day": "2026-08-07"}), []string{"Northgate", "Southpark"}))
-	s.K("cookbook/where-was-i the days at Lakeside, newest first", slices.Equal(c.col(st[2], P{"place_id": par}), []string{"2026-08-08", "2026-07-31"}))
-	s.K("an at link to a person is refused: at points at a place", strings.HasPrefix(c.link(d7, c.named("person", "Ana"), "at"), "ERR"))
-	s.K("an at link from a person is refused: at comes from a page", strings.HasPrefix(c.link(c.named("person", "Ion"), par, "at"), "ERR"))
-	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", spa)
-	s.K("...and a tombstoned place is not where I was", slices.Equal(c.col(st[1], P{"day": "2026-08-07"}), []string{"Northgate"}))
-	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", d31)
-	s.K("cookbook/where-was-i where was I on a tombstoned day: nowhere", len(c.col(st[1], P{"day": "2026-07-31"})) == 0)
-	atRows := 0
-	for _, r := range c.rows(DV, P{"day": "2026-07-31"}) {
-		if r[0] == "at" {
-			atRows++
-		}
-	}
-	s.K("cookbook/day-view a tombstoned day lists none of its places", atRows == 0)
 
 	// ---- observed habits and birthdays remain distinct from explicit tasks (D23)
 	c = s.fresh()
@@ -386,8 +351,8 @@ func periods(s *S) {
 	s.K("a period page with a day is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
 	_, err = c.tryIdentity("person", "2026", M{})
 	s.K("a person titled 2026 is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
-	_, err = c.tryIdentity("place", "2026-Q3", M{})
-	s.K("a place titled 2026-Q3 is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
+	_, err = c.tryIdentity("metric", "2026-Q3", M{})
+	s.K("a metric titled 2026-Q3 is refused (entities_period_page)", err != nil && strings.Contains(err.Error(), "entities_period_page"), err)
 	year := c.str("SELECT id FROM entities WHERE preferred_name_key='2026'")
 	s.K("a year page is not promoted to a person (entities_period_page)", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", year), "entities_period_page"))
 
@@ -439,8 +404,6 @@ func periods(s *S) {
 	s.K("a part-of link from a week page is refused (a period page is never filed)", strings.Contains(c.link(week, category, "part-of"), "a period page is never filed in a category"))
 	s.K("a part-of link to a month page is refused (a category is never a period page)", strings.Contains(c.link(filed, month, "part-of"), "a category is a plain page, never a period page"))
 	s.K("a part-of link to a year page is refused", strings.HasPrefix(c.link(filed, year, "part-of"), "ERR"))
-	s.K("an at link from a week page is refused: it starts at a day page only (D16)", strings.Contains(c.link(week, c.thing("place"), "at"), "an at link starts at a day page"))
-	s.K("an at link from a day page still works", c.link(c.dayPage("2026-10-20", ""), c.thing("place"), "at") == "OK")
 	s.K("a wikilink from and to a period page works", c.link(week, month, "wikilink") == "OK" && c.link(c.page("Notes"), week, "wikilink") == "OK")
 
 	// ---- a day page is as before

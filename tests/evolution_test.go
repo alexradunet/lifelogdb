@@ -18,7 +18,7 @@ func evolution(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 	populated := func() *C {
 		c := s.fresh()
-		for _, t := range []string{"page", "person", "place"} {
+		for _, t := range []string{"page", "person", "metric"} {
 			c.thing(t)
 		}
 		c.page("Some page")
@@ -97,7 +97,7 @@ func evolution(s *S) {
 	s.K("entities_entity_type: the new value is refused before", err(use(c)))
 	c.must("BEGIN")
 	r1 := c.tryx("ALTER TABLE entities DROP CONSTRAINT entities_entity_type")
-	r2 := c.tryx("ALTER TABLE entities ADD CONSTRAINT entities_entity_type CHECK (entity_type IN ('page','person','place','metric','vehicle'))")
+	r2 := c.tryx("ALTER TABLE entities ADD CONSTRAINT entities_entity_type CHECK (entity_type IN ('page','person','metric','file','vehicle'))")
 	c.must("COMMIT")
 	s.K("entities_entity_type: DROP and ADD the widened CHECK in one transaction", r1 == "OK" && r2 == "OK", r1, r2)
 	s.K("entities_entity_type: the new value is accepted", use(c) == "OK")
@@ -148,22 +148,19 @@ func evolution(s *S) {
 	guard := c.str("select sql from sqlite_schema where name='link_kinds_structure_fixed'")
 	c.must("BEGIN IMMEDIATE")
 	c.must("DROP TRIGGER link_kinds_structure_fixed")
-	c.must("UPDATE link_kinds SET to_types = 'person,place' WHERE kind = 'at'")
+	c.must("UPDATE link_kinds SET to_types = 'page,person' WHERE kind = 'part-of'")
 	c.must(guard)
 	c.must("COMMIT")
-	s.K("after the migration a day page may be at a person's home page", c.link(c.dayPage("2026-09-30", "x"), c.named("person", ""), "at") == "OK")
-	s.K("...and the guard is back: the next change is refused", strings.Contains(c.tryx("UPDATE link_kinds SET to_types = NULL WHERE kind = 'at'"), "fixed at registration"))
+	s.K("after the migration a part-of link may end at a person", c.link(c.thing("page"), c.named("person", ""), "part-of") == "OK")
+	s.K("...and the guard is back: the next change is refused", strings.Contains(c.tryx("UPDATE link_kinds SET to_types = NULL WHERE kind = 'part-of'"), "fixed at registration"))
 
 	// ---- type changes preserve the registry's endpoint rules. Only a plain page changes its type
 	// (entities_promote_from_page), so the incoming edge ends at a plain page: the category of a part-of link.
 	c = s.fresh()
-	w := c.named("place", "Lakeside")
+	w := c.page("Lakeside")
 	lakes := c.page("Lakes")
-	s.K("the place [[Lakeside]] is filed in the category [[Lakes]]", c.link(w, lakes, "part-of") == "OK")
+	s.K("the page [[Lakeside]] is filed in the category [[Lakes]]", c.link(w, lakes, "part-of") == "OK")
 	s.K("type change refuses a retained incoming typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", lakes), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", lakes) == "page" && c.n("SELECT count(*) FROM links WHERE to_id=? AND kind='part-of'", lakes) == 1)
-	out := c.dayPage("2026-08-01", "x")
-	c.link(out, w, "at")
-	s.K("type change refuses a retained outgoing typed edge", strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", out), "retained link endpoint") && c.str("SELECT entity_type FROM entities WHERE id=?", out) == "page")
 
 	// ---- an entity uid is additive after the freeze (D3): add, backfill, unique index, then NOT NULL
 	c = populated()

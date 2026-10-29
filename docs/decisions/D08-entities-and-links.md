@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-- **Decision.** The five linkable types (page, person, place, metric, file; `entities_entity_type`) share one ID space through `entities`. A domain row takes its id
+- **Decision.** The four linkable types (page, person, metric, file; `entities_entity_type`) share one ID space through `entities`. A domain row takes its id
   from the `entities` insert by `RETURNING id`: `last_insert_rowid()` across statements is moved by any insert in
   between — a link, a ghost page, a measurement — and the next row silently points at the wrong entity (executed). All relationships live
   in one `links(from_id, to_id, kind)` table with real foreign keys (`UNIQUE(from_id, to_id, kind)`
@@ -13,8 +13,8 @@
   `links_endpoint_types` checks the kind and both endpoint types on every insert
   — also on a connection with `foreign_keys=OFF`, executed in autocommit. `entities_endpoint_types`
   refuses type changes that would invalidate retained incoming or outgoing edges;
-  [semantic integrity](../contract/integrity-checks.md) checks endpoints independently (executed). Three kinds are
-  registered: `wikilink`, `at` and `part-of` ([who may link what](../architecture/link-rules.md)); the owner removed
+  [semantic integrity](../contract/integrity-checks.md) checks endpoints independently (executed). Two kinds are
+  registered: `wikilink` and `part-of` ([who may link what](../architecture/link-rules.md)); the owner removed
   the relationship kinds and the symmetric mirror with them ([RFC 0017](../rfcs/0017-no-typed-links.md)): a
   relationship is words in the page. Links are immutable except `note`
   (`links_fixed`); a note, like a link kind's, holds no NUL (`links_note`, `link_kinds_note`). Cycles (`part-of`) are not prevented; [metrics by category](../cookbook/metrics-by-category.md) walks them with `UNION`. Widening a

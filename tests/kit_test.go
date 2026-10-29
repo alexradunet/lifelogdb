@@ -575,7 +575,7 @@ func (c *C) pageW(title string, day any, body string) int64 {
 // dayPage is the journal page of a local day (D5): titled with the day, its day the title.
 func (c *C) dayPage(day, body string) int64 { return c.pageW(day, day, body) }
 
-// named is a person or a place (D20): the entity and its page (entity_type = typ), and a person's people row — one id.
+// named is a person, a metric or a file (D20): the entity and its page (entity_type = typ), and its typed row — one id.
 func (c *C) named(typ, handle string, cols ...M) int64 {
 	if handle == "" {
 		handle = fmt.Sprintf("%s %d", strings.ToUpper(typ[:1])+typ[1:], c.s.next())
@@ -592,9 +592,6 @@ func (c *C) named(typ, handle string, cols ...M) int64 {
 }
 
 func (c *C) domain(typ string, id int64, cols M) {
-	if typ == "place" { // a place is its page: no row of its own (D16)
-		return
-	}
 	table, m := "people", M{"id": id, "name": "P"}
 	switch typ {
 	case "metric": // a metric's row holds its unit (D27)

@@ -48,7 +48,7 @@ func renames(s *S) {
 	seed := func(c *C) (int64, int64) {
 		id := c.pageW("Sourdogh", "2026-09-20", "Feed [[Baking]].")
 		target := c.page("Baking")
-		place := c.named("place", "Japan")
+		place := c.page("Japan")
 		day := c.dayPage("2026-09-29", "See [[Sourdogh]].")
 		c.link(id, target, "wikilink")
 		c.link(id, target, "part-of")
@@ -96,15 +96,13 @@ func renames(s *S) {
 		_, err = rename(c, tomb, "Other tomb")
 		s.K("deleted identity must revive before rename", err != nil && state(c) == before, err)
 	}
-	for _, typ := range []string{"person", "place", "metric", "file"} {
+	for _, typ := range []string{"person", "metric", "file"} {
 		c := s.fresh()
 		id := c.named(typ, "Old "+typ)
 		before := c.tab("SELECT entity_type,body,day,source FROM entities WHERE id=?", id)
 		got, err := recipe(c, id, "New "+typ)
 		s.K("typed identity rename preserves type/prose/day/source", err == nil && got == id && c.tab("SELECT entity_type,body,day,source FROM entities WHERE id=?", id) == before, typ, err)
-		if typ != "place" {
-			table := map[string]string{"person": "people", "metric": "metrics", "file": "files"}[typ]
-			s.K("typed extension still has the same owner", c.n("SELECT count(*) FROM "+table+" WHERE id=?", id) == 1)
-		}
+		table := map[string]string{"person": "people", "metric": "metrics", "file": "files"}[typ]
+		s.K("typed extension still has the same owner", c.n("SELECT count(*) FROM "+table+" WHERE id=?", id) == 1)
 	}
 }

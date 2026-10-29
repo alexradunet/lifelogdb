@@ -9,8 +9,8 @@
   category's name twice ([proposal 0002](../rfcs/0002-categories-are-pages.md)); a category as a page with a metric's
   own column left two ways to categorise ([proposal 0003](../rfcs/0003-a-metric-is-a-page.md)). A day page filed in
   a category was in a category that listed no day ([proposal 0020](../rfcs/0020-a-day-page-is-never-filed.md)).
-- **Decision.** A category is a plain page, and its name is the page title, as a place's is ([D16](D16-places.md)).
-  Anything but a day page — a metric ([D27](D27-a-metric-is-a-page.md)), a plain page, a person, a place, a file — is
+- **Decision.** A category is a plain page, and its name is the page title, as a person's is ([D20](D20-named-pages.md)).
+  Anything but a day page — a metric ([D27](D27-a-metric-is-a-page.md)), a plain page, a person, a file — is
   filed in a category by a `part-of` link to the category's page, and a category belongs to another by the same link
   between their pages (`Ferritin` part-of `Iron` part-of `Biomarkers`). `part-of` is a registered kind
   ([D8](D08-entities-and-links.md)): its `link_kinds` row lets it start at any entity type and end at a `page`, and
@@ -20,7 +20,7 @@
   The walk is [metrics by category](../cookbook/metrics-by-category.md).
 - **A day page is neither a category nor filed in one** (`links_endpoint_types`, which refuses a `part-of` link
   that ends or starts at a day page). A day is the time axis: it is found by its date, and it meets the things of
-  its day through the links it leaves — its wikilinks and its `at` links. A plain page whose title only contains a
+  its day through the links it leaves — its wikilinks. A plain page whose title only contains a
   date (`Trip 2026-10-01`) is not a day page, and is filed as any page is. A link never changes its endpoints
   (`links_fixed`), and a day page never stops being one. A page becomes a day page only when it selects a date as
   its preferred key. A page with a name cannot do that (`entities_day_identity`, `entity_names_day_insert`); a page

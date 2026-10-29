@@ -27,8 +27,7 @@ SELECT n.id FROM entity_names n JOIN entities e ON e.id=n.entity_id
        OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]')
    AND (e.preferred_name_key IS NOT n.name_key OR n.title IS NOT upper(n.name_key))) ORDER BY n.id; -- no rows
 SELECT l.id FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
- WHERE (l.kind='at' AND NOT coalesce(f.is_journal,0))
- OR (l.kind='part-of' AND coalesce(t.is_journal,0))
+ WHERE (l.kind='part-of' AND coalesce(t.is_journal,0))
  OR (l.kind='part-of' AND coalesce(f.is_journal,0))
  OR (l.kind='part-of' AND (t.period IS NOT NULL OR f.period IS NOT NULL)) ORDER BY l.id; -- no rows
 SELECT m.id FROM measurements m JOIN metrics x ON x.id=m.metric_id
@@ -46,19 +45,18 @@ INSERT INTO entities_fts(entities_fts, rank) VALUES ('integrity-check', 1);   --
 - **`foreign_key_check` — what the first cannot see.** A writer that forgot `PRAGMA foreign_keys=ON`
   ([connection setup](connections.md) — per connection; `STRICT` does not enforce foreign keys) stored a reading of a metric that
   does not exist, and `integrity_check` said `ok`.
-- **Semantic integrity — domain ownership and typed graph endpoints.** The orphan query finds a missing owned preferred name or a missing typed extension. A fully named plain page/place is complete without another prose row; a person, metric or file needs its extension. Missing name ownership also violates a foreign key; missing typed extensions do not. The typed-edge query checks both endpoints against
+- **Semantic integrity — domain ownership and typed graph endpoints.** The orphan query finds a missing owned preferred name or a missing typed extension. A fully named plain page is complete without another prose row; a person, metric or file needs its extension. Missing name ownership also violates a foreign key; missing typed extensions do not. The typed-edge query checks both endpoints against
   the closed kind registry (`link_kinds`) only, even when a damaged file bypassed the insertion and type-change guards (executed).
-  It does not check the three rules that the registry cannot say, which the next group holds.
+  It does not check the rules that the registry cannot say, which the next group holds.
   The remaining semantic queries detect a correction of a missing reading or of another metric,
   correction rows unreachable from an original reading (cycles or dangling chains), and invalid journal-name and period-name ownership
   (executed with deliberately bypassed guards restored before checking). The rooted-chain query visits each
   reachable reading once; it does not follow every row's full ancestry.
   Journal diagnostics report `entity_names.id`; other diagnostics report the inspected table's `id`.
 - **Rules that only a trigger holds.** Two triggers hold rules that no CHECK can say, and each has a query that
-  finds a row written while the trigger was missing. The link query covers the three rules of `links_endpoint_types`
-  that `link_kinds` cannot say, since a day page and a plain page are both `page`: an `at` link starts at a day page,
-  a `part-of` link never ends at a day page, and a `part-of` link never starts at one ([D16](../decisions/D16-places.md),
-  [D26](../decisions/D26-metric-categories.md)). A `part-of` link also never starts or ends at a period page ([D30](../decisions/D30-period-pages.md)). The scale query covers `measurements_scale_range`: a reading of a scale
+  finds a row written while the trigger was missing. The link query covers the rules of `links_endpoint_types`
+  that `link_kinds` cannot say, since a day page and a plain page are both `page`: a `part-of` link never ends at a
+  day page, and a `part-of` link never starts at one ([D26](../decisions/D26-metric-categories.md)). A `part-of` link also never starts or ends at a period page ([D30](../decisions/D30-period-pages.md)). The scale query covers `measurements_scale_range`: a reading of a scale
   (a unit `lo-hi`) is a whole number inside the range. A retraction has no value and is never held. Both queries
   read every row, so they find a row written while the trigger was missing. Both report the `id` of the inspected
   table (executed with the trigger dropped before the bad row was written).

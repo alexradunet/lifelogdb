@@ -2,10 +2,10 @@
 
 **Status:** accepted
 
-- **Decision.** Where the owner was on a day is the `at` links of that day's page ([D16](D16-places.md)), and nothing
-  else. A place has no point and no radius: there is no `places` table. A photo's position, when its metadata holds
+- **Decision.** Where the owner was on a day is the words of that day's page ([D16](D16-places.md)), and nothing
+  else. A place is a plain page with no point and no radius: there is no `places` table. A photo's position, when its metadata holds
   one, is never read and never stored: a kept photo gives its day ([D9](D09-binary-files.md)), and the owner writes
-  the `at` link. No `positions` table, no fix per row.
+  the words. No `positions` table, no fix per row.
 - **Why.** The owner reviewed the writer on 2026-10-15 and kept the core only
   ([RFC 0016](../rfcs/0016-no-location.md)): a place's point served one thing, the matching of a photo's position to
   a place when the photo was kept, and that matching cost a table, a distance query without math functions, a
@@ -17,6 +17,6 @@
   - *A track*: a `positions` table, one GPS fix per row: rejected, the owner does not want minute-by-minute
     tracking. Reopen with an issue when a question needs the moment: "where was I at 15:00 on that day?".
   - *An online reverse geocoder*: rejected, it would send the owner's positions to a third party.
-- **Trade accepted.** "Where was I" is answered by what the owner wrote, never by a photo. A place's whereabouts is
+- **Trade accepted.** "Where was I" is answered by what the owner wrote, never by a photo. The whereabouts of a place is
   prose in its page.
-- **Sources.** Executed: the `named` suite (a place needs no detail row).
+- **Sources.** Executed: the `named` suite (no place type and no place table).

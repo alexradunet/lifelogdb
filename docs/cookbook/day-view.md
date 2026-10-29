@@ -1,6 +1,6 @@
 # The day view
 
-The day's page, other pages written that day, the places the owner was at, and the measurements (through
+The day's page, other pages written that day, and the measurements (through
 `measurement_values`, so corrected readings never show).
 `ORDER BY (at IS NOT NULL), at` puts undated items — the day page first — before the rest on purpose;
 a bare `ORDER BY at` does it by accident.
@@ -15,13 +15,6 @@ SELECT what, at, detail FROM (
          e.updated_at, p.title
     FROM entities e JOIN entity_names p ON p.entity_id = e.id AND p.name_key = e.preferred_name_key
    WHERE e.day = :day AND e.preferred_name_key <> :day AND e.deleted_at IS NULL
-  UNION ALL
-  SELECT 'at', NULL, pl.title
-    FROM entities d
-    JOIN links l    ON l.from_id = d.id AND l.kind = 'at'
-    JOIN entities e ON e.id = l.to_id AND e.deleted_at IS NULL
-    JOIN entity_names pl ON pl.entity_id = e.id AND pl.name_key = e.preferred_name_key
-   WHERE d.preferred_name_key = :day AND d.day = :day AND d.deleted_at IS NULL
   UNION ALL
   SELECT p.title, me.taken_at, CAST(me.value AS TEXT) || ' ' || m.unit
     FROM measurement_values me JOIN metrics m ON m.id = me.metric_id

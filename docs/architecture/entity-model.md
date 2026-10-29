@@ -8,9 +8,9 @@ is derived and rebuildable and is not drawn.)
 ## Entities and the graph
 
 One named identity and prose body per linkable thing (`entities`), with authoritative spellings in
-`entity_names` and a preferred selection checked by a deferred owner FK. A person, place, metric or file
+`entity_names` and a preferred selection checked by a deferred owner FK. A person, metric or file
 is a page concept, not a separate prose row. Typed extensions reference `(id, entity_type)`
-directly on `entities`; a place has no typed row. The polymorphic `links` graph references
+directly on `entities`. The polymorphic `links` graph references
 the same stable id and the closed `link_kinds` registry.
 
 ```mermaid

@@ -1,11 +1,10 @@
-# A person or a place: create one, promote a ghost page (D20)
+# A person: create one, promote a ghost page (D20)
 
 Step 0 is the resolve of [save a body](save-a-body.md). No row: create it (steps 1–3). A plain page (`entity_type = 'page'`,
 e.g. a ghost an earlier `[[Bob Sample]]` made) that is not a day
 page: promote it instead — a tombstoned one is revived by the promotion, as a save revives a
 page it names ([save a body](save-a-body.md) step 2a; the UI says so). Any other
-row: the handle is taken; choose another (`Bob Sample (colleague)`). A place is the same with its own
-type and no domain row: `entities` and its owned names only, and its promotion is the `UPDATE` alone ([D16](../decisions/D16-places.md)).
+row: the handle is taken; choose another (`Bob Sample (colleague)`).
 
 ```sql
 -- 0. does the handle exist already?  :handle_key = title_key(:handle_title), contract/titles-and-wikilinks.md
@@ -33,6 +32,5 @@ COMMIT;
 The day pages that already name the person ([the days that name someone](days-that-name.md)) keep their links: the id did not change. A promotion
 cannot go wrong quietly: a page that is already typed, or none at all, makes the `UPDATE` change no
 row, so the `people` insert fails on its key; a day page makes the `UPDATE` itself fail
-(`entities_day_page_plain`). Both executed; roll the transaction back. A place's promotion has no second
-statement, so its writer checks that the `UPDATE` changed one row. Without its `entity_type = 'page'` condition, the
-`UPDATE` of a person, a place, a metric or a file to another type fails itself (`entities_promote_from_page`, executed).
+(`entities_day_page_plain`). Both executed; roll the transaction back. Without its `entity_type = 'page'` condition, the
+`UPDATE` of a person, a metric or a file to another type fails itself (`entities_promote_from_page`, executed).

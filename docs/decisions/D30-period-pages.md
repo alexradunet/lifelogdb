@@ -18,7 +18,7 @@
     page and fixes its spelling to the upper-case key (`2026-W43`, `2026-Q4`; for a month and a year the key itself).
     `entity_names_day_update` keeps that spelling. `entities_day_identity` never renames it, never lets a page acquire
     the key through aliases, and never lets a page with a `part-of` link acquire it. `links_endpoint_types` refuses a
-    `part-of` link from or to a period page. An `at` link stays day-only ([D16](D16-places.md)).
+    `part-of` link from or to a period page.
   - `lifelog_meta.periods` and the comment in the `entities` statement say the same in the file.
   - A plain page with a period-shaped title in a file built before this rule is adopted at the rebuild, since there is no
     migration before the freeze ([D13](D13-migrations-and-freeze.md)). In such a file the page keeps its alias and its links, since a period page is never
@@ -29,7 +29,7 @@
   - A `periods` table: rejected. It is a second home for a page, with its own id, name and body.
   - A plain page the owner titles `2026 Q4`: rejected. The writer cannot find it by its key, and the calendar cannot draw it.
   - A `day` set to the first day of the period: rejected. It is derivable from the key, and it would list a week page under its Monday.
-- **Trade accepted.** A title of four digits is always a year page. An `at` link stays day-only. Only ISO weeks exist; a
+- **Trade accepted.** A title of four digits is always a year page. Only ISO weeks exist; a
   week of another calendar is a plain page with a title the owner chooses.
 - **Sources.** The `periods` block of the `journal` suite and the date probes of the `dates` suite, both *executed*:
   the Monday of an ISO week, the week-53 years, a CHECK that reads `'43' - 1`, and a virtual generated column over `GLOB`.

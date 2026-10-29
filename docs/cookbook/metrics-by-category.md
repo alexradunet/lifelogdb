@@ -48,7 +48,7 @@ SELECT coalesce(c.title, '') AS category, mp.title AS metric, m.unit
 
 A category's page is an ordinary page: its body is what the owner writes about the category, and a `[[Lipids]]` in
 the journal is one of its backlinks ([backlinks](backlinks.md)). The same link files anything else in a category — a
-plain page, a person, a place, a file; never a day page (`links_endpoint_types`, [D26](../decisions/D26-metric-categories.md)). Renaming a category's page retains the id and all `part-of` links that end at it
+plain page, a person, a file; never a day page (`links_endpoint_types`, [D26](../decisions/D26-metric-categories.md)). Renaming a category's page retains the id and all `part-of` links that end at it
 ([rename a page](rename-a-page.md)). Nothing keeps the `part-of` links a tree: a page may belong to two categories,
 and links may close a cycle (D8); a writer that draws the tree follows one parent and stops at a
 page it has seen.

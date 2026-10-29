@@ -7,33 +7,32 @@ import (
 	"strings"
 )
 
-// named: people and places use one named identity; direct typed details and
-// canonical promotion/lookup recipes preserve that identity (D16, D20).
+// named: a person is one named identity; direct typed details and
+// canonical promotion/lookup recipes preserve that identity (D20).
 // A  the foreign keys and CHECKs: what may and may not be built, and what a promotion may and may not do;
-// B  cookbook/person-or-place run literally: create, promote a ghost, a taken handle, never a day page;
+// B  cookbook/person run literally: create, promote a ghost, a taken handle, never a day page;
 // C  a day page that writes [[Name]] reaches the person through the writer's save; cookbook/days-that-name,
 //
 //	cookbook/backlinks, cookbook/everything-about; renames; rebuild;
 //
-// D  two Sams, two Springfields; ghost_pages leaves named pages alone.
+// D  two Sams; ghost_pages leaves named pages alone.
 func named(s *S) {
 	err := func(r string) bool { return strings.HasPrefix(r, "ERR") }
 
 	// ---- A  structure
 	c := s.fresh()
 
-	for i, typ := range []string{"person", "place"} {
-		id := c.named(typ, "H "+typ)
-		s.K("a "+typ+" is one id with its actual owned handle", c.n("SELECT count(*) FROM entities e JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE e.id=? AND e.entity_type=?", id, typ) == 1 && c.n("SELECT count(*) FROM entities WHERE source<>'schema'") == int64(i+1))
-	}
+	id := c.named("person", "H person")
+	s.K("a person is one id with its actual owned handle", c.n("SELECT count(*) FROM entities e JOIN entity_names n ON n.entity_id=e.id AND n.name_key=e.preferred_name_key WHERE e.id=? AND e.entity_type='person'", id) == 1 && c.n("SELECT count(*) FROM entities WHERE source<>'schema'") == 1)
 	s.K("a person detail without its entity is refused", err(c.tryx("INSERT INTO people(id,name) VALUES (9999,'x')")))
 	plainOwner := c.page("Wrong extension owner")
 	s.K("a person extension requires a person owner", err(c.tryx("INSERT INTO people(id,name) VALUES (?,'Wrong type')", plainOwner)))
 	c.must("UPDATE entities SET body='not a cleanup ghost' WHERE id=?", plainOwner)
-	s.K("a place needs no detail row", c.n("SELECT count(*) FROM entities WHERE entity_type='place'") == 1)
+	s.K("there is no place type and no place table: a place is a plain page (D16, D21)", err(c.tryx("INSERT INTO entities(entity_type,preferred_name_key,source,created_at,updated_at) VALUES ('place','lakeside','ui',"+NOW+","+NOW+")")) &&
+		c.n("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name IN ('places','positions')") == 0)
 	_, untitled := c.tryIdentity("person", "", nil)
 	s.K("a named entity must be titled", untitled != nil)
-	s.K("a person detail cannot claim another type", err(c.tryx("INSERT INTO people(id,entity_type,name) VALUES (?,'place','Mismatch')", c.anyIdentity("person"))))
+	s.K("a person detail cannot claim another type", err(c.tryx("INSERT INTO people(id,entity_type,name) VALUES (?,'metric','Mismatch')", c.anyIdentity("person"))))
 	_, unknown := c.tryIdentity("task", "Task witness", nil)
 	s.K("there is no task entity (D23)", unknown != nil && strings.Contains(unknown.Error(), "entities_entity_type"))
 	half := c.anyIdentity("person")
@@ -61,28 +60,28 @@ func named(s *S) {
 		c.tab("select e.entity_type, pe.entity_type from entities e join people pe using(id) where id=?", g) == "person|person", r1, r2)
 	s.K("...and the day page's link to it is kept (the id did not change)", c.tab("select to_id from links where from_id=?", mm) == ids(g))
 	// a typed entity never changes its type (entities_promote_from_page, D20); the people row's FK holds a person
-	// too, but a place has no typed row, so only the trigger keeps a place a place
+	// too, and the trigger keeps the plain sentence of the rule
 	promoteOnly := func(r string) bool { return strings.Contains(r, "only a plain page is promoted") }
 	s.K("a promoted person cannot be turned back into a plain page (entities_promote_from_page)", promoteOnly(c.tryx("UPDATE entities SET entity_type='page' WHERE id=?", g)))
-	s.K("...nor into a place", promoteOnly(c.tryx("UPDATE entities SET entity_type='place' WHERE id=?", g)))
-	pl := c.named("place", "Lakeside")
+	s.K("...nor into a metric", promoteOnly(c.tryx("UPDATE entities SET entity_type='metric' WHERE id=?", g)))
+	pm := c.named("metric", "Weight")
 	refusedAll := true
-	for _, typ := range []string{"person", "metric", "file", "page"} {
-		refusedAll = refusedAll && promoteOnly(c.tryx("UPDATE entities SET entity_type=? WHERE id=?", typ, pl))
+	for _, typ := range []string{"person", "file", "page"} {
+		refusedAll = refusedAll && promoteOnly(c.tryx("UPDATE entities SET entity_type=? WHERE id=?", typ, pm))
 	}
-	s.K("a place is never promoted to a person, a metric, a file or a plain page (entities_promote_from_page)",
-		refusedAll && c.str("SELECT entity_type FROM entities WHERE id=?", pl) == "place")
+	s.K("a metric is never promoted to a person, a file or a plain page (entities_promote_from_page)",
+		refusedAll && c.str("SELECT entity_type FROM entities WHERE id=?", pm) == "metric")
 	// a tool that writes back every column of the row it read names entity_type with its own value
 	fullRow := c.tryx(`UPDATE entities SET entity_type=entity_type, preferred_name_key=preferred_name_key, day=day, created_at=created_at,
-	    updated_at=updated_at, revision=revision, deleted_at=deleted_at, source=source, import_key=import_key, body='By the lake' WHERE id=?`, pl)
-	s.K("a full-row update of a place that keeps its type passes", fullRow == "OK" && c.str("SELECT entity_type || '|' || body FROM entities WHERE id=?", pl) == "place|By the lake", fullRow)
+	    updated_at=updated_at, revision=revision, deleted_at=deleted_at, source=source, import_key=import_key, body='By the lake' WHERE id=?`, g)
+	s.K("a full-row update of a person that keeps its type passes", fullRow == "OK" && c.str("SELECT entity_type || '|' || body FROM entities WHERE id=?", g) == "person|By the lake", fullRow)
 	dp := c.dayPage("2026-09-29", "x")
-	s.K("a day page cannot become a person or a place: the cascade meets entities_day_page_plain",
+	s.K("a day page cannot become a person or a metric: the cascade meets entities_day_page_plain",
 		strings.Contains(c.tryx("UPDATE entities SET entity_type='person' WHERE id=?", dp), "entities_day_page_plain") &&
-			strings.Contains(c.tryx("UPDATE entities SET entity_type='place' WHERE id=?", dp), "entities_day_page_plain"))
+			strings.Contains(c.tryx("UPDATE entities SET entity_type='metric' WHERE id=?", dp), "entities_day_page_plain"))
 
-	_, datedPlace := c.tryIdentity("place", "2026-09-28", M{"day": "2026-09-28"})
-	s.K("a place cannot own a canonical journal date", datedPlace != nil && strings.Contains(datedPlace.Error(), "entities_day_page_plain"))
+	_, datedPerson := c.tryIdentity("person", "2026-09-28", M{"day": "2026-09-28"})
+	s.K("a person cannot own a canonical journal date", datedPerson != nil && strings.Contains(datedPerson.Error(), "entities_day_page_plain"))
 	s.K("a page cannot become an unknown type", err(c.tryx("UPDATE entities SET entity_type='task' WHERE id=?", c.page("Tk"))))
 	cf := s.freshWith(F{FKOff: true})
 	_, badType := cf.tryIdentity("task", "Unknown kind", nil)
@@ -90,8 +89,8 @@ func named(s *S) {
 	s.K("the owned name of a person cannot be deleted", err(c.tryx("DELETE FROM entity_names WHERE entity_id=?", g)))
 	s.K("tombstoning a person retains its name", c.tryx("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", g) == "OK" && c.str("SELECT title FROM entity_names WHERE entity_id=?", g) == "Ana")
 
-	// ---- B  cookbook/person-or-place run literally
-	sts := statements(s.d.Block("person-or-place"))
+	// ---- B  cookbook/person run literally
+	sts := statements(s.d.Block("person"))
 	var sel0 []string
 	at := -1
 	for i, st := range sts {
@@ -113,7 +112,7 @@ func named(s *S) {
 		}
 		return strings.Join(out, " ")
 	}
-	s.K("cookbook/person-or-place has a resolve, a five-statement create and a four-statement promotion",
+	s.K("cookbook/person has a resolve, a five-statement create and a four-statement promotion",
 		len(sel0) == 1 && len(sts) == 10 && words(create) == "BEGIN INSERT INSERT INSERT COMMIT" && words(promo) == "BEGIN UPDATE INSERT COMMIT", words(sts))
 	if len(sel0) == 1 && len(create) == 5 && len(promo) == 4 {
 		c = s.fresh()
@@ -121,7 +120,7 @@ func named(s *S) {
 		s.K("step 0 finds nothing for a new handle", c.tab(sel0[0], P{"handle_key": p["handle_key"]}) == "")
 		for _, st := range create {
 			if _, e := c.runBlock(st, p, nil); e != nil {
-				stop("person-or-place create: %v", e)
+				stop("person create: %v", e)
 			}
 		}
 		pid := p["person_id"]
@@ -130,24 +129,19 @@ func named(s *S) {
 		s.K("step 0 now reports the handle as taken (entity_type person)", c.tab(sel0[0], P{"handle_key": "bob sample"}) == val(pid)+"|person|None")
 		_, dupe := c.tryIdentity("page", "BOB SAMPLE", nil)
 		s.K("the same handle cannot be made twice, in any case", dupe != nil && strings.Contains(dupe.Error(), "UNIQUE"))
-		c.named("place", "Berlin")
-		s.K("a place is created as its entity and its page", c.n("select count(*) from entities where entity_type in ('person','place')") == 2)
-		gp := c.page("Lakeside")
-		s.K("a plain page becomes a place by the UPDATE alone, its links kept", c.tryx(strings.Replace(promo[1], "'person'", "'place'", 1), P{"ghost_id": gp}) == "OK" &&
-			c.str("SELECT entity_type FROM entities WHERE id=?", gp) == "place")
 		// the promotion UPDATE without its entity_type = 'page' condition, from each typed entity to another type
 		bare := strings.Replace(promo[1], " AND entity_type = 'page'", "", 1)
-		toPlace := strings.Replace(bare, "'person'", "'place'", 1)
+		toMetric := strings.Replace(bare, "'person'", "'metric'", 1)
 		var notRefused []string
 		for _, x := range []struct {
 			update, from string
-		}{{bare, "place"}, {bare, "metric"}, {bare, "file"}, {toPlace, "person"}} {
+		}{{bare, "metric"}, {bare, "file"}, {toMetric, "person"}} {
 			id := c.named(x.from, "")
 			if r := c.tryx(x.update, P{"ghost_id": id}); !strings.Contains(r, "only a plain page is promoted") || c.str("SELECT entity_type FROM entities WHERE id=?", id) != x.from {
 				notRefused = append(notRefused, x.from+": "+r)
 			}
 		}
-		s.K("without its entity_type = 'page' condition, the promotion UPDATE of a person, a place, a metric or a file to another type fails itself (entities_promote_from_page)",
+		s.K("without its entity_type = 'page' condition, the promotion UPDATE of a person, a metric or a file to another type fails itself (entities_promote_from_page)",
 			bare != promo[1] && len(notRefused) == 0, notRefused)
 		// promote a ghost an earlier day page made
 		c = s.fresh()
@@ -162,11 +156,11 @@ func named(s *S) {
 		s.K("...and the old day page already names her, no re-save needed (cookbook/days-that-name)", slices.Equal(c.col(s.d.Block("days-that-name"), P{"entity_id": gid}), []string{"2026-09-30"}))
 		s.K("promoting a page that is already a person changes no row, and the people insert fails", c.tryx(promo[1], P{"ghost_id": gid}) == "OK" &&
 			c.n("select changes()") == 0 && err(c.tryx(promo[2], P{"ghost_id": gid})))
-		pl := c.named("place", "Lisbon")
-		s.K("promoting a place's page into a person changes no row, and the people insert fails on its FK", c.tryx(promo[1], P{"ghost_id": pl}) == "OK" && err(c.tryx(promo[2], P{"ghost_id": pl})))
+		pm := c.named("metric", "Lisbon")
+		s.K("promoting a metric's page into a person changes no row, and the people insert fails on its FK", c.tryx(promo[1], P{"ghost_id": pm}) == "OK" && err(c.tryx(promo[2], P{"ghost_id": pm})))
 		s.K("promoting a day page is refused by entities_day_page_plain: the day stays the journal's page", strings.Contains(c.tryx(promo[1], P{"ghost_id": mid}), "entities_day_page_plain") &&
 			c.str("SELECT entity_type FROM entities WHERE id=?", mid) == "page")
-		s.K("...nor into a place", strings.Contains(c.tryx(strings.Replace(promo[1], "'person'", "'place'", 1), P{"ghost_id": mid}), "entities_day_page_plain"))
+		s.K("...nor into a metric", strings.Contains(c.tryx(strings.Replace(promo[1], "'person'", "'metric'", 1), P{"ghost_id": mid}), "entities_day_page_plain"))
 		t := c.page("Cleo Sample")
 		c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", t)
 		c.must(promo[1], P{"ghost_id": t})
@@ -246,7 +240,7 @@ func named(s *S) {
 	resave()
 	s.K("a rebuild from the bodies alone gives back every link, people included", c.tab(wl) == before)
 
-	// ---- D  two Sams, two Springfields, the ghost view
+	// ---- D  two Sams, the ghost view
 	c = s.fresh()
 	s1 := c.named("person", "Sam", M{"name": "Sam"})
 	all := true
@@ -259,9 +253,7 @@ func named(s *S) {
 	ma, _ := c.savePage("Met [[Sam]]", "")
 	mb, _ := c.savePage("Haircut with [[Sam (barber)]]", "")
 	s.K("two people named Sam, told apart in the handle; each page reaches its own", c.tab("select to_id from links where from_id=?", ma) == ids(s1) && c.tab("select to_id from links where from_id=?", mb) == ids(s2))
-	c.named("place", "Springfield (IL)")
-	c.named("place", "Springfield (MA)")
-	s.K("two places are told apart only once: Springfield (IL) and Springfield (MA)", c.n("select count(*) from entities where entity_type='place'") == 2)
+	c.named("person", "Nobody mentions me")
 	c.page("Typo page")
 	tgt := c.page("Renamed target")
 	st := c.pageW("Old target name", nil, "#REDIRECT [[Renamed target]]")
@@ -278,7 +270,7 @@ func named(s *S) {
 	gh2 := c.col("select id from ghost_pages")
 	s.K("ghost_pages leaves a page younger than 30 days alone", !slices.Contains(gh2, ids(gnew)), gh2)
 	s.K("ghost_pages leaves a tombstoned page alone", !slices.Contains(gh2, ids(gdead)), gh2)
-	s.K("ghost_pages lists the real ghost and none of the person or place pages, and not a page a rename points at", slices.Equal(gh, []string{"Typo page"}), gh)
+	s.K("ghost_pages lists the real ghost and none of the person pages, and not a page a rename points at", slices.Equal(gh, []string{"Typo page"}), gh)
 }
 
 // window is up to n items of xs from i.

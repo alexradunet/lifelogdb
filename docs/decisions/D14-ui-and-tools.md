@@ -3,7 +3,7 @@
 **Status:** accepted
 
 - **Decision.** Build only what the product needs: a capture composer that appends to today's page
-  (with mood, [D6](D06-mood-is-a-measurement.md)), a day view, simple metric charts, forms for people/places,
+  (with mood, [D6](D06-mood-is-a-measurement.md)), a day view, simple metric charts, forms for people,
   a search box over `entities_fts`, and a backlinks panel. For ad-hoc exploration: **Datasette** pointed
   at `life.db`, read-only ([connection setup](../contract/connections.md)) [R49](../research/references.md#r49). `sqlite-web` is **not used** [R50](../research/references.md#r50): it can insert, update and
   delete rows — a second writer that bypasses the insert conventions (principle 3).

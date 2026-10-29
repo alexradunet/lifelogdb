@@ -19,7 +19,7 @@ CREATE TABLE lifelog_meta (
   value TEXT NOT NULL
 ) STRICT;
 INSERT INTO lifelog_meta(key, value) VALUES
-  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, places, health metrics and the files kept as their text and a small picture, of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
+  ('schema',    'lifelog v1: the journal (one page per day), wiki, people, health metrics and the files kept as their text and a small picture, of one person: a life log, not a project manager; the rules of each table are comments inside its CREATE statement (.schema), the rules that span tables are these rows; this is an in-file reading summary: a conforming writer also needs the matching docs contract and vectors'),
   ('instants',  'every *_at column is an exact 24-character ASCII UTC ISO-8601 TEXT instant, years 0000..9999 and hours 00..23, with milliseconds, e.g. 2026-06-09T21:14:03.482Z, written by the app, never by a SQLite default (CURRENT_TIMESTAMP has no milliseconds and is not ISO-8601; a trigger writes strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')); fixed width, so it sorts as text; supplied clock timestamps may coincide or regress and do not encode commit order; CHECK strftime(''%Y-%m-%dT%H:%M:%fZ'', x) IS x; created_at, on every table that has it, is when the row was written to life.db, never back-dated'),
   ('days',      'every *_day column (and day) is the LOCAL exact 10-character ASCII calendar date YYYY-MM-DD, years 0000..9999, where the thing happened for recorded facts, written by the app: the local calendar day of the device that captured it when the client names the date, and the local day of the writer''s own clock and zone when the client sends the word today or no day; never recomputed from an instant; CHECK explicit ASCII shape and date(x) IS x (IS, not =: a CHECK passes on NULL, and date(''2026-9-3'') is NULL)'),
   ('periods',   'a period page has a canonical key like a day page: a week 2026-W43 (ISO 8601: Monday first, week 1 holds 4 January), a month 2026-10, a quarter 2026-Q4 or a year 2026; its key is reserved, it has no alias, no rename and no day (day is NULL), it is never filed and never a category, and entities.period names its shape (D30)'),
@@ -32,12 +32,12 @@ INSERT INTO lifelog_meta(key, value) VALUES
   ('evolution', 'after the freeze (the first kept write that a rebuild would lose, which no program can write again from its source; before it a file is rebuilt, not migrated): numbered forward-only SQL migrations, additive only (new tables, columns and indexes; a named CHECK may be replaced with ALTER TABLE DROP/ADD CONSTRAINT, so every CHECK is named), counted in PRAGMA user_version; additive means data-preserving, not reader-compatible: renames can break readers and replaced CHECKs can break writers; check user_version and select explicit columns');
 
 CREATE TABLE entities (
-  -- One named identity and prose body per linkable thing (page, person, place, metric, file).
+  -- One named identity and prose body per linkable thing (page, person, metric, file).
   -- Creation time is immutable evidence of initial recording (entities_provenance_fixed).
   -- Insert this row first with RETURNING id, then its owned preferred entity_names row in the same
   -- BEGIN IMMEDIATE transaction; preferred ownership is NOT NULL and checked by the deferred composite FK.
   -- Never carry last_insert_rowid() across statements. Typed extension rows use this same id and
-  -- (id, entity_type) FK directly; a place has no typed row (D21). Promotion changes type, not identity.
+  -- (id, entity_type) FK directly. Promotion changes type, not identity.
   -- A canonical date key is the one plain journal-day identity for that local day: its day equals its
   -- preferred key, neither may transfer, and its only registry spelling is that date. Other objects
   -- may have a day without being journal days. Their aliases and preferred names remain editable.
@@ -58,7 +58,7 @@ CREATE TABLE entities (
   -- (deleted_at, entity_type, ...) are read without walking the overflow pages of a long body.
   id          INTEGER PRIMARY KEY,
   entity_type TEXT NOT NULL CONSTRAINT entities_entity_type
-                  CHECK (entity_type IN ('page','person','place','metric','file')),
+                  CHECK (entity_type IN ('page','person','metric','file')),
   preferred_name_key TEXT NOT NULL,       -- selects exactly one owned registry row; spelling lives only there
   day         TEXT CONSTRAINT entities_day CHECK (day IS NULL OR length(day) = 10 AND day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(day) IS day),
   -- The one definition of "a journal day page" (D5): the preferred key is a canonical local date. The CHECKs and
@@ -426,7 +426,7 @@ CREATE TABLE link_kinds (
   -- structure (allowed endpoint entity types) is fixed at registration and enforced
   -- by a trigger on every link. Registering a kind is a deliberate INSERT, so a typo cannot create
   -- one. from_types / to_types: NULL = any entity type, else a comma list of entities.entity_type values
-  -- ('person,place'), matched token by token: a misspelt token admits nothing, so it never widens a kind,
+  -- ('person,metric'), matched token by token: a misspelt token admits nothing, so it never widens a kind,
   -- but the other tokens of its list still admit their types.
   -- an unreferenced kind may be deleted or replaced by the owner; a used one is refused by the links FK, which is
   -- RESTRICT because REPLACE deletes the row first and would otherwise change its structure past the trigger
@@ -438,8 +438,7 @@ CREATE TABLE link_kinds (
   note       TEXT CONSTRAINT link_kinds_note CHECK (note IS NULL OR instr(note, char(0)) = 0)
 ) STRICT;
 INSERT INTO link_kinds(kind, from_types, to_types, note) VALUES
-  ('wikilink', 'page,person,place,metric,file', 'page,person,place,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
-  ('at',       'page',      'place',        'day page → a place the owner was at that day; from a day page only, which links_endpoint_types checks (D16)'),
+  ('wikilink', 'page,person,metric,file', 'page,person,metric,file', 'extracted from [[body]] on save (an embed ![[...]] is one); body is the truth'),
   ('part-of',  NULL,        'page',         'anything but a day page → the page of a category it is filed in (Ferritin → Iron → Biomarkers, D26); a day page is never filed, which links_endpoint_types checks; walk it with a recursive CTE');
 CREATE TRIGGER link_kinds_structure_fixed BEFORE UPDATE OF from_types, to_types ON link_kinds
   WHEN NEW.from_types IS NOT OLD.from_types OR NEW.to_types IS NOT OLD.to_types
@@ -449,8 +448,8 @@ BEGIN
 END;
 
 CREATE TABLE links (
-  -- one graph for everything: wiki backlinks, where the owner was, what is filed where. kind='at' records the places the owner was at, from a day page only, and kind='part-of' files
-  -- a thing in a plain page, never a day page: both held by links_endpoint_types (D16, D26).
+  -- one graph for everything: wiki backlinks and what is filed where. kind='part-of' files
+  -- a thing in a plain page, never a day page: held by links_endpoint_types (D26).
   -- Rows are hard-deleted (the one such table, D11) and immutable otherwise (delete and
   -- re-insert). Backlinks need only to_id. Cycles are not prevented (D8).
   -- Edit revisions (lifelog_meta.edit_revisions): a link is an edit of the page it leaves (from_id) and never of the
@@ -491,17 +490,14 @@ BEGIN
                       OR (k.to_types IS NOT NULL
                           AND instr(',' || k.to_types || ',',
                                     ',' || coalesce((SELECT entity_type FROM entities WHERE id = NEW.to_id), '?') || ',') = 0)));
-  -- three rules link_kinds cannot say, since a day page and a plain page are both 'page': an at link starts at a
-  -- day page (D16); a category is a plain page, never a day page; and a day page is never filed in a category: a day
-  -- is found by its date (D26). A link never changes its endpoints (links_fixed), a day page never stops being one,
+  -- two rules link_kinds cannot say, since a day page and a plain page are both 'page': a category is a plain
+  -- page, never a day page; and a day page is never filed in a category: a day is found by its date (D26). A link never changes its endpoints (links_fixed), a day page never stops being one,
   -- and a page with a part-of link never becomes one (entities_day_identity, entity_names_day_insert)
-  SELECT RAISE(ABORT, 'an at link starts at a day page (D16)')
-   WHERE NEW.kind = 'at' AND NOT coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
   SELECT RAISE(ABORT, 'a category is a plain page, never a day page (D26)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.to_id), 0);
   SELECT RAISE(ABORT, 'a day page is never filed in a category (D26)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT is_journal FROM entities WHERE id = NEW.from_id), 0);
-  -- a period page (D30) is neither a category nor filed; an at link still starts at a day page only
+  -- a period page (D30) is neither a category nor filed
   SELECT RAISE(ABORT, 'a category is a plain page, never a period page (D30)')
    WHERE NEW.kind = 'part-of' AND coalesce((SELECT period IS NOT NULL FROM entities WHERE id = NEW.to_id), 0);
   SELECT RAISE(ABORT, 'a period page is never filed in a category (D30)')
@@ -593,10 +589,10 @@ BEGIN SELECT RAISE(ABORT, 'files are never deleted: tombstone the entity (entiti
 CREATE TRIGGER entities_promote_from_page BEFORE UPDATE OF entity_type ON entities
   WHEN NEW.entity_type IS NOT OLD.entity_type AND OLD.entity_type IS NOT 'page'
 BEGIN
-  -- promotion (D20): only a plain page changes its type, to a person, a place, a metric or a file; a typed entity
-  -- never changes its type. The foreign key of a typed row also holds a person, a metric and a file, but a place
-  -- has no typed row: only this trigger keeps the type of a place
-  SELECT RAISE(ABORT, 'only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)');
+  -- promotion (D20): only a plain page changes its type, to a person, a metric or a file; a typed entity
+  -- never changes its type. The foreign key of a typed row also refuses the write, and this trigger keeps the
+  -- plain sentence of the rule
+  SELECT RAISE(ABORT, 'only a plain page is promoted: a person, a metric or a file keeps its type (D20)');
 END;
 
 CREATE TRIGGER metrics_range_order BEFORE INSERT ON metrics

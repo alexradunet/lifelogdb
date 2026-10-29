@@ -99,14 +99,14 @@ func identity(s *S) {
 
 	// ---- no hard deletes
 	c = s.fresh()
-	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place"), "metric": c.thing("metric"), "file": c.thing("file")}
+	byType := map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "metric": c.thing("metric"), "file": c.thing("file")}
 	n0 := c.n("select count(*) from entities where source <> 'schema'")
-	for _, x := range [][2]string{{"page", "entities"}, {"person", "people"}, {"place", "entities"}, {"metric", "metrics"}, {"file", "files"}} {
+	for _, x := range [][2]string{{"page", "entities"}, {"person", "people"}, {"metric", "metrics"}, {"file", "files"}} {
 		s.K("DELETE FROM "+x[1]+" is refused", err(c.tryx("DELETE FROM "+x[1]+" WHERE id=?", byType[x[0]])))
 		s.K("DELETE of the "+x[0]+" entities row is refused", err(c.tryx("DELETE FROM entities WHERE id=?", byType[x[0]])))
 	}
 	s.K("the page rows of named entities cannot be deleted either", err(c.tryx("DELETE FROM entity_names WHERE entity_id=?", byType["person"])))
-	s.K("nothing was removed (five entities, one id each)", c.n("select count(*) from entities where source <> 'schema'") == n0 && n0 == 5)
+	s.K("nothing was removed (four entities, one id each)", c.n("select count(*) from entities where source <> 'schema'") == n0 && n0 == 4)
 	s.K("REPLACE INTO owned names is blocked under recursive_triggers=ON",
 		err(c.tryx(fmt.Sprintf("REPLACE INTO entity_names(id,entity_id,title,name_key) SELECT id,entity_id,'Replaced','replaced' FROM entity_names WHERE entity_id=%d", byType["page"]))) &&
 			c.str("select body from entities where id=?", byType["page"]) == "x")
@@ -125,9 +125,9 @@ func identity(s *S) {
 
 	// ---- updated_at, kept by triggers
 	c = s.fresh()
-	byType = map[string]int64{"page": c.thing("page"), "person": c.thing("person"), "place": c.thing("place")}
+	byType = map[string]int64{"page": c.thing("page"), "person": c.thing("person")}
 	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z'")
-	for _, x := range [][2]string{{"page", "UPDATE entities SET body='y' WHERE id=?"}, {"person", "UPDATE people SET birth_day='1990-01-01' WHERE id=?"}, {"place", "UPDATE entities SET body='a café' WHERE id=?"}} {
+	for _, x := range [][2]string{{"page", "UPDATE entities SET body='y' WHERE id=?"}, {"person", "UPDATE people SET birth_day='1990-01-01' WHERE id=?"}} {
 		c.must(x[1], byType[x[0]])
 		s.K("updating a "+x[0]+" bumps entities.updated_at", c.n("select updated_at > created_at from entities where id=?", byType[x[0]]) == 1)
 	}
@@ -201,7 +201,6 @@ func identity(s *S) {
 	c = s.fresh()
 	pg := c.thing("page")
 	c.thing("person")
-	c.thing("place")
 	c.must("UPDATE entities SET updated_at='2000-01-01T00:00:00.000Z'")
 	time.Sleep(2 * time.Millisecond)
 	c.must("UPDATE entities SET deleted_at="+NOW+" WHERE id=?", pg)
@@ -228,7 +227,7 @@ func editRevisions(s *S) {
 	}
 	s.K("creation is not an edit: a page made by cookbook/capture's entity and owned-name statements is at revision 1 with updated_at = created_at", created)
 	var edited []string
-	for _, typ := range []string{"page", "person", "place", "metric", "file"} {
+	for _, typ := range []string{"page", "person", "metric", "file"} {
 		id := c.identity(typ, "ui", "Created "+typ, nil, "")
 		switch typ {
 		case "person", "metric", "file":
@@ -238,7 +237,7 @@ func editRevisions(s *S) {
 			edited = append(edited, typ)
 		}
 	}
-	s.K("creation is not an edit: a page, person, place, metric and file stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
+	s.K("creation is not an edit: a page, person, metric and file stay at revision 1 with updated_at = created_at after their typed row", len(edited) == 0, edited)
 	renamed := c.page("Rename witness")
 	renameBefore := revision(renamed)
 	c.must("INSERT INTO entity_names(entity_id,title,name_key) VALUES (?,'Renamed witness','renamed witness')", renamed)
