@@ -91,21 +91,42 @@ func TestSayMakesTheConversationPageAndAppendsTurns(t *testing.T) {
 	}
 }
 
-// TestSayNamesTheRelayInTheOwnersParagraph: an agent or an import writer gives `, via NAME` (its prefix cut) in the
-// marker and the entity's turn has `via`; the owner's own surfaces give the marker without it and no `via`.
-func TestSayNamesTheRelayInTheOwnersParagraph(t *testing.T) {
-	for _, tc := range []struct{ source, marker, via string }{
-		{"agent:x", "**Owner** (11:07, via x): Hi", "x"},
-		{"agent:a:b", "**Owner** (11:07, via a:b): Hi", "a:b"},
-		{"import:y.z", "**Owner** (11:07, via y.z): Hi", "y.z"},
-		{"cli", "**Owner** (11:07): Hi", ""},
-		{"ui", "**Owner** (11:07): Hi", ""},
-		{"app:phone", "**Owner** (11:07): Hi", ""},
-	} {
-		t.Run(tc.source, func(t *testing.T) {
+// TestSayIsTheOwnersAndViaNamesTheRelay: an agent or an import cannot speak as the owner (403, and no page). The
+// owner's say names a relay with via: the paragraph then reads (HH:MM, via NAME). Without via it reads (HH:MM). A via
+// that is not a writer name is 422.
+func TestSayIsTheOwnersAndViaNamesTheRelay(t *testing.T) {
+	doSay := func(h http.Handler, source string, v map[string]string) error {
+		t.Helper()
+		c := client.InProcess(h, source)
+		conv := apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation"))
+		_, err := c.Do(t.Context(), apitest.Action(t, conv, "say"), v)
+		return err
+	}
+	for _, source := range []string{"agent:x", "import:y"} {
+		t.Run(source, func(t *testing.T) {
 			_, h, s := conversationStore(t)
-			c := client.InProcess(h, tc.source)
-			e, err := say(t, c, "today", "Hi")
+			if err := doSay(h, source, map[string]string{"text": "Hi"}); apitest.Status(err) != 403 {
+				t.Errorf("say as %s: %v, want 403", source, err)
+			}
+			if id, err := s.PageID(t.Context(), "Conversation "+convDay); err != nil || id != 0 {
+				t.Errorf("a refused say made the page: %d %v", id, err)
+			}
+		})
+	}
+	for _, tc := range []struct{ via, marker string }{
+		{"phone", "**Owner** (11:07, via phone): Hi"},
+		{"a:b.c", "**Owner** (11:07, via a:b.c): Hi"},
+		{"", "**Owner** (11:07): Hi"},
+	} {
+		t.Run("via "+tc.via, func(t *testing.T) {
+			_, h, s := conversationStore(t)
+			c := client.InProcess(h, "cli")
+			conv := apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation"))
+			v := map[string]string{"text": "Hi"}
+			if tc.via != "" {
+				v["via"] = tc.via
+			}
+			e, err := c.Do(t.Context(), apitest.Action(t, conv, "say"), v)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -123,6 +144,15 @@ func TestSayNamesTheRelayInTheOwnersParagraph(t *testing.T) {
 				t.Errorf("the turn: %v, want via %q", turn, tc.via)
 			}
 		})
+	}
+	_, h, s := conversationStore(t)
+	for _, bad := range []string{"Bad Name", "UPPER", strings.Repeat("a", 65)} {
+		if err := doSay(h, "cli", map[string]string{"text": "Hi", "via": bad}); apitest.Status(err) != 422 {
+			t.Errorf("say with via %q: %v, want 422", bad, err)
+		}
+	}
+	if id, err := s.PageID(t.Context(), "Conversation "+convDay); err != nil || id != 0 {
+		t.Errorf("a refused say made the page: %d %v", id, err)
 	}
 }
 

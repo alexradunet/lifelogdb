@@ -45,13 +45,14 @@ var errNoModel = errors.New("no model is set")
 type Agent struct {
 	Chat   Chat
 	Client *client.Client // sends siren.AgentPrefix + Source on every request, and so do the tools of the model
-	// Settings reads GET /settings at each turn. It has the owner's token and no source: the settings hold the key
-	// of the model, and the API refuses them to an agent. Only model() uses it. nil: Client.
-	Settings *client.Client
-	Owner    string // the number of the owner, digits only
-	State    string // the path of state.json
-	Now      func() time.Time
-	Log      *log.Logger // nil: the standard logger
+	// AsOwner is the owner's client: the owner's token, no source. The settings read and say use it, because the
+	// phone's message is the owner's turn and say is the owner's action (the settings hold the key of the model, and
+	// the API refuses them to an agent). nil: Client.
+	AsOwner *client.Client
+	Owner   string // the number of the owner, digits only
+	State   string // the path of state.json
+	Now     func() time.Time
+	Log     *log.Logger // nil: the standard logger
 	// Tick gives the moments when the worker looks at today's page. nil: every three seconds.
 	Tick <-chan time.Time
 
@@ -187,10 +188,10 @@ func (a *Agent) phoneTurn(ctx context.Context, m Message) {
 	a.finish(ctx, tctx, c, at)
 }
 
-// ownerSays sends the owner's text with the action say. Its answer is the conversation after the append: the
-// extension adopts it as its own save.
+// ownerSays sends the owner's text with the action say, as the owner, and names this program as the relay (via). Its
+// answer is the conversation after the append: the extension adopts it as its own save.
 func (a *Agent) ownerSays(ctx context.Context, text string) (*convo, error) {
-	e, err := a.Client.Do(ctx, a.actions["say"], map[string]string{"day": "today", "text": text})
+	e, err := a.owner().Do(ctx, a.actions["say"], map[string]string{"day": "today", "text": text, "via": Source})
 	if err != nil {
 		return nil, err
 	}
@@ -201,15 +202,19 @@ func (a *Agent) ownerSays(ctx context.Context, text string) (*convo, error) {
 	return c, a.adopt(c)
 }
 
+// owner is the client of the owner's requests: AsOwner, or Client when there is none.
+func (a *Agent) owner() *client.Client {
+	if a.AsOwner != nil {
+		return a.AsOwner
+	}
+	return a.Client
+}
+
 // model reads the settings of lifelog and makes the client of the model. It is called at each turn, so a change in
-// Settings is seen at once. The read is the owner's: the client Settings carries no source. The tools of the model
+// Settings is seen at once. The read is the owner's: the client AsOwner carries no source. The tools of the model
 // use Client, so their read of /settings is an agent's, and the API refuses it. The key is never in an error.
 func (a *Agent) model(ctx context.Context) (*model.Client, error) {
-	c := a.Settings
-	if c == nil {
-		c = a.Client
-	}
-	e, err := c.Get(ctx, "/settings")
+	e, err := a.owner().Get(ctx, "/settings")
 	if err != nil {
 		return nil, fmt.Errorf("settings: %w", err)
 	}

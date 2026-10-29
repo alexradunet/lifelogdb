@@ -21,12 +21,12 @@ flowchart LR
 
 - **One conversation a day, and it is a page.** The core owns the convention (the page `Conversation YYYY-MM-DD`,
   its category, its first line, the paragraph of a turn: see the conversation class in [API.md](../../API.md)). A
-  message from the phone goes in with the action `say` (`day` = `today`). The extension reads the page with
+  message from the phone goes in with the action `say` (`day` = `today`) as the owner's turn, with `via=whatsapp`. The extension reads the page with
   `GET /days/{day}/conversation` and holds no title and no category. The tool calls and the reply are added with
   `save-body`, as lines and `**lifelog** (HH:MM): text`. The model reads the whole page on each turn. The extension
   keeps nothing else of the conversation.
-- **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, with the owner's
-  token and no `Lifelog-Source`, through a second client that only this read uses. Every other request, the tools of
+- **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, and sends `say`, with the owner's
+  token and no `Lifelog-Source`, through a second client that only these two use. Every other request, the tools of
   the model too, carries `Lifelog-Source: agent:whatsapp`, so the model's own `get /settings` is refused (403): the key
   of the model never reaches the model, the page or the phone. A change in Settings is seen
   at the next turn. With no model set, the reply of the turn is one line, "No model is set: open Settings in

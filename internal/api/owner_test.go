@@ -39,7 +39,7 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	if record := apitest.Action(t, catalog, "record"); record.Owner {
 		t.Fatalf("record is owner-only: %+v", record)
 	}
-	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
+	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}, "say": {"day": "today", "text": "Hi"}}
 	for _, source := range []string{"agent:policy-test", "import:policy-test"} {
 		c := client.InProcess(h, source)
 		for _, a := range catalog.Actions {

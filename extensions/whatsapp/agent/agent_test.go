@@ -37,7 +37,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 	if err := r.finish(t); err != nil {
 		t.Fatal(err)
 	}
-	want := "[[2031-05-20]]\n\n**Owner** (09:30): I walked by the river\n\n- `capture` → [/days/2031-05-20/capture](/days/2031-05-20/capture)\n\n**lifelog** (09:30): Written to today."
+	want := "[[2031-05-20]]\n\n**Owner** (09:30, via whatsapp): I walked by the river\n\n- `capture` → [/days/2031-05-20/capture](/days/2031-05-20/capture)\n\n**lifelog** (09:30): Written to today."
 	if got := r.api.body(todayTitle); got != want {
 		t.Errorf("page body\n%q\nwant\n%q", got, want)
 	}
@@ -50,7 +50,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 			says = append(says, q)
 		}
 	}
-	if len(says) != 1 || says[0].Path != "/days/today/say" || says[0].Source != "agent:whatsapp" || !strings.Contains(says[0].Body, "text=I+walked+by+the+river") {
+	if len(says) != 1 || says[0].Path != "/days/today/say" || says[0].Source != "" || !strings.Contains(says[0].Body, "text=I+walked+by+the+river") || !strings.Contains(says[0].Body, "via=whatsapp") {
 		t.Errorf("say requests %+v", says)
 	}
 	w := r.api.writes()
@@ -65,7 +65,7 @@ func TestTheFirstTurnOfADayMakesThePageAndKeepsTheTurnOnIt(t *testing.T) {
 		t.Errorf("system message %+v", sys)
 	}
 	// The model sees the page with the owner's paragraph, which was saved before the model was called.
-	if got := userOf(reqs[0]); got != "[[2031-05-20]]\n\n**Owner** (09:30): I walked by the river" || len(reqs[0].Messages) != 2 {
+	if got := userOf(reqs[0]); got != "[[2031-05-20]]\n\n**Owner** (09:30, via whatsapp): I walked by the river" || len(reqs[0].Messages) != 2 {
 		t.Errorf("user message %q", got)
 	}
 	if last := reqs[1].Messages[len(reqs[1].Messages)-1]; last.Role != "tool" || last.ToolCallID != "call1" {
@@ -102,6 +102,10 @@ func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSourceAndEveryOther
 			if q.Method != "GET" || q.Source != "" || q.Auth != "Bearer "+token {
 				t.Errorf("settings request %+v, want a GET with the token and no source", q)
 			}
+		case strings.HasSuffix(q.Path, "/say"): // the owner's turn
+			if q.Source != "" || q.Auth != "Bearer "+token {
+				t.Errorf("say request %+v, want the token and no source", q)
+			}
 		default:
 			if q.Source != "agent:whatsapp" || q.Auth != "Bearer "+token {
 				t.Errorf("request %+v, want the source agent:whatsapp and the token", q)
@@ -111,7 +115,7 @@ func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSourceAndEveryOther
 			}
 		}
 	}
-	if reads != 2 || writes != 4 {
+	if reads != 2 || writes != 2 {
 		t.Errorf("%d settings reads and %d writes, want 2 and 4", reads, writes)
 	}
 }
@@ -278,7 +282,7 @@ func TestTwoMessagesAreAnsweredInOrderAndTheSecondSeesTheFirstOnThePage(t *testi
 		t.Fatal(err)
 	}
 	got := userOf(r.mod.requests()[1])
-	want := "[[2031-05-20]]\n\n**Owner** (09:30): first\n\n**lifelog** (09:30): answer 1\n\n**Owner** (09:30): second"
+	want := "[[2031-05-20]]\n\n**Owner** (09:30, via whatsapp): first\n\n**lifelog** (09:30): answer 1\n\n**Owner** (09:30, via whatsapp): second"
 	if got != want {
 		t.Errorf("second user message\n%q\nwant\n%q", got, want)
 	}
@@ -358,7 +362,7 @@ func TestAStaleVersionReadsTheSaveAgainAndAppendsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := api.body(todayTitle)
-	if strings.Count(body, "**Owner** (09:30): hello") != 1 || !strings.Contains(body, "Added on the web.x") || !strings.HasSuffix(body, "**lifelog** (09:30): noted") {
+	if strings.Count(body, "**Owner** (09:30, via whatsapp): hello") != 1 || !strings.Contains(body, "Added on the web.x") || !strings.HasSuffix(body, "**lifelog** (09:30): noted") {
 		t.Errorf("page body %q", body)
 	}
 }
@@ -515,7 +519,7 @@ func TestARestartKeepsTheThreadAndDoesNotAnswerItsOwnSaves(t *testing.T) {
 	if n := len(r2.mod.requests()); n != 1 {
 		t.Errorf("%d model requests after the restart, want 1", n)
 	}
-	if got := userOf(r2.mod.requests()[0]); !strings.Contains(got, "**lifelog** (09:30): first answer") || !strings.HasSuffix(got, "**Owner** (09:30): two") {
+	if got := userOf(r2.mod.requests()[0]); !strings.Contains(got, "**lifelog** (09:30): first answer") || !strings.HasSuffix(got, "**Owner** (09:30, via whatsapp): two") {
 		t.Errorf("the restarted agent lost the thread: %q", got)
 	}
 	if _, ok, err := LastSave(state + ".missing"); ok || err != nil {

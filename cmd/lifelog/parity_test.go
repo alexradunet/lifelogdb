@@ -1349,11 +1349,15 @@ func rowSettings(x *parityRun) {
 	}
 }
 
-// say is not the owner's: an owner and an agent both write the paragraph of a turn. The first turn makes the page in the
+// say is the owner's: an agent or an import is refused (403) and writes nothing. The first turn makes the page in the
 // category Conversations with the first line; a second turn is appended after a blank line; an empty text is 422 and
-// writes nothing. The stamp is the time of the surface's clock, so the row checks its shape only. An agent writer adds
-// `, via NAME` in the marker.
+// writes nothing. The stamp is the time of the surface's clock, so the row checks its shape only.
 func rowSay(x *parityRun) {
+	if !x.owner {
+		x.refused("say", map[string]string{"day": "today", "text": "Hello."}, http.StatusForbidden, "forbidden")
+		x.absent("Conversation " + parityToday)
+		return
+	}
 	x.refused("say", map[string]string{"day": "today", "text": " \n "}, http.StatusUnprocessableEntity, "invalid")
 	x.absent("Conversation " + parityToday)
 	e := x.ok("say", map[string]string{"day": "today", "text": "Hello."})
@@ -1366,7 +1370,7 @@ func rowSay(x *parityRun) {
 		x.t.Fatal(err)
 	}
 	p := props(x.t, pe)
-	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d:\d\d(?:, via [a-z0-9_:.-]+)?\): Hello\.\n\n\*\*Owner\*\* \(\d\d:\d\d(?:, via [a-z0-9_:.-]+)?\): Again\.$`)
+	want := regexp.MustCompile(`^\[\[` + parityToday + `\]\]\n\n\*\*Owner\*\* \(\d\d:\d\d\): Hello\.\n\n\*\*Owner\*\* \(\d\d:\d\d\): Again\.$`)
 	if body, _ := p["body"].(string); !want.MatchString(body) {
 		x.t.Errorf("the body after two turns: %q", body)
 	}

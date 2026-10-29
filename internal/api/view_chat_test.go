@@ -115,8 +115,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "say"), map[string]string{"text": "How did I **sleep**? See [[Sleep notes]]."}))
 	conversationBody(t, c, "\n\n- `search_pages` words=sleep\n- `read_day` failed: not_found\n\n**lifelog** (09:30): You slept *well*.\n")
-	relay := apitest.Remote(t, h, "agent:whatsapp")
-	apitest.Must(t)(relay.Do(t.Context(), apitest.Action(t, apitest.Must(t)(relay.Get(t.Context(), "/days/today/conversation")), "say"), map[string]string{"text": "And last night?"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/days/today/conversation")), "say"), map[string]string{"text": "And last night?", "via": "whatsapp"}))
 	body := apitest.Must(t)(c.Get(t.Context(), apitest.Href(apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation")), "page"))).Properties.(map[string]any)["body"].(string)
 	body = strings.Replace(body, "**Owner**", "A note the owner typed.\n\n**Owner**", 1) // text before the first marker is a text turn
 	conv := apitest.Must(t)(c.Get(t.Context(), "/days/"+fixedToday+"/conversation"))

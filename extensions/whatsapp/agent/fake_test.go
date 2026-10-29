@@ -155,11 +155,13 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e = siren.Entity{Properties: map[string]any{"status": status, "code": code, "message": "no"}}
 	}
 	var id int
+	src := r.Header.Get(siren.SourceHeader) // an agent or an import is not the owner
+	notOwner := strings.HasPrefix(src, "agent:") || strings.HasPrefix(src, "import:")
 	switch {
 	case r.URL.Path == "/actions":
 		e = siren.Entity{Actions: catalog()}
 	case r.URL.Path == "/settings" && r.Method == "GET":
-		if strings.HasPrefix(r.Header.Get(siren.SourceHeader), "agent:") || strings.HasPrefix(r.Header.Get(siren.SourceHeader), "import:") {
+		if notOwner {
 			fail(403, "forbidden")
 			break
 		}
@@ -173,6 +175,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/conversation") && r.Method == "GET":
 		e = f.conversation(strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/days/"), "/conversation"))
 	case strings.HasSuffix(r.URL.Path, "/say") && r.Method == "POST":
+		if notOwner {
+			fail(403, "forbidden")
+			break
+		}
 		day := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/days/"), "/say")
 		if day == "today" {
 			day = today
@@ -182,7 +188,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			p = &page{id: len(f.pages) + 1, title: "Conversation " + day, body: "[[" + day + "]]", category: "Conversations", version: 1}
 			f.pages = append(f.pages, p)
 		}
-		p.body, p.version = p.body+"\n\n**Owner** (09:30): "+r.PostForm.Get("text"), p.version+1
+		stamp := "(09:30)"
+		if via := r.PostForm.Get("via"); via != "" {
+			stamp = "(09:30, via " + via + ")"
+		}
+		p.body, p.version = p.body+"\n\n**Owner** "+stamp+": "+r.PostForm.Get("text"), p.version+1
 		e = f.conversation(day)
 	case strings.HasSuffix(r.URL.Path, "/body") && r.Method == "POST":
 		fmt.Sscanf(r.URL.Path, "/pages/%d/body", &id)
@@ -229,7 +239,7 @@ func catalog() []siren.Action {
 		{Name: "open-day", Method: "GET", Href: "/days/{day}", Fields: []siren.Field{{Name: "day", Type: "date", In: "path"}}},
 		{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Title: "Text"}}},
-		{Name: "say", Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{
+		{Name: "say", Owner: true, Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{
 			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Required: true}}},
 		{Name: "save-body", Method: "POST", Href: "/pages/{id}/body", Fields: []siren.Field{
 			{Name: "id", Type: "number", In: "path", Required: true}, {Name: "body", Type: "textarea", Required: true}, {Name: "version", Type: "hidden", Required: true}}},
@@ -380,8 +390,8 @@ func startOn(t *testing.T, script func(n int, r chatReq) (int, string), api *fak
 	t.Cleanup(apiSrv.Close)
 	a := &Agent{
 		Chat: r.chat, Client: client.Remote(apiSrv.URL, siren.AgentPrefix+Source, token),
-		Settings: client.Remote(apiSrv.URL, "", token),
-		Owner:    owner, State: r.state, Now: r.clock, Log: log.New(io.Discard, "", 0), Tick: r.tick,
+		AsOwner: client.Remote(apiSrv.URL, "", token),
+		Owner:   owner, State: r.state, Now: r.clock, Log: log.New(io.Discard, "", 0), Tick: r.tick,
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	r.cancel = cancel

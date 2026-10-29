@@ -26,17 +26,24 @@ func ConversationTitle(day string) string { return "Conversation " + day }
 // conversationFirstLine is the first line of the page: a link to the day it is about.
 func conversationFirstLine(day string) string { return "[[" + day + "]]" }
 
-// stamp is the brackets that begin an entry: the time in the server's zone, HH:MM, and the writer that relayed the
-// entry when an agent or an import wrote it (its prefix cut): `(HH:MM)` or `(HH:MM, via NAME)`. say and capture both
-// begin with it, so every surface stamps an entry alike.
-func (h *server) stamp(source string) string {
-	via := ""
+// stamp is the brackets that begin an entry: the time in the server's zone, HH:MM, and the name of the relay when
+// there is one: `(HH:MM)` or `(HH:MM, via NAME)`. say and capture both begin with it, so every surface stamps an
+// entry alike. say takes the name from its field via, capture from its source (relayOf).
+func (h *server) stamp(relay string) string {
+	if relay != "" {
+		relay = ", via " + relay
+	}
+	return "(" + h.s.Local().Format("15:04") + relay + ")"
+}
+
+// relayOf is the writer that relayed an entry when an agent or an import wrote it (its prefix cut), else "".
+func relayOf(source string) string {
 	for _, prefix := range []string{siren.AgentPrefix, siren.ImportPrefix} {
 		if name, ok := strings.CutPrefix(source, prefix); ok {
-			via = ", via " + name
+			return name
 		}
 	}
-	return "(" + h.s.Local().Format("15:04") + via + ")"
+	return ""
 }
 
 // words is the text of an entry as the page keeps it: LF line ends (a browser sends CRLF) and no blank edge.
@@ -176,8 +183,12 @@ func (h *server) say(r *http.Request, act spec, src string) (*siren.Entity, erro
 	if entry == "" {
 		return nil, core.Invalid("missing field text")
 	}
+	via := v.Get("via")
+	if via != "" && !writerRE.MatchString(via) {
+		return nil, core.Invalid("via %q: a name of letters, digits, _ : . -", via)
+	}
 	_, sync, err := h.s.AppendParagraph(r.Context(), src, ConversationTitle(day), day, conversationCategory,
-		conversationFirstLine(day), ownerParagraph(h.stamp(src), entry))
+		conversationFirstLine(day), ownerParagraph(h.stamp(via), entry))
 	if err != nil {
 		return nil, err
 	}

@@ -857,12 +857,13 @@ the others). When the page exists, the answer carries the page as a series carri
 deleted is no conversation: the answer has no turns, and `say` makes it live again. A browser's `GET /pages/{id}` of a
 live conversation page is a 303 to this resource, with the query kept; the JSON of the page is the page's own.
 
-`POST /days/{day}/say` (the action `say`, any writer): the field `text` is added to the page of the day as the
+`POST /days/{day}/say` (the action `say`, the owner's: 403 `forbidden` to an `agent:*` or `import:*` writer): the field `text` is added to the page of the day as the
 owner's turn, with the time of the server's clock in its zone. The page is made on the first turn of the day, in
 the same write; a deleted page of the conversation, or a deleted category `Conversations`, is revived by it. The
 answer is this entity, and `result` is the [save result](#result-of-capture-create-page-save-body).
 `say` is for today: a `day` that is not the server's local today is 422 `say is for today: the agent answers today's
-conversation`, and writes nothing. A `text` that is empty or only blanks is 422 and writes nothing.
+conversation`, and writes nothing. A `text` that is empty or only blanks is 422 and writes nothing. The optional field
+`via` names the relay, the program that carries the owner's words (`[a-z0-9_:.-]{1,64}`); another value is 422.
 
 **The format of the page.** An agent in any language reads and writes the conversation with `save-body`, or with `say`
 for the owner's turn. The page:
@@ -874,8 +875,7 @@ for the owner's turn. The page:
   outside a fenced code block (a line that starts with three backticks opens or closes a fence). `HH:MM` is the
   server's local time; a marker written with the earlier separator, `(HH.MM)`, is read the same. The agent writes `**lifelog**`, and `say` writes `**Owner**`. The brackets may also name the
   writer that relayed the turn: `**Owner** (HH:MM, via whatsapp): `, where the name is `[a-z0-9_:.-]+`. `say` writes
-  it when the writer is an `agent:*` or `import:*` source (the name is the source without its prefix), and writes
-  no such part for any other writer;
+  it when the request names `via`, and writes no such part without it;
 - runs a turn from its marker line to the line before the next marker line, or to the end of the page. The words of
   the turn are the rest of the marker line and the lines after it, with their inner blank lines (a turn may have many
   paragraphs, and a note that the owner adds after a reply is part of that reply). The blank edge is dropped;
@@ -893,7 +893,7 @@ for the owner's turn. The page:
 | `turns[]` | list | the turns, in the order of the page; empty when the page does not exist |
 | `turns[].who` | string | `owner`, `lifelog`, or `text` for a free paragraph |
 | `turns[].at` | string | `HH:MM`, also for a marker written as `HH.MM`; absent for a free paragraph |
-| `turns[].via` | string | the writer that relayed the turn, its prefix cut; absent when the owner wrote it on a surface of lifelog |
+| `turns[].via` | string | the relay named by `via`; absent when the owner wrote on a surface of lifelog |
 | `turns[].text` | string | the words of the turn, without the mark |
 | `turns[].tools` | list | the tool lines of a `lifelog` turn, as written, with the leading ``- ` ``; absent when none |
 | `turns[].refs` | list | the addresses of the turn's tool lines (paths that start with `/`), in order, unique; absent when none |

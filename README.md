@@ -348,12 +348,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   in `Conversations`, with the first line `[[YYYY-MM-DD]]`. A turn runs from a marker line, `**Owner** (HH:MM): text` or
   `**lifelog** (HH:MM): text` (outside a fenced code block), to the next marker line, with the tool lines of the agent
   (`` - `tool` ``) just before its marker. The time is
-  the server's local time. The marker may name the relay, `**Owner** (HH:MM, via whatsapp): `: `say` writes it for an
-  `agent:*` or `import:*` writer, and the turn carries it as `via` (and the addresses of its tool lines as `refs`). [API.md](API.md#conversation) states the format for an agent in any language, and
+  the server's local time. The marker may name the relay, `**Owner** (HH:MM, via whatsapp): `: `say` writes it when the
+  request names `via`, and the turn carries it as `via` (and the addresses of its tool lines as `refs`). [API.md](API.md#conversation) states the format for an agent in any language, and
   `internal/api/conversation.go` holds it in this program. `say` (`POST /days/{day}/say`, `today` allowed) adds the
   owner's turn and makes the page on the first turn of the day, in one write; it is for today only (another day is
-  422, and that day's conversation offers no `say`); it is not the owner's alone, so
-  the WhatsApp extension relays the owner's words with it. `GET /days/{day}/conversation` gives the turns, parsed from
+  422, and that day's conversation offers no `say`); it is the owner's alone: an
+  `agent:*` or `import:*` writer is refused (403), and it is never an MCP tool, so no agent speaks as the owner. The
+  WhatsApp extension relays the owner's words as the owner, with `via=whatsapp`; the paragraph then reads `**Owner** (HH:MM, via whatsapp): `. `GET /days/{day}/conversation` gives the turns, parsed from
   the body, with the page's properties, links and actions when the page exists (as a series carries a metric's page,
   [plan 144](docs/plans/144-one-view-for-a-metric.md)), and `say`. A browser's `GET /pages/{id}` of a live conversation
   page is a 303 to it, so there is one view of a conversation. A live conversation page keeps its title: it offers no
@@ -499,7 +500,7 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | action | API | CLI | MCP tool | browser |
 |---|---|---|---|---|
 | `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
-| `say` | `POST /days/{day}/say` | `do say` | `say` | every page: the chat column; the rail: Chat |
+| `say` | `POST /days/{day}/say` | `do say` | none, the owner's | every page: the chat column; the rail: Chat |
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
 | `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |

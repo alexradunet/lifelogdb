@@ -101,10 +101,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdin i
 	logger := log.New(stderr, "lifelog-whatsapp: ", log.LstdFlags)
 	a := &agent.Agent{
 		Client: client.Remote(*base, siren.AgentPrefix+agent.Source, token),
-		// The settings hold the key of the model and the owner's number: they are read as the owner, with no source.
-		Settings: client.Remote(*base, "", token),
-		State:    statePath,
-		Log:      logger,
+		// The settings hold the key of the model and the owner's number, and the phone's message is the owner's
+		// turn: both go as the owner, with no source.
+		AsOwner: client.Remote(*base, "", token),
+		State:   statePath,
+		Log:     logger,
 	}
 	if *terminalMode {
 		a.Owner = terminal.Sender
@@ -160,7 +161,7 @@ func serveWhatsApp(ctx context.Context, a *agent.Agent, sessionPath string, logg
 		after = saved
 	}
 	// The number comes from the settings, before the connection. A number that is set is used for the whole run.
-	if a.Owner, err = agent.WaitOwner(ctx, a.Settings, logger, nil); err != nil {
+	if a.Owner, err = agent.WaitOwner(ctx, a.AsOwner, logger, nil); err != nil {
 		return err
 	}
 	chat, err := whatsapp.Connect(ctx, s, a.Owner, after, logger)
