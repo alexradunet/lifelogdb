@@ -14,7 +14,7 @@ import (
 // browseKinds are the kinds Browse lists, in the order of its chips. A file is media when the first part of its type
 // is one of MediaKinds, else a document. BrowseCounts counts each of them, so only BrowseKinds gives them out, as a
 // copy.
-var browseKinds = []string{"page", "person", "place", "media", "document", "metric"}
+var browseKinds = []string{"page", "person", "media", "document", "metric"}
 
 // BrowseKinds are the kinds Browse lists (browseKinds). Each call gives a new copy: a caller that changes it does not
 // change the kinds that BrowseCounts counts, or the list of the next caller.
@@ -188,7 +188,7 @@ func (s *Store) BrowseCounts(ctx context.Context, sc Scope) (map[string]int, err
 	return out, nil
 }
 
-// NamedRow is a live person or place with how often the log mentions it.
+// NamedRow is a live person with how often the log mentions it.
 type NamedRow struct {
 	ID    int64
 	Title string
@@ -201,9 +201,9 @@ type NamedRow struct {
 	body    string
 }
 
-// NamedMentions is one page of the live people or places in the scope, by title (the folded title,
+// NamedMentions is one page of the live people in the scope, by title (the folded title,
 // preferred_name_key). It reads the mentions in the same query, so the cost does not grow with the number of rows.
-func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, offset int) ([]NamedRow, error) {
+func (s *Store) NamedMentions(ctx context.Context, sc Scope, limit, offset int) ([]NamedRow, error) {
 	where, args := sc.where()
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT p.id, p_name.title, count(DISTINCT lp.id),
@@ -212,9 +212,9 @@ func (s *Store) NamedMentions(ctx context.Context, typ string, sc Scope, limit, 
 		  JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		  LEFT JOIN links l ON l.to_id = p.id
 		  LEFT JOIN entities lp ON lp.id = l.from_id AND lp.deleted_at IS NULL
-		 WHERE p.entity_type = ? AND p.deleted_at IS NULL AND `+where+`
+		 WHERE p.entity_type = 'person' AND p.deleted_at IS NULL AND `+where+`
 		 GROUP BY p.id, p_name.title
-		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(append([]any{typ}, args...), limit, offset)...)
+		 ORDER BY p.preferred_name_key LIMIT ? OFFSET ?`, append(args, limit, offset)...)
 	out, err := list(rows, err, func(r *NamedRow) []any { return []any{&r.ID, &r.Title, &r.Mentions, &r.LastDay, &r.body} })
 	if err != nil {
 		return nil, err
@@ -363,15 +363,4 @@ func (s *Store) RandomThing(ctx context.Context, kind string) (int64, error) {
 		return 0, NotFound("nothing of the kind %s yet", kind)
 	}
 	return id, err
-}
-
-// PlaceTitles are the titles of the live places, in the order of their title keys: the options of a form that asks
-// for a place (the link `at` from a day page).
-func (s *Store) PlaceTitles(ctx context.Context) ([]string, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `
-		SELECT n.title
-		  FROM entities e JOIN entity_names n ON n.entity_id = e.id AND n.name_key = e.preferred_name_key
-		 WHERE e.entity_type = 'place' AND e.deleted_at IS NULL
-		 ORDER BY e.preferred_name_key`)
-	return list(rows, err, func(t *string) []any { return []any{t} })
 }

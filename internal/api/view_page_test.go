@@ -62,9 +62,9 @@ func TestEveryViewRenders(t *testing.T) {
 	day := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "Ran with [[Sam]] #running, `[[not a link]]`", "mood": "4"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page"))), "save-body"), map[string]string{"body": "Ran with [[Sam]] and [[Ana]] #running"}))
 	ana := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Ana"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person", "name": "Ana Popescu"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"name": "Ana Popescu"}))
 	sam := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Sam"))
-	lisbon := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
+	lisbon := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Lisbon"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, lisbon, "file-pages"), map[string]string{"category": "Cities"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "walk"}))
@@ -102,7 +102,6 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/browse", http.StatusOK, []string{`placeholder="A page's title, or words of a body">`, `<span class="first">Essay</span>`}},
 		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="person"><button class="quiet">A random one</button></form>`}},
 		{"/browse?deleted=1", http.StatusOK, []string{`<span class="first">Scratch</span>`}},
-		{"/browse?kind=place", http.StatusOK, nil},
 		{"/browse?ghosts=1", http.StatusOK, nil},
 		{"/metrics", http.StatusOK, nil},
 		{"/metrics/walk", http.StatusOK, nil},

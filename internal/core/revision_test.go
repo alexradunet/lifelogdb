@@ -284,8 +284,6 @@ func TestCreationIsNotAnEdit(t *testing.T) {
 		return
 	})
 	add("page with wikilinks", id, err)
-	id, err = s.CreatePlace(ctx, "cli", "Harbour")
-	add("place", id, err)
 	_, err = s.CreateMetric(ctx, "cli", NewMetric{Name: "Sleep", Unit: "h", Note: "hours slept, see [[Lakeside]]"})
 	if err == nil {
 		id, err = s.PageID(ctx, "Sleep")
@@ -392,13 +390,13 @@ func TestIncomingLinkDoesNotInvalidateAnOpenEdit(t *testing.T) {
 	if _, err := s.SaveBody(ctx, "api", topic, "about [[health]]", topicPage.Version); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "ui", topic, health, "part-of", "context"); err != nil {
+	if err := addLink(s, "ui", topic, health, "part-of", "context"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "ui", other, health, "part-of", ""); err != nil {
+	if err := addLink(s, "ui", other, health, "part-of", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Unlink(ctx, "ui", other, health, "part-of"); err != nil {
+	if err := dropLink(s, "ui", other, health, "part-of"); err != nil {
 		t.Fatal(err)
 	}
 	now, err := s.PageByID(ctx, health)

@@ -106,7 +106,7 @@ func (t *Tx) findPage(body bool, cond string, arg any) (*pageRef, error) {
 type ExistsError struct {
 	ID    int64
 	Title string
-	Plain bool // the page is a live plain page, so promote can make it a person or a place
+	Plain bool // the page is a live plain page, so promote can make it a person
 }
 
 func (e *ExistsError) Error() string { return "a page titled " + e.Title + " already exists" }

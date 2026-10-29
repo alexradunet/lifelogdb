@@ -110,14 +110,14 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	record := recordAction(ms, "", today)
 	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
-		action("create-page", nil, nil), action("create-person", nil, nil), action("create-place", nil, nil), action("add-file", nil, nil),
+		action("create-page", nil, nil), action("create-person", nil, nil), action("add-file", nil, nil),
 		record, planAction(today), action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &siren.Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
 			link("browse", siren.BrowseHref(nil), "Browse"), link("plans", "/plans", "Plans"), link("people", siren.BrowseKindHref("person"), "People"),
-			link("places", siren.BrowseKindHref("place"), "Places"), link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
+			link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", siren.GhostsHref(), "Ghost pages"), link("actions", "/actions", "All actions"),
 			link("calendar", siren.MonthHref(now), "Calendar"),
 			link("year", siren.YearHref(now.Year()), "This year")},
@@ -166,7 +166,7 @@ func neighbourLinks(prev, next neighbour) []siren.Link {
 // streamLimit is the count of the cards of a page of the stream when the request names none.
 const streamLimit = 30
 
-// cardChip is a place, a person or a birthday of a card, with the address of its page.
+// cardChip is a person or a birthday of a card, with the address of its page.
 type cardChip struct {
 	Title string `json:"title"`
 	Href  string `json:"href"`
@@ -187,7 +187,6 @@ type dayCard struct {
 	Words     string     `json:"words,omitempty"`
 	Mood      []float64  `json:"mood,omitempty"`
 	Picture   string     `json:"picture,omitempty"`
-	Places    []cardChip `json:"places,omitempty"`
 	People    []cardChip `json:"people,omitempty"`
 	MoreChips int        `json:"more_chips,omitempty"`
 	Birthdays []cardChip `json:"birthdays,omitempty"`
@@ -202,11 +201,7 @@ func cardOf(c core.Card) dayCard {
 	d := dayCard{Day: c.Day, PageID: c.PageID, Words: c.Words, Mood: c.Mood, Picture: pictureHref(c.Picture),
 		MoreChips: c.MoreChips, MorePages: c.MorePages, Readings: c.Readings}
 	for _, it := range c.Chips {
-		if it.Kind == "place" {
-			d.Places = append(d.Places, chip(it))
-		} else {
-			d.People = append(d.People, chip(it))
-		}
+		d.People = append(d.People, chip(it))
 	}
 	for _, it := range c.Birthdays {
 		d.Birthdays = append(d.Birthdays, chip(it))
@@ -352,7 +347,7 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 		}
 		e.Actions = append(e.Actions, saveBodyAction(d.PageID, p.Body, p.Version))
 		e.Links = append(e.Links, coverLinks(p)...)
-		e.Actions = append(e.Actions, action("set-cover", idParam(d.PageID), nil), action("unlink", idParam(d.PageID), map[string]any{"kind": "at"}))
+		e.Actions = append(e.Actions, action("set-cover", idParam(d.PageID), nil))
 		dv := e.Properties.(dayView)
 		dv.Cover = p.Cover
 		e.Properties = dv

@@ -181,9 +181,9 @@ func TestAFieldOfPageTitlesOffersThemInADatalist(t *testing.T) {
 			`<input type="text" name="category" value="" required list="pick-category"><datalist id="pick-category"><option value="Art"><option value="Gym"></datalist></label>`},
 		{"with no options", markup(drawForm(t, filePages(nil))),
 			`<input type="text" name="category" value="" required></label>`},
-		{"not a page's title", markup(drawForm(t, siren.Action{Name: "promote", Title: "Promote", Method: "POST", Href: "/pages/7/promote", Fields: []siren.Field{
-			{Name: "to", Type: "text", Title: "Into", Required: true, Options: []string{"person", "place"}}}})),
-			`<select name="to"><option>person</option><option>place</option></select>`},
+		{"not a page's title", markup(drawForm(t, siren.Action{Name: "sort", Title: "Sort", Method: "POST", Href: "/pages/7/sort", Fields: []siren.Field{
+			{Name: "by", Type: "text", Title: "By", Required: true, Options: []string{"title", "day"}}}})),
+			`<select name="by"><option>title</option><option>day</option></select>`},
 		{"the titles 0 and 1", markup(drawForm(t, flagLike)),
 			`<input type="text" name="category" value="" list="register-metric-category"><datalist id="register-metric-category"><option value="0"><option value="1"></datalist></label>`},
 	} {

@@ -12,8 +12,7 @@ import (
 // application's reading of a person's days.
 
 // datedRow is a row the calendar shows on its day: a page that is not a day page and has the day (kind page, or file
-// for a file), or a live place the live day page links with at (place). ID is the page's or the place's. Pages is
-// the count of the day's pages and files, on a page or a file.
+// for a file). Pages is the count of the day's pages and files, on a page or a file.
 type datedRow struct {
 	Day   string
 	Kind  string
@@ -22,9 +21,8 @@ type datedRow struct {
 	Pages int
 }
 
-// dated are the dated rows of the days that days selects, by day: the places and the pages in the order of their
-// titles, at most pagesPerDay pages and files a day. days is the rest of a condition on a day column, after the
-// column ("IN (SELECT value FROM json_each(:days))"), with its named arguments.
+// dated are the dated rows of the days that days selects, by day: the pages in the order of their titles, at most pagesPerDay
+// pages and files a day. days is the rest of a condition on a day column, after the column ("IN (SELECT value FROM json_each(:days))"), with its named arguments.
 func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ...any) ([]datedRow, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT day, kind, id, title, n FROM (
@@ -34,13 +32,6 @@ func (s *Store) dated(ctx context.Context, days string, pagesPerDay int, args ..
 		         count(*) OVER (PARTITION BY p.day) AS n
 		    FROM entities p JOIN entity_names p_name ON p_name.entity_id = p.id AND p_name.name_key = p.preferred_name_key
 		   WHERE p.day `+days+` AND NOT p.is_journal AND p.deleted_at IS NULL
-		  UNION ALL
-		  SELECT d.day, 'place', pl.id, pl_name.title, 1, pl.preferred_name_key, 0, 0
-		    FROM entities d
-		    JOIN links l ON l.from_id = d.id AND l.kind = 'at'
-		    JOIN entities pl ON pl.id = l.to_id AND pl.deleted_at IS NULL
-		    JOIN entity_names pl_name ON pl_name.entity_id = pl.id AND pl_name.name_key = pl.preferred_name_key
-		   WHERE d.is_journal AND d.day `+days+` AND d.deleted_at IS NULL
 		) WHERE r <= :cap
 		ORDER BY day, rank, sortkey, id`, append(args, sql.Named("cap", pagesPerDay))...)
 	return list(rows, err, func(d *datedRow) []any { return []any{&d.Day, &d.Kind, &d.ID, &d.Title, &d.Pages} })

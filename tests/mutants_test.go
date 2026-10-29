@@ -21,10 +21,9 @@ type change struct {
 	nth        int
 }
 
-func edit(old, new string) change             { return change{"edit", old, new, 0} }
-func editNth(old, new string, nth int) change { return change{"edit", old, new, nth} }
-func nocheck(name string) change              { return change{"nocheck", name, "", 0} }
-func notrigger(name string) change            { return change{"notrigger", name, "", 0} }
+func edit(old, new string) change  { return change{"edit", old, new, 0} }
+func nocheck(name string) change   { return change{"nocheck", name, "", 0} }
+func notrigger(name string) change { return change{"notrigger", name, "", 0} }
 
 // apply is the files the change breaks, by their path relative to docs/.
 func (ch change) apply(d *Docs) (map[string]string, error) {

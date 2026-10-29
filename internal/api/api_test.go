@@ -80,6 +80,7 @@ func TestEveryCatalogActionHasItsRouteAndItsOwnerRule(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Route probe"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Picked at random"})) // promote with no field makes the probe page a person
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "capture"), map[string]string{"text": "A day picked at random."}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	m := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "record"), map[string]string{"metric": "weight", "day": "2026-09-01", "value": "71"}))
@@ -270,23 +271,16 @@ func TestActionsAreOfferedOnlyWhereLegal(t *testing.T) {
 		t.Fatal(err)
 	}
 	dayPage := apitest.Must(t)(c.Get(t.Context(), apitest.Href(day, "page")))
-	if got := names(dayPage); got != "save-body,plan,tick,carry,schedule,set-cover,link,unlink,tombstone-pages" {
+	if got := names(dayPage); got != "save-body,plan,tick,carry,schedule,set-cover,tombstone-pages" {
 		t.Errorf("a day page offers %s (never promote)", got)
 	}
-	if !hasOption(apitest.Action(t, dayPage, "link"), "kind", "at") {
-		t.Error("a day page does not offer an at link")
-	}
-	if hasOption(apitest.Action(t, dayPage, "link"), "kind", "part-of") {
-		t.Error("a day page offers a part-of link (D26: a day page is never filed)")
-	}
 	ana := apitest.Must(t)(c.Get(t.Context(), dayPage.Entities[0].Href))
-	// A plain page may start part-of only, which file-pages writes, so it offers no link (D16: at is from a day
-	// page only); with from it takes it out of one.
+	// A plain page is filed by file-pages; with from it takes it out of a category.
 	if got := names(ana); got != "save-body,plan,tick,carry,schedule,promote,rename,set-cover,file-pages,tombstone-pages" {
 		t.Errorf("a plain page offers %s", got)
 	}
-	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), map[string]string{"to": "person"}))
-	if got := names(ana); hasAction(ana, "promote") || hasAction(ana, "link") {
+	ana = apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "promote"), nil))
+	if got := names(ana); hasAction(ana, "promote") {
 		t.Errorf("a person offers %s", got)
 	}
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, ana, "tombstone-pages"), nil))
@@ -317,18 +311,6 @@ func TestExistingTitleLinksToThePage(t *testing.T) {
 	e, err := c.Do(t.Context(), create, map[string]string{"title": "CAFÉ"})
 	if err == nil || apitest.Href(e, "existing") == "" {
 		t.Errorf("a duplicate title: %v, links %v", err, e.Links)
-	}
-}
-
-// A link from an id that no page has is a missing row (404), not the foreign key's refusal (422).
-func TestLinkFromAMissingPageIsNotFound(t *testing.T) {
-	c, _, _ := apitest.Fresh(t, "cli")
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Target"}))
-	link := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "link") // the templated action: the id is a path field
-	_, err := c.Do(t.Context(), link, map[string]string{"id": "999999", "to": "Target", "kind": "part-of"})
-	if code, status := codeOf(t, err); code != "not_found" || status != 404 {
-		t.Errorf("link from a missing page: code=%q status=%d (%v)", code, status, err)
 	}
 }
 
@@ -642,7 +624,7 @@ func TestMetricCanonicalActions(t *testing.T) {
 					t.Error("self link changes actions")
 				}
 				restricted := tc.state == "unknown" || tc.state == "deleted"
-				if restricted && (pageOf(e) != "" || hasAction(e, "link")) {
+				if restricted && (pageOf(e) != "" || hasAction(e, "file-pages")) {
 					t.Errorf("restricted metric offers actions: %s", names(e))
 				}
 			}
@@ -680,10 +662,6 @@ func TestRenamedIdentityRetainsActionsAndAliasWrites(t *testing.T) {
 	alias := apitest.Must(t)(c.Get(t.Context(), "/pages?title=Typo"))
 	if apitest.Href(alias, "self") != oldHref || alias.Title != "Correct" || alias.Properties.(map[string]any)["body"] != "#REDIRECT [[Other]]" {
 		t.Fatalf("retained alias: %+v", alias)
-	}
-	link := apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/actions")), "link") // a plain page offers no link of its own
-	if _, err := c.Do(t.Context(), link, map[string]string{"id": strings.TrimPrefix(oldHref, "/pages/"), "to": "Other", "kind": "redirect"}); apitest.Status(err) != 422 {
-		t.Fatalf("removed kind: %v", err)
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 // a file) or a current reading. Every read after the read of the days takes the days of the page as one set
 // (json_each), not a window: 30 sparse days can span decades.
 
-// The bounds of a card: the lines of its journal, its chips (the places and the people together) and the titles of its
+// The bounds of a card: the lines of its journal, its chips (the people) and the titles of its
 // pages. The rest is a count.
 const (
 	cardLines = 4
@@ -18,7 +18,7 @@ const (
 	cardPages = 3
 )
 
-// CardItem is a thing a card names: a place, a person, a birthday, a page or a file (Kind).
+// CardItem is a thing a card names: a person, a birthday, a page or a file (Kind).
 type CardItem struct {
 	Kind  string
 	ID    int64
@@ -26,9 +26,8 @@ type CardItem struct {
 }
 
 // Card is one day of the stream. PageID and Words are its live day page's, 0 and "" on a slim card (a day with no
-// day page). Picture is the day page's cover (0 for none). Chips are its places (the at links of the day page) then
-// its people (the wikilinks of the day page to a live person), at most cardChips, and MoreChips the rest. Birthdays
-// are the people born on its month and day. Pages are its pages and files, at most cardPages, and MorePages the rest.
+// day page). Picture is the day page's cover (0 for none). Chips are its people (the wikilinks of the day page to a live
+// person), at most cardChips, and MoreChips the rest. Birthdays are the people born on its month and day. Pages are its pages and files, at most cardPages, and MorePages the rest.
 // Readings are its current readings other than the Mood's.
 type Card struct {
 	Day       string
@@ -106,10 +105,6 @@ func (s *Store) fillCards(ctx context.Context, cards []Card, days []string) erro
 	}
 	for _, d := range dated {
 		c := at[d.Day]
-		if d.Kind == "place" {
-			c.addChip(CardItem{d.Kind, d.ID, d.Title})
-			continue
-		}
 		c.Pages = append(c.Pages, CardItem{d.Kind, d.ID, d.Title})
 		c.MorePages = max(d.Pages-cardPages, 0)
 	}
@@ -130,7 +125,7 @@ func (s *Store) fillCards(ctx context.Context, cards []Card, days []string) erro
 	return nil
 }
 
-// addChip adds a place or a person to a card, or counts it when the card has cardChips already.
+// addChip adds a person to a card, or counts it when the card has cardChips already.
 func (c *Card) addChip(it CardItem) {
 	if len(c.Chips) < cardChips {
 		c.Chips = append(c.Chips, it)
@@ -146,7 +141,7 @@ type dayPerson struct {
 }
 
 // cardPeople are the live people the live day pages of the days :days link with a wikilink, by day, then in the
-// order of their titles. A place a day page names with a wikilink is not one: its at link is its chip.
+// order of their titles.
 func (s *Store) cardPeople(ctx context.Context, days sql.NamedArg) ([]dayPerson, error) {
 	rows, err := s.DB.R.QueryContext(ctx, `
 		SELECT d.day, pe.id, n.title

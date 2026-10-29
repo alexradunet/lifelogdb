@@ -472,7 +472,6 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 		"text":    true, // a field of capture
 		"created": true, // a list of the answer of capture
 		"skipped": true, // a list of the answer of capture
-		"at":      true, // the kind of a link from a day page to a place
 		"owner":   true, // the mark of an owner-only action in the catalog
 	}
 	toolLike := regexp.MustCompile(`^[a-z]+(_[a-z]+)*$`)

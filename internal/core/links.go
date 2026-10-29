@@ -98,7 +98,7 @@ func dayOfTitle(title string) any {
 	return nil
 }
 
-// link is Store.Link in t; added reports whether the link is new.
+// link adds an edge of a registered kind in t (D8); added reports whether the link is new.
 func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 	if kind == "wikilink" {
 		return false, Invalid("wikilink links are written by saving a body, not directly")
@@ -121,37 +121,6 @@ func (t *Tx) link(from, to int64, kind, note string) (added bool, err error) {
 		return false, err
 	}
 	return n > 0, nil
-}
-
-// unlink is Store.Unlink in t.
-func (t *Tx) unlink(from, to int64, kind string) error {
-	if kind == "wikilink" {
-		return Invalid("wikilink links are removed by saving a body, not directly")
-	}
-	res, err := t.tx.ExecContext(t.ctx, `DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = ?`, from, to, kind)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return NotFound("no %s link from %d to %d", kind, from, to)
-	}
-	return nil
-}
-
-// Link adds an edge of a registered kind (D8). wikilink rows belong to the save contract, so none is written here. A
-// kind that the registry does not have (redirect among them) and the endpoint rules, an `at` from a day page among
-// them, are links_endpoint_types. A from id that no page has is a 404.
-func (s *Store) Link(ctx context.Context, source string, from, to int64, kind, note string) error {
-	return s.Do(ctx, source, func(t *Tx) error { _, err := t.link(from, to, kind, note); return err })
-}
-
-// Unlink deletes one edge (links rows are the one table whose rows are deleted, D11).
-func (s *Store) Unlink(ctx context.Context, source string, from, to int64, kind string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.unlink(from, to, kind) })
 }
 
 // Edge is a link seen from one end; ID and Title are the other end.

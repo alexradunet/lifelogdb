@@ -56,8 +56,7 @@ func (t *Tx) CreatePage(title, body, day string) (id int64, r Sync, err error) {
 	return id, r, err
 }
 
-// CreatePerson and CreatePlace are cookbook/person-or-place.md's create: one id, a page, and for a person a
-// people row.
+// CreatePerson is cookbook/person.md's create: one id, a page and a people row.
 func (t *Tx) CreatePerson(title, name, birth, death string) (int64, error) {
 	if name == "" {
 		name = title
@@ -69,14 +68,10 @@ func (t *Tx) CreatePerson(title, name, birth, death string) (int64, error) {
 	})
 }
 
-func (t *Tx) CreatePlace(title string) (int64, error) {
-	return t.createNamed("place", title, "", nil, nil)
-}
-
 // createNamed creates one entity: its row in entities with the whole body, its preferred name in entity_names, and
-// then extra for its typed row. It is the one check of the title for CreatePage, CreatePerson and CreatePlace: the
+// then extra for its typed row. It is the one check of the title for CreatePage and CreatePerson: the
 // title must be valid, and no page, live or deleted, may hold its key (the ExistsError names that page). day is the
-// day of a page (for a day page, its date), nil for a person or a place. Creation is one write, so the new entity is
+// day of a page (for a day page, its date), nil for a person. Creation is one write, so the new entity is
 // at revision 1 (lifelog_meta.edit_revisions). The caller syncs the wikilinks of the body after the typed row exists.
 func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) error) (int64, error) {
 	if err := checkTitle("title", title); err != nil {
@@ -100,7 +95,7 @@ func (t *Tx) createNamed(typ, title, body string, day any, extra func(int64) err
 	return id, extra(id)
 }
 
-// promotable says whether a page may be offered to become a person, a place or a metric: a live plain page that is
+// promotable says whether a page may be offered to become a person or a metric: a live plain page that is
 // not a day page or a period page (entities_day_page_plain, entities_period_page) and that nothing is filed in (a
 // category: its part-of links need a plain page, entities_endpoint_types). It reads the stored columns. It is an
 // offer, not a rule: a promotion that the schema refuses for another reason is still the schema's 422.
@@ -113,14 +108,7 @@ func (t *Tx) promotable(id int64) (bool, error) {
 }
 
 // promote is Store.Promote in t.
-func (t *Tx) promote(id int64, typ, name, birth, death string) error {
-	if typ != "person" && typ != "place" {
-		return Invalid("promote to person or place, not %q", typ)
-	}
-	// A place has no name apart from its title and no dates. The schema cannot see a field that it has no column for.
-	if typ == "place" && (name != "" || birth != "" || death != "") {
-		return Invalid("a place takes no full name and no birth_day or death_day: they are for a person")
-	}
+func (t *Tx) promote(id int64, name, birth, death string) error {
 	var have string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT entity_type FROM entities WHERE id = ?`, id).Scan(&have)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -129,27 +117,24 @@ func (t *Tx) promote(id int64, typ, name, birth, death string) error {
 	if err != nil {
 		return err
 	}
-	// The schema refuses a person, a place, a metric or a file promoted to another type (entities_promote_from_page).
-	// A promotion to the type that the entity has already changes no type, so no rule of the schema sees it: for a
-	// place the update below would only revive a tombstone, and for a person the people insert would fail on its key.
+	// The schema refuses a person, a metric or a file promoted to another type (entities_promote_from_page). A person
+	// promoted to a person changes no type, so no rule of the schema sees it: the people insert would fail on its key.
 	// The writer refuses it with this 409.
-	if have == typ {
+	if have == "person" {
 		return Conflict("page %d is a %s, not a plain page to promote", id, have)
 	}
-	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = ?, deleted_at = NULL WHERE id = ?`, typ, id); err != nil {
+	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'person', deleted_at = NULL WHERE id = ?`, id); err != nil {
 		return err
 	}
-	if typ == "person" {
-		if name == "" {
-			p, err := t.findPage(false, `e.id = ?`, id)
-			if err != nil {
-				return err
-			}
-			name = p.Title
+	if name == "" {
+		p, err := t.findPage(false, `e.id = ?`, id)
+		if err != nil {
+			return err
 		}
-		_, err = t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
-			id, name, nullIfEmpty(birth), nullIfEmpty(death))
+		name = p.Title
 	}
+	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO people(id, name, birth_day, death_day) VALUES (?, ?, ?, ?)`,
+		id, name, nullIfEmpty(birth), nullIfEmpty(death))
 	return err
 }
 
@@ -239,11 +224,6 @@ func (s *Store) CreatePerson(ctx context.Context, source, title, name, birth, de
 	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.CreatePerson(title, name, birth, death) })
 }
 
-// CreatePlace makes the place. file-pages files it in a category.
-func (s *Store) CreatePlace(ctx context.Context, source, title string) (int64, error) {
-	return alone(s, ctx, source, func(t *Tx) (int64, error) { return t.CreatePlace(title) })
-}
-
 // fileNew files a page made in this write in the category titled category ("" for none), as FilePages files it:
 // a missing category is made, and a day as the category refuses the whole write: entities_day_page refuses a plain
 // page with a day's title, and links_endpoint_types a part-of link to a day page that exists.
@@ -255,16 +235,14 @@ func (t *Tx) fileNew(id int64, category string) error {
 	return err
 }
 
-// Promote makes a plain page a person or a place (cookbook/person-or-place.md): the id and its links stay, a
-// tombstoned page is revived. A missing id is 404; a page of another type is the schema's 422
-// (entities_promote_from_page), and a promotion to the type that the entity has already is a 409.
-//
-// name, birth and death are for a person; for a place any of them is a 422. They are empty when not given.
-func (s *Store) Promote(ctx context.Context, source string, id int64, typ, name, birth, death string) error {
-	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, typ, name, birth, death) })
+// Promote makes a plain page a person (cookbook/person.md): the id and its links stay, a tombstoned page is
+// revived. A missing id is 404; a page of another type is the schema's 422 (entities_promote_from_page), and a
+// person is a 409. name, birth and death are empty when not given.
+func (s *Store) Promote(ctx context.Context, source string, id int64, name, birth, death string) error {
+	return s.Do(ctx, source, func(t *Tx) error { return t.promote(id, name, birth, death) })
 }
 
-// EditPerson changes the full name and the dates of a live person (cookbook/person-or-place.md). The handle, which
+// EditPerson changes the full name and the dates of a live person (cookbook/person.md). The handle, which
 // is the page's title, changes with rename. A page of another type is a 409, a missing page a 404, a tombstoned one a
 // 409; a bad date, an empty name or a death before the birth is the 422 of the schema (people_name,
 // people_birth_day, people_death_day, people_death_day_order).
@@ -402,7 +380,7 @@ type Hit struct {
 
 // searchKinds are the kinds a search groups its hits by (docs/plans/130-the-explore-pass.md, part 6), in the order of
 // the groups. A metric is a page: its page is words, as a page is.
-var searchKinds = []string{"day", "page", "person", "place", "file"}
+var searchKinds = []string{"day", "page", "person", "file"}
 
 // SearchKinds are the kinds of a hit (searchKinds), as a copy.
 func SearchKinds() []string { return slices.Clone(searchKinds) }

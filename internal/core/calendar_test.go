@@ -84,7 +84,7 @@ func TestBirthdaysComeBackEachYear(t *testing.T) {
 
 func TestDatedRowsOfAWindow(t *testing.T) {
 	s := fresh(t)
-	dayPage, _, err := s.Capture(ctx, "cli", "2031-05-14", "A walk by the lake.", nil)
+	_, _, err := s.Capture(ctx, "cli", "2031-05-14", "A walk by the lake.", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,13 +111,6 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 	if _, err := s.AddFile(ctx, "cli", FileIn{Title: "Lake.jpg", SHA256: strings.Repeat("a", 64), MIME: "image/jpeg", Day: "2031-05-14"}); err != nil {
 		t.Fatal(err)
 	}
-	park, err := s.CreatePlace(ctx, "cli", "Lake Park")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Link(ctx, "cli", dayPage, park, "at", ""); err != nil {
-		t.Fatal(err)
-	}
 
 	set, err := json.Marshal(daysFrom(t, "2031-05-01", "2031-05-31"))
 	if err != nil {
@@ -132,7 +125,6 @@ func TestDatedRowsOfAWindow(t *testing.T) {
 		got = append(got, fmt.Sprintf("%s %s %s %d", r.Day, r.Kind, r.Title, r.Pages))
 	}
 	want := []string{
-		"2031-05-14 place Lake Park 0",
 		"2031-05-14 file Lake.jpg 2",
 		"2031-05-14 page Notes on rivers 2",
 	}

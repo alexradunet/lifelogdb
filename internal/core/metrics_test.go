@@ -446,9 +446,6 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if _, _, err := s.Capture(ctx, "cli", "2031-05-02", "a day", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreatePlace(ctx, "cli", "Lake Example"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := s.CreatePerson(ctx, "cli", "Ana Example", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +455,7 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	if _, _, err := s.CreatePage(ctx, "cli", "Grade", "what the teacher gives", ""); err != nil {
 		t.Fatal(err)
 	}
-	const promoteOnly = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
+	const promoteOnly = "only a plain page is promoted: a person, a metric or a file keeps its type (D20)"
 	const outOfOrder = "a scale names its range as its unit, lo-hi with lo less than hi, as in 1-5 (D6)"
 	for _, c := range []struct {
 		name string
@@ -468,8 +465,7 @@ func TestCreateMetricRefusalsWriteNothing(t *testing.T) {
 	}{
 		// a day page is never a metric: the schema refuses the promotion
 		{"a day page's title", NewMetric{Name: "2031-05-02", Unit: "km"}, 422, "entities_day_page_plain"},
-		// a person, a place or a file is never a metric: the schema refuses the promotion (entities_promote_from_page)
-		{"a place's title", NewMetric{Name: "Lake Example", Unit: "km"}, 422, promoteOnly},
+		// a person or a file is never a metric: the schema refuses the promotion (entities_promote_from_page)
 		{"a person's title", NewMetric{Name: "Ana Example", Unit: "km"}, 422, promoteOnly},
 		{"a file's title", NewMetric{Name: "Scan.pdf", Unit: "km"}, 422, promoteOnly},
 		// a unit of the shape lo-hi with lo not less than hi is not a range: the schema refuses it (metrics_range_order),

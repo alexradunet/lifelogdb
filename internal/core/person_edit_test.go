@@ -2,22 +2,11 @@ package core
 
 import "testing"
 
-func TestPromoteKeepsTheDatesOfAPersonAndRefusesThemForAPlace(t *testing.T) {
+func TestPromoteKeepsTheDatesOfAPerson(t *testing.T) {
 	s := fresh(t)
-	_, _, _ = s.Capture(ctx, "cli", "2026-07-31", "With [[Sam]] at [[Pier]]", nil)
+	_, _, _ = s.Capture(ctx, "cli", "2026-07-31", "With [[Sam]]", nil)
 	sam, _ := s.PageID(ctx, "Sam")
-	pier, _ := s.PageID(ctx, "Pier")
-	for _, tc := range []struct{ name, birth, death string }{
-		{"", "1980-02-03", "2020-01-01"}, {"", "", "2020-01-01"}, {"Full name", "", ""},
-	} {
-		if err := s.Promote(ctx, "cli", pier, "place", tc.name, tc.birth, tc.death); status(err) != 422 {
-			t.Errorf("a place with %+v: %v, want 422", tc, err)
-		}
-	}
-	if p, _ := s.PageByID(ctx, pier); p.Type != "page" {
-		t.Errorf("a refused promotion changed the type to %s", p.Type)
-	}
-	if err := s.Promote(ctx, "cli", sam, "person", "Samuel Ortiz", "1980-02-03", ""); err != nil {
+	if err := s.Promote(ctx, "cli", sam, "Samuel Ortiz", "1980-02-03", ""); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := s.PageByID(ctx, sam)

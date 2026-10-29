@@ -231,7 +231,6 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 	for _, kind := range []struct{ title, href, action, post string }{ // post: the address the action's form posts to
 		{"Page", "/browse?kind=page&new=create-page", "create-page", "/pages"},
 		{"Person", "/browse?kind=person&new=create-person", "create-person", "/people"},
-		{"Place", "/browse?kind=place&new=create-place", "create-place", "/places"},
 		{"Metric", "/metrics?new=register-metric", "", ""},
 		{"Reading", "/?new=record#record", "record", "/measurements"},
 		{"File", "/browse?kind=media&new=add-file", "add-file", "/files"},
@@ -255,8 +254,8 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 			}
 		}
 	}
-	if strings.Count(menu, "<li>") != 6 {
-		t.Errorf("the New menu has %d items, want 6", strings.Count(menu, "<li>"))
+	if strings.Count(menu, "<li>") != 5 {
+		t.Errorf("the New menu has %d items, want 5", strings.Count(menu, "<li>"))
 	}
 }
 
@@ -303,10 +302,10 @@ func TestTheCatalogSaysOneVerbForOneMeaning(t *testing.T) {
 		titles[a.Name] = a.Title
 	}
 	for name, want := range map[string]string{
-		"create-page": "New page", "create-person": "New person", "create-place": "New place",
+		"create-page": "New page", "create-person": "New person", "promote": "Make it a person",
 		"register-metric": "New metric", "add-file": "New file",
-		"record": "Add a reading", "link": "Add a link", "capture": "Add to the day",
-		"unlink": "Remove a link", "revive": "Restore", "file-pages": "Put in a category",
+		"record": "Add a reading", "capture": "Add to the day",
+		"revive": "Restore", "file-pages": "Put in a category",
 	} {
 		if titles[name] != want {
 			t.Errorf("%s is titled %q, want %q", name, titles[name], want)

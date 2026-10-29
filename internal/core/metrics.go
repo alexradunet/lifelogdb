@@ -16,8 +16,7 @@ import (
 // RegisterMetric makes a metric (D27): a page titled m.Name, whose body is m.Note, and its metrics row with the
 // unit and the daily mark (D31), one id. A plain page of that title becomes the metric, as a person is promoted (D20): a ghost, or a note
 // the owner wrote about it, whose text is kept — the note is written only to an empty body. The schema refuses a
-// person, a place or a file of that title (entities_promote_from_page). Registering one that
-// exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
+// person or a file of that title (entities_promote_from_page). Registering one that exists with the same unit is a no-op, and so is one with no unit where the existing metric is a scale (isScale): a
 // source that names Mood does not write its range, so the request takes the metric as it is. Another unit is
 // refused: a unit never changes (metrics_unit_fixed). A metric that exists keeps its mark, and a request that sends a
 // different mark is refused: EditMetric changes it (nothing is dropped in silence).
@@ -57,7 +56,7 @@ func (t *Tx) RegisterMetric(m NewMetric) (added bool, err error) {
 		}
 		return false, nil
 	}
-	// a day page is never a metric (entities_day_page_plain), and a person, a place or a file never becomes one
+	// a day page is never a metric (entities_day_page_plain), and a person or a file never becomes one
 	// (entities_promote_from_page): the schema refuses the update
 	if _, err := t.tx.ExecContext(t.ctx, `UPDATE entities SET entity_type = 'metric', deleted_at = NULL WHERE id = ?`, p.ID); err != nil {
 		return false, err

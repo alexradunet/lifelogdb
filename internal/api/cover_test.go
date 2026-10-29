@@ -29,7 +29,7 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "Met at school."}))
-	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
+	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Lake"}))
 	trip := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip"}))
 	scanPath, _ := jpegFile(t, "scan.jpg", 20, 20)
 	scan := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.jpg", "original": scanPath}))
@@ -39,7 +39,7 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 			t.Errorf("%s has no link to its picker", e.Title)
 		}
 	}
-	for _, e := range []*siren.Entity{scan, apitest.Must(t)(c.Get(ctx, "/browse?kind=person")), apitest.Must(t)(c.Get(ctx, "/browse?kind=place"))} {
+	for _, e := range []*siren.Entity{scan, apitest.Must(t)(c.Get(ctx, "/browse?kind=person"))} {
 		if hasAction(e, "set-cover") {
 			t.Errorf("%s offers set-cover", e.Title)
 		}
@@ -100,9 +100,15 @@ func TestSetCoverFromAnyPage(t *testing.T) {
 
 	// A client names a kept picture by its title.
 	apitest.Must(t)(c.Do(ctx, coverAction(t, apitest.Must(t)(c.Get(ctx, apitest.Href(lake, "self"))), apitest.Href(lake, "self")+"/cover"), map[string]string{"title": title}))
-	places, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
-	if len(places) != 1 || str(places[0].(map[string]any)["picture"]) != cover {
-		t.Errorf("the places rows = %v, want Lake with the cover %s", places, cover)
+	pages, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=page")))["rows"].([]any)
+	var lakePicture any
+	for _, r := range pages {
+		if row := r.(map[string]any); row["title"] == "Lake" {
+			lakePicture = row["picture"]
+		}
+	}
+	if str(lakePicture) != cover {
+		t.Errorf("the pages rows = %v, want Lake with the cover %s", pages, cover)
 	}
 	if _, err := c.Do(ctx, coverAction(t, page, self+"/cover"), map[string]string{"title": "Nothing.jpg"}); err == nil {
 		t.Errorf("a title that is no kept picture was taken")

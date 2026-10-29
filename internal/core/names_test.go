@@ -208,16 +208,16 @@ func TestRenamedIdentityWritesThroughRetainedHandle(t *testing.T) {
 	if err := s.Do(ctx, "import:synthetic", func(tx *Tx) error { _, err := tx.SetBody(id, "imported [[Other]]"); return err }); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", id, other, "part-of", "note"); err != nil {
+	if err := addLink(s, "cli", id, other, "part-of", "note"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Unlink(ctx, "cli", id, other, "part-of"); err != nil {
+	if err := dropLink(s, "cli", id, other, "part-of"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", other, id, "part-of", "reverse"); err != nil {
+	if err := addLink(s, "cli", other, id, "part-of", "reverse"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Unlink(ctx, "cli", other, id, "part-of"); err != nil {
+	if err := dropLink(s, "cli", other, id, "part-of"); err != nil {
 		t.Fatal(err)
 	}
 	mention, err := s.PageByID(ctx, other)
@@ -240,7 +240,7 @@ func TestRename(t *testing.T) {
 		t.Fatal(err)
 	}
 	baking, _ := s.PageID(ctx, "Baking")
-	s.Link(ctx, "cli", old, baking, "part-of", "")
+	addLink(s, "cli", old, baking, "part-of", "")
 	to, err := s.Rename(ctx, "cli", old, "Sourdough")
 	if err != nil {
 		t.Fatal(err)
@@ -332,14 +332,14 @@ func TestNameOwnershipAndJournalReservations(t *testing.T) {
 	execRefused(day, `UPDATE entity_names SET title='Other' WHERE entity_id=?`, day)
 	execRefused(day, `UPDATE entities SET preferred_name_key='other' WHERE id=?`, day)
 	execRefused(day, `UPDATE entities SET day='2026-03-01' WHERE id=?`, day)
-	execRefused(day, `UPDATE entities SET entity_type='place' WHERE id=?`, day)
+	execRefused(day, `UPDATE entities SET entity_type='person' WHERE id=?`, day)
 	execRefused(ordinary, `INSERT INTO entity_names(entity_id,title,name_key) VALUES(?,'2026-03-01','2026-03-01')`, ordinary)
 	execRefused(ordinary, `UPDATE entities SET preferred_name_key='2026-03-01',day='2026-03-01' WHERE id=?`, ordinary)
 	execRefused(ordinary, `UPDATE entities SET preferred_name_key='2026-02-28',day='2026-02-28' WHERE id=?`, ordinary)
 	execRefused(ordinary, `UPDATE entity_names SET entity_id=? WHERE name_key='dated note'`, day)
 	execRefused(ordinary, `UPDATE entity_names SET name_key='reassigned' WHERE entity_id=?`, ordinary)
 	execRefused(ordinary, `DELETE FROM entity_names WHERE entity_id=?`, ordinary)
-	if err := s.Promote(ctx, "cli", day, "place", "", "", ""); err == nil {
+	if err := s.Promote(ctx, "cli", day, "", "", ""); err == nil {
 		t.Fatal("day promoted")
 	}
 	if _, err := s.Rename(ctx, "cli", ordinary, "New dated note"); err != nil {
@@ -712,7 +712,7 @@ func TestReferenceNameContractProductionPipeline(t *testing.T) {
 			if _, err := s.Rename(ctx, "cli", id, v.Name); err != nil {
 				t.Fatal(err)
 			}
-			if err := s.Promote(ctx, "cli", id, "place", "", "", ""); err != nil {
+			if err := s.Promote(ctx, "cli", id, "", "", ""); err != nil {
 				t.Fatal(err)
 			}
 			p, err := s.PageByID(ctx, source)
@@ -723,7 +723,7 @@ func TestReferenceNameContractProductionPipeline(t *testing.T) {
 				t.Fatal(err)
 			}
 			p, err = s.PageByID(ctx, source)
-			if err != nil || len(p.Out) != 1 || p.Out[0].ID != id || p.Out[0].Type != "place" {
+			if err != nil || len(p.Out) != 1 || p.Out[0].ID != id || p.Out[0].Type != "person" {
 				t.Fatalf("promoted alias: %+v %v", p, err)
 			}
 		})

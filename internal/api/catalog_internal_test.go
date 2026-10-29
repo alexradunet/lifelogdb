@@ -1,9 +1,12 @@
 package api
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"lifelog/siren"
 )
 
 // TestTheCatalogMarksTheFieldOfAPageTitle: the catalog says which field takes a page's title (Pages), so a client
@@ -11,7 +14,7 @@ import (
 // to put the pages in, and the one to take them out of).
 func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 	for _, tc := range []struct{ action, fields string }{
-		{"create-page", "category"}, {"link", "to"}, {"unlink", "to"}, {"find", "title"}, {"file-pages", "category,from"},
+		{"create-page", "category"}, {"find", "title"}, {"file-pages", "category,from"},
 	} {
 		var marked []string
 		for _, fd := range action(tc.action, nil, nil).Fields {
@@ -21,6 +24,20 @@ func TestTheCatalogMarksTheFieldOfAPageTitle(t *testing.T) {
 		}
 		if strings.Join(marked, ",") != tc.fields {
 			t.Errorf("%s marks %v as a page's title, want [%s]", tc.action, marked, tc.fields)
+		}
+	}
+}
+
+// TestTheCatalogHasNoPlacesAndNoFreeLinks: a place is a plain page (D16), and the only kind that link and unlink took
+// was at. A wikilink comes from a body and a part-of from file-pages, so no action writes a link directly.
+func TestTheCatalogHasNoPlacesAndNoFreeLinks(t *testing.T) {
+	for _, a := range catalog {
+		switch a.Name {
+		case "create-place", "link", "unlink":
+			t.Errorf("the catalog has the action %s", a.Name)
+		}
+		if a.Name == "promote" && slices.ContainsFunc(a.Fields, func(f siren.Field) bool { return f.Name == "to" }) {
+			t.Error("promote has a field to: it makes a person alone")
 		}
 	}
 }

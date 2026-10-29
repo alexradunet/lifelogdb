@@ -81,7 +81,7 @@ func TestHereDropsTheReceipt(t *testing.T) {
 }
 
 // TestDayPartsSplitTheViewByPart: each row of a day's view goes to the part of the page that draws it, in the order of
-// the view: the day page's body to Journal (also an empty body), a page to Pages (edited or not), a place to Places.
+// the view: the day page's body to Journal (also an empty body), a page to Pages (edited or not).
 // A reading's row, and a row that is not an object, go to no part.
 func TestDayPartsSplitTheViewByPart(t *testing.T) {
 	row := func(what, detail string) any { return map[string]any{"what": what, "detail": detail} }
@@ -94,11 +94,11 @@ func TestDayPartsSplitTheViewByPart(t *testing.T) {
 		{"no view", map[string]any{}, dayParts{}},
 		{"an empty view", map[string]any{"view": []any{}}, dayParts{}},
 		{"a day page with an empty body", map[string]any{"view": []any{row("day page", "")}}, dayParts{Journal: []string{""}}},
-		{"every part", map[string]any{"view": []any{row("day page", "Ran"), row("at", "Lisbon"), row("page", "A"),
-			row("page (edited)", "B"), row("weight", "70 kg"), row("at", "Porto"), row("page", "C")}},
-			dayParts{Journal: []string{"Ran"}, Pages: []writtenPage{{"A", false}, {"B", true}, {"C", false}}, Places: []string{"Lisbon", "Porto"}}},
+		{"every part", map[string]any{"view": []any{row("day page", "Ran"), row("page", "A"),
+			row("page (edited)", "B"), row("weight", "70 kg"), row("page", "C")}},
+			dayParts{Journal: []string{"Ran"}, Pages: []writtenPage{{"A", false}, {"B", true}, {"C", false}}}},
 		{"pages and no day page", map[string]any{"view": []any{row("page (edited)", "B")}}, dayParts{Pages: []writtenPage{{"B", true}}}},
-		{"rows that are not objects", map[string]any{"view": []any{"x", 3.0, nil, row("at", "Sintra")}}, dayParts{Places: []string{"Sintra"}}},
+		{"rows that are not objects", map[string]any{"view": []any{"x", 3.0, nil, row("page", "Sintra")}}, dayParts{Pages: []writtenPage{{"Sintra", false}}}},
 	} {
 		if got := (&view{Props: c.props}).DayParts(); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)

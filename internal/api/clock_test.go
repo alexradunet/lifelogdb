@@ -230,7 +230,7 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 			if err != nil {
 				return nil, err
 			}
-			return do("promote", map[string]string{"id": id, "to": "person", field: w})
+			return do("promote", map[string]string{"id": id, field: w})
 		}, refusal)
 		cases["edit-person "+field] = caseOf(func(w string) (*siren.Entity, error) {
 			id, err := idOf(do("create-person", map[string]string{"title": title("Person")}))

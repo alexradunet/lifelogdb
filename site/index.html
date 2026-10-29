@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lifelog</title>
-<meta name="description" content="Lifelog keeps your life log in one SQLite file that you own, built to stay readable for fifty years. A journal, people, places, health readings, habits and the files you keep.">
+<meta name="description" content="Lifelog keeps your life log in one SQLite file that you own, built to stay readable for fifty years. A journal, people, health readings, habits and the files you keep.">
 <meta property="og:title" content="Lifelog — a life log for fifty years">
-<meta property="og:description" content="One SQLite file that you own, with an open schema that any program can read. A journal, people, places, health readings, habits and the files you keep.">
+<meta property="og:description" content="One SQLite file that you own, with an open schema that any program can read. A journal, people, health readings, habits and the files you keep.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#2a1709">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -36,7 +36,7 @@
     <div>
       <p class="eyebrow">ONE FILE · ONE OWNER · FIFTY YEARS</p>
       <h1>Your life log, in <em>one file</em> you keep.</h1>
-      <p class="lede">Lifelog keeps a journal of your days, the people and places in them, your health readings, your
+      <p class="lede">Lifelog keeps a journal of your days, the people in them, your health readings, your
         habits and the files you keep. Everything goes into one SQLite file, <code>life.db</code>, on your own disk.
         The file explains itself, so you can read it in fifty years, with or without this program.</p>
       <div class="actions">
@@ -87,11 +87,10 @@
       It does not guess, and it does not change your words.</p>
     <div class="grid">
       <article class="card parchment"><h3>A journal of day pages</h3>
-        <p>One page for each day. Write in Markdown. A <code>[[name]]</code> links a person, a place or a page, and a
+        <p>One page for each day. Write in Markdown. A <code>[[name]]</code> links a person or a page, and a
           <code>#tag</code> groups the pages.</p></article>
-      <article class="card parchment"><h3>People and places</h3>
-        <p>Each person and each place has a page. A person’s name and birthday are kept as records, not only
-          as text. A day links the places where you were.</p></article>
+      <article class="card parchment"><h3>People</h3>
+        <p>Each person has a page. A person’s name and birthday are kept as records, not only as text.</p></article>
       <article class="card parchment"><h3>Health readings</h3>
         <p>Mood, weight, sleep, a blood test. Readings are never edited: a correction is a new reading that replaces
           the old one, so the history stays true.</p></article>
@@ -133,7 +132,7 @@
         <p>Capture a line, read a day, record a reading, keep a file or take a snapshot, from any terminal.</p>
         <span class="mono">lifelog capture "Ran 5k with [[Sam]] #running" --mood 4</span></article>
       <article class="card parchment"><h3>An AI agent, with your word</h3>
-        <p>An MCP server lets a coding agent help you import old notes. The agent proposes each person, place and
+        <p>An MCP server lets a coding agent help you import old notes. The agent proposes each person and
           link. You say yes or no. Each row records which agent wrote it.</p></article>
     </div>
   </div>
@@ -212,8 +211,8 @@
         <tbody>
           <tr><td>Sync between copies</td><td>Your other devices are clients of one writer. A merge would remove the
             checked keys that keep the data correct.</td></tr>
-          <tr><td>A location track</td><td>A place has no point, and no photo’s position is read. You write the places of a
-            day yourself. No minute-by-minute position is kept.</td></tr>
+          <tr><td>A location track</td><td>No photo’s position is read. You write where you were in the words of a day
+            page. No minute-by-minute position is kept.</td></tr>
           <tr><td>A photo archive</td><td>Lifelog keeps the few photos that stand for a day. Your library stays in your
             photo tool.</td></tr>
           <tr><td>A finance ledger</td><td>Notes about money stay text until a real need for numbers comes.</td></tr>

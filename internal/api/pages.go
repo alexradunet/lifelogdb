@@ -136,17 +136,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 		return nil, err
 	}
 	e.Actions = pageActions(p, kinds, cats)
-	if p.IsDayPage && p.DeletedAt == "" { // a day page links to a place: the form offers the places there are
-		places, err := h.s.PlaceTitles(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for i, a := range e.Actions {
-			if a.Name == "link" {
-				e.Actions[i] = withOptions(a, "to", places)
-			}
-		}
-	}
 	if p.Period != "" && p.DeletedAt == "" { // the lines planned in the period (docs/contract/plan-lines.md)
 		if from, through, ok := periodWindow(p.Period, p.Title); ok {
 			lines, err := h.linesIn(ctx, from, through)
@@ -203,10 +192,6 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if p.Type != "file" {
 		out = append(out, action("set-cover", ids, nil))
 	}
-	// file-pages files a page and, with from, takes it out; link and unlink offer the other kinds.
-	if linkable := slices.DeleteFunc(slices.Clone(kinds), func(k string) bool { return k == "part-of" }); len(linkable) > 0 {
-		out = append(out, withOptions(action("link", ids, nil), "kind", linkable), withOptions(action("unlink", ids, nil), "kind", linkable))
-	}
 	if slices.Contains(kinds, "part-of") { // its categories, as badges (docs/plans/114-one-way-to-do-a-thing.md)
 		var titles []string
 		for _, c := range cats {
@@ -232,9 +217,8 @@ func coverLinks(p *core.Page) []siren.Link {
 	return out
 }
 
-// linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus the two the save
-// contract and renames own; `at` only from a day page (D16), `part-of` never from one (D26). links_endpoint_types
-// holds both rules: these are only the options a form offers.
+// linkKinds are the kinds a page of this type may start (link_kinds.from_types), minus `part-of` from a day page
+// (D26). links_endpoint_types holds that rule: this is only the offer of file-pages.
 func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]string, error) {
 	kinds, err := h.s.LinkKindsFrom(ctx, typ)
 	if err != nil {
@@ -242,7 +226,7 @@ func (h *server) linkKinds(ctx context.Context, typ string, dayPage bool) ([]str
 	}
 	var out []string
 	for _, k := range kinds {
-		if k == "at" && !dayPage || k == "part-of" && dayPage {
+		if k == "part-of" && dayPage {
 			continue
 		}
 		out = append(out, k)
@@ -268,7 +252,7 @@ type searchHit struct {
 }
 
 // searchKindTitles are the words of the chips of a search, by kind.
-var searchKindTitles = map[string]string{"all": "All", "day": "Days", "page": "Pages", "person": "People", "place": "Places", "file": "Files"}
+var searchKindTitles = map[string]string{"all": "All", "day": "Days", "page": "Pages", "person": "People", "file": "Files"}
 
 // searchHref is the address of the search for these words in this order, of this kind. The best match and every kind
 // are the defaults, so their address names neither.
@@ -379,19 +363,7 @@ func (h *server) createPerson(r *http.Request, act spec, src string) (*siren.Ent
 	}
 	id, err := h.s.CreatePerson(r.Context(), src, v.Get("title"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day")))
 	if err != nil {
-		return nil, offerPromote(err, "person", v)
-	}
-	return h.pageEntity(r.Context(), id)
-}
-
-func (h *server) createPlace(r *http.Request, act spec, src string) (*siren.Entity, error) {
-	v, err := fieldsOf(r, act)
-	if err != nil {
-		return nil, err
-	}
-	id, err := h.s.CreatePlace(r.Context(), src, v.Get("title"))
-	if err != nil {
-		return nil, offerPromote(err, "place", v)
+		return nil, offerPromote(err, v)
 	}
 	return h.pageEntity(r.Context(), id)
 }
@@ -401,7 +373,7 @@ func (h *server) promote(r *http.Request, act spec, src string) (*siren.Entity, 
 	if err != nil {
 		return nil, err
 	}
-	if err := h.s.Promote(r.Context(), src, id, v.Get("to"), v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day"))); err != nil {
+	if err := h.s.Promote(r.Context(), src, id, v.Get("name"), h.dayNamed(v.Get("birth_day")), h.dayNamed(v.Get("death_day"))); err != nil {
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), id)
@@ -449,8 +421,8 @@ func (h *server) editMetric(r *http.Request, act spec, src string) (*siren.Entit
 	return e, nil
 }
 
-// existsOffer is an ExistsError of create-person or create-place that the owner can mend in one step: the page that
-// holds the title is a plain page, and promote makes it the person or the place, with the fields typed.
+// existsOffer is an ExistsError of create-person that the owner can mend in one step: the page that holds the title
+// is a plain page, and promote makes it the person, with the fields typed.
 type existsOffer struct {
 	*core.ExistsError
 	promote string // the address of the promote form
@@ -459,22 +431,20 @@ type existsOffer struct {
 
 func (o *existsOffer) Unwrap() error { return o.ExistsError }
 
-// offerPromote wraps err as an existsOffer when err says that a plain page holds the title of the new person or
-// place. The fields are the ones of the request; a value that is empty is left out.
-func offerPromote(err error, to string, v url.Values) error {
+// offerPromote wraps err as an existsOffer when err says that a plain page holds the title of the new person. The
+// fields are the ones of the request; a value that is empty is left out.
+func offerPromote(err error, v url.Values) error {
 	var ex *core.ExistsError
 	if !errors.As(err, &ex) || !ex.Plain {
 		return err
 	}
-	q := url.Values{"new": {"promote"}, "to": {to}}
-	if to == "person" {
-		for _, field := range []string{"name", "birth_day", "death_day"} {
-			if x := v.Get(field); x != "" {
-				q.Set(field, x)
-			}
+	q := url.Values{"new": {"promote"}}
+	for _, field := range []string{"name", "birth_day", "death_day"} {
+		if x := v.Get(field); x != "" {
+			q.Set(field, x)
 		}
 	}
-	return &existsOffer{ex, siren.PageHref(ex.ID) + "?" + q.Encode(), "make it a " + to + ", with what you typed"}
+	return &existsOffer{ex, siren.PageHref(ex.ID) + "?" + q.Encode(), "make it a person, with what you typed"}
 }
 
 func (h *server) revive(r *http.Request, _ spec, src string) (*siren.Entity, error) {
@@ -486,39 +456,6 @@ func (h *server) revive(r *http.Request, _ spec, src string) (*siren.Entity, err
 		return nil, err
 	}
 	return h.pageEntity(r.Context(), id)
-}
-
-// linkEnds resolves the page of the path and the page titled `to`, for the action act (link or unlink).
-func (h *server) linkEnds(r *http.Request, act spec) (from, to int64, v url.Values, err error) {
-	if from, v, err = idForm(r, act); err != nil {
-		return
-	}
-	if to, err = h.s.PageID(r.Context(), v.Get("to")); err == nil && to == 0 {
-		err = core.NotFound("no page titled %s: make it first (New page, create-page)", v.Get("to"))
-	}
-	return
-}
-
-func (h *server) linkPages(r *http.Request, act spec, src string) (*siren.Entity, error) {
-	from, to, v, err := h.linkEnds(r, act)
-	if err != nil {
-		return nil, err
-	}
-	if err := h.s.Link(r.Context(), src, from, to, v.Get("kind"), v.Get("note")); err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), from)
-}
-
-func (h *server) unlinkPages(r *http.Request, act spec, src string) (*siren.Entity, error) {
-	from, to, v, err := h.linkEnds(r, act)
-	if err != nil {
-		return nil, err
-	}
-	if err := h.s.Unlink(r.Context(), src, from, to, v.Get("kind")); err != nil {
-		return nil, err
-	}
-	return h.pageEntity(r.Context(), from)
 }
 
 func (h *server) rename(r *http.Request, act spec, src string) (*siren.Entity, error) {

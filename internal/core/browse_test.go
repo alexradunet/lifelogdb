@@ -16,8 +16,8 @@ import (
 //
 //	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf, Old (tombstoned)
 //	Cousins: Gamma
-//	Work:    Delta, Harbor, Weight
-//	nowhere: Alpha, Bo, Lakeside, memo.m4a, notes.txt, Walk, Mood (the metric every file has), the day page
+//	Work:    Delta, Weight
+//	nowhere: Alpha, Bo, memo.m4a, notes.txt, Walk, Mood (the metric every file has), the day page
 //	         2031-05-01 (a day page is never filed: links_endpoint_types, D26)
 func browseFixture(t *testing.T) (*Store, map[string]int64) {
 	t.Helper()
@@ -39,11 +39,6 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		check(err)
 		ids[title] = id
 	}
-	for _, title := range []string{"Lakeside", "Harbor"} {
-		id, err := s.CreatePlace(ctx, "cli", title)
-		check(err)
-		ids[title] = id
-	}
 	for i, f := range []FileIn{{Title: "photo.jpg", MIME: "image/jpeg", Day: "2031-05-02"}, {Title: "memo.m4a", MIME: "audio/mp4", Day: "2031-05-01"},
 		{Title: "scan.pdf", MIME: "application/pdf", Day: "2031-04-01"}, {Title: "notes.txt", MIME: "text/plain", Day: "2031-03-01"}} {
 		f.SHA256 = strings.Repeat(fmt.Sprintf("%02x", i+1), 32)
@@ -58,7 +53,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 		check(err)
 		ids[m[0]] = id
 	}
-	day, _, err := s.Capture(ctx, "cli", "2031-05-01", "Lunch with [[Ana]] at [[Lakeside]]", nil)
+	day, _, err := s.Capture(ctx, "cli", "2031-05-01", "Lunch with [[Ana]]", nil)
 	check(err)
 	ids["2031-05-01"] = day
 	file := func(category string, titles ...string) {
@@ -74,7 +69,7 @@ func browseFixture(t *testing.T) (*Store, map[string]int64) {
 	file("Family", "Beta", "Ana", "photo.jpg", "scan.pdf", "Old")
 	file("Cousins", "Gamma")
 	file("Family", "Cousins")
-	file("Work", "Delta", "Harbor", "Weight")
+	file("Work", "Delta", "Weight")
 	check(s.Tombstone(ctx, "cli", ids["Old"]))
 	return s, ids
 }
@@ -118,13 +113,13 @@ func TestPlainPagesInEachScope(t *testing.T) {
 	}
 }
 
-// TestTheKindsInEachScope: people and places with their mentions, media and documents newest day first, metrics by
+// TestTheKindsInEachScope: people with their mentions, media and documents newest day first, metrics by
 // title with their unit, each in the three scopes.
 func TestTheKindsInEachScope(t *testing.T) {
 	s, ids := browseFixture(t)
-	named := func(typ string, sc Scope) string {
+	named := func(sc Scope) string {
 		t.Helper()
-		rows, err := s.NamedMentions(ctx, typ, sc, 50, 0)
+		rows, err := s.NamedMentions(ctx, sc, 50, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,13 +161,9 @@ func TestTheKindsInEachScope(t *testing.T) {
 	}
 	family, unfiled := Scope{In: ids["Family"]}, Scope{Unfiled: true}
 	for _, tc := range []struct{ name, got, want string }{
-		{"people", named("person", Scope{}), "Ana:1:2031-05-01,Bo:0:"},
-		{"people in Family", named("person", family), "Ana:1:2031-05-01"},
-		{"people not filed", named("person", unfiled), "Bo:0:"},
-		{"places", named("place", Scope{}), "Harbor:0:,Lakeside:1:2031-05-01"},
-		{"places in Family", named("place", family), ""},
-		{"places in Work", named("place", Scope{In: ids["Work"]}), "Harbor:0:"},
-		{"places not filed", named("place", unfiled), "Lakeside:1:2031-05-01"},
+		{"people", named(Scope{}), "Ana:1:2031-05-01,Bo:0:"},
+		{"people in Family", named(family), "Ana:1:2031-05-01"},
+		{"people not filed", named(unfiled), "Bo:0:"},
 		{"media", files(true, "", Scope{}), "photo.jpg:2031-05-02,memo.m4a:2031-05-01"},
 		{"recordings", files(true, "audio", Scope{}), "memo.m4a:2031-05-01"},
 		{"media in Family", files(true, "", family), "photo.jpg:2031-05-02"},
@@ -233,10 +224,10 @@ func TestBrowseCountsEachKindInEachScope(t *testing.T) {
 		sc   Scope
 		want map[string]int
 	}{
-		{"everything", Scope{}, map[string]int{"page": 7, "person": 2, "place": 2, "media": 2, "document": 2, "metric": 3, "all": 18, "ghosts": 0, "deleted": 1}},
-		{"in Family", Scope{In: ids["Family"]}, map[string]int{"page": 2, "person": 1, "place": 0, "media": 1, "document": 1, "metric": 0, "all": 5, "ghosts": 0, "deleted": 1}},
-		{"in Work", Scope{In: ids["Work"]}, map[string]int{"page": 1, "person": 0, "place": 1, "media": 0, "document": 0, "metric": 1, "all": 3, "ghosts": 0, "deleted": 1}},
-		{"not filed", Scope{Unfiled: true}, map[string]int{"page": 1, "person": 1, "place": 1, "media": 1, "document": 1, "metric": 2, "all": 7, "ghosts": 0, "deleted": 1}},
+		{"everything", Scope{}, map[string]int{"page": 7, "person": 2, "media": 2, "document": 2, "metric": 3, "all": 16, "ghosts": 0, "deleted": 1}},
+		{"in Family", Scope{In: ids["Family"]}, map[string]int{"page": 2, "person": 1, "media": 1, "document": 1, "metric": 0, "all": 5, "ghosts": 0, "deleted": 1}},
+		{"in Work", Scope{In: ids["Work"]}, map[string]int{"page": 1, "person": 0, "media": 0, "document": 0, "metric": 1, "all": 2, "ghosts": 0, "deleted": 1}},
+		{"not filed", Scope{Unfiled: true}, map[string]int{"page": 1, "person": 1, "media": 1, "document": 1, "metric": 2, "all": 6, "ghosts": 0, "deleted": 1}},
 	} {
 		got, err := s.BrowseCounts(ctx, tc.sc)
 		if err != nil || !maps.Equal(got, tc.want) {
@@ -322,7 +313,7 @@ func TestNotFiledCountsOnlyALiveCategory(t *testing.T) {
 		}
 	}
 	unfiled := Scope{Unfiled: true}
-	people, err := s.NamedMentions(ctx, "person", unfiled, 50, 0)
+	people, err := s.NamedMentions(ctx, unfiled, 50, 0)
 	if err != nil || len(people) != 1 || people[0].ID != cy {
 		t.Errorf("people not filed: %+v %v, want Cy", people, err)
 	}
@@ -391,7 +382,7 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 	}
 	for _, tc := range []struct{ name, got, want string }{
 		{"pages", titles(s.PlainPages(ctx, Scope{}, 50, 0)), "Alpha,reading,Shelf,Zeta"},
-		{"people", titles(s.NamedMentions(ctx, "person", Scope{}, 50, 0)), "Ana,bo,Cy"},
+		{"people", titles(s.NamedMentions(ctx, Scope{}, 50, 0)), "Ana,bo,Cy"},
 		{"metrics", titles(s.MetricRows(ctx, Scope{}, 50, 0)), "commits,Mood,Weight"},
 		{"in Shelf", titles(s.FiledIn(ctx, shelf, 50, 0)), "Alpha,reading,Zeta"},
 	} {
@@ -414,8 +405,8 @@ func TestBrowseOrdersTitlesWithoutCase(t *testing.T) {
 func TestBrowseKindsGivesACopy(t *testing.T) {
 	kinds := BrowseKinds()
 	kinds[0] = "task"
-	if got := strings.Join(BrowseKinds(), ","); got != "page,person,place,media,document,metric" {
-		t.Errorf("BrowseKinds() = %s after a caller changed its copy, want page,person,place,media,document,metric", got)
+	if got := strings.Join(BrowseKinds(), ","); got != "page,person,media,document,metric" {
+		t.Errorf("BrowseKinds() = %s after a caller changed its copy, want page,person,media,document,metric", got)
 	}
 }
 
@@ -464,22 +455,20 @@ func TestReadersPage(t *testing.T) {
 	s := fresh(t)
 	ctx := context.Background()
 	for i := 1; i <= 5; i++ {
-		if _, err := s.CreatePlace(ctx, "cli", fmt.Sprintf("Place %d", i)); err != nil {
+		if _, err := s.CreatePerson(ctx, "cli", fmt.Sprintf("Person %d", i), "", "", ""); err != nil {
 			t.Fatal(err)
 		}
 		if _, _, err := s.Capture(ctx, "cli", fmt.Sprintf("2031-04-%02d", i), fmt.Sprintf("pageword [[Missing %d]]", i), nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Hand-counted: five places by title, five ghosts oldest first, five hits.
+	// Hand-counted: five people by title, five ghosts oldest first, five hits.
 	for _, tc := range []struct {
 		name          string
 		limit, offset int
 		want          string
-	}{
-		{"places first two", 2, 0, "Place 1,Place 2"}, {"places middle", 2, 2, "Place 3,Place 4"}, {"places last", 2, 4, "Place 5"}, {"places past", 2, 5, ""}, {"places all", 10, 0, "Place 1,Place 2,Place 3,Place 4,Place 5"},
-	} {
-		got, err := s.NamedMentions(ctx, "place", Scope{}, tc.limit, tc.offset)
+	}{} {
+		got, err := s.NamedMentions(ctx, Scope{}, tc.limit, tc.offset)
 		var list []string
 		for _, r := range got {
 			list = append(list, r.Title)
@@ -551,7 +540,7 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	got, err := s.NamedMentions(ctx, Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +559,7 @@ func TestNamedMentionsCountLivePagesAndTheNewestDay(t *testing.T) {
 		}
 	}
 
-	second, err := s.NamedMentions(ctx, "person", Scope{}, 1, 1)
+	second, err := s.NamedMentions(ctx, Scope{}, 1, 1)
 	if err != nil || len(second) != 1 || second[0].Title != "Sam" {
 		t.Errorf("NamedMentions(1, 1) = %+v, %v, want Sam", second, err)
 	}
@@ -614,7 +603,7 @@ func TestNamedMentionsGiveAPersonTheFirstPictureItsPageEmbeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	got, err := s.NamedMentions(ctx, Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

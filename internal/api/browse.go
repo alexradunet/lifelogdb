@@ -36,7 +36,6 @@ type browseRead struct {
 var browseKindTable = map[string]browseKind{
 	"page":     {chip: "Pages", tombstonable: true, read: (*server).pageRows},
 	"person":   {chip: "People", read: (*server).namedRows},
-	"place":    {chip: "Places", read: (*server).namedRows},
 	"media":    {chip: "Media", tombstonable: true, read: (*server).fileRows},
 	"document": {chip: "Documents", tombstonable: true, read: (*server).fileRows},
 	"metric":   {chip: "Metrics", read: (*server).metricRows},
@@ -57,10 +56,10 @@ type browseRow struct {
 	ID         int64            `json:"id"`
 	Title      string           `json:"title"`
 	Type       string           `json:"type"`               // entities.entity_type
-	Kind       string           `json:"kind"`               // page, person, place, media, document or metric
+	Kind       string           `json:"kind"`               // page, person, media, document or metric
 	Category   bool             `json:"category,omitempty"` // a page that is a category
-	Mentions   *int             `json:"mentions,omitempty"` // a person, a place, a file: the live pages that link to it
-	LastDay    string           `json:"last_day,omitempty"` // a person, a place: the newest day page among them
+	Mentions   *int             `json:"mentions,omitempty"` // a person or a file: the live pages that link to it
+	LastDay    string           `json:"last_day,omitempty"` // a person: the newest day page among them
 	Picture    string           `json:"picture,omitempty"`  // the address of its cover, or of a file's own picture
 	MIME       string           `json:"mime,omitempty"`     // a file: the type of the original
 	FileKind   string           `json:"file_kind,omitempty"`
@@ -75,7 +74,6 @@ type browseRow struct {
 type browseCounts struct {
 	Page     int  `json:"page"`
 	Person   int  `json:"person"`
-	Place    int  `json:"place"`
 	Media    int  `json:"media"`
 	Document int  `json:"document"`
 	Metric   int  `json:"metric"`
@@ -281,7 +279,7 @@ func (h *server) browse(r *http.Request, act spec, _ string) (*siren.Entity, err
 
 	props := browseProps{pageProps: pg, Kind: b.kind, Unfiled: b.unfiled, Ghosts: b.ghosts, Deleted: b.deleted, Media: b.media,
 		Categories: cs, Rows: rows, In: in}
-	props.Counts = browseCounts{Page: counts["page"], Person: counts["person"], Place: counts["place"], Media: counts["media"],
+	props.Counts = browseCounts{Page: counts["page"], Person: counts["person"], Media: counts["media"],
 		Document: counts["document"], Metric: counts["metric"], Ghosts: counts["ghosts"],
 		Deleted: counts["deleted"]}
 	if in != nil {
@@ -377,15 +375,14 @@ func (h *server) pageRows(ctx context.Context, rd browseRead) ([]browseRow, page
 	return rows, props, err
 }
 
-// namedRows are the people or the places, as rd.b.kind says.
+// namedRows are the people.
 func (h *server) namedRows(ctx context.Context, rd browseRead) ([]browseRow, pageProps, error) {
-	kind := rd.b.kind
 	found, props, err := readList(rd, func(limit, offset int) ([]core.NamedRow, error) {
-		return h.s.NamedMentions(ctx, kind, rd.sc, limit, offset)
+		return h.s.NamedMentions(ctx, rd.sc, limit, offset)
 	})
 	rows := []browseRow{}
 	for _, p := range found {
-		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: kind, Kind: kind, Mentions: &p.Mentions, LastDay: p.LastDay,
+		rows = append(rows, browseRow{ID: p.ID, Title: p.Title, Type: "person", Kind: "person", Mentions: &p.Mentions, LastDay: p.LastDay,
 			Picture: pictureHref(p.Picture)})
 	}
 	return rows, props, err
@@ -451,7 +448,7 @@ func fileKind(mime string) string {
 // rule 6; anything else is filed by file-pages), the pick bar's, and a random thing of the kind. The ghosts have no New and no random thing. The deleted
 // have no action here: each is restored from its page. Every list offers file-pages (All too: it is the default view
 // of a category, where a thing is moved, docs/plans/132-browse-the-notion-way.md); pages (the ghosts too),
-// media and documents also offer tombstone-pages. People, places and metrics are deleted from their own page.
+// media and documents also offer tombstone-pages. People and metrics are deleted from their own page.
 func browseActions(b browseQuery, in *browseIn, categories []string) []siren.Action {
 	var out []siren.Action
 	if b.deleted {

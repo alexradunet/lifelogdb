@@ -80,8 +80,7 @@ SELECT id FROM measurements EXCEPT SELECT id FROM rooted ORDER BY id`, &r.Invali
        OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' OR n.name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]')
    AND (e.preferred_name_key IS NOT n.name_key OR n.title IS NOT upper(n.name_key))) ORDER BY n.id`, &r.InvalidJournalNames},
 		{"link day-page rules", `SELECT l.id FROM links l LEFT JOIN entities f ON f.id=l.from_id LEFT JOIN entities t ON t.id=l.to_id
- WHERE (l.kind='at' AND NOT coalesce(f.is_journal,0))
- OR (l.kind='part-of' AND coalesce(t.is_journal,0))
+ WHERE (l.kind='part-of' AND coalesce(t.is_journal,0))
  OR (l.kind='part-of' AND coalesce(f.is_journal,0))
  OR (l.kind='part-of' AND (t.period IS NOT NULL OR f.period IS NOT NULL)) ORDER BY l.id`, &r.InvalidLinkDayRules},
 		{"scale ranges", `SELECT m.id FROM measurements m JOIN metrics x ON x.id=m.metric_id

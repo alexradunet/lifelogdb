@@ -233,13 +233,12 @@ type navItem struct {
 }
 
 // newKinds are the items of the rail's New menu (docs/plans/114-one-way-to-do-a-thing.md): each kind is made on its
-// list, and the link opens the list with its New form open. A page, a person, a place and a file are made on their
+// list, and the link opens the list with its New form open. A page, a person and a file are made on their
 // Browse list (docs/plans/117-one-browse-view.md, rule 7); a file on the media list. A metric is made on /metrics,
 // and a reading is added on the page of today, Home (docs/plans/131-the-pareto-pass.md, part 2).
 var newKinds = []struct{ Title, Href, Icon string }{
 	{"Page", siren.BrowseNewHref("page"), "new"},
 	{"Person", siren.BrowseNewHref("person"), "people"},
-	{"Place", siren.BrowseNewHref("place"), "places"},
 	{"Metric", siren.NewMetricHref(""), "metrics"},
 	{"Reading", "/?new=record#record", "today"},
 	{"File", siren.BrowseNewHref("media"), "files"},

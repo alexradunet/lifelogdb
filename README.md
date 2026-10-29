@@ -1,7 +1,7 @@
 # Lifelog
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
-its backup: a journal of day pages, notes, the people and places in them, where you were, health readings, and the
+its backup: a journal of day pages, notes, the people in them, health readings, and the
 files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is a line of a page. It serves the file two ways: a hypermedia API (with an HTML face for
 the browser) and a CLI. Everything that names a third party is an extension beside it: the MCP server, the setup of a
 coding agent, Google Photos ([extensions](#extensions)).
@@ -47,7 +47,7 @@ and the snapshot script, as a reference to compare with the installed copies bef
 
 An import is done by a program that loads rows itself ([imports](docs/contract/imports.md)), or by a coding agent
 with the owner, in a conversation: the agent reads a source with its own tools and writes through the catalog's MCP
-tools, and the owner says yes or no to each person, place and link ([plan 089](docs/plans/089-no-import-process.md)).
+tools, and the owner says yes or no to each person and link ([plan 089](docs/plans/089-no-import-process.md)).
 `lifelog agentic-init` prepares the folder for it ([plan 090](docs/plans/090-agentic-init.md)); then open Claude
 Code, Codex, OpenCode or Pi in the folder.
 
@@ -106,7 +106,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `/browse` and `/search` take `limit` (1–500) and `offset` and link `next` and `prev`
   ([plan 079](docs/plans/079-client-contract-hygiene.md)).
 - **The browser gets the same entity.** `Accept: text/html` renders it with a template per class (day, page,
-  person, place, metric, search, lists; `internal/api/view/html/`, embedded) or a generic one for any other. A
+  person, metric, search, lists; `internal/api/view/html/`, embedded) or a generic one for any other. A
   template reads only the properties the JSON carries and places only the actions the entity offers, so a form
   shows where the action is legal and nowhere else. A body is CommonMark with goldmark's safe defaults (raw HTML
   omitted), its `[[wikilinks]]` and `#tags` linked. A browser form posts and is answered 303 to the resource it
@@ -136,7 +136,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `open-day` goes to a day by its date, or to today with no date. Every field of the catalog whose type is `date`
   reads the word `today` as the server's local day. The handlers read today from one clock, which a test fixes.
   `/years/{YYYY}` is the year (twelve months);
-  People and Places list each name with the pages that mention it and the day of the last one
+  the People list names each person with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
   else the icon of a person.
 - **Plan lines** ([plan 136](docs/plans/136-plan-lines-and-period-pages.md), [D29](docs/decisions/D29-plan-lines.md)).
@@ -210,7 +210,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   which stays until the next page because it may name what the write did not do. A day and Home (the page of today) are a calendar
   leaf, a sheet and its margin ([plan 095](docs/plans/095-the-leaf-and-its-margin.md)): the leaf (the month on a
   band, the day's number in mono) heads the page; the sheet holds what the page is for (the journal, then Capture);
-  the margin holds what the page asks of the owner (the readings, the places), and comes after the
+  the margin holds what the page asks of the owner (the readings), and comes after the
   sheet on a narrow screen. A page and a list use the same sheet. One button a screen is filled:
   the main write. A view can fold an
   action's optional fields under "N more fields", inside the form, so a browser sends them with no script.
@@ -384,17 +384,17 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   days. A day is in the stream when it holds something: its day page, a page or a file with its day, or a current
   reading. A day after today is not in it. It pages by `limit` and `offset`, as every list. A card holds
   up to four plain lines of the journal, the mood, the cover only (a preview is 100–300 KB, so no other picture), the
-  places and the people as chips, the birthdays, and three pages, then a count. A day with no day page is a slim card
+  people as chips, the birthdays, and three pages, then a count. A day with no day page is a slim card
   with no words. Every read of a page of the stream takes its days as one set, not a window: 30 sparse cards can span
   decades. Days, Month and Year are the zoom of the Calendar: one row of chips, with Today, and the links `days`,
   `month` and `year`. `random-page` (`GET /pages/random`, `kind`) is a read that answers 303 to a thing picked at
   random, and with `kind=day` to a day: a quiet button on the stream and on Browse. `search` takes `kind` (day, page,
-  person, place, file): the page draws Pages by title first, then the chips of the kinds, then the hits in groups by
+  person, file): the page draws Pages by title first, then the chips of the kinds, then the hits in groups by
   kind, each with its cover or the icon of its kind.
 - **Browse** ([plan 117](docs/plans/117-one-browse-view.md), [plan 132](docs/plans/132-browse-the-notion-way.md)). A category is a page, and anything is filed in it by
   `part-of` (D26); the owner's word (2026-10-15) is "category" everywhere, a thing may be in several, and a category
   shows everything filed in it, whatever its type. `GET /browse` (the catalog action `browse`) is one list with two
-  filters: the kind of its rows (Pages, People, Places, Media, Documents, Metrics, each chip with its count; All
+  filters: the kind of its rows (Pages, People, Media, Documents, Metrics, each chip with its count; All
   inside a category, where it is the first chip and the default) and where it looks (Everything, what is filed
   directly in a category, or Not filed, which follows the kind). The category tree, by path with a count each, is one
   fold: beside the list and always open in a wide column, a closed fold above the chips on a phone, its summary
@@ -508,16 +508,13 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `carry` | `POST /pages/{id}/carry` | `do carry` | `carry` | a plan line where it is drawn: Carry |
 | `schedule` | `POST /pages/{id}/schedule` | `do schedule` | `schedule` | a plan line where it is drawn: Schedule. The one action that changes the `on:` and `due:` of a line in place |
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
-| `create-place` | `POST /places` | `do create-place` | `create_place` | Browse, Places: New place |
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
-| `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person or a place |
+| `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person |
 | `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | a person, More: Edit name and dates |
 | `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric: Ask for it every day |
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
 | `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
-| `link` | `POST /pages/{id}/links` | `do link` | `link` | a day: Where, I was at a place; a page, More: Add a typed link |
-| `unlink` | `POST /pages/{id}/unlink` | `do unlink` | `unlink` | a day: the x of a place in Where; a page, More: Remove a typed link |
 | `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add and the x of a category badge; a Browse list: Move on a row, and the pick bar (Move to, Add to, Remove from here); the Metrics board: the pick bar |
 | `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
 | `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |

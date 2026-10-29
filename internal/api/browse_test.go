@@ -24,9 +24,9 @@ import (
 //
 //	Family:  Beta, Cousins, Ana, photo.jpg, scan.pdf
 //	Cousins: Gamma, Weight
-//	nowhere: Alpha, Bo, Lakeside, memo.m4a, Mood (the metric every file has)
+//	nowhere: Alpha, Bo, memo.m4a, Mood (the metric every file has)
 //
-// The day page 2031-05-01 mentions Ana and Lakeside; a day page is never filed (links_endpoint_types, D26).
+// The day page 2031-05-01 mentions Ana; a day page is never filed (links_endpoint_types, D26).
 func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 	t.Helper()
 	ctx := t.Context()
@@ -47,9 +47,6 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 		check(err)
 		ids[title] = id
 	}
-	id, err := s.CreatePlace(ctx, "cli", "Lakeside")
-	check(err)
-	ids["Lakeside"] = id
 	for i, f := range []core.FileIn{{Title: "photo.jpg", MIME: "image/jpeg", Day: "2031-05-02"}, {Title: "memo.m4a", MIME: "audio/mp4", Day: "2031-05-01"},
 		{Title: "scan.pdf", MIME: "application/pdf", Day: "2031-04-01"}} {
 		f.SHA256 = strings.Repeat(fmt.Sprintf("%02x", i+1), 32)
@@ -57,13 +54,13 @@ func browseFixture(t *testing.T, s *core.Store) map[string]int64 {
 		check(err)
 		ids[f.Title] = k.ID
 	}
-	_, err = s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg"})
+	_, err := s.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg"})
 	check(err)
 	for _, title := range []string{"Weight", "Mood"} {
 		ids[title], err = s.PageID(ctx, title)
 		check(err)
 	}
-	ids["2031-05-01"], _, err = s.Capture(ctx, "cli", "2031-05-01", "Lunch with [[Ana]] at [[Lakeside]]", nil)
+	ids["2031-05-01"], _, err = s.Capture(ctx, "cli", "2031-05-01", "Lunch with [[Ana]]", nil)
 	check(err)
 	file := func(category string, titles ...string) {
 		t.Helper()
@@ -128,7 +125,6 @@ func TestBrowseListsEachKindWithItsRowAndOrder(t *testing.T) {
 			"Gamma:type=page;kind=page;category=-;mentions=-;last_day=-;picture=-;mime=-;file_kind=-;day=-;unit=-"},
 		{"/browse?kind=person", "Ana:type=person;kind=person;category=-;mentions=1;last_day=2031-05-01;picture=-;mime=-;file_kind=-;day=-;unit=- " +
 			"Bo:type=person;kind=person;category=-;mentions=0;last_day=-;picture=-;mime=-;file_kind=-;day=-;unit=-"},
-		{"/browse?kind=place", "Lakeside:type=place;kind=place;category=-;mentions=1;last_day=2031-05-01;picture=-;mime=-;file_kind=-;day=-;unit=-"},
 		{"/browse?kind=media", "photo.jpg:type=file;kind=media;category=-;mentions=0;last_day=-;picture=-;mime=image/jpeg;file_kind=image;day=2031-05-02;unit=- " +
 			"memo.m4a:type=file;kind=media;category=-;mentions=0;last_day=-;picture=-;mime=audio/mp4;file_kind=audio;day=2031-05-01;unit=-"},
 		{"/browse?kind=media&media=audio", "memo.m4a:type=file;kind=media;category=-;mentions=0;last_day=-;picture=-;mime=audio/mp4;file_kind=audio;day=2031-05-01;unit=-"},
@@ -242,7 +238,6 @@ func TestBrowseNotFiledFollowsTheKind(t *testing.T) {
 	for _, tc := range []struct{ path, want string }{
 		{"/browse?unfiled=1", "Alpha:"},
 		{"/browse?kind=person&unfiled=1", "Bo:"},
-		{"/browse?kind=place&unfiled=1", "Lakeside:"},
 		{"/browse?kind=media&unfiled=1", "memo.m4a:"},
 		{"/browse?kind=document&unfiled=1", ""},
 		{"/browse?kind=metric&unfiled=1", "Mood:"},
@@ -274,7 +269,7 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		t.Helper()
 		m := props(apitest.Must(t)(c.Get(ctx, path)))["counts"].(map[string]any)
 		var out []string
-		for _, k := range []string{"page", "person", "place", "media", "document", "metric", "all", "ghosts", "deleted"} {
+		for _, k := range []string{"page", "person", "media", "document", "metric", "all", "ghosts", "deleted"} {
 			if v, ok := m[k]; ok {
 				out = append(out, fmt.Sprintf("%s=%v", k, v))
 			}
@@ -285,11 +280,11 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	for _, tc := range []struct{ path, want string }{
-		{"/browse", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0 deleted=0"},
-		{"/browse?kind=media", "page=5 person=2 place=1 media=2 document=1 metric=2 ghosts=0 deleted=0"},
-		{"/browse?in=Family", "page=2 person=1 place=0 media=1 document=1 metric=0 all=5 ghosts=0 deleted=0"},
-		{"/browse?in=Cousins&kind=page", "page=1 person=0 place=0 media=0 document=0 metric=1 all=2 ghosts=0 deleted=0"},
-		{"/browse?unfiled=1&kind=person", "page=1 person=1 place=1 media=1 document=0 metric=1 ghosts=0 deleted=0"},
+		{"/browse", "page=5 person=2 media=2 document=1 metric=2 ghosts=0 deleted=0"},
+		{"/browse?kind=media", "page=5 person=2 media=2 document=1 metric=2 ghosts=0 deleted=0"},
+		{"/browse?in=Family", "page=2 person=1 media=1 document=1 metric=0 all=5 ghosts=0 deleted=0"},
+		{"/browse?in=Cousins&kind=page", "page=1 person=0 media=0 document=0 metric=1 all=2 ghosts=0 deleted=0"},
+		{"/browse?unfiled=1&kind=person", "page=1 person=1 media=1 document=0 metric=1 ghosts=0 deleted=0"},
 	} {
 		if got := counts(tc.path); got != tc.want {
 			t.Errorf("%s: %s, want %s", tc.path, got, tc.want)
@@ -306,7 +301,7 @@ func TestBrowseCountsEachChipInTheScopeOfTheList(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	if got, want := chips(apitest.Must(t)(c.Get(ctx, "/browse?unfiled=1&kind=person"))), "page=/browse?kind=page&unfiled=1 person=/browse?kind=person&unfiled=1 "+
-		"place=/browse?kind=place&unfiled=1 media=/browse?kind=media&unfiled=1 document=/browse?kind=document&unfiled=1 metric=/browse?kind=metric&unfiled=1"; got != want {
+		"media=/browse?kind=media&unfiled=1 document=/browse?kind=document&unfiled=1 metric=/browse?kind=metric&unfiled=1"; got != want {
 		t.Errorf("chips not filed:\n got %s\nwant %s", got, want)
 	}
 	// Inside a category All is the default, and its chip comes first.
@@ -396,9 +391,9 @@ func TestBrowseRefusesACombinationWithNoMeaning(t *testing.T) {
 	if _, err := c.Get(ctx, "/browse?in=Nobody+at+all"); apitest.Status(err) != http.StatusNotFound {
 		t.Errorf("a title of nothing: %v, want 404", err)
 	}
-	// Only a plain page can be a category (link_kinds, links_endpoint_types): a person, a place, a file, a metric and a
+	// Only a plain page can be a category (link_kinds, links_endpoint_types): a person, a file, a metric and a
 	// day are refused, not given an empty list.
-	for _, title := range []string{"Ana", "Lakeside", "photo.jpg", "Mood", "2031-05-01"} {
+	for _, title := range []string{"Ana", "photo.jpg", "Mood", "2031-05-01"} {
 		if _, err := c.Get(ctx, "/browse?in="+url.QueryEscape(title)); apitest.Status(err) != http.StatusUnprocessableEntity {
 			t.Errorf("in=%s: %v, want 422", title, err)
 		}
@@ -534,7 +529,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		}
 	}
 	// All is the default view of a category, so it is where a thing is moved: the bar moves and removes, and never
-	// deletes (a person or a place is deleted from its own page).
+	// deletes (a person is deleted from its own page).
 	if !strings.Contains(family, `id="pick"`) || !strings.Contains(family, `<button class="primary">Move to</button>`) ||
 		!strings.Contains(family, `<button form="pick" name="from" value="Family" formnovalidate>Remove from Family</button>`) || strings.Contains(family, `>Delete<`) {
 		t.Error("All in a category does not draw the pick bar with Move to and Remove from Family, and no Delete")
@@ -612,7 +607,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		"/browse?ghosts=1":                "No ghost page: every page has text or a link.",
 		"/browse?kind=document&unfiled=1": "Everything of this kind is in a category.",
 		"/browse?in=Cousins&kind=person":  "Nothing of this kind is filed in Cousins.",
-		"/browse?kind=place&in=Alpha":     "Nothing of this kind is filed in Alpha.",
+		"/browse?kind=media&in=Alpha":     "Nothing of this kind is filed in Alpha.",
 	} {
 		if body := browse(t, h, path); !strings.Contains(body, `<p class="empty">`+want+`</p>`) {
 			t.Errorf("%s lacks its empty state %q", path, want)
@@ -722,7 +717,7 @@ func TestHomeLinksTheListsOfBrowse(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	for rel, want := range map[string]string{
-		"browse": "/browse", "people": "/browse?kind=person", "places": "/browse?kind=place",
+		"browse": "/browse", "people": "/browse?kind=person",
 		"media": "/browse?kind=media", "files": "/browse?kind=document", "ghosts": "/browse?ghosts=1&kind=page", "metrics": "/metrics",
 	} {
 		if got := apitest.Href(root, rel); got != want {

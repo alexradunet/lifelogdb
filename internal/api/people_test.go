@@ -3,7 +3,6 @@ package api_test
 import (
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -12,14 +11,13 @@ import (
 )
 
 // TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt: the answer 409 keeps "open it" and adds a link to the
-// promote form of that page, with the kind and the fields typed (docs/plans/141-the-access-pass.md, part 2).
+// promote form of that page, with the fields typed (docs/plans/141-the-access-pass.md, part 2).
 func TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	sam := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Sam"}))
 	samHref := apitest.Href(sam, "self")
-	pier := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Pier"}))
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
 
 	post := func(path string, form url.Values) string {
@@ -31,22 +29,17 @@ func TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt(t *testing.T) {
 		return rec.Body.String()
 	}
 	body := post("/people", url.Values{"title": {"Sam"}, "name": {"Samuel Ortiz"}, "birth_day": {"1980-02-03"}})
-	for _, want := range []string{`open it</a>`, `href="` + samHref + `?birth_day=1980-02-03&amp;name=Samuel&#43;Ortiz&amp;new=promote&amp;to=person">make it a person, with what you typed</a>`} {
+	for _, want := range []string{`open it</a>`, `href="` + samHref + `?birth_day=1980-02-03&amp;name=Samuel&#43;Ortiz&amp;new=promote">make it a person, with what you typed</a>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the 409 of a person does not say %s:\n%.600s", want, body)
 		}
 	}
 	// The link opens the promote form with the fields filled.
-	page := browse(t, h, samHref+"?birth_day=1980-02-03&name=Samuel+Ortiz&new=promote&to=person")
+	page := browse(t, h, samHref+"?birth_day=1980-02-03&name=Samuel+Ortiz&new=promote")
 	for _, want := range []string{`value="Samuel Ortiz"`, `value="1980-02-03"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the promote form is not filled: it lacks %s", want)
 		}
-	}
-	// A place takes no full name and no dates: its link carries the kind alone.
-	body = post("/places", url.Values{"title": {"Pier"}})
-	if want := apitest.Href(pier, "self") + `?new=promote&amp;to=place">make it a place`; !strings.Contains(body, want) {
-		t.Errorf("the 409 of a place does not say %s:\n%.600s", want, body)
 	}
 	// A page that is a person already has nothing to promote: only "open it".
 	if body = post("/people", url.Values{"title": {"Ana"}}); strings.Contains(body, "make it a") || !strings.Contains(body, apitest.Href(ana, "self")) {
@@ -54,17 +47,26 @@ func TestANewPersonWithTheTitleOfAPlainPageOffersToPromoteIt(t *testing.T) {
 	}
 }
 
-// TestPromoteTakesTheDatesOfAPersonAndRefusesThemForAPlace: through the API, as a client of any surface sends them.
-func TestPromoteTakesTheDatesOfAPersonAndRefusesThemForAPlace(t *testing.T) {
+// TestPromoteMakesAPersonAndTakesItsDates: through the API, as a client of any surface sends them. A plain page with
+// no field becomes a person named as its title. The catalog has no field to, and the writer refuses it.
+func TestPromoteMakesAPersonAndTakesItsDates(t *testing.T) {
 	c, _, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
 	sam := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Sam"}))
 	pier := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Pier"}))
-	if _, err := c.Do(ctx, apitest.Action(t, pier, "promote"), map[string]string{"to": "place", "birth_day": "1980-02-03"}); apitest.Status(err) != http.StatusUnprocessableEntity {
-		t.Errorf("a place with a birth day: %v, want 422", err)
+	promote := apitest.Action(t, pier, "promote")
+	if promote.Title != "Make it a person" || promote.Field("to") != nil {
+		t.Errorf("promote is %q with the field to: %v", promote.Title, promote.Field("to"))
 	}
-	got := apitest.Must(t)(c.Do(ctx, apitest.Action(t, sam, "promote"), map[string]string{"to": "person", "name": "Samuel Ortiz", "birth_day": "1980-02-03"}))
+	if _, err := c.Do(ctx, promote, map[string]string{"to": "person"}); apitest.Status(err) != http.StatusUnprocessableEntity {
+		t.Errorf("a field the action does not list: %v, want 422", err)
+	}
+	plain := apitest.Must(t)(c.Do(ctx, promote, nil))
+	if person, _ := props(plain)["person"].(map[string]any); plain.Class[0] != "person" && person["name"] != "Pier" {
+		t.Errorf("a plain page with no field: class %v, person %v, want a person named Pier", plain.Class, person)
+	}
+	got := apitest.Must(t)(c.Do(ctx, apitest.Action(t, sam, "promote"), map[string]string{"name": "Samuel Ortiz", "birth_day": "1980-02-03"}))
 	if person, _ := props(got)["person"].(map[string]any); person["name"] != "Samuel Ortiz" || person["birth_day"] != "1980-02-03" || person["death_day"] != nil {
 		t.Errorf("the person is %v", person)
 	}
@@ -131,66 +133,6 @@ func TestEditPersonThroughTheAPIAndTheBrowser(t *testing.T) {
 	if rec := submit(h, apitest.Href(plain, "self")+"/person", url.Values{"name": {"X"}}, ""); rec.Code != http.StatusConflict {
 		t.Errorf("edit-person on a plain page: %d, want 409", rec.Code)
 	}
-}
-
-// TestTheWhereOfADayLinksAPlaceAndRemovesIt: Where is always drawn; "I was at a place" leads to the link form of the day
-// page with the kind filled and the places as options, and the x of a place sends unlink for it.
-func TestTheWhereOfADayLinksAPlaceAndRemovesIt(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	ctx := t.Context()
-	root := apitest.Must(t)(c.Get(ctx, "/"))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lisbon"}))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Porto"}))
-
-	// A day with no day page: Where says what to do first, and draws no link form.
-	empty := browse(t, h, "/days/2026-03-01")
-	if !strings.Contains(empty, `aria-label="Where"`) || !strings.Contains(empty, "Write something in the journal first") || strings.Contains(empty, "I was at a place") {
-		t.Errorf("the Where of a day with no page:\n%s", section(empty, "Where"))
-	}
-
-	catalog := apitest.Must(t)(c.Get(ctx, "/actions"))
-	day := apitest.Must(t)(c.Do(ctx, apitest.Action(t, catalog, "capture"), map[string]string{"day": "2026-03-02", "text": "Walked."}))
-	dayPage := apitest.Href(day, "page")
-	where := section(browse(t, h, "/days/2026-03-02"), "Where")
-	if want := `<a href="` + dayPage + `?new=link&amp;kind=at">I was at a place</a>`; !strings.Contains(where, want) || !strings.Contains(where, "No place on this day") {
-		t.Errorf("the Where of a day with a page and no place:\n%s", where)
-	}
-	// The link opens the day page's link form: kind filled, places offered.
-	form := browse(t, h, dayPage+"?new=link&kind=at")
-	for _, want := range []string{`<option value="Lisbon">`, `<option value="Porto">`, `<option selected>at</option>`} {
-		if !strings.Contains(form, want) {
-			t.Errorf("the link form of the day page lacks %s", want)
-		}
-	}
-	link := apitest.Action(t, apitest.Must(t)(c.Get(ctx, dayPage)), "link")
-	if _, err := c.Do(ctx, link, map[string]string{"to": "Lisbon", "kind": "at"}); err != nil {
-		t.Fatal(err)
-	}
-	where = section(browse(t, h, "/days/2026-03-02"), "Where")
-	unlink := regexp.MustCompile(`<form method="POST" action="` + regexp.QuoteMeta(dayPage) + `/unlink" class="tiny">(?s:.*)name="to" value="Lisbon">(?s:.*)name="kind" value="at">(?s:.*)<button class="remove" aria-label="Remove Lisbon">`)
-	if !unlink.MatchString(where) {
-		t.Errorf("the place has no x that sends unlink:\n%s", where)
-	}
-	rec := submit(h, dayPage+"/unlink", url.Values{"kind": {"at"}, "to": {"Lisbon"}, "back": {"/days/2026-03-02"}}, "")
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("unlink answered %d: %.300s", rec.Code, rec.Body.String())
-	}
-	if where = section(browse(t, h, "/days/2026-03-02"), "Where"); strings.Contains(where, "Lisbon") {
-		t.Errorf("the place is still in Where:\n%s", where)
-	}
-}
-
-// section is the part of a page from the section with that label to its end tag.
-func section(page, label string) string {
-	start := strings.Index(page, `aria-label="`+label+`"`)
-	if start < 0 {
-		return ""
-	}
-	end := strings.Index(page[start:], "</section>")
-	if end < 0 {
-		return page[start:]
-	}
-	return page[start : start+end]
 }
 
 // TestAPeriodPageOrACategoryIsNotOfferedAsAPersonOrAMetric: the schema refuses to change the type of a period page

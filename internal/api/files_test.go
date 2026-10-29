@@ -143,7 +143,7 @@ func TestAddFileKeepsMalformedHEIFWithUnknownMetadata(t *testing.T) {
 	if file["mime"] != "image/heic" || file["preview"] != false || props(e)["body"] != "kept despite bad metadata" {
 		t.Fatalf("malformed HEIF was not kept as an unknown file: props=%+v result=%+v", props(e), res)
 	}
-	if res["day"] != nil || res["place"] != nil || res["unmatched"] != nil || res["linked"] == true {
+	if res["day"] != nil || res["unmatched"] != nil || res["linked"] == true {
 		t.Errorf("bad metadata derived photo facts: %+v", res)
 	}
 }
@@ -189,7 +189,7 @@ func TestAPhotosDay(t *testing.T) {
 	jpg := write("IMG_1.jpg", phototest.WithExif(phototest.JPEG(64, 48), photo.Meta{Taken: "2019-06-03 07:41:12"}, true))
 	e := apitest.Must(t)(c.Do(t.Context(), add, map[string]string{"title": "2019-06-03 IMG_1.jpg", "original": jpg}))
 	res, _ := e.Result.(map[string]any)
-	if res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" || res["place"] != nil || res["unmatched"] != nil {
+	if res["embedded"] != true || res["day"] != "2019-06-03" || props(e)["day"] != "2019-06-03" || res["unmatched"] != nil {
 		t.Fatalf("a photo with a day: %+v", res)
 	}
 	day := apitest.Must(t)(c.Get(t.Context(), "/days/2019-06-03"))
@@ -321,7 +321,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			c, h, _ := apitest.Fresh(t, "cli")
 			if kind == "conflict" {
-				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-place"), map[string]string{"title": "Occupied"}))
+				apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, apitest.Must(t)(c.Get(t.Context(), "/")), "create-person"), map[string]string{"title": "Occupied"}))
 			}
 			var b bytes.Buffer
 			mw := multipart.NewWriter(&b)

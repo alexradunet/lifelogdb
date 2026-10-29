@@ -30,7 +30,7 @@ func (v *view) HitGroups() []hitGroup {
 }
 
 // kindIcons are the icons of the kinds of a hit that has no picture: the icons of the sidebar that exist.
-var kindIcons = map[string]string{"day": "calendar", "page": "files", "person": "people", "place": "places", "file": "image"}
+var kindIcons = map[string]string{"day": "calendar", "page": "files", "person": "people", "file": "image"}
 
 // kindIcon is the icon of a hit's kind, "" for a kind that has none.
 func kindIcon(kind any) string {

@@ -200,7 +200,7 @@ func TestACategoryPageOpensInBrowse(t *testing.T) {
 	}
 }
 
-// A new page is filed where it is made; a person, a place, a file and a metric are filed by file-pages
+// A new page is filed where it is made; a person, a file and a metric are filed by file-pages
 // (docs/plans/131-the-pareto-pass.md, part 2).
 
 // partOfLinks are the titles the entity links part-of, in order.
@@ -217,7 +217,7 @@ func partOfLinks(e *siren.Entity) []string {
 func TestOnlyANewPageTakesACategory(t *testing.T) {
 	c, _, _ := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	for _, name := range []string{"create-page", "create-person", "create-place", "add-file", "register-metric"} {
+	for _, name := range []string{"create-page", "create-person", "add-file", "register-metric"} {
 		a := apitest.Action(t, root, name)
 		f := a.Field("category")
 		if want := name == "create-page"; (f != nil) != want {
@@ -397,17 +397,8 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 		t.Errorf("a refused filing filed Plans in %v", got)
 	}
 
-	if hasOption(apitest.Action(t, day, "link"), "kind", "part-of") || !hasOption(apitest.Action(t, day, "link"), "kind", "at") {
-		t.Errorf("a day page's link offers %+v: at, and never part-of", apitest.Action(t, day, "link").Fields)
-	}
-	if hasAction(apitest.Must(t)(c.Get(ctx, "/pages/"+plain)), "link") {
-		t.Error("a plain page offers link: file-pages files it")
-	}
-	apitest.Must(t)(c.Do(ctx, file, map[string]string{"ids": plain, "category": "Garden"}))
-	link := apitest.Action(t, apitest.Must(t)(c.Get(ctx, "/actions")), "link") // the catalog's, which names any kind
-	_, err := c.Do(ctx, link, map[string]string{"id": dayID, "to": "Garden", "kind": "part-of"})
-	if apitest.Status(err) != http.StatusUnprocessableEntity || !strings.Contains(fmt.Sprint(err), sentence) {
-		t.Errorf("link part-of from a day page: %v, want a 422 that says %q", err, sentence)
+	if hasAction(day, "file-pages") {
+		t.Error("a day page offers file-pages: a day page is never filed (D26)")
 	}
 	if got := partOfLinks(apitest.Must(t)(c.Get(ctx, "/pages/"+dayID))); len(got) != 0 {
 		t.Errorf("the day page is part-of %v", got)

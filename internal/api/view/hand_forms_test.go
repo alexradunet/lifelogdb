@@ -81,28 +81,22 @@ func TestTheTickFormHoldsOnlyTheLineAndItsButtons(t *testing.T) {
 }
 
 // TestAFixedValueIsAHiddenInput: a form whose fields are all fixed or hidden is hidden inputs and one button, the
-// glyph with its aria-label, and nothing else (the × of a place and of a category).
+// glyph with its aria-label, and nothing else (the × of a category).
 func TestAFixedValueIsAHiddenInput(t *testing.T) {
-	unlink := siren.Action{Name: "unlink", Method: "POST", Href: "/pages/4/unlink", Fields: []siren.Field{
-		{Name: "to", Type: "text", Required: true, Pages: true, Options: []string{"Lisbon"}}, {Name: "kind", Type: "text", Required: true}}}
-	html, _ := drawForm(t, unlink, "kind", "at", "to", "Lisbon", "class", "tiny", "button", "×", "aria", "Remove Lisbon", "back", "/days/1")
-	for _, want := range []string{`class="tiny"`, `<input type="hidden" name="to" value="Lisbon">`, `<input type="hidden" name="kind" value="at">`,
-		`<input type="hidden" name="back" value="/days/1">`, `<button class="remove" aria-label="Remove Lisbon">×</button>`} {
-		if !strings.Contains(html, want) {
-			t.Errorf("unlink lacks %s in %s", want, html)
-		}
-	}
-	if strings.Contains(html, "<label") || strings.Contains(html, "<details") || strings.Contains(html, "<datalist") {
-		t.Errorf("unlink draws a field: %s", html)
-	}
 	file := filePages(0, "Sport")
 	file.Fields = append(file.Fields, siren.Field{Name: "from", Type: "text", Pages: true})
-	html, _ = drawForm(t, file, "ids", "5", "from", "Sport", "outside", "category,move", "class", "tiny", "button", "×", "aria", "Remove from Sport")
+	html, _ := drawForm(t, file, "ids", "5", "from", "Sport", "outside", "category,move", "class", "tiny", "button", "×", "aria", "Remove from Sport")
 	if n := regexp.MustCompile(`name="(\w+)"`).FindAllStringSubmatch(html, -1); len(n) != 2 || n[0][1] != "ids" || n[1][1] != "from" {
 		t.Errorf("file-pages sends %v, want ids and from: %s", n, html)
 	}
-	if strings.Contains(html, "<label") || !strings.Contains(html, `aria-label="Remove from Sport"`) {
-		t.Errorf("file-pages ×: %s", html)
+	for _, want := range []string{`class="tiny"`, `<input type="hidden" name="ids" value="5">`, `<input type="hidden" name="from" value="Sport">`,
+		`<button class="remove" aria-label="Remove from Sport">×</button>`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("file-pages lacks %s in %s", want, html)
+		}
+	}
+	if strings.Contains(html, "<label") || strings.Contains(html, "<details") || strings.Contains(html, "<datalist") {
+		t.Errorf("file-pages draws a field: %s", html)
 	}
 }
 

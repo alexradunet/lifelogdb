@@ -1,6 +1,6 @@
 ---
 name: lifelog-import-notes
-description: Put the owner's notes (a folder of Markdown notes, a journal of daily notes, an Obsidian vault) into life.db, one note at a time, with the owner approving each person, place and link. Use when the owner asks to import notes or a journal into lifelog.
+description: Put the owner's notes (a folder of Markdown notes, a journal of daily notes, an Obsidian vault) into life.db, one note at a time, with the owner approving each person. Use when the owner asks to import notes or a journal into lifelog.
 ---
 
 # Import notes into life.db
@@ -21,15 +21,13 @@ like a date but is none of these: ask the owner.
    only when the owner says so.
 5. The answer of `capture` lists `created` (empty pages that the note's `[[links]]` made) and `skipped` (links that
    are not valid titles). Tell the owner both.
-6. People and places. List each person the note names, and each place where the owner was. `find` each one, then
-   propose one line each:
-   - a place that exists: "link at PLACE?"
-   - a plain page of that title (a `[[link]]` made it): "make NAME a person?" or "make PLACE a place, and link at?"
-   - no page: "new person NAME?" or "new place PLACE, and link at?"
+6. People. List each person the note names. `find` each one, then propose one line each:
+   - a plain page of that title (a `[[link]]` made it): "make NAME a person?"
+   - no page: "new person NAME?"
 
-   Write only what the owner approves: `promote`, `create_person` or `create_place`, then for a place `link` from
-   the day page with the kind `at`. A day page links a person only by a `[[link]]` in its text, and the text stays as
-   the note writes it. Never a person for a role ("the dentist"), never a place for a common noun.
+   Write only what the owner approves: `promote` or `create_person`. A place is a plain page: leave it as the note
+   writes it. A day page links a person only by a `[[link]]` in its text, and the text stays as the note writes it.
+   Never a person for a role ("the dentist").
 
 ## A topic note
 

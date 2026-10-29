@@ -63,7 +63,7 @@ func TestSetCoverKeepsThePhotoAndShowsItFirst(t *testing.T) {
 	if got, want := body(), "![[Ana 2026-10-15 2.jpg]]\n\n![[Ana 2026-10-15.jpg]]\n\nMet at school."; got != want {
 		t.Errorf("body = %q, want %q", got, want)
 	}
-	rows, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	rows, err := s.NamedMentions(ctx, Scope{}, 10, 0)
 	if err != nil || len(rows) != 1 || rows[0].Picture != second.ID {
 		t.Errorf("NamedMentions = %+v, %v, want the picture %d", rows, err, second.ID)
 	}
@@ -225,7 +225,7 @@ func TestNamedMentionsPictureIsTheFirstEmbedThatIsAKeptPicture(t *testing.T) {
 	if _, err := s.SaveBody(ctx, "cli", b, "![[Plain]]\n\n![[Bo 2026-10-15.jpg]]", "2"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := s.NamedMentions(ctx, "person", Scope{}, 10, 0)
+	rows, err := s.NamedMentions(ctx, Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestATxPictureThatFailsReturnsNoResult(t *testing.T) {
 	}
 }
 
-// TestEveryPageHasACover: a plain page, a place, a metric and a day page have a cover: the first live file with a
+// TestEveryPageHasACover: a plain page, a metric and a day page have a cover: the first live file with a
 // preview that the body embeds, by any of its names. A day page takes the photo of its day with no action. A
 // tombstoned file and a file with no picture are passed over. A file page has no cover: its own picture stands for
 // it.
@@ -310,7 +310,7 @@ func TestEveryPageHasACover(t *testing.T) {
 	if err := s.Tombstone(ctx, "cli", gone); err != nil { // after the save: a save that links a tombstone revives it
 		t.Fatal(err)
 	}
-	place, err := s.CreatePlace(ctx, "cli", "Shore")
+	place, _, err := s.CreatePage(ctx, "cli", "Shore", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestTheListsShowTheCover(t *testing.T) {
 	if _, _, err := s.CreatePage(ctx, "cli", "Plain", "words", ""); err != nil {
 		t.Fatal(err)
 	}
-	place, err := s.CreatePlace(ctx, "cli", "Shore")
+	place, _, err := s.CreatePage(ctx, "cli", "Shore", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,13 +383,6 @@ func TestTheListsShowTheCover(t *testing.T) {
 	for _, r := range pages {
 		got["page "+r.Title] = r.Picture
 	}
-	places, err := s.NamedMentions(ctx, "place", Scope{}, 10, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, r := range places {
-		got["place "+r.Title] = r.Picture
-	}
 	metrics, err := s.MetricRows(ctx, Scope{}, 10, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -404,7 +397,7 @@ func TestTheListsShowTheCover(t *testing.T) {
 	for _, r := range filed {
 		got["filed "+r.Title] = r.Picture
 	}
-	want := map[string]int64{"page Away": k.ID, "page Plain": 0, "page Trips": 0, "place Shore": k.ID, "metric Mood": 0, "metric Swims": k.ID,
+	want := map[string]int64{"page Away": k.ID, "page Plain": 0, "page Trips": 0, "page Shore": k.ID, "metric Mood": 0, "metric Swims": k.ID,
 		"filed Away": k.ID, "filed Lake.jpg": k.ID, "filed Scan.pdf": 0}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("pictures = %v, want %v", got, want)

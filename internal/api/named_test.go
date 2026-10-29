@@ -61,8 +61,7 @@ func TestPeopleListCarriesItsMentions(t *testing.T) {
 }
 
 // TestPeopleListShowsThePictureAPersonEmbeds: in the people list of Browse, a person whose page embeds a picture has
-// that picture's preview in its row, and the sheet draws it round before the name; a person with none has the icon of a person. A place has
-// its cover too, drawn as a small square, never as a face (docs/plans/127-a-cover-for-every-page.md).
+// that picture's preview in its row, and the sheet draws it round before the name; a person with none has the icon of a person.
 func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	ctx := t.Context()
@@ -72,8 +71,6 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 	ana := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Ana"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, ana, "save-body"), map[string]string{"body": "![[Ana face.jpg]]\n\nMet at school."}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-person"), map[string]string{"title": "Sam"}))
-	lake := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, lake, "save-body"), map[string]string{"body": "![[Ana face.jpg]]"}))
 
 	rows, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=person")))["rows"].([]any)
 	if len(rows) != 2 {
@@ -92,25 +89,17 @@ func TestPeopleListShowsThePictureAPersonEmbeds(t *testing.T) {
 			t.Errorf("the people sheet lacks %q", s)
 		}
 	}
-	places, _ := props(apitest.Must(t)(c.Get(ctx, "/browse?kind=place")))["rows"].([]any)
-	if len(places) != 1 || places[0].(map[string]any)["picture"] != want {
-		t.Errorf("the places rows = %v, want Lake with its cover %s", places, want)
-	}
-	if body := browse(t, h, "/browse?kind=place"); strings.Contains(body, `class="face-picture"`) ||
-		!strings.Contains(body, `<a class="entry named covered" href="`+apitest.Href(lake, "self")+`"><img class="cover-picture" src="`+want+`" alt="" loading="lazy">`) {
-		t.Errorf("the places sheet does not draw the cover square, or draws a face")
-	}
 }
 
 // TestMentionsHaveNoDayWhenNoDayPageLinks: a page that is not a day page gives a count and no last day.
 func TestMentionsHaveNoDayWhenNoDayPageLinks(t *testing.T) {
 	c, h, _ := apitest.FreshOn(t, "cli", "2026-10-12") // the day the words are read against: a day of this year has no year
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-place"), map[string]string{"title": "Lake"}))
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-person"), map[string]string{"title": "Lake"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip", "body": "At [[Lake]]"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Swim", "body": "In [[Lake]]"}))
-	if body := browse(t, h, "/browse?kind=place"); !strings.Contains(body, "mentioned on 2 pages</span>") {
-		t.Errorf("the places sheet lacks the count without a day:\n%.2000s", body)
+	if body := browse(t, h, "/browse?kind=person"); !strings.Contains(body, "mentioned on 2 pages</span>") {
+		t.Errorf("the people sheet lacks the count without a day:\n%.2000s", body)
 	}
 }
 

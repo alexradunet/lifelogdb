@@ -205,7 +205,7 @@ func TestLinkFieldsImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", a, b, "part-of", "old note"); err != nil {
+	if err := addLink(s, "cli", a, b, "part-of", "old note"); err != nil {
 		t.Fatal(err)
 	}
 	var id int64
@@ -275,10 +275,9 @@ func TestALinkOfAKindThatTheRegistryDoesNotHave(t *testing.T) {
 		status int
 		says   string // a part of the message
 	}{
-		{"link redirect", func() error { return s.Link(ctx, "cli", a, b, "redirect", "") }, 422, unregistered},
-		{"link a kind with no row", func() error { return s.Link(ctx, "cli", a, b, "no-such-kind", "") }, 422, unregistered},
-		{"link redirect from no page", func() error { return s.Link(ctx, "cli", 9999, b, "redirect", "") }, 404, "no page 9999"},
-		{"unlink redirect", func() error { return s.Unlink(ctx, "cli", a, b, "redirect") }, 404, fmt.Sprintf("no redirect link from %d to %d", a, b)},
+		{"link redirect", func() error { return addLink(s, "cli", a, b, "redirect", "") }, 422, unregistered},
+		{"link a kind with no row", func() error { return addLink(s, "cli", a, b, "no-such-kind", "") }, 422, unregistered},
+		{"link redirect from no page", func() error { return addLink(s, "cli", 9999, b, "redirect", "") }, 404, "no page 9999"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			before := everyRow(t, s)
@@ -307,7 +306,7 @@ func TestLinkKindsFromMatchesTheRegistry(t *testing.T) {
 		if err := rows.Scan(&kind, &from); err != nil {
 			t.Fatal(err)
 		}
-		for _, typ := range []string{"page", "person", "place", "file", "metric", "category", "no-such-type"} {
+		for _, typ := range []string{"page", "person", "file", "metric", "category", "no-such-type"} {
 			if from == nil || strings.Contains(","+*from+",", ","+typ+",") {
 				want[typ] = append(want[typ], kind)
 			}
@@ -329,4 +328,15 @@ func TestLinkKindsFromMatchesTheRegistry(t *testing.T) {
 	if got, err := s.LinkKindsFrom(ctx, "page' OR '1'='1"); err != nil || strings.Join(got, ",") != strings.Join(want["no-such-type"], ",") {
 		t.Errorf("injection: %v %v want %v", got, err, want["no-such-type"])
 	}
+}
+
+// addLink writes one edge through the writer's own link (the part-of rows of file-pages use it).
+func addLink(s *Store, source string, from, to int64, kind, note string) error {
+	return s.Do(ctx, source, func(t *Tx) error { _, err := t.link(from, to, kind, note); return err })
+}
+
+// dropLink deletes one edge by direct SQL: no operation of the writer takes an edge out but file-pages with from.
+func dropLink(s *Store, source string, from, to int64, kind string) error {
+	_, err := s.DB.W.ExecContext(ctx, `DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = ?`, from, to, kind)
+	return err
 }

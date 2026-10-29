@@ -9,7 +9,7 @@ import (
 // rule 7). A file of any kind is made by add-file. A kind that is not here (metric, all) is made elsewhere or is not
 // made on its list.
 var newActions = map[string]string{
-	"page": "create-page", "person": "create-person", "place": "create-place", "media": "add-file", "document": "add-file",
+	"page": "create-page", "person": "create-person", "media": "add-file", "document": "add-file",
 }
 
 // NewActionOf is the name of the action that makes a thing of the Browse kind on its list, "" for none. The list

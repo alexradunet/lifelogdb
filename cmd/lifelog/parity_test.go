@@ -292,7 +292,6 @@ func parityRows() []parityRow {
 		{"search order=newest", rowSearchNewest},
 		{"browse deleted=1", rowBrowseDeleted},
 		{"search limit=1", rowSearchLimit},
-		{"create-place in a category", rowCreatePlace},
 		{"file-pages", rowFilePages},
 		{"file-pages with from", rowUnfilePages},
 		{"file-pages with a day page", rowFileADayPage},
@@ -306,7 +305,7 @@ func parityRows() []parityRow {
 		{"plans lists a line with no day", rowPlansListsALine},
 		{"schedule changes the dates of a line", rowScheduleChangesDates},
 	}
-	for _, kind := range []string{"page", "person", "place", "metric", "file"} {
+	for _, kind := range []string{"page", "person", "metric", "file"} {
 		rows = append(rows, parityRow{"rename a " + kind, func(x *parityRun) { rowRename(x, kind) }})
 	}
 	return append(rows,
@@ -317,7 +316,7 @@ func parityRows() []parityRow {
 		parityRow{"say", rowSay},
 		parityRow{"rebuild-search", rowRebuildSearch},
 		parityRow{"resync-links", rowResyncLinks},
-		parityRow{"promote a place", rowPromoteAPlace},
+		parityRow{"promote", rowPromote},
 		parityRow{"edit-person", rowEditPerson},
 		parityRow{"edit-metric", rowEditMetric},
 		parityRow{"register-metric with a range out of order", rowRangeOutOfOrder},
@@ -329,7 +328,6 @@ func parityRows() []parityRow {
 		parityRow{"create-page with a category", rowCreatePage},
 		parityRow{"create-person", rowCreatePerson},
 		parityRow{"tombstone-pages then revive", rowTombstoneAndRevive},
-		parityRow{"link and unlink", rowLinkAndUnlink},
 		parityRow{"correct and retract", rowCorrectAndRetract},
 		parityRow{"integrity-check", rowIntegrityCheck},
 		parityRow{"snapshot", rowSnapshot},
@@ -471,7 +469,7 @@ func rowRandomPage(x *parityRun) {
 			x.t.Errorf("random-page kind=person: %v %q, want Ana", e.Class, e.Title)
 		}
 	}
-	x.refused("random-page", map[string]string{"kind": "place"}, http.StatusNotFound, "not_found")
+	x.refused("random-page", map[string]string{"kind": "place"}, http.StatusUnprocessableEntity, "invalid") // a place is no kind: it is a page
 	x.refused("random-page", map[string]string{"kind": "year"}, http.StatusUnprocessableEntity, "invalid")
 }
 
@@ -636,30 +634,6 @@ func rowSearchKind(x *parityRun) {
 	x.refused("search", map[string]string{"q": "lantern", "kind": "metric"}, http.StatusUnprocessableEntity, "invalid")
 }
 
-// create-place makes the place, and file-pages files it in a category, made when it is new
-// (docs/plans/131-the-pareto-pass.md, part 2).
-func rowCreatePlace(x *parityRun) {
-	e := x.ok("create-place", map[string]string{"title": "Lakeside"})
-	if e.Title != "Lakeside" || len(partOf(e)) != 0 {
-		x.t.Errorf("create-place Lakeside: %q part-of %v", e.Title, partOf(e))
-	}
-	x.ok("file-pages", map[string]string{"ids": strings.TrimPrefix(apitest.Href(e, "self"), "/pages/"), "category": "Trips"})
-	if got := x.browse("in=Trips&kind=place"); got != "Lakeside" {
-		x.t.Errorf("the places in Trips: %s, want Lakeside", got)
-	}
-}
-
-// partOf are the titles that an entity links part-of.
-func partOf(e *siren.Entity) []string {
-	var parts []string
-	for _, l := range e.Entities {
-		if slices.Equal(l.Rel, []string{"part-of"}) {
-			parts = append(parts, l.Title)
-		}
-	}
-	return parts
-}
-
 // file-pages files several pages in a category in one write, and makes the category when it is new.
 func rowFilePages(x *parityRun) {
 	var ids []int64
@@ -748,8 +722,6 @@ func rowRename(x *parityRun, kind string) {
 		p, _, err = x.store.CreatePage(ctx, "cli", old, "original prose", "")
 	case "person":
 		p, err = x.store.CreatePerson(ctx, "cli", old, "Synthetic Person", "", "2031-01-01")
-	case "place":
-		p, err = x.store.CreatePlace(ctx, "cli", old)
 	case "metric":
 		if _, err = x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: old, Unit: "kg", Note: "original metric"}); err == nil {
 			p, err = x.store.PageID(ctx, old)
@@ -1006,29 +978,43 @@ func rowResyncLinks(x *parityRun) {
 	}
 }
 
-// A place is never promoted: promote of a place to a person is refused by the schema (entities_promote_from_page) as a
-// 422 with the sentence of the trigger, on every surface. So is register-metric with the title of a place, which only
-// an owner may call. Nothing is written: the place keeps its type, its version and its body, and no person is made.
-func rowPromoteAPlace(x *parityRun) {
-	p, err := x.store.CreatePlace(x.t.Context(), "cli", "Lakeside")
+// promote makes a plain page a person on every surface, with the page's title as its name when none is sent. A person
+// promoted again is a 409. A metric is never promoted: the schema refuses it (entities_promote_from_page) as a 422
+// with the sentence of the trigger, and so is register-metric with the title of a person, which only an owner may
+// call. A refused call writes nothing.
+func rowPromote(x *parityRun) {
+	ctx := x.t.Context()
+	p, _, err := x.store.CreatePage(ctx, "cli", "Lakeside", "a plain page", "")
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	e := x.ok("promote", map[string]string{"id": id(p)})
+	if person, _ := props(x.t, e)["person"].(map[string]any); e.Class[0] != "person" || person["name"] != "Lakeside" {
+		x.t.Errorf("promote of a plain page: class %v, person %v, want a person named Lakeside", e.Class, person)
+	}
+	x.refused("promote", map[string]string{"id": id(p)}, http.StatusConflict, "conflict")
+	if _, err := x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: "Distance", Unit: "km"}); err != nil {
+		x.t.Fatal(err)
+	}
+	metric, err := x.store.PageID(ctx, "Distance")
 	if err != nil {
 		x.t.Fatal(err)
 	}
 	same := func(m map[string]any) map[string]any {
 		return map[string]any{"type": m["entity_type"], "version": m["version"], "body": m["body"], "person": m["person"]}
 	}
-	before := same(x.pageByID(p))
-	const trigger = "only a plain page is promoted: a person, a place, a metric or a file keeps its type (D20)"
-	if msg := x.refused("promote", map[string]string{"id": id(p), "to": "person"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
-		x.t.Errorf("promote of a place: %q, want the sentence of the trigger", msg)
+	before := same(x.pageByID(metric))
+	const trigger = "only a plain page is promoted: a person, a metric or a file keeps its type (D20)"
+	if msg := x.refused("promote", map[string]string{"id": id(metric)}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
+		x.t.Errorf("promote of a metric: %q, want the sentence of the trigger", msg)
 	}
 	if x.owner {
 		if msg := x.refused("register-metric", map[string]string{"name": "Lakeside", "unit": "km"}, http.StatusUnprocessableEntity, "invalid"); !strings.Contains(msg, trigger) {
-			x.t.Errorf("register-metric with the title of a place: %q, want the sentence of the trigger", msg)
+			x.t.Errorf("register-metric with the title of a person: %q, want the sentence of the trigger", msg)
 		}
 	}
-	if after := same(x.pageByID(p)); !reflect.DeepEqual(after, before) || before["type"] != "place" {
-		x.t.Errorf("the place after the refusals: %v, want %v, a place", after, before)
+	if after := same(x.pageByID(metric)); !reflect.DeepEqual(after, before) || before["type"] != "metric" {
+		x.t.Errorf("the metric after the refusals: %v, want %v, a metric", after, before)
 	}
 }
 
@@ -1472,46 +1458,6 @@ func rowTombstoneAndRevive(x *parityRun) {
 		if got := x.isDeleted(ids[i]); got != want {
 			x.t.Errorf("after revive: the page %d: deleted %v, want %v", ids[i], got, want)
 		}
-	}
-}
-
-// atPlaces are the titles of the places that a page links with at.
-func (x *parityRun) atPlaces(pid int64) string {
-	x.t.Helper()
-	var out []string
-	links, _ := x.pageByID(pid)["links"].([]any)
-	for _, l := range links {
-		if l := l.(map[string]any); l["kind"] == "at" {
-			out = append(out, fmt.Sprint(l["title"]))
-		}
-	}
-	return strings.Join(out, ",")
-}
-
-// link with the kind at says that a day was at a place, and unlink takes it away. The unlink of a link that is not
-// there changes nothing.
-func rowLinkAndUnlink(x *parityRun) {
-	ctx := x.t.Context()
-	day, _, err := x.store.Capture(ctx, "cli", "2031-05-10", "A walk.", nil)
-	if err != nil {
-		x.t.Fatal(err)
-	}
-	if _, err := x.store.CreatePlace(ctx, "cli", "Lakeside"); err != nil {
-		x.t.Fatal(err)
-	}
-	args := map[string]string{"id": id(day), "to": "Lakeside", "kind": "at"}
-	x.ok("link", args)
-	if got := x.atPlaces(day); got != "Lakeside" {
-		x.t.Errorf("the places of the day after link: %q, want Lakeside", got)
-	}
-	x.ok("unlink", args)
-	if got := x.atPlaces(day); got != "" {
-		x.t.Errorf("the places of the day after unlink: %q, want none", got)
-	}
-	before := x.pageByID(day)
-	x.refused("unlink", args, http.StatusNotFound, "not_found")
-	if after := x.pageByID(day); !reflect.DeepEqual(after, before) {
-		x.t.Errorf("the day after the unlink of no link: %v, want %v", after, before)
 	}
 }
 

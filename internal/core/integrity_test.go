@@ -407,7 +407,7 @@ func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Link(ctx, "cli", metric, category, "part-of", ""); err != nil {
+	if err := addLink(s, "cli", metric, category, "part-of", ""); err != nil {
 		t.Fatal(err)
 	}
 	var edge int64
@@ -422,7 +422,7 @@ func TestIntegrityDetectsDeliberateTypedEdgeDamage(t *testing.T) {
 		t.Fatalf("clean setup: %+v", clean)
 	}
 	// Deliberate damage bypasses only the guard in this disposable fixture.
-	if _, err := s.DB.W.Exec(`DROP TRIGGER entities_endpoint_types; UPDATE entities SET entity_type='place' WHERE id=?`, category); err != nil {
+	if _, err := s.DB.W.Exec(`DROP TRIGGER entities_endpoint_types; UPDATE entities SET entity_type='person' WHERE id=?; INSERT INTO people(id, name) VALUES (?, 'Damaged')`, category, category); err != nil {
 		t.Fatal(err)
 	}
 	damaged, err := s.Integrity(ctx)

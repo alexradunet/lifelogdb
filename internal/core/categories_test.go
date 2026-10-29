@@ -445,7 +445,7 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 		t.Fatal(err)
 	}
 	garden := pageByTitle(t, s, "Garden").ID
-	if err := s.Link(ctx, "cli", day, garden, "part-of", ""); status(err) != 422 || !strings.Contains(err.Error(), sentence) {
+	if err := addLink(s, "cli", day, garden, "part-of", ""); status(err) != 422 || !strings.Contains(err.Error(), sentence) {
 		t.Errorf("link part-of from a day page: %d %v, want a 422 that says %q", status(err), err, sentence)
 	}
 	if got := partOf(t, s, day); len(got) != 0 {
@@ -454,7 +454,7 @@ func TestADayPageIsNeverFiled(t *testing.T) {
 }
 
 // A new page is filed where it is made (docs/plans/115-categories-to-browse.md): the page and its part-of link in one
-// write, a missing category made, and a day as the category refused with nothing written. A person, a place, a file
+// write, a missing category made, and a day as the category refused with nothing written. A person, a file
 // and a metric are filed by file-pages (docs/plans/131-the-pareto-pass.md, part 2).
 
 // makers are the writes that take a category, each making a thing titled title.

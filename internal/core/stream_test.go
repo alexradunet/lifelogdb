@@ -49,12 +49,8 @@ func TestTheStreamHoldsEveryDayWithSomething(t *testing.T) {
 	capture := func(day, text string, mood *float64) int64 { t.Helper(); return captured(t, s, day, text, mood) }
 	must[int64](t)(s.CreatePerson(ctx, "cli", "Ana", "", "1990-10-17", ""))
 	must[int64](t)(s.CreatePerson(ctx, "cli", "Cara", "", "1990-10-15", "")) // a birthday on a day with no card
-	lake := must[int64](t)(s.CreatePlace(ctx, "cli", "Lake"))
 	capture("2026-10-20", "A plan for a day to come.", nil)
-	today := capture("2026-10-17", "Swam at the lake.\n\n## Then\nAna came by, with [[Ana]].\n![[Nothing kept]]\nline four\nline five", ptr(4))
-	if err := s.Link(ctx, "cli", today, lake, "at", ""); err != nil {
-		t.Fatal(err)
-	}
+	capture("2026-10-17", "Swam at the lake.\n\n## Then\nAna came by, with [[Ana]].\n![[Nothing kept]]\nline four\nline five", ptr(4))
 	must[bool](t)(s.CreateMetric(ctx, "cli", NewMetric{Name: "Weight", Unit: "kg"}))
 	must[int64](t)(s.Record(ctx, "cli", Reading{Metric: "Weight", Day: "2026-10-12", Value: 70}))
 	must[Kept](t)(s.AddFile(ctx, "cli", FileIn{Title: "Notes.pdf", SHA256: strings.Repeat("b", 64), MIME: "application/pdf", Day: "2026-10-11"}))
@@ -68,7 +64,7 @@ func TestTheStreamHoldsEveryDayWithSomething(t *testing.T) {
 
 	cards, more := streamPage(t, s, 30, 0)
 	want := []string{
-		`2026-10-17 page=true picture=false words="Swam at the lake.\nThen\nAna came by, with Ana.\nline four" mood=[4] chips=place:Lake,person:Ana+0 birthdays=person:Ana pages=+0 readings=0`,
+		`2026-10-17 page=true picture=false words="Swam at the lake.\nThen\nAna came by, with Ana.\nline four" mood=[4] chips=person:Ana+0 birthdays=person:Ana pages=+0 readings=0`,
 		`2026-10-12 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=+0 readings=1`,
 		`2026-10-11 page=false picture=false words="" mood=[] chips=+0 birthdays= pages=file:Notes.pdf+0 readings=0`,
 		// a file with a picture is shown in the page of its day: that day page has the picture, and no words

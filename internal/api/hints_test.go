@@ -13,13 +13,13 @@ import (
 // /actions lists every action with the text of the API.
 func TestAFormDrawsTheHintAndTheActionsPageTheDescription(t *testing.T) {
 	_, h, _ := apitest.Fresh(t, "cli")
-	hint := "Make a place. Its title is its name."
-	if page := browse(t, h, "/browse?kind=place"); !strings.Contains(page, hint) {
-		t.Errorf("/browse?kind=place does not draw the hint of create-place")
+	hint := "Make a person. The title is the short name that links use. The name is the full name."
+	if page := browse(t, h, "/browse?kind=person"); !strings.Contains(page, hint) {
+		t.Errorf("/browse?kind=person does not draw the hint of create-person")
 	}
 	page := browse(t, h, "/actions")
-	if strings.Contains(page, hint) || !strings.Contains(page, "Create a place; its title is its name and its handle.") {
-		t.Errorf("/actions does not draw the description of create-place")
+	if strings.Contains(page, hint) || !strings.Contains(page, "Create a person: title is the permanent handle") {
+		t.Errorf("/actions does not draw the description of create-person")
 	}
 }
 

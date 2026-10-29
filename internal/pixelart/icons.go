@@ -11,7 +11,7 @@ const IconSize = 10
 
 // IconNames are the names of the glyphs, in the order of the cells of the icon sheet: the name at index n is the
 // cell n. The view reads this list, and app.css has one position for each name.
-var IconNames = []string{"today", "calendar", "browse", "people", "places", "files", "metrics", "search", "new",
+var IconNames = []string{"today", "calendar", "browse", "people", "files", "metrics", "search", "new",
 	"more", "image", "video", "audio", "week", "plans", "chat"}
 
 // IconCell gives the cell of the glyph with this name. The second value is false for a name that is not a glyph.
@@ -81,19 +81,6 @@ var glyphs = map[string]drawing{
 		"X........X",
 		"X........X",
 		"XXXXXXXXXX",
-	},
-	// a drop with a hollow
-	"places": {
-		"...XXXX...",
-		"..X....X..",
-		".X..XX..X.",
-		".X..XX..X.",
-		"..X....X..",
-		"..X....X..",
-		"...X..X...",
-		"....XX....",
-		"....XX....",
-		"..........",
 	},
 	// a page with a folded corner
 	"files": {

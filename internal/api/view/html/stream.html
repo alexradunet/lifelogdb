@@ -1,6 +1,6 @@
 {{/* The stream (docs/plans/130-the-explore-pass.md): the Calendar opens on the days of the record as cards, the
      newest first, 30 a page, then Older days. A card holds up to four plain lines of the journal, the mood, the cover,
-     the places and the people as chips, the birthdays, and the pages of the day; a day with no day page is a slim card
+     the people as chips, the birthdays, and the pages of the day; a day with no day page is a slim card
      with no words. Days, Month and Year are the zoom of the Calendar. */}}
 {{define "stream"}}{{template "head" .}}{{$s := .Props}}
 <header class="page-head"><div class="what"><h1>Days</h1>{{template "zoom" (dict "v" . "current" "days")}}</div>
@@ -22,7 +22,7 @@
 {{with .picture}}<a class="card-cover" href="/days/{{$.c.day}}"><img src="{{.}}" alt="" loading="lazy"></a>{{end}}
 <div class="card-text">
 {{with .words}}<p class="card-words">{{.}}</p>{{end}}
-{{if or .places .people .birthdays}}<ul class="card-chips" aria-label="Places and people">{{range .places}}<li><a href="{{.href}}">{{icon "places"}}{{.title}}</a></li>{{end}}{{range .people}}<li><a href="{{.href}}">{{icon "people"}}{{.title}}</a></li>{{end}}{{with .more_chips}}<li><a href="/days/{{$.c.day}}">+{{num .}}</a></li>{{end}}{{range .birthdays}}<li><a href="{{.href}}">Birthday: {{.title}}</a></li>{{end}}</ul>{{end}}
+{{if or .people .birthdays}}<ul class="card-chips" aria-label="People">{{range .people}}<li><a href="{{.href}}">{{icon "people"}}{{.title}}</a></li>{{end}}{{with .more_chips}}<li><a href="/days/{{$.c.day}}">+{{num .}}</a></li>{{end}}{{range .birthdays}}<li><a href="{{.href}}">Birthday: {{.title}}</a></li>{{end}}</ul>{{end}}
 {{with .pages}}<p class="card-pages">+ {{count (beyond . 0 $.c.more_pages) "page" "pages"}}: {{range $i, $p := .}}{{if $i}}, {{end}}<a href="{{.href}}">{{.title}}</a>{{end}}{{with $.c.more_pages}}, <a href="/days/{{$.c.day}}">and {{num .}} more</a>{{end}}</p>{{end}}
 {{with .readings}}<p class="meta">{{count . "reading" "readings"}}</p>{{end}}
 </div>

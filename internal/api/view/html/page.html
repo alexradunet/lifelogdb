@@ -1,4 +1,4 @@
-{{/* A page, a person, a place or a file (docs/plans/095-the-leaf-and-its-margin.md): the head with its
+{{/* A page, a person or a file (docs/plans/095-the-leaf-and-its-margin.md): the head with its
      title (a day page's in words); the sheet with the editor under the head, so a long page is edited without a
      scroll to its end, then the body, then Filed here on a category page (what is part-of it, the categories
      first, with New page here and a link to the category in Browse; docs/plans/115-categories-to-browse.md,
@@ -70,7 +70,7 @@
 {{template "boxed" (form (.Action "rename") "group" "more")}}
 {{template "boxed" (form (.Action "edit-person") "group" "more" "placeholder" "name=Samuel Ortiz")}}
 {{if not .IsSeries}}{{template "boxed" (form (.Action "edit-metric") "group" "more" "button" "Save")}}{{end}}
-{{template "boxed" (form (.Action "promote") "group" "more" "button" "Make it a person or a place")}}
+{{template "boxed" (form (.Action "promote") "group" "more" "button" "Make it a person")}}
 {{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
 {{$back := $.Here}}{{if .IsSeries}}{{$back = printf "/pages/%s" (num $p.id)}}{{end}}{{template "boxed" (form (.Action "tombstone-pages") "group" "more" "hide" "ids" "back" $back)}}</div></section>{{end}}
 {{end}}

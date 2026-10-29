@@ -134,7 +134,7 @@ func Num(v any) string {
 
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
-	"day": "day", "page": "page", "person": "page", "place": "page", "file": "page",
+	"day": "day", "page": "page", "person": "page", "file": "page",
 	"days": "stream", "search": "search", "browse": "browse", "plans": "plans",
 
 	"metrics": "metrics", "series": "metric", "conversation": "conversation", "settings": "settings", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
@@ -343,7 +343,6 @@ func (v *view) Backlinks() []bucket {
 type dayParts struct {
 	Journal []string
 	Pages   []writtenPage // the other pages written on the day
-	Places  []string      // the titles of the places of the day
 }
 
 // writtenPage is a page written on a day, as the day lists it: its title, and whether it changed after it was made.
@@ -365,8 +364,6 @@ func (v *view) DayParts() dayParts {
 			p.Journal = append(p.Journal, detail)
 		case "page", "page (edited)":
 			p.Pages = append(p.Pages, writtenPage{Title: detail, Edited: what != "page"})
-		case "at":
-			p.Places = append(p.Places, detail)
 		}
 	}
 	return p

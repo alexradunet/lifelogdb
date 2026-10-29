@@ -12,7 +12,7 @@ func TestIconsAreDeterministicAndHaveTheirSize(t *testing.T) {
 	if !bytes.Equal(a.Pix, b.Pix) {
 		t.Error("two calls of Icons draw different pixels")
 	}
-	if got, want := a.Bounds(), image.Rect(0, 0, 256, 16); got != want {
+	if got, want := a.Bounds(), image.Rect(0, 0, 240, 16); got != want {
 		t.Errorf("bounds %v, want %v", got, want)
 	}
 }
@@ -111,7 +111,7 @@ func TestEachIconIsATenByTenGlyphInOneColour(t *testing.T) {
 }
 
 func TestIconCellIsTheIndexOfTheName(t *testing.T) {
-	for want, name := range []string{"today", "calendar", "browse", "people", "places", "files", "metrics", "search",
+	for want, name := range []string{"today", "calendar", "browse", "people", "files", "metrics", "search",
 		"new", "more", "image", "video", "audio", "week", "plans", "chat"} {
 		if got, ok := IconCell(name); !ok || got != want {
 			t.Errorf("IconCell(%q) = %d, %v; want %d", name, got, ok, want)

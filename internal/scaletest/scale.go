@@ -265,7 +265,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 		if _, e = tx.CreatePerson("Scale Person", "Synthetic person", "", ""); e != nil {
 			return e
 		}
-		if _, e = tx.CreatePlace("Scale Place"); e != nil {
+		if _, _, e = tx.CreatePage("Scale Place", "", "1970-01-01"); e != nil {
 			return e
 		}
 		for i, name := range metricNames {
@@ -280,7 +280,7 @@ func build(ctx context.Context, s *core.Store, p Profile, o Options) (*fixture, 
 	}
 	f.pages["Scale Popular"] = expectedPage{typ: "page", day: "1970-01-01", bodyHash: hashText("Synthetic shared topic")}
 	f.pages["Scale Person"] = expectedPage{typ: "person", bodyHash: hashText("")}
-	f.pages["Scale Place"] = expectedPage{typ: "place", bodyHash: hashText("")}
+	f.pages["Scale Place"] = expectedPage{typ: "page", day: "1970-01-01", bodyHash: hashText("")}
 	for _, name := range metricNames {
 		f.pages[name] = expectedPage{typ: "metric", bodyHash: hashText("Synthetic metric")}
 	}

@@ -34,7 +34,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
 		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
 		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "lines": []planLine{}, "quarters": []yearQuarter{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
-		"page, person, place, file": pageProperties{},
+		"page, person, file":        pageProperties{},
 		"plan line":                 planLine{},
 		"result of plan":            map[string]any{"page_id": int64(0), "line": 0, "written": ""},
 		"result of tick":            map[string]any{"line": 0, "outcome": "", "text": "", "page_id": int64(0), "appended": "", "appended_line": 0, "removed": "", "removed_line": 0, "next_kept": false, "href": ""},
@@ -104,8 +104,8 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	}
 	live := []struct{ section, route string }{
 		{"root", "/"}, {"days", "/days"}, {"search", "/search?q=word"},
-		{"day", "/days/2031-05-01"}, {"page, person, place, file", ids["page"]}, {"page, person, place, file", ids["person"]},
-		{"page, person, place, file", ids["place"]}, {"page, person, place, file", ids["file"]},
+		{"day", "/days/2031-05-01"}, {"page, person, file", ids["page"]}, {"page, person, file", ids["person"]},
+		{"page, person, file", ids["file"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
 		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"}, {"plans", "/plans"},
 		{"integrity", "/integrity"}, {"settings", "/settings"}, {"conversation", "/days/2031-05-01/conversation"}, {"conversation", "/days/2031-05-02/conversation"}, {"cover-choice", ids["page"] + "/cover"},
@@ -269,11 +269,6 @@ func fixture(t *testing.T) (http.Handler, *core.Store, map[string]string) {
 		t.Fatal(err)
 	}
 	ids["person"] = fmt.Sprintf("/pages/%d", personID)
-	placeID, err := s.CreatePlace(ctx, "cli", "Lakeside")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids["place"] = fmt.Sprintf("/pages/%d", placeID)
 	pageID, _, err := s.CreatePage(ctx, "cli", "A note", "word [[Sam]] #tag", "")
 	if err != nil {
 		t.Fatal(err)

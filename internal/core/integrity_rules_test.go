@@ -13,7 +13,6 @@ import (
 
 func TestIntegrityDetectsALinkThatBreaksADayPageRule(t *testing.T) {
 	for _, rule := range []struct{ name, kind, fromDay, toDay string }{
-		{"an at link from a plain page", "at", "", ""},
 		{"a part-of link to a day page", "part-of", "", "2026-10-02"},
 		{"a part-of link from a day page", "part-of", "2026-10-03", ""},
 	} {
@@ -33,12 +32,6 @@ func TestIntegrityDetectsALinkThatBreaksADayPageRule(t *testing.T) {
 			}
 			if rule.toDay != "" {
 				to = page(rule.toDay)
-			}
-			if rule.kind == "at" {
-				var err error
-				if to, err = s.CreatePlace(ctx, "cli", "Harbour"); err != nil {
-					t.Fatal(err)
-				}
 			}
 			clean, err := s.Integrity(ctx)
 			if err != nil || !clean.OK {

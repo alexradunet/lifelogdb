@@ -464,7 +464,7 @@ func TestUnknownPhotoDryRunDedupKnownDayMissingPreviewAndTombstone(t *testing.T)
 		t.Fatal("dedup replaced ownership")
 	}
 	counts, err := countRows(ctx, s)
-	if err != nil || counts.Pages != before.Pages || counts.Links["at"] != before.Links["at"] {
+	if err != nil || counts.Pages != before.Pages || counts.Links["part-of"] != before.Links["part-of"] {
 		t.Fatal("unknown dedup incidental writes")
 	}
 	if err = s.Tombstone(ctx, "cli", kept.ID); err != nil {

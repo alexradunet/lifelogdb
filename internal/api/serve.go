@@ -108,9 +108,8 @@ func newServer(s *core.Store) *server {
 	h.mux = m
 	h.mount(m, catalog, map[string]actionFunc{
 		"capture": h.capture, "create-page": h.createPage, "save-body": h.saveBody, "plan": h.plan, "tick": h.tick, "carry": h.carry, "schedule": h.schedule, "create-person": h.createPerson,
-		"create-place": h.createPlace, "add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote, "edit-person": h.editPerson, "edit-metric": h.editMetric,
-		"revive": h.revive, "tombstone-pages": h.tombstoneMany, "link": h.linkPages,
-		"unlink": h.unlinkPages, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
+		"add-file": h.addFile, "set-cover": h.setCover, "promote": h.promote, "edit-person": h.editPerson, "edit-metric": h.editMetric,
+		"revive": h.revive, "tombstone-pages": h.tombstoneMany, "file-pages": h.filePages, "record": h.record, "correct": h.correct,
 		"retract": h.retract, "rename": h.rename, "register-metric": h.registerMetric, "integrity-check": h.integrity,
 		"search": h.search, "browse": h.browse, "plans": h.plans, "find": h.find, "open-day": h.openDay,
 		"random-page": h.randomPage, "snapshot": h.snapshot,

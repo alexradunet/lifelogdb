@@ -17,7 +17,7 @@ import (
 const CardsPerTurn = 6
 
 // Card is one address of a turn, as a badge of the thread draws it: an icon (or a small picture), a title and one
-// value. Kind picks the icon and the words: link (the address alone), day, page, person, place, file, metric, series,
+// value. Kind picks the icon and the words: link (the address alone), day, page, person, file, metric, series,
 // measurement, plan, search, conversation or other. A part that a kind does not use stays empty.
 type Card struct {
 	Href, Kind, Title string
@@ -31,7 +31,7 @@ type Card struct {
 func (v *view) CardOf(href string) Card { return v.cardOf(href, v.cards[href]) }
 
 // cardIcons are the icons of the kinds of a card that is not a leaf.
-var cardIcons = map[string]string{"page": "files", "person": "people", "place": "places", "file": "image", "metric": "metrics",
+var cardIcons = map[string]string{"page": "files", "person": "people", "file": "image", "metric": "metrics",
 	"series": "metrics", "measurement": "metrics", "plan": "plans", "search": "search", "conversation": "chat", "day": "calendar"}
 
 // cardOf is the card of the entity e at href. A nil entity, an entity with a property that JSON cannot carry, and
@@ -89,9 +89,9 @@ func linkWords(href string) string {
 }
 
 // cardKind picks the kind of an entity from its classes. A conversation is also a page, and a day page is a page
-// and a day page: the more particular class wins. A kind of page is its own (person, place, file, metric, page); "" is a class without a card.
+// and a day page: the more particular class wins. A kind of page is its own (person, file, metric, page); "" is a class without a card.
 func cardKind(class []string) string {
-	for _, k := range []string{"conversation", "day", "day-page", "series", "measurement", "search", "person", "place", "file", "metric", "page"} {
+	for _, k := range []string{"conversation", "day", "day-page", "series", "measurement", "search", "person", "file", "metric", "page"} {
 		if slices.Contains(class, k) {
 			return k
 		}
@@ -129,7 +129,7 @@ func (v *view) dayCard(c Card, props map[string]any, kind string) Card {
 	return c
 }
 
-// pageCard is a page, a person, a place, a file or a metric's page: its title and its cover (a file's own picture
+// pageCard is a page, a person, a file or a metric's page: its title and its cover (a file's own picture
 // when it has no cover).
 func (v *view) pageCard(c Card, props map[string]any, kind string) Card {
 	c.Kind = kind

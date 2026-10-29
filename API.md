@@ -68,7 +68,7 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page. When `create-person` or `create-place` meets a live plain page, the link `promote` is the address of that page with the promote form open and the fields filled), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found` (for a metric that does not exist, the link `register` is the address of the Metrics board with the form of `register-metric` open and the name filled), `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page. When `create-person` meets a live plain page, the link `promote` is the address of that page with the promote form open and the fields filled), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found` (for a metric that does not exist, the link `register` is the address of the Metrics board with the form of `register-metric` open and the name filled), `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person; a fault of the server (500 `internal`) says only `internal error`, and the server's log has the cause |
 
 ## Pages of a list
@@ -83,11 +83,11 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 
 `GET /`: the entry point of the API. A browser's `GET /` (it asks for HTML, and not Siren) is answered with the
 [day](#day) of today instead, the page of today. Links: `today`, `days`, `browse` (`/browse`), `plans` (`/plans`), `people`
-(`/browse?kind=person`), `places` (`/browse?kind=place`), `media` (`/browse?kind=media`), `files`
+(`/browse?kind=person`), `media` (`/browse?kind=media`), `files`
 (`/browse?kind=document`), `metrics`, `ghosts` (`/browse?ghosts=1&kind=page`), `actions`, `calendar` (this month),
 `year` (this year). Actions: `capture` (for today), `search`,
 `find`, `open-day`,
-`create-page`, `create-person`, `create-place`, `add-file`,
+`create-page`, `create-person`, `add-file`,
 `record`, `plan` (for today), `register-metric` (owner), `snapshot` (owner).
 
 | property | type | meaning |
@@ -98,7 +98,7 @@ first page. Orders: days newest first; search by rank, or newest first with `ord
 | `recent[].page_id` | integer | the day page's id |
 | `recent[].first_line` | string | the first line of its body that has text, as plain text: a heading's or a list item's marker, the marks of emphasis, code and links, and the brackets of a wikilink cut (a link shows its label), an embed or an image left out (a picture is not words, so a line of pictures alone is passed over), 160 characters at most; absent when the body has no such line |
 | `recent[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `recent[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
+| `recent[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-file)); absent when it has none |
 
 ### actions
 
@@ -130,14 +130,11 @@ has no page is absent), `index`. Actions: `open-day`, `random-page` with `kind` 
 | `cards[].page_id` | integer | the live day page's id; absent on a slim card, a day with no day page |
 | `cards[].words` | string | the first 4 lines of the day page's body that have words, as plain text (as `recent[].first_line` of the root), joined by a newline; absent when none |
 | `cards[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
-| `cards[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
-| `cards[].places[]` | list | the live places the live day page links with `at`, by title; absent when none |
-| `cards[].places[].title` | string | the title of the place |
-| `cards[].places[].href` | string | the place's page |
-| `cards[].people[]` | list | the live people the live day page links with a wikilink, by title, after the places, so that the places and the people are 6 at most; absent when none |
+| `cards[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-file)); absent when it has none |
+| `cards[].people[]` | list | the live people the live day page links with a wikilink, by title, 6 at most; absent when none |
 | `cards[].people[].title` | string | the title of the person |
 | `cards[].people[].href` | string | the person's page |
-| `cards[].more_chips` | integer | the places and the people after the first 6; absent when none |
+| `cards[].more_chips` | integer | the people after the first 6; absent when none |
 | `cards[].birthdays[]` | list | the live people born on the month and day of the card (29 February is on 28 February in a common year); a birthday is only on a day that has a card; absent when none |
 | `cards[].birthdays[].title` | string | the title of the person |
 | `cards[].birthdays[].href` | string | the person's page |
@@ -153,7 +150,7 @@ has no page is absent), `index`. Actions: `open-day`, `random-page` with `kind` 
 `GET /browse`, the catalog action `browse` (docs/plans/117-one-browse-view.md): one page of the things of one kind,
 with the category tree beside them. The query, all optional:
 
-- `kind`: `page`, `person`, `place`, `media`, `document`, `metric` or `all`; the default is `all` with `in`, else
+- `kind`: `page`, `person`, `media`, `document`, `metric` or `all`; the default is `all` with `in`, else
   `page`.
 - `in`: a title (any name of the page, in any case): only what is filed directly in that category.
 - `unfiled`: `0` or `1`: only what is in no category. A deleted category is not one: what is filed only there is in
@@ -166,9 +163,9 @@ with the category tree beside them. The query, all optional:
 
 A combination with no meaning is refused (422): `all` without `in`; `in` with `unfiled`; `ghosts` with a kind other
 than `page`, or with `in` or `unfiled`; `deleted` with a kind, `in`, `unfiled` or `ghosts`; `media` with a kind other than `media`. A title that names nothing is a 404. A title of a thing
-that cannot be a category (a person, a place, a file, a metric or a day) is a 422, and of a deleted page a 409.
+that cannot be a category (a person, a file, a metric or a day) is a 422, and of a deleted page a 409.
 A page is a plain page: a day page is in no list. Media and documents are the files, split by the first part of their
-type. Orders: pages, people, places and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
+type. Orders: pages, people and metrics by title, in any case (as the tree orders the categories); media and documents newest day first; `all` the categories
 first, then by title; ghosts oldest first; the deleted the newest deletion first.
 
 A category is a page that something is `part-of` (D26). Each row is an embedded `item` link (class: the row's
@@ -176,7 +173,7 @@ A category is a page that something is `part-of` (D26). Each row is an embedded 
 query names, but `all`). Links: `self` (with the filters), `index`, `metrics`, `new-metric` (with `kind=metric` only: the address of the [New metric form](#metrics)), a `kind` link for each chip (class:
 its kind; it keeps `in` and `unfiled`; `all` inside a category only, and there the first), `everything` and `unfiled` (the ends of the tree), `ghosts`, `deleted`, with `kind=media` also `pictures`,
 `videos` and `recordings`, and `prev`/`next`. Actions: the New of the kind (`create-page`, `create-person`,
-`create-place`, `add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
+`add-file`, which keeps a file of any kind on the media list too; none for `metric`, `all` and the ghosts),
 and inside a category `create-page` with `category` filled: it makes the page and files it there in one write, and a
 refusal of either step writes nothing (the other kinds are filed by `file-pages`); `file-pages` on every list, with its field `move` filled with `1` inside a category (the pick bar moves by default) and empty elsewhere; `tombstone-pages` on `page` (the ghosts
 too), `media` and `document`; `random-page` with `kind` filled with the kind of the list, on every list but the ghosts. The deleted
@@ -196,7 +193,6 @@ offer no action.
 | `counts` | object | the live things of each kind in the scope of the list (everything, the category, or no category) |
 | `counts.page` | integer | the plain pages |
 | `counts.person` | integer | the people |
-| `counts.place` | integer | the places |
 | `counts.media` | integer | the pictures, videos and recordings |
 | `counts.document` | integer | the other files |
 | `counts.metric` | integer | the metrics |
@@ -216,13 +212,13 @@ offer no action.
 | `rows[].id` | integer | the page's id |
 | `rows[].title` | string | its title |
 | `rows[].type` | string | its `entity_type` |
-| `rows[].kind` | string | its kind: `page`, `person`, `place`, `media`, `document` or `metric`; in the list of the deleted, its `entity_type` |
+| `rows[].kind` | string | its kind: `page`, `person`, `media`, `document` or `metric`; in the list of the deleted, its `entity_type` |
 | `rows[].category` | boolean | a page that is a category; absent otherwise |
 | `rows[].categories[]` | list | the live categories the row is filed in, by title key; absent when none, and in the lists of the ghost pages and the deleted |
 | `rows[].categories[].id` | integer | the category's page id |
 | `rows[].categories[].title` | string | its title |
-| `rows[].mentions` | integer | a person, a place, a file (not in `all`): the live pages that link to it, each counted once |
-| `rows[].last_day` | string | a person, a place: the day of the newest live day page among them; absent when none |
+| `rows[].mentions` | integer | a person, a file (not in `all`): the live pages that link to it, each counted once |
+| `rows[].last_day` | string | a person: the day of the newest live day page among them; absent when none |
 | `rows[].picture` | string | the address of its cover's picture, or of a file's own; absent when none |
 | `rows[].mime` | string | a file (not in `all`): the type of the original |
 | `rows[].file_kind` | string | a file: the first part of its type, `image`, `video`, `audio`, `application`, `text`, … |
@@ -263,9 +259,9 @@ lines (the `{id}` of their href is the `page_id` of the line).
 page is its title when it is a day page, and else the local day of its `created_at` (in the zone of the writer). Pages of
 one day keep the order of the best match. Any other `order` is a 422 (`invalid`) that names the two. Links: `self`,
 `index`, `order` (the same words in the other order, titled `Newest first` or `Best match`), `prev` and `next`, and a
-`kind` link for each chip ([plan 130](docs/plans/130-the-explore-pass.md)): `All`, then `Days`, `Pages`, `People`,
-`Places` and `Files`, each with `class` its kind (`all` for All) and the same words and order.
-`kind` is optional: `day`, `page` (a metric is one), `person`, `place` or `file` lists only the hits of that kind; with
+`kind` link for each chip ([plan 130](docs/plans/130-the-explore-pass.md)): `All`, then `Days`, `Pages`, `People`
+and `Files`, each with `class` its kind (`all` for All) and the same words and order.
+`kind` is optional: `day`, `page` (a metric is one), `person` or `file` lists only the hits of that kind; with
 none, every kind. Any other `kind` is a 422 (`invalid`).
 A page is in one list only: the `hits` leave out the pages that `titles` lists, and the paging counts the pages that are left.
 With no `q`, or a `q` of blanks only (spaces, tabs, a no-break space or another Unicode space), the answer has the
@@ -280,12 +276,12 @@ action `search` and no properties: a browser draws it as the page to search from
 | `titles[].name` | string | the name that starts with `q`: the page's title or one of its aliases |
 | `titles[].title` | string | the page's preferred title |
 | `titles[].page_id` | integer | the page |
-| `titles[].entity_type` | string | its type: `page`, `person`, `place`, `file`, … |
+| `titles[].entity_type` | string | its type: `page`, `person`, `file`, … |
 | `hits[]` | list | the hits of this page, best first |
 | `hits[].id` | integer | the page's id |
 | `hits[].title` | string | its title |
 | `hits[].snippet` | string | the matching text, matches in `⟦`…`⟧` (U+27E6, U+27E7: never brackets, which a body's text uses) |
-| `hits[].kind` | string | `day` (a day page), `page` (a page or a metric), `person`, `place` or `file` |
+| `hits[].kind` | string | `day` (a day page), `page` (a page or a metric), `person` or `file` |
 | `hits[].picture` | string | the address of the picture of its cover, or of a file's own picture; absent when it has none |
 | `limit` | integer | the page size used |
 | `offset` | integer | the rows skipped |
@@ -295,8 +291,8 @@ action `search` and no properties: a browser draws it as the page to search from
 `GET /days/{day}` (`/days/today` redirects; `GET /days/go?day=`, the action `open-day`, redirects to the day it
 names, or to today when `day` is absent or empty, and a value that is not a day is 422). Links:
 `prev`, `next` (the neighbouring days; 0000-01-01 has no `prev` and 9999-12-31 no `next`), `month` (its calendar), `week` (its week),
-`page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-place-file). Embedded: `reading` links to each measurement. Actions: `capture`,
-`record`, `plan` (with `page` this day), `tick`, `carry` and `schedule` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover`, `unlink` (with `kind` at, for the places of Where) and `save-body`
+`page` (the day page, once it exists), `metrics`, and `cover` and `choose-cover` as on [the day page](#page-person-file). Embedded: `reading` links to each measurement. Actions: `capture`,
+`record`, `plan` (with `page` this day), `tick`, `carry` and `schedule` (for the lines of `planned[]`, as on [a week](#week)) and, once the day page exists, `set-cover` and `save-body`
 of it (its body and `version` filled in). The write `capture`
 answers with this entity and a `result` of the sync shape; its field `mood` has the `options` 1 to 5. The entry it
 appends begins with the brackets of a turn of [the conversation](#conversation): `(HH:MM) ` in the server's local
@@ -309,9 +305,9 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `day` | day | the day |
 | `page_id` | integer | the id of the day page; absent when none exists yet |
 | `view[]` | list | the day view of the cookbook, one row each, in reading order |
-| `view[].what` | string | `day page` (its body), `page` or `page (edited)` (a page written that day), `at` (a place the day was at), or a metric's title (a reading) |
+| `view[].what` | string | `day page` (its body), `page` or `page (edited)` (a page written that day), or a metric's title (a reading) |
 | `view[].at` | instant | when, for a page or a reading; absent otherwise |
-| `view[].detail` | string | the body, the page title, the place, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
+| `view[].detail` | string | the body, the page title, `Metric: done`/`not done`/`not recorded`/`invalid`, or `value unit` |
 | `readings[]` | list | the day's readings, each a reading (below) with its id, to correct one |
 | `mood` | list | the values of the day's current Mood readings, in the order they were recorded (the Mood metric found by its name key); empty when none |
 | `today` | day | this machine's local day |
@@ -331,7 +327,7 @@ unchanged on a retry, and the answer is then the class [result](#result), not th
 | `earlier[].first_line` | string | as `recent[].first_line` |
 | `earlier[].mood` | list | as `recent[].mood`; absent when none |
 | `earlier[].picture` | string | as `recent[].picture`; absent when it has none |
-| `cover` | object | the day page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | the day page's cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
@@ -366,12 +362,12 @@ is absent), `page` (the page of the month, titled `YYYY-MM`, once it exists), `i
 | `days[].first_line` | string | the first line of that page's body that has text, as plain text (as `recent[]` of the root); absent when none |
 | `days[].mood` | list | the values of the day's current Mood readings, in the order they were recorded; absent when none |
 | `days[].readings` | integer | the current readings on the day, of every metric but the Mood (`mood` holds those); absent when none |
-| `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-place-file)); absent when it has none |
+| `days[].picture` | string | the address of the picture of the day page's cover (as `cover` of [a page](#page-person-file)); absent when it has none |
 | `lines[]` | list | the [plan lines](#plan-line) planned in the month, and the lines done in it |
 | `page_id` | integer | the period's page, once it exists; absent otherwise |
 | `body` | string | its body; absent with `page_id` |
 | `version` | string | its version, for `save-body`; absent with `page_id` |
-| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
@@ -402,7 +398,7 @@ week exists.
 | `page_id` | integer | the period's page, once it exists; absent otherwise |
 | `body` | string | its body; absent with `page_id` |
 | `version` | string | its version, for `save-body`; absent with `page_id` |
-| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
@@ -433,12 +429,12 @@ link to each month. Actions: `plan` with `page` this year, `tick`, `carry` and `
 | `page_id` | integer | the period's page, once it exists; absent otherwise |
 | `body` | string | its body; absent with `page_id` |
 | `version` | string | its version, for `save-body`; absent with `page_id` |
-| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
 
-### page, person, place, file
+### page, person, file
 
 `GET /pages/{id}`; `GET /pages?title=` redirects to it. A browser's `GET` of the page of a live metric is a 303 to its [series](#series), with the query kept: the series carries the page, so a metric has one view. JSON, and the page of a deleted metric, are answered as here. The class is the page's type; a day page adds `day-page`, a
 tombstoned page adds `deleted`. Links: `day` (a day page's day view), `series` (a metric's readings), `preview` (a
@@ -447,8 +443,7 @@ picture of the page's cover, when it has one), `choose-cover` (the [pictures it 
 is not a file), `make-metric` (a live plain page that is not a day page: the address of the [New metric form](#metrics) with the name filled; registering the metric turns this page into it and keeps its text). Embedded: every outgoing link under its kind, every incoming one under `backlink` and its kind, with the class
 `category` added to a `part-of` backlink from a category page. Actions by
 what is legal: `save-body` (with the current `body` and `version` filled; an empty `body` is refused, so a save
-cannot empty a page), `promote` and `rename` (neither on a live [conversation page](#conversation): its day names it, so `rename` of it, and `rename` of any page to a title `Conversation YYYY-MM-DD`, is 409 `a conversation page keeps its title: its day names it`, and writes nothing), `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `edit-metric` (a live metric: `daily` filled with the current mark, 1 or 0; a field left out is 0; a page that is not a live metric is 409), `link` and `unlink` (each with the kinds this type may start, but `part-of`: `file-pages`
-files a page and, with `from`, takes it out; a plain page, whose only kind would be `part-of`, offers neither), [`file-pages`](#filed) (a page that may
+cannot empty a page), `promote` (it makes a person) and `rename` (neither on a live [conversation page](#conversation): its day names it, so `rename` of it, and `rename` of any page to a title `Conversation YYYY-MM-DD`, is 409 `a conversation page keeps its title: its day names it`, and writes nothing), `edit-person` (a live person: `name`, `birth_day` and `death_day` filled with the current values; a field left out stays, an empty date removes it, and an edit with no field is 422), `edit-metric` (a live metric: `daily` filled with the current mark, 1 or 0; a field left out is 0; a page that is not a live metric is 409), [`file-pages`](#filed) (a page that may
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-cover` (a live page that is not a file), `tombstone-pages` with `ids` this page, or
@@ -467,7 +462,7 @@ that is not a kept picture, or a file page, is refused (422).
 | property | type | meaning |
 |---|---|---|
 | `id` | integer | the page's id, permanent |
-| `entity_type` | string | `page`, `person`, `place`, `metric` or `file` |
+| `entity_type` | string | `page`, `person`, `metric` or `file` |
 | `title` | string | its preferred title; a day page's is its day |
 | `day` | day | the page's day: a day page's own, or the day a note or file belongs to; absent otherwise |
 | `body` | string | the body, CommonMark with `[[wikilinks]]` and `#tags` |
@@ -493,7 +488,7 @@ that is not a kept picture, or a file page, is refused (422).
 | `cover.title` | string | the file's title |
 | `cover.embed` | string | the title as the body's embed writes it, which may be an alias: a reader that draws the cover apart from the body leaves out the first embed of that title |
 | `links[]` | list | the typed links this page starts |
-| `links[].kind` | string | the link kind (`wikilink`, `at`, `part-of`) |
+| `links[].kind` | string | the link kind (`wikilink`, `part-of`) |
 | `links[].id` | integer | the other page's id |
 | `links[].title` | string | its title |
 | `links[].entity_type` | string | its type |
@@ -551,7 +546,7 @@ is its cover), a deleted page 409.
 | `page.id` | integer | its id |
 | `page.title` | string | its title |
 | `page.is_day_page` | boolean | it is a day page |
-| `cover` | object | its cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | its cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
@@ -594,7 +589,7 @@ holds the current one), and `retract`: to remove a reading, retract it. A retrac
 default; `/metrics/{name}` when there is none), `all-readings` (with a `from` only: the same with no `from`), `up`
 (metrics). A live metric is a page (D27), and the answer carries that page: its properties (the rows below that follow `daily`), its
 links but `self`, `series` and `index` (so `cover` and `choose-cover`), its embedded links (every
-outgoing link under its kind, every incoming one under `backlink`) and its actions, all as in [a page](#page-person-place-file).
+outgoing link under its kind, every incoming one under `backlink`) and its actions, all as in [a page](#page-person-file).
 The `metric` object of the page is not repeated: `unit` and `daily` are here. Embedded: `reading` links, and the page's.
 Actions: `record` (this metric), and the page's.
 
@@ -621,11 +616,11 @@ Actions: `record` (this metric), and the page's.
 | `created_at` | instant | when the page was created |
 | `version` | string | the version token a `save-body` must send back |
 | `is_day_page` | boolean | always false |
-| `cover` | object | the page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | the page's cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
-| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-place-file) |
+| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-file) |
 | `links[].kind` | string | |
 | `links[].id` | integer | |
 | `links[].title` | string | |
@@ -851,7 +846,7 @@ with an agent, as the turns of one plain page. Class `conversation`, and `page` 
 no model: an agent (an extension) reads the page and writes its own paragraphs in the format below. Links: `self`, `day`
 (the day view), `index`, and `page` (the conversation page) when it exists. Actions: `say` first, with `day` filled in,
 only when `day` is the server's local today (the conversation of another day offers none);
-when the page exists, the actions of [the page](#page-person-place-file) after it (`save-body` with the `version`, and
+when the page exists, the actions of [the page](#page-person-file) after it (`save-body` with the `version`, and
 the others). When the page exists, the answer carries the page as a series carries a metric's page: its properties
 (the rows below that follow `turns`), its links but `self` and `index`, and its embedded links. A page that is
 deleted is no conversation: the answer has no turns, and `say` makes it live again. A browser's `GET /pages/{id}` of a
@@ -904,11 +899,11 @@ for the owner's turn. The page:
 | `created_at` | instant | when the page was created |
 | `version` | string | the version token a `save-body` must send back; it changes with every write, so a client that waits for an answer compares it |
 | `is_day_page` | boolean | always false |
-| `cover` | object | the page's cover, as `cover` of [a page](#page-person-place-file); absent when it has none |
+| `cover` | object | the page's cover, as `cover` of [a page](#page-person-file); absent when it has none |
 | `cover.id` | integer | |
 | `cover.title` | string | |
 | `cover.embed` | string | |
-| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-place-file) |
+| `links[]` | list | the typed links the page starts, as `links[]` of [a page](#page-person-file) |
 | `links[].kind` | string | |
 | `links[].id` | integer | |
 | `links[].title` | string | |

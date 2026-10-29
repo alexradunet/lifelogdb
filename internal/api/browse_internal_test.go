@@ -30,7 +30,7 @@ func TestBrowseQueryOf(t *testing.T) {
 		{"in=Family", "kind=all named=false in=Family unfiled=false ghosts=false media="},
 		{"in=Family&kind=all", "kind=all named=true in=Family unfiled=false ghosts=false media="},
 		{"in=Family&kind=page", "kind=page named=true in=Family unfiled=false ghosts=false media="},
-		{"kind=place&unfiled=1", "kind=place named=true in= unfiled=true ghosts=false media="},
+		{"kind=person&unfiled=1", "kind=person named=true in= unfiled=true ghosts=false media="},
 		{"unfiled=0", "kind=page named=false in= unfiled=false ghosts=false media="},
 		{"ghosts=1", "kind=page named=false in= unfiled=false ghosts=true media="},
 		{"kind=media&media=image", "kind=media named=true in= unfiled=false ghosts=false media=image"},
@@ -74,8 +74,7 @@ func TestBrowseActions(t *testing.T) {
 	}{
 		{"pages", browseQuery{kind: "page"}, nil, "create-page file-pages[Cousins Family] tombstone-pages random-page"},
 		{"people", browseQuery{kind: "person"}, nil, "create-person file-pages[Cousins Family] random-page"},
-		{"places", browseQuery{kind: "place"}, nil, "create-place file-pages[Cousins Family] random-page"},
-		{"unfiled places", browseQuery{kind: "place", unfiled: true}, nil, "create-place file-pages[Cousins Family] random-page"},
+		{"unfiled people", browseQuery{kind: "person", unfiled: true}, nil, "create-person file-pages[Cousins Family] random-page"},
 		{"media", browseQuery{kind: "media"}, nil, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
 		{"documents", browseQuery{kind: "document"}, nil, "add-file file-pages[Cousins Family] tombstone-pages random-page"},
 		{"metrics", browseQuery{kind: "metric"}, nil, "file-pages[Cousins Family] random-page"},
