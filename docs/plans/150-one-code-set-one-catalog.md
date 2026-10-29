@@ -10,7 +10,15 @@
   column). The import paths of two packages change in many files; the API gains two refusals (an unknown field, a
   value outside a field's options); `say` becomes the owner's. Another session commits to master in parallel: the
   plan runs on the branch `plan-150`, one commit a part, rebased before the merge.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). The ten parts are on the branch `plan-150`, one commit each (`aef1b20` to
+  `dd62203`), and the counter-review's findings are fixed in the commit after them: the shared form of the pick bar
+  is allowed to a browser form only and named in `view.SharedForms`; the fake API of the WhatsApp tests lists `via`
+  and refuses an unlisted name; `DoFiles` refuses a file with no `Open`; the Google Photos client reads the catalog
+  once; the multipart test of the unknown-field rule waits for its writer (a data race in the test, not in the
+  handler). Checks on the branch: `gofmt` clean; `go vet ./... && go test ./...` and `go test -count=1 -shuffle=on
+  ./...` pass; `go vet ./... && go test ./...` passes in each of the four extensions; `staticcheck ./...`
+  (2026.2.2) is silent; `govulncheck ./...` (v1.9.0) finds nothing; `CGO_ENABLED=1 go test -race` of `client/...`
+  and `internal/api/...` passes. Linux only. The merge into master and the install wait for the owner.
 - **Resolves:** the owner's three decisions of 2026-10-28 (below). It supersedes the paragraph "No shared client
   library" of [plan 135](135-extensions-outside-the-core.md), a dated record that stays as written.
 
