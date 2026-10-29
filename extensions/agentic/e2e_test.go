@@ -473,27 +473,12 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 		"created": true, // a list of the answer of capture
 		"skipped": true, // a list of the answer of capture
 		"at":      true, // the kind of a link from a day page to a place
+		"owner":   true, // the mark of an owner-only action in the catalog
 	}
 	toolLike := regexp.MustCompile(`^[a-z]+(_[a-z]+)*$`)
 	lowercase := regexp.MustCompile(`^[a-z]`)
 	backticked := regexp.MustCompile("`([^`\n]+)`")
 	valueFlags := []string{"--db", "--url", "--source"} // the global flags that take a value
-
-	agents := f.read("AGENTS.md")
-	m := regexp.MustCompile(`the owner's only: ([^.]*)\.`).FindStringSubmatch(agents)
-	if m == nil {
-		t.Fatal("AGENTS.md calls no action the owner's only")
-	}
-	ownerOnly := map[string]bool{}
-	for _, b := range backticked.FindAllStringSubmatch(m[1], -1) {
-		ownerOnly[b[1]] = true
-		if tools[b[1]] {
-			t.Errorf("AGENTS.md calls %s the owner's only, and it is a tool", b[1])
-		}
-	}
-	if !maps.Equal(ownerOnly, owners) {
-		t.Errorf("AGENTS.md calls %v the owner's only; the owner's actions are %v", ownerOnly, owners)
-	}
 
 	skills, err := filepath.Glob(filepath.Join(f.dir, ".agents", "skills", "*", "SKILL.md"))
 	if err != nil || len(skills) == 0 {
@@ -510,9 +495,6 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 	used := map[string]bool{}
 	for _, name := range texts {
 		text := f.read(name)
-		if name == "AGENTS.md" {
-			text = strings.Replace(text, m[0], "", 1)
-		}
 		var lastName string // the command of the last command line of the text
 		var lastFlags []string
 		for _, b := range backticked.FindAllStringSubmatch(text, -1) {
@@ -554,6 +536,12 @@ func TestTheAgentsTextsNameWhatTheProgramHas(t *testing.T) {
 					}
 				}
 			}
+		}
+	}
+	// The texts name no owner action as a tool: the catalog's Owner mark is the one list, and the texts only point at it.
+	for name := range owners {
+		if used[name] {
+			t.Errorf("a text names the owner's action `%s`", name)
 		}
 	}
 	for _, list := range []map[string]bool{commandWords, notTools} {

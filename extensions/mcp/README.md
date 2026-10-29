@@ -15,7 +15,7 @@ flowchart LR
 ```
 
 - Each action of the catalog that is not the owner's is one tool. The tool name is the action name with `_` for `-`.
-- The owner-only actions (`register-metric`, `snapshot`, `integrity-check`, `rebuild-search`, `resync-links`) are
+- The owner-only actions (the ones the catalog marks `owner`) are
   never tools. The API refuses them to an `agent:*` writer as well.
 - The tool `get` follows a link: it fetches the resource at an `href` of an earlier result.
 - A file field takes the absolute path of a local file. The server streams the file to the API.

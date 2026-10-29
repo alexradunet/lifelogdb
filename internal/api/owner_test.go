@@ -22,11 +22,22 @@ func TestOwnerOnlyActionsPolicy(t *testing.T) {
 	d, snapshots := dbtest.New(t), t.TempDir()
 	h := api.New(&core.Store{DB: d, SnapshotDir: snapshots})
 	catalog := apitest.Must(t)(client.InProcess(h, "agent:policy-test").Get(t.Context(), "/actions"))
-	register, snapshot, integrity, record := apitest.Action(t, catalog, "register-metric"), apitest.Action(t, catalog, "snapshot"), apitest.Action(t, catalog, "integrity-check"), apitest.Action(t, catalog, "record")
-	rebuild, resync := apitest.Action(t, catalog, "rebuild-search"), apitest.Action(t, catalog, "resync-links")
-	if !register.Owner || !snapshot.Owner || !integrity.Owner || integrity.Method != "GET" || record.Owner ||
-		!rebuild.Owner || rebuild.Method != "POST" || !resync.Owner || resync.Method != "POST" {
-		t.Fatalf("wrong catalog policy: %+v %+v %+v %+v %+v %+v", register, snapshot, integrity, record, rebuild, resync)
+	// The catalog has owner reads and owner writes, and an ordinary action is not the owner's. The loop below
+	// reads the catalog's own mark, so a new owner action needs no edit here.
+	var ownerGets, ownerPosts int
+	for _, a := range catalog.Actions {
+		switch {
+		case a.Owner && a.Method == "GET":
+			ownerGets++
+		case a.Owner && a.Method == "POST":
+			ownerPosts++
+		}
+	}
+	if ownerGets == 0 || ownerPosts == 0 {
+		t.Fatalf("the catalog has %d owner reads and %d owner writes, want at least one of each", ownerGets, ownerPosts)
+	}
+	if record := apitest.Action(t, catalog, "record"); record.Owner {
+		t.Fatalf("record is owner-only: %+v", record)
 	}
 	sent := map[string]map[string]string{"register-metric": {"name": "Forbidden direct"}}
 	for _, source := range []string{"agent:policy-test", "import:policy-test"} {

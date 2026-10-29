@@ -40,7 +40,7 @@ their writer (`agent:NAME`). Without MCP, use the CLI through your shell with th
 same database, or the rows show the owner as their writer and the owner's rules do not hold:
 `"{{.Exe}}" --db "{{.DB}}" --source agent:NAME do ACTION field=value` (NAME as the MCP config names you).
 
-Five actions are the owner's only: `register_metric`, `snapshot`, `integrity_check`, `rebuild_search` and `resync_links`. They are refused to you.
+The actions that `lifelog actions` marks `owner` are the owner's only. They are refused to you.
 When you need one, ask the owner to run it, for example `lifelog snapshot`.
 
 ## Rules

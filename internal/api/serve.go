@@ -547,8 +547,7 @@ func source(r *http.Request) string {
 var writerRE = regexp.MustCompile(`^[a-z0-9_:.-]{1,64}$`)
 
 // requireOwner refuses a writer that is not the owner: an agent (agent:*) or an import (import:*). The owner-only
-// actions (register-metric, settings, snapshot, integrity-check, rebuild-search, resync-links) are refused to any other writer,
-// on every surface.
+// actions (the catalog's Owner mark) are refused to any other writer, on every surface.
 // It checks the grammar of the name too, which repeats the CHECKs on purpose. An owner-only action can read and meet
 // no CHECK, and the prefix tests below would pass "Agent:x" as the owner. Any other write leaves the name to the
 // schema.

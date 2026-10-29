@@ -300,8 +300,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `lifelog mcp --agent NAME` on that `life.db` with absolute paths. A file with another text is kept unless
   `--force`; run it again after the folder moves. Like `init`, it is a setup command of the machine, not a catalog
   action: it writes files beside the program.
-- **Owner-only actions.** `register-metric`, `settings`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links` are
-  refused to an `agent:*` or `import:*` writer and are never MCP tools. The full-text check of `integrity-check` holds the write
+- **Owner-only actions.** The actions that the catalog marks `owner` are
+  refused to an `agent:*` or `import:*` writer and are never MCP tools. The table [every action on every surface](#every-action-on-every-surface)
+  lists each one (MCP column: "none, the owner's"), and a test holds the table equal to the catalog. The full-text check of `integrity-check` holds the write
   lock while it runs, so an agent must not start it. `rebuild-search` (`POST /search/rebuild`) is the repair of the
   full-text index, which the check finds: the FTS5 `'rebuild'` in one write. `resync-links` (`POST /links/resync`)
   rewrites the links of every live page whose links differ from its body (`link_drift`), by the code of a body save

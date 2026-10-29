@@ -20,6 +20,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"lifelog/client/tools"
 	"lifelog/siren"
 )
 
@@ -104,18 +105,43 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tools := map[string]bool{}
+	have := map[string]bool{}
 	for _, tool := range listed.Tools {
-		tools[tool.Name] = true
+		have[tool.Name] = true
 	}
 	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans", "edit_person", "edit_metric"} {
-		if !tools[name] {
+		if !have[name] {
 			t.Errorf("no tool %q", name)
 		}
 	}
-	for _, name := range []string{"snapshot", "register_metric", "integrity_check", "rebuild_search", "resync_links"} {
-		if tools[name] {
-			t.Errorf("the owner's action %s is a tool", name)
+	// The tools are exactly the actions that the catalog does not mark as the owner's, and get.
+	out, err := b.run("actions", "--db", b.db)
+	if err != nil {
+		t.Fatalf("lifelog actions: %v", err)
+	}
+	var catalog []struct {
+		Name  string `json:"name"`
+		Owner bool   `json:"owner"`
+	}
+	if err := json.Unmarshal(out, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	wantTools := map[string]bool{"get": true}
+	for _, a := range catalog {
+		if !a.Owner {
+			wantTools[tools.Name(a.Name)] = true
+		} else if have[tools.Name(a.Name)] {
+			t.Errorf("the owner's action %s is a tool", a.Name)
+		}
+	}
+	for name := range wantTools {
+		if !have[name] {
+			t.Errorf("no tool %q", name)
+		}
+	}
+	for name := range have {
+		if !wantTools[name] {
+			t.Errorf("the tool %q is no action of the catalog and not get", name)
 		}
 	}
 
@@ -201,7 +227,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	closed = true
 
 	// The file holds what the session wrote (read after the session, with the CLI).
-	out, err := b.run("get", "/days/2031-05-20", "--db", b.db)
+	out, err = b.run("get", "/days/2031-05-20", "--db", b.db)
 	if err != nil {
 		t.Fatalf("lifelog get: %v", err)
 	}

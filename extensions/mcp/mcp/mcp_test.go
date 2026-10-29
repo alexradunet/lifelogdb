@@ -78,15 +78,18 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 	}
 	owner, public := 0, 0
 	for _, a := range actions {
-		if a.Owner {
+		name := strings.ReplaceAll(a.Name, "-", "_")
+		switch {
+		case a.Owner:
 			owner++
-		} else {
+			if seen[name] {
+				t.Errorf("the owner-only action %s is an MCP tool", name)
+			}
+		default:
 			public++
-		}
-	}
-	for _, name := range []string{"register_metric", "snapshot", "integrity_check", "rebuild_search", "resync_links"} {
-		if seen[name] {
-			t.Errorf("the owner-only action %s is an MCP tool", name)
+			if !seen[name] {
+				t.Errorf("the action %s is no MCP tool", name)
+			}
 		}
 	}
 	if len(seen) != public+1 { // every public action, and get
@@ -100,12 +103,12 @@ func TestTheToolsAreTheActionsThatAreNotTheOwners(t *testing.T) {
 		t.Fatalf("open_day 2031-05-14 returned %+v", day)
 	}
 	// The browser's calendar is on this surface too (docs/plans/091-the-browser-for-daily-use.md).
-	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/months/2031-05"}); month.Title != "May 2031" {
-		t.Fatalf("get /months/2031-05 returned %+v", month)
+	if month := callTool(t, ctx, session, "get", map[string]any{"href": "/fake/months/2031-05"}); month.Title != "May 2031" {
+		t.Fatalf("get /fake/months/2031-05 returned %+v", month)
 	}
 	// A day's view is on this surface too.
-	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/days/2031-05-14"}).Properties.(map[string]any); !ok || day["view"] == nil {
-		t.Fatalf("get /days/2031-05-14 lacks its view: %v", day)
+	if day, ok := callTool(t, ctx, session, "get", map[string]any{"href": "/fake/days/2031-05-14"}).Properties.(map[string]any); !ok || day["view"] == nil {
+		t.Fatalf("get /fake/days/2031-05-14 lacks its view: %v", day)
 	}
 }
 
@@ -290,7 +293,7 @@ func TestMCPNumericArguments(t *testing.T) {
 			t.Fatalf("%s: %v %v", token, res, err)
 		}
 	}
-	want := []string{"/pages/999999/revive", "/pages/1000000/revive", "/pages/9007199254740993/revive", "/pages/1e6/revive"}
+	want := []string{"/fake/pages/999999/revive", "/fake/pages/1000000/revive", "/fake/pages/9007199254740993/revive", "/fake/pages/1e6/revive"}
 	if fmt.Sprint(paths) != fmt.Sprint(want) {
 		t.Fatalf("paths %v want %v", paths, want)
 	}

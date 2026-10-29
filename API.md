@@ -14,7 +14,7 @@ and this page disagree, so a property here is a property on the wire.
   allowed to call it; `--tls-cert`/`--tls-key` serve HTTPS. Without one of them the answer is 401 `token_required`.
 - **Provenance:** `Lifelog-Source: <name>` names the writer on every row the request writes (`[a-z0-9_:.-]{1,64}`,
   e.g. `app:phone`). Without it a browser form writes as `ui` and anything else as `api`. A writer named `agent:…`
-  or `import:…` is refused the owner-only actions: `register-metric`, `settings`, `snapshot`, `integrity-check`, `rebuild-search` and `resync-links`,
+  or `import:…` is refused the owner-only actions (`owner: true` in the catalog)
   and the owner-only reads `GET /settings` and `GET /snapshots/{name}` (403 `forbidden`).
 - **Representation:** `Accept: application/vnd.siren+json` (or anything but `text/html`) gets the JSON below;
   `Accept: text/html` gets the same entity drawn as a page. A JSON client sends an action as

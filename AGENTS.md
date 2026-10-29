@@ -220,8 +220,8 @@ it draws the entity on the origin of the API, with the forms that post to it.
   catalog: a capability is a resource or an action of `GET /actions`, and so the CLI's `do`, the MCP tools and the
   browser's forms carry it without further work; a shortcut on one surface (`lifelog capture`, a dedicated HTML view) wraps an action, never
   replaces or extends it. A feature that exists on one surface only is a defect, not a convenience. The only
-  differences allowed are the ones the README names and tests assert: owner-only actions (`register-metric`,
-  `snapshot`, `integrity-check`, `rebuild-search`, `resync-links`) are refused to an `agent:*` or `import:*` writer
+  differences allowed are the ones the README names and tests assert: owner-only actions (the ones the
+  catalog marks `owner`, shown by `lifelog actions`) are refused to an `agent:*` or `import:*` writer
   and are never MCP tools. The README's table [every action on every surface](README.md#every-action-on-every-surface)
   names each action's route, CLI line, MCP tool and form; a new action adds its row in the same change, and
   `TestTheTableOfTheSurfacesIsTheCatalog` fails until it does.
