@@ -54,6 +54,7 @@ flowchart LR
 | `LIFELOG_EXE` | The path of the `lifelog` program, symbolic links resolved. |
 | `LIFELOG_DB` | The absolute path of the file that the line names (`--db`, `$LIFELOG_DB`, or the `life.db` beside the program). It is set whether the file exists or not. |
 | `LIFELOG_TOKEN` | As inherited. Send it as a bearer token when it is set. |
+| `LIFELOG_LISTEN` | Set by `serve --with` only: the loopback address (`127.0.0.1:PORT`) where a connected app serves its catalog. The address is new at each start. A program that serves nothing ignores it. |
 | stdin, stdout, stderr | Inherited. An MCP server on stdio works. |
 
 The temporary server is the same writer as the CLI. [Connections](../docs/contract/connections.md) allows it beside
@@ -96,6 +97,12 @@ flowchart TD
 - **The stop.** On an interrupt or SIGTERM, `serve` interrupts the child first and waits for it, 10 seconds at most,
   then kills it. Then it drains its own requests and closes the file, so the child may still write while it ends.
 - `--with` and `--tls-cert` together are refused: the child would have to trust the certificate.
+- **A catalog of its own.** A child may serve a Siren catalog on `LIFELOG_LISTEN`: see [a catalog of its own](#a-catalog-of-its-own).
+
+### A catalog of its own
+
+A child may serve a Siren catalog on the address in `LIFELOG_LISTEN`. `serve` reads `GET /actions` once for each start
+and adds the actions to its own catalog as `NAME-action`, at `/with/NAME`.
 
 ## Who writes
 

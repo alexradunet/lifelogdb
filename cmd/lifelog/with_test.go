@@ -50,6 +50,23 @@ type withServer struct {
 // words, and returns when the server said it serves. The restart delay is 50 ms.
 func startWithServer(t *testing.T, modes map[string]string, extra ...string) *withServer {
 	t.Helper()
+	w := newWithServer(t)
+	argv := []string{"--db", w.db, "serve", "--addr", "127.0.0.1:0"}
+	for name, mode := range modes {
+		fakeExtensionAs(t, w.dir, name)
+		if err := os.WriteFile(filepath.Join(w.dir, "lifelog-"+name+".mode"), []byte(mode), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		argv = append(argv, "--with", name)
+	}
+	w.start(t, argv, extra)
+	return w
+}
+
+// newWithServer is the folder, the file and the settings of a serve that runs with children: the restart delay is
+// 50 ms, and the children get the environment of the test.
+func newWithServer(t *testing.T) *withServer {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows cannot send an interrupt to a process: the console does")
 	}
@@ -59,14 +76,12 @@ func startWithServer(t *testing.T, modes map[string]string, extra ...string) *wi
 	w := &withServer{dir: t.TempDir(), db: dbtest.File(t), stderr: new(lockedBuffer), done: make(chan error, 1)}
 	t.Setenv("FAKE_DIR", w.dir)
 	t.Setenv("LIFELOG_TOKEN", "inherited-token-must-not-reach-the-child")
-	argv := []string{"--db", w.db, "serve", "--addr", "127.0.0.1:0"}
-	for name, mode := range modes {
-		fakeExtensionAs(t, w.dir, name)
-		if err := os.WriteFile(filepath.Join(w.dir, "lifelog-"+name+".mode"), []byte(mode), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		argv = append(argv, "--with", name)
-	}
+	return w
+}
+
+// start runs the command line in-process and returns when the server said it serves.
+func (w *withServer) start(t *testing.T, argv, extra []string) {
+	t.Helper()
 	e, _, _ := testEnv(t)
 	e.executable = func() (string, error) { return filepath.Join(w.dir, "lifelog"), nil }
 	e.stdout, e.stderr = new(lockedBuffer), w.stderr
@@ -79,7 +94,6 @@ func startWithServer(t *testing.T, modes map[string]string, extra ...string) *wi
 	line := w.waitFor(t, "lifelog: serving ")
 	_, address := servedAt(t, line)
 	w.base = "http://" + address
-	return w
 }
 
 // stop interrupts the server and waits for it to return.
