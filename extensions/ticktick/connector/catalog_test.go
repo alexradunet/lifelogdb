@@ -283,7 +283,7 @@ func TestATickTickFaultIsBadGatewayWithoutItsBody(t *testing.T) {
 func TestTheSyncActionPollsAndAnswersTheHomeWithTheCount(t *testing.T) {
 	env := newCatalogEnv(t)
 	env.tick.add("t1", "p-home", "Pay rent")
-	env.tick.finish("t1", time.Now().Add(-time.Hour))
+	env.tick.finish("t1", now.Add(-time.Hour)) // the clock of the poller is now: the cursor keeps it
 	e, err := env.c.Do(t.Context(), env.action(t, "sync"), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -303,7 +303,7 @@ func TestTheSyncActionPollsAndAnswersTheHomeWithTheCount(t *testing.T) {
 func TestTheSyncActionAnswersALifelogFaultWithoutItsWords(t *testing.T) {
 	env := newCatalogEnv(t)
 	env.tick.add("t1", "p-home", "Pay rent")
-	env.tick.finish("t1", time.Now().Add(-time.Hour))
+	env.tick.finish("t1", now.Add(-time.Hour)) // the clock of the poller is now: the cursor keeps it
 	env.life.refuse = 422
 	_, err := env.c.Do(t.Context(), env.action(t, "sync"), nil)
 	var ce *client.Error
