@@ -14,9 +14,12 @@
 - **Status:** IN REVIEW (owner). Parts 0 to 3 built on 2026-10-29 on master, each part by a sub-agent in a worktree
   and reviewed before its merge; the baseline, `staticcheck`, `govulncheck`, a shuffled run and the race detector on
   the end-to-end tests of the handshake pass; the mermaid render check was not run (`mmdc` is not installed). Part 4
-  waits for the owner: the one-off program is written and tested on a seeded file at
-  `~/.local/share/lifelog-oneoff/plan154/` (`OLD.sql` is `schema.sql` at `cda8c4d`, the live file's schema; `NEW.sql`
-  is `schema.sql` at `06bd6d2`). One thing differs from the plan as written: `create-page` of a period key stored
+  shipped 2026-10-29: snapshot to `/home/cico/life/snapshots/2026-10-29-plan-154`, the service stopped, the one-off
+  (`~/.local/share/lifelog-oneoff/plan154/`, `OLD.sql` = `schema.sql` at `cda8c4d`, `NEW.sql` = `schema.sql` at
+  `06bd6d2`) run after its dry run: 2143 rows and 12 bodies with a box unchanged, `entities_plans` and `has_box`
+  dropped, the stored text of `entities` set, `schema_version` 198 to 199, equal to NEW, the checks ok; then
+  `~/.local/bin/lifelog` built from `563dc34`, the service started 19:47:08 (`serving ... on http://127.0.0.1:7777`,
+  the WhatsApp child beside it). One thing differs from the plan as written: `create-page` of a period key stored
   today as the page's day and was refused by `entities_period_page`; Part 1 made it store no day, as D30 requires, so
   the period views can offer it. The by-hand run of the server with the test app was not done; the end-to-end test
   holds the same assertions on the real `lifelog serve --with`.

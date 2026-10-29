@@ -1,7 +1,7 @@
 # 0092 — Plan lines cost more than they give: the owner plans in a task manager
 
 - **Date:** 2026-10-29
-- **Status:** proposed
+- **Status:** resolved
 - **Seen in:** the owner's review of the app on 2026-10-29. The owner keeps their plans in a task manager outside
   `lifelog`, and said that the plan lines of [D29](../decisions/D29-plan-lines.md), with their four actions and their
   Plans page, are not used. Checked against the code at `860e9b3`.
@@ -62,4 +62,4 @@ the core names no third party and dials only its own server.
 [RFC 0025](../rfcs/0025-no-plan-lines-and-connected-apps.md), accepted by the owner on 2026-10-29: plan lines are
 removed; a plan lives outside the file, in the owner's task manager; an extension run under `lifelog serve --with NAME`
 may serve a catalog of its own, which the core aggregates, so the agent, the browser and the API reach the app through
-the one catalog. The change is [plan 154](../plans/154-connected-apps-through-the-catalog.md).
+the one catalog. Resolved 2026-10-29 by [plan 154](../plans/154-connected-apps-through-the-catalog.md): the contract, the writer and the browser changed on master, and the owner's file followed (2143 rows unchanged, 12 bodies keep their boxes as prose; `has_box` and `entities_plans` dropped).
