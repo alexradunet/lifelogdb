@@ -18,7 +18,7 @@ compatibility follows [D13](../decisions/D13-migrations-and-freeze.md).
    [titles and wikilinks](../contract/titles-and-wikilinks.md) (titles, `title_key`, the save contract).
 3. **The [cookbook](../cookbook/README.md)** as the canonical reads and writes; `lifelog_meta` and the comments inside
    `.schema` as the in-file summary.
-4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) and in [plan lines](../contract/plan-lines.md) as a conformance suite: each
+4. **The test vectors** printed in [titles and wikilinks](../contract/titles-and-wikilinks.md) as a conformance suite: that
    page is the only copy of its vectors, and the suites in `tests/` read them from it. The [exact-time](../contract/exact-time.md)
    vectors preserve the meaning of recorded time evidence.
 5. For imports, [imports](../contract/imports.md): a program loads rows itself; an agent works with the owner through the

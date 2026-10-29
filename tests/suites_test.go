@@ -18,8 +18,6 @@ var suites = []struct {
 	{"named", named},
 	{"names", names},
 	{"name-grammar", nameGrammar},
-	{"plan-lines", planLines},
-	{"plan-lines-index", planLinesIndex},
 	{"name-ownership", nameOwnership},
 	{"files", files},
 	{"pages", pages},

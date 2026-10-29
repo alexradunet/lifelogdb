@@ -85,6 +85,19 @@ func evolution(s *S) {
 	t.must("INSERT INTO v VALUES (5)")
 	s.K("ADD CONSTRAINT checks the existing rows (tightening is as safe as loosening)", err(t.tryx("ALTER TABLE v ADD CONSTRAINT v_x3 CHECK (x > 10)")))
 
+	// ---- a derived column and its index leave the file in two steps. Nothing but the index names the column
+	t = s.connect("")
+	t.must("CREATE TABLE g (id INTEGER PRIMARY KEY, body TEXT NOT NULL, flag INTEGER NOT NULL GENERATED ALWAYS AS (instr(body, '[ ]') > 0) VIRTUAL) STRICT")
+	t.must("CREATE INDEX g_flag ON g(id) WHERE flag")
+	t.must("INSERT INTO g(body) VALUES ('- [ ] one'), ('prose'), ('- [ ] two')")
+	whileIndexed := t.tryx("ALTER TABLE g DROP COLUMN flag")
+	s.K("a generated column named by a partial index cannot be dropped", err(whileIndexed) && t.n("SELECT count(*) FROM g WHERE flag") == 2, whileIndexed)
+	t.must("DROP INDEX g_flag")
+	afterIndex := t.tryx("ALTER TABLE g DROP COLUMN flag")
+	gone := t.tryx("SELECT flag FROM g")
+	s.K("a VIRTUAL generated column is dropped once nothing names it, and the rows stay",
+		afterIndex == "OK" && t.n("SELECT count(*) FROM g") == 3 && err(gone), afterIndex, gone)
+
 	// ---- widening enums on a populated database
 	use := func(c *C) string {
 		_, e := c.tryIdentity("vehicle", "Vehicle witness", nil)

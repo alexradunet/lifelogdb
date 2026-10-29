@@ -44,7 +44,7 @@ CREATE TABLE entities (
   -- A period page is the same kind of identity for a longer span (D30): its preferred key is a week (2026-W43), a
   -- month (2026-10), a quarter (2026-Q4) or a year (2026), written in the key as 2026-w43 and 2026-q4. Its day is
   -- NULL, it shares the identity rules of a day page, and it is the owner's horizon: the week, the month, the
-  -- quarter or the year a plan or a review belongs to.
+  -- quarter or the year a review belongs to.
   -- Body saves synchronize wikilinks by resolved entity id (D19); invalid names do not block a save.
   -- Type changes refuse any incoming or outgoing link whose registered endpoint types would become invalid;
   -- no retained edge is silently removed. Nothing is ever deleted: deleted_at is the tombstone (D11), never
@@ -72,11 +72,6 @@ CREATE TABLE entities (
                 WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN 'month'
                 WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-q[0-9]' THEN 'quarter'
                 WHEN preferred_name_key GLOB '[0-9][0-9][0-9][0-9]-w[0-9][0-9]' THEN 'week' END) VIRTUAL,
-  -- Can the body hold a plan line? It holds one of the five boxes of a plan line (contract/plan-lines). This is a
-  -- superset filter: a "[ ]" in prose counts too. A reader of plans parses only the pages with a box (entities_plans).
-  -- The column and its index are derived from the body and disposable; the words stay in the body only.
-  has_box     INTEGER NOT NULL GENERATED ALWAYS AS (instr(body, '[ ]') > 0 OR instr(body, '[x]') > 0 OR instr(body, '[X]') > 0
-                OR instr(body, '[-]') > 0 OR instr(body, '[>]') > 0) VIRTUAL,
   created_at  TEXT NOT NULL CONSTRAINT entities_created_at CHECK (length(created_at) = 24 AND created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(created_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', created_at) IS created_at),   -- the write time (lifelog_meta.instants)
   updated_at  TEXT NOT NULL CONSTRAINT entities_updated_at CHECK (length(updated_at) = 24 AND updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z' AND substr(updated_at,12,2) BETWEEN '00' AND '23' AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) IS updated_at),   -- kept by the *_touch triggers
   revision    INTEGER NOT NULL DEFAULT 1 CONSTRAINT entities_revision CHECK (revision >= 1), -- edit token, independent of the clock; overflow refuses the write
@@ -138,7 +133,6 @@ CREATE TABLE entity_names (
                'LPT1','LPT2','LPT3','LPT4','LPT5','LPT6','LPT7','LPT8','LPT9','LPT¹','LPT²','LPT³'))
 ) STRICT;
 CREATE INDEX entities_day ON entities(day) WHERE day IS NOT NULL;   -- day view; a link-target page has no day
-CREATE INDEX entities_plans ON entities(id) WHERE has_box AND deleted_at IS NULL;   -- the pages that can hold a plan line (derived, disposable)
 CREATE TRIGGER entity_names_fixed BEFORE UPDATE ON entity_names
  WHEN NEW.id IS NOT OLD.id OR NEW.entity_id IS NOT OLD.entity_id OR NEW.name_key IS NOT OLD.name_key
 BEGIN SELECT RAISE(ABORT, 'name keys and ownership are immutable'); END;

@@ -2,11 +2,10 @@
 
 **Status:** accepted
 
-- **Context.** The owner planned for a week, a month, a quarter and a year, and each needs one home: the future log, the
-  monthly log, the quarterly plan, the annual review (plan 136, 2026-10-19). The bullet journal keeps a future log and
-  a monthly log; multi-scale planning works at more than one horizon; a fresh start at a temporal landmark (a new week,
-  a new month, a new year) is when people begin a plan. A day page already has such a home ([D5](D05-pages-and-day-pages.md)). A longer span had none.
-- **Decision.** A period page is a page whose canonical key is a week (`2026-W43`: ISO 8601, Monday first, week 1 holds
+- **Context.** A week, a month, a quarter and a year each need one home for a review and a note: the future log, the
+  monthly log, the quarterly review, the annual review. The bullet journal keeps a future log and a monthly log;
+  multi-scale planning works at more than one horizon. A day page already has such a home ([D5](D05-pages-and-day-pages.md)). A longer span had none.
+- **Decision.** A period page is a plain page with the key as its title. The key is a week (`2026-W43`: ISO 8601, Monday first, week 1 holds
   4 January), a month (`2026-10`), a quarter (`2026-Q4`) or a year (`2026`). The generated column `entities.period` is
   the one definition: it reads the folded `preferred_name_key` (`2026-w43`) and says `week`, `month`, `quarter`, `year`
   or NULL. A key of ten characters never has these shapes, so a page is never both a day page and a period page.

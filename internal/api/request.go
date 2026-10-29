@@ -245,7 +245,7 @@ func flag(v url.Values, name string) bool { return v.Get(name) == "1" }
 
 // The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
 // links the next one when a further row exists, the previous one when offset > 0.
-const maxPageLimit = core.MaxListLimit
+const maxPageLimit = 500
 
 // pageOf reads limit (1–maxPageLimit, def when absent) and offset (≥ 0) from the query.
 func pageOf(r *http.Request, def int) (limit, offset int, err error) {
