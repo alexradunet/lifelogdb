@@ -471,6 +471,35 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		}
 	})
 
+	t.Run("a list is a page of the browser, with its tasks as links and its add form filled", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+"/with/ticktick/lists/p-home", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "text/html")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		raw, _ := io.ReadAll(res.Body)
+		page := string(raw)
+		if res.StatusCode != 200 {
+			t.Fatalf("status %d, want 200", res.StatusCode)
+		}
+		if !regexp.MustCompile(`<a [^>]*href="/with/ticktick/tasks/t-mom"[^>]*>[^<]*Call mom`).MatchString(page) {
+			t.Errorf("the page has no link to /with/ticktick/tasks/t-mom with the title Call mom:\n%s", page)
+		}
+		form := regexp.MustCompile(`(?s)<form[^>]*action="/with/ticktick/tasks"[^>]*>.*?</form>`).FindString(page)
+		if form == "" {
+			t.Fatalf("the page has no form that posts to /with/ticktick/tasks:\n%s", page)
+		}
+		// The list has options, so the view draws a select, with the list of the page selected.
+		if !regexp.MustCompile(`<select[^>]*name="list"[^>]*>.*<option selected>Home</option>`).MatchString(form) {
+			t.Errorf("the form has no list with Home selected:\n%s", form)
+		}
+	})
+
 	t.Run("a task that TickTick does not know is not found", func(t *testing.T) {
 		actions, _ := s.client().Catalog(t.Context())
 		for _, a := range actions {

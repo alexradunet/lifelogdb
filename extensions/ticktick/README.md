@@ -134,6 +134,37 @@ lists, not of the Inbox.
 
 A `sync` that comes while a poll runs waits for it. The timer and the action share one lock.
 
+## Browse the tasks
+
+The app serves more than the home. The home links to the lists, a list links to its tasks, and a task links back to its
+list. Any surface can follow these links, because they are plain resources of the catalog.
+
+```mermaid
+flowchart LR
+  H["/ home: lists, due today, done"] --> L["/lists/{id}: the open tasks of one list, add-task prefilled"]
+  L --> T["/tasks/{id}: the task, its list, complete-task"]
+  H --> T
+  H --> D["/done: the done tasks of the last 30 days"]
+  D --> T
+```
+
+| route | what it answers |
+|---|---|
+| `GET /` | the counts `open` and `overdue`, one link to each list (`NAME · N`, N is its open count), the tasks due today or before, the link `Done`, and the actions `add-task` and `sync` |
+| `GET /lists/{id}` | the name of the list, `open` and `overdue`, its open tasks in the order of TickTick (`TITLE · due YYYY-MM-DD` when due), and `add-task` with the list filled in. An unknown id is 404 `not_found`. |
+| `GET /tasks/{id}` | one task, a link to its list, and `complete-task` when it is open. A done task answers `done: true` and has no `complete-task`. |
+| `GET /done` | the tasks done in the last 30 days, newest first (`YYYY-MM-DD · TITLE · LIST`), and their `count`. A server without `/task/completed` answers an empty list and the `note` "the server has no list of done tasks". |
+
+How to reach them:
+
+- In the browser: the rail link "TickTick" opens `/with/ticktick/`. Follow the links from there.
+- On the command line: `lifelog get /with/ticktick/ --url http://127.0.0.1:7777`, then `lifelog get /with/ticktick/lists/ID --url ...`.
+- With the MCP: it reads the same server, so the same addresses.
+
+The Inbox has a limit. The `/project` call of TickTick does not list the Inbox, so the app does not read its open
+tasks. A task made here without a list goes to the Inbox. You reach it by its own address only, and its page has no
+link to a list.
+
 ## The service
 
 Run it beside the server:

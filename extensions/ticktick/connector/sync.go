@@ -42,7 +42,7 @@ func entryOf(t ticktick.Task, names map[string]string) (entry, bool) {
 	if name, known := names[t.ProjectID]; known && !strings.HasPrefix(t.ProjectID, "inbox") {
 		text += " · " + name
 	}
-	return entry{id: t.ID, day: at.Format("2006-01-02"), text: text, key: t.ID + ":" + t.CompletedTime, at: at}, true
+	return entry{id: t.ID, day: at.Format(dayFmt), text: text, key: t.ID + ":" + t.CompletedTime, at: at}, true
 }
 
 // Sync does one poll. It asks TickTick for the tasks done since the cursor and writes each as a capture on its day.

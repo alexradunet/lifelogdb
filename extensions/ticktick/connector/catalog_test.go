@@ -136,16 +136,29 @@ func TestTheHomeCountsTheTasksAndEmbedsTheOnesDueTodayOrBefore(t *testing.T) {
 	if lists, _ := p["lists"].([]any); len(lists) != 2 || lists[0] != "Home" || lists[1] != "Work" {
 		t.Errorf("lists = %v, want Home Work", p["lists"])
 	}
-	var hrefs []string
+	var hrefs, lists []string
 	for _, l := range home.Entities {
-		if !slices.Contains(l.Rel, "item") || !slices.Contains(l.Class, "task") {
-			t.Errorf("embedded %+v, want rel item, class task", l)
+		if !slices.Contains(l.Rel, "item") {
+			t.Errorf("embedded %+v, want rel item", l)
+		}
+		if slices.Contains(l.Class, "list") {
+			lists = append(lists, l.Href+" "+l.Title)
+			continue
+		}
+		if !slices.Contains(l.Class, "task") {
+			t.Errorf("embedded %+v, want class list or task", l)
 		}
 		hrefs = append(hrefs, l.Href)
 	}
 	slices.Sort(hrefs)
 	if want := []string{"/tasks/late", "/tasks/today"}; !slices.Equal(hrefs, want) {
-		t.Errorf("embedded = %v, want %v", hrefs, want)
+		t.Errorf("embedded tasks = %v, want %v", hrefs, want)
+	}
+	if want := []string{"/lists/p-home Home · 2", "/lists/p-work Work · 2"}; !slices.Equal(lists, want) {
+		t.Errorf("embedded lists = %v, want %v", lists, want)
+	}
+	if l := home.LinkByRel("done"); l == nil || l.Href != "/done" || l.Title != "Done" {
+		t.Errorf("done link = %+v, want /done titled Done", l)
 	}
 	var acts []string
 	for _, a := range home.Actions {
@@ -312,5 +325,135 @@ func TestTheSyncActionAnswersALifelogFaultWithoutItsWords(t *testing.T) {
 	}
 	if msg := props(t, ce.Entity)["message"].(string); !strings.Contains(msg, "t1") || strings.Contains(msg, "words") {
 		t.Errorf("message = %q, want the task id and no words", msg)
+	}
+}
+
+func TestAListShowsItsOpenTasksAndPrefillsAddTask(t *testing.T) {
+	env := newCatalogEnv(t)
+	env.tick.add("a", "p-work", "Write report").DueDate = "2030-03-09T00:00:00.000+0000"
+	env.tick.add("b", "p-home", "Pay rent")
+	env.tick.add("c", "p-work", "Old task").DueDate = "2030-03-01T00:00:00.000+0000"
+	env.tick.add("d", "p-work", "Done already")
+	env.tick.finish("d", now)
+
+	e, err := env.c.Get(t.Context(), "/lists/p-work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(e.Class, []string{"list"}) || e.Title != "Work" {
+		t.Errorf("list = %v %q, want class list, title Work", e.Class, e.Title)
+	}
+	p := props(t, e)
+	if p["open"].(interface{ String() string }).String() != "2" || p["overdue"].(interface{ String() string }).String() != "1" {
+		t.Errorf("open = %v, overdue = %v, want 2 and 1", p["open"], p["overdue"])
+	}
+	got := map[string]string{}
+	for _, l := range e.Entities {
+		if !slices.Contains(l.Rel, "item") || !slices.Contains(l.Class, "task") {
+			t.Errorf("embedded %+v, want rel item, class task", l)
+		}
+		got[l.Href] = l.Title
+	}
+	want := map[string]string{"/tasks/a": "Write report · due 2030-03-09", "/tasks/c": "Old task · due 2030-03-01"}
+	if len(got) != 2 || got["/tasks/a"] != want["/tasks/a"] || got["/tasks/c"] != want["/tasks/c"] {
+		t.Errorf("tasks = %v, want %v", got, want)
+	}
+	if l := e.LinkByRel("self"); l == nil || l.Href != "/lists/p-work" {
+		t.Errorf("self = %+v", l)
+	}
+	if l := e.LinkByRel("index"); l == nil || l.Href != "/" || l.Title != "TickTick" {
+		t.Errorf("index = %+v", l)
+	}
+	if len(e.Actions) != 1 || e.Actions[0].Name != "add-task" {
+		t.Fatalf("actions = %+v, want add-task only", e.Actions)
+	}
+	if f := e.Actions[0].Field("list"); f == nil || f.Value != "Work" {
+		t.Errorf("list field = %+v, want the value Work", f)
+	}
+}
+
+func TestAnUnknownListIsNotFound(t *testing.T) {
+	env := newCatalogEnv(t)
+	_, err := env.c.Get(t.Context(), "/lists/nope")
+	wantError(t, err, 404, "not_found", "no such list")
+}
+
+func TestDoneListsTheTasksOfTheWindowNewestFirst(t *testing.T) {
+	env := newCatalogEnv(t) // the clock of the poller is 2030-03-05 12:00; the window starts 2030-02-03 12:00
+	env.tick.add("t1", "p-home", "Pay rent")
+	env.tick.add("t2", "p-work", "Write report")
+	env.tick.add("t3", "p-work", "Too old")
+	env.tick.add("t4", "p-home", "Still open")
+	env.tick.finish("t1", time.Date(2030, 3, 2, 9, 0, 0, 0, time.UTC))
+	env.tick.finish("t2", time.Date(2030, 3, 4, 10, 0, 0, 0, time.UTC))
+	env.tick.finish("t3", time.Date(2030, 1, 10, 9, 0, 0, 0, time.UTC))
+
+	e, err := env.c.Get(t.Context(), "/done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(e.Class, []string{"done"}) || e.Title != "Done" {
+		t.Errorf("done = %v %q", e.Class, e.Title)
+	}
+	var got []string
+	for _, l := range e.Entities {
+		if !slices.Contains(l.Rel, "item") || !slices.Contains(l.Class, "task") {
+			t.Errorf("embedded %+v, want rel item, class task", l)
+		}
+		got = append(got, l.Href+" "+l.Title)
+	}
+	want := []string{"/tasks/t2 2030-03-04 · Write report · Work", "/tasks/t1 2030-03-02 · Pay rent · Home"}
+	if !slices.Equal(got, want) {
+		t.Errorf("done = %q, want %q", got, want)
+	}
+	if n := props(t, e)["count"].(interface{ String() string }).String(); n != "2" {
+		t.Errorf("count = %s, want 2", n)
+	}
+	for _, rel := range []string{"self", "index"} {
+		if e.LinkByRel(rel) == nil {
+			t.Errorf("no %s link", rel)
+		}
+	}
+}
+
+func TestDoneWithoutTheCompletedCallIsEmptyWithANote(t *testing.T) {
+	env := newCatalogEnv(t)
+	env.tick.noCompleted = true
+	e, err := env.c.Get(t.Context(), "/done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := props(t, e)
+	if len(e.Entities) != 0 || p["note"] != "the server has no list of done tasks" {
+		t.Errorf("done = %+v %v, want no tasks and the note", e.Entities, p)
+	}
+}
+
+func TestATaskLinksItsListAndADoneTaskHasNoCompleteAction(t *testing.T) {
+	env := newCatalogEnv(t)
+	env.tick.add("t1", "p-work", "Write report")
+	e, err := env.c.Get(t.Context(), "/tasks/t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l := e.LinkByRel("list"); l == nil || l.Href != "/lists/p-work" || l.Title != "Work" {
+		t.Errorf("list link = %+v, want /lists/p-work titled Work", l)
+	}
+
+	// The app has not learned this task: it is not in the open tasks, so it is found among the done ones.
+	env.tick.add("t2", "p-home", "Pay rent")
+	env.tick.finish("t2", time.Date(2030, 3, 4, 10, 0, 0, 0, time.UTC))
+	e, err = env.c.Get(t.Context(), "/tasks/t2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if props(t, e)["done"] != true || len(e.Actions) != 0 {
+		t.Errorf("done task = %+v, want done: true and no action", e)
+	}
+	if l := e.LinkByRel("list"); l == nil || l.Href != "/lists/p-home" {
+		t.Errorf("list link = %+v, want /lists/p-home", l)
+	}
+	if env.tick.callsTo("POST /task/completed") != 1 {
+		t.Errorf("the done tasks were read %d times, want 1", env.tick.callsTo("POST /task/completed"))
 	}
 }
