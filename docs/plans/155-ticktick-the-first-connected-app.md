@@ -17,8 +17,12 @@
   `GET /tasks/{id}` is an outer route around `app.Catalog`, which has no hook for a route that is not an action. Two
   limits are in the extension's README: the Open API lists no Inbox project, so the home and the vanish-and-fetch way
   do not see Inbox tasks (`/task/completed` does), and that way misses a task created and done between two polls.
-  Not tested: the live TickTick (the login, the shapes of its answers, which way the account takes); the owner's
-  steps are in the Tests section.
+  Live (the owner, 2026-10-29): the login succeeded, with the address of the redirect pasted on the terminal (the
+  program runs on a server; `04927cc`). The first sync wrote 0: a probe with the owner's token (counts only) showed
+  that the live `POST /task/completed` answers an empty list to every `startDate` and `endDate` in every form, and the
+  whole list to an empty body; `completedTime` has the form the client parses, with the zone `Europe/Bucharest`. The
+  client now asks with an empty body and the connector keeps the tasks since its cursor (`e157f2c`, `c4b20cd`). The
+  rest of the live steps (the sync, the unit) are the owner's.
 - **Resolves:** the owner's word of 2026-10-29 (below). No issue: the schema and the contract do not change.
 
 ## The owner's words (2026-10-29)
