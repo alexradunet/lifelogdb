@@ -16,7 +16,7 @@
 <p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>
 {{if $p.id}}{{template "categories" (dict "v" $ "back" $.Here)}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
-{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line" "more" "on,due,every,from_done" "back" $.Here)}}
+{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line" "more" "*" "back" $.Here)}}
 {{template "links" .}}
 {{template "backlinks" .}}
 {{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}{{end}}

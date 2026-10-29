@@ -22,7 +22,7 @@
 </div>
 <div class="margin">
 <section class="group plan" aria-label="Plan">
-<div class="panel-head"><h2>Plan</h2>{{template "boxed" (form (.Action "plan") "page" $w.week "autofocus" "text" "more" "on,due,every,from_done" "back" $.Here)}}</div>
+<div class="panel-head"><h2>Plan</h2>{{template "boxed" (form (.Action "plan") "page" $w.week "autofocus" "text" "more" "*" "back" $.Here)}}</div>
 {{if not $w.page_id}}<p class="empty">This week has no page yet. The first plan line makes it.</p>{{end}}
 </section>
 </div>

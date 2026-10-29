@@ -452,7 +452,7 @@ files a page and, with `from`, takes it out; a plain page, whose only kind would
 be `part-of`, not a day page: `ids` is this page, and `category` offers the category titles; a new title is made),
 `create-page` with `category` filled (a live category page: something is `part-of` it; the new page is made and
 filed in it in one write), `set-cover` (a live page that is not a file), `tombstone-pages` with `ids` this page, or
-`revive` alone on a deleted page. A live page offers `plan` (with `page` its title), `tick`, `carry` and `schedule` (see [plan line](#plan-line)). The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
+`revive` alone on a deleted page. A live page offers `plan` (with `page` its title), `tick`, `carry` and `schedule` (see [plan line](#plan-line); a period page lists the lines of other pages, so it offers them templated, as [a week](#week) does). The writes answer with this entity; `create-page` and `save-body` carry a `result` of the sync shape, `add-file` the kept
 shape. A page's cover is the first live file with a preview that its body embeds; a file page has none, its own
 picture stands for it. A browser draws the cover as a square at the head of the margin, with one link to the
 [picker](#cover-choice), and leaves that embed out of the body.
@@ -983,6 +983,7 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 | `removed` | string | after a `reopen`: the next line that was removed; absent when none was |
 | `removed_line` | integer | the number that line had before the reopen; absent when none was removed |
 | `next_kept` | boolean | after a `reopen` of a line with `every:`: `true` when the next line was not found, so it stays; absent otherwise |
+| `href` | string | the address of the `tick` action of that page: where a client posts the `reopen` that undoes this tick |
 
 ### result of tombstone-pages
 
@@ -990,6 +991,7 @@ What the save contract did with the body's `[[wikilinks]]` and `#tags`:
 |---|---|---|
 | `tombstoned` | list | the ids deleted, as `ids` |
 | `count` | integer | how many |
+| `revive` | string | the address of the `revive` action of the page, when one page was deleted: where a client posts the undo; absent for several |
 
 ### result of carry
 

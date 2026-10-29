@@ -347,7 +347,7 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 	}
 	after := browse(t, h, self)
 	for _, cat := range []string{"Projects", "Outdoors"} {
-		if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">` + cat + `</a><form class="tiny" method="POST" action="/pages/file"><input type="hidden" name="back" value="[^"]*"><input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="from" value="` + cat + `">`).MatchString(after) {
+		if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">` + cat + `</a><form method="POST" action="/pages/file" class="tiny">\s*<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="from" value="` + cat + `">`).MatchString(after) {
 			t.Errorf("the page has no badge for %s", cat)
 		}
 	}

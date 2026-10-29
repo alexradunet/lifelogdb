@@ -129,7 +129,7 @@
 {{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "outside" "from" "required" "category" "back" $back "placeholder" "category=Bloodwork, Sport, Financial"}}
 {{$cats := $v.Categories}}
 {{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
-{{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{with $file}}<form class="tiny" method="POST" action="{{.Href}}"><input type="hidden" name="back" value="{{$back}}"><input type="hidden" name="ids" value="{{(.Field "ids").Value}}"><input type="hidden" name="from" value="{{$t}}"><button class="remove" aria-label="Remove from {{$t}}">×</button></form>{{end}}</span>{{end}}
+{{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{if $file}}{{template "form" (form ($v.Action "file-pages") "ids" ($file.Field "ids").Value "from" $t "outside" "category,move" "class" "tiny" "button" "×" "aria" (print "Remove from " $t) "back" $back)}}{{end}}</span>{{end}}
 {{if not $cats}}<span class="meta">none</span>{{end}}
 {{with $file}}<details class="add-category"{{if .Asked}} open{{end}}><summary class="button small">+ Add</summary>
 {{template "form" .}}</details>{{end}}</div>{{end}}{{end}}
@@ -165,7 +165,7 @@
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
-{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
+{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}{{range .Buttons}}<button name="{{.Field}}" value="{{.Value}}" class="{{.Class}}">{{.Label}}</button>{{else}}<button{{if .Aria}} class="remove" aria-label="{{.Aria}}"{{else if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{end}}{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
      options as a row of radio buttons (the options of the field mood also carry their words; a flag that the action requires, as the value of a daily metric, is the words Done and Not done in place of 0 and 1: a small word in the slab, which the sheet shows on the chosen slab), other options as a

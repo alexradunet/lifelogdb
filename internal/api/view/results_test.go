@@ -65,12 +65,12 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 // TestATickOffersItsUndo: the line of a done or dropped tick carries one form that posts a reopen of the same line to
 // its page and returns to the page the toast is on. Without the page or the words there is no form.
 func TestATickOffersItsUndo(t *testing.T) {
-	m := map[string]any{"line": 2.0, "outcome": "dropped", "text": "Pay <rent>", "page_id": 4.0}
+	m := map[string]any{"line": 2.0, "outcome": "dropped", "text": "Pay <rent>", "page_id": 4.0, "href": "/ticks/4"}
 	lines := resultSentences(m, clock{today: "2026-10-12"}, "/days/2026-10-12")
 	if len(lines) != 1 || lines[0].Form == nil {
 		t.Fatalf("lines %+v", lines)
 	}
-	want := resultForm{Href: "/pages/4/tick", Label: "Undo",
+	want := resultForm{Href: "/ticks/4", Label: "Undo",
 		Hidden: [][2]string{{"back", "/days/2026-10-12"}, {"line", "2"}, {"text", "Pay <rent>"}, {"outcome", "reopen"}}}
 	if got := *lines[0].Form; got.Href != want.Href || got.Label != want.Label || !slices.Equal(got.Hidden, want.Hidden) {
 		t.Errorf("form %+v, want %+v", got, want)

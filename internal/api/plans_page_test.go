@@ -30,8 +30,9 @@ func TestThePlannedBlockOfADayHoldsTheLinesOfOtherPages(t *testing.T) {
 		`<section class="group plan" aria-label="Planned">`, `<h3>Today</h3>`, `<h3>Earlier</h3>`,
 		`<span class="text">Call the bank</span>`, `<a href="/pages/` + bank + `">Bank</a>`, `<span class="badge">due Wed 14 May</span>`,
 		`<li class="plan-row" id="row-` + bank + `-` + line + `">`,
-		`<form class="tick-line" method="post" action="/pages/` + bank + `/tick"><input type="hidden" name="back" value="/days/` + fixedToday + `#row-` + bank + `-` + line + `">` +
+		`<form method="POST" action="/pages/` + bank + `/tick" class="tick-line">` + "\n" +
 			`<input type="hidden" name="line" value="` + line + `"><input type="hidden" name="text" value="Call the bank">` +
+			`<input type="hidden" name="back" value="/days/` + fixedToday + `#row-` + bank + `-` + line + `">` + "\n" +
 			`<button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>`,
 		`action="/pages/` + bank + `/carry"`, `<input type="hidden" name="text" value="Call the bank">`, `name="to" value="2031-05-15"`,
 	} {

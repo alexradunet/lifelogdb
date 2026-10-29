@@ -10,11 +10,11 @@
 <span class="meta">{{if ne .title $own}}<a href="/pages/{{num .page_id}}">{{if .is_day_page}}{{$v.Date .title}}{{else}}{{.title}}{{end}}</a>{{end}}
 {{- with .on}} <span class="badge">on {{shortDay .}}</span>{{end}}{{with .due}} <span class="badge{{if and $open (lt . $v.Today)}} danger{{end}}">due {{shortDay .}}</span>{{end}}{{with .done}} <span class="badge">done {{shortDay .}}</span>{{end}}{{with .every}} <span class="badge">every {{.}}</span>{{end}}</span>
 {{- if $open}}{{with $v.LineAction "tick" .}}
-<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}#{{$row}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="done" class="small">Done</button><button name="outcome" value="dropped" class="small quiet">Dropped</button></form>
+<div class="plan-acts">{{template "form" (form . "class" "tick-line" "buttons" "outcome=done,dropped" "hide" "line,text" "outside" "done" "back" (print $v.Here "#" $row))}}
 {{template "boxed" (form ($v.LineAction "carry" $.l "to" $to) "hide" "line,text" "back" (print $v.Here "#" $row) "group" $row)}}
 {{template "boxed" (form ($v.LineAction "schedule" $.l "on" (or $.l.on "") "due" (or $.l.due "")) "button" "Schedule" "hide" "line,text" "back" (print $v.Here "#" $row) "group" $row)}}</div>{{end}}
 {{- else if and .text (or (eq .box "x") (eq .box "-"))}}{{with $v.LineAction "tick" .}}
-<div class="plan-acts"><form class="tick-line" method="post" action="{{.Href}}"><input type="hidden" name="back" value="{{$v.Here}}#{{$row}}"><input type="hidden" name="line" value="{{num (.Field "line").Value}}"><input type="hidden" name="text" value="{{(.Field "text").Value}}"><button name="outcome" value="reopen" class="small quiet">Reopen</button></form></div>{{end}}{{end}}</li>{{end}}{{end}}
+<div class="plan-acts">{{template "form" (form . "class" "tick-line" "buttons" "outcome=reopen" "hide" "line,text" "outside" "done" "back" (print $v.Here "#" $row))}}</div>{{end}}{{end}}</li>{{end}}{{end}}
 
 {{/* planlist is lines as rows. It takes v, lines, own and to as planrow does. */}}
 {{define "planlist"}}{{$a := .}}<ul class="plain plan-list">{{range .lines}}{{template "planrow" (dict "v" $a.v "l" . "own" $a.own "to" $a.to)}}{{end}}</ul>{{end}}
@@ -31,6 +31,6 @@
      the head. It takes v and key (the period's key, which the plan form fixes as page, unless a link asked for the plan of another
      period: the quarter of a year). */}}
 {{define "period-plan"}}{{$v := .v}}{{$key := .key}}{{$page := .key}}{{if eq ($v.Asked "new") "plan"}}{{$page = or ($v.Asked "page") .key}}{{end}}<section class="group plan" id="plan" aria-label="Planned">
-<div class="panel-head"><h2>Planned</h2>{{template "boxed" (form ($v.Action "plan") "page" $page "autofocus" "text" "more" "on,due,every,from_done" "back" $v.Here)}}</div>
+<div class="panel-head"><h2>Planned</h2>{{template "boxed" (form ($v.Action "plan") "page" $page "autofocus" "text" "more" "*" "back" $v.Here)}}</div>
 {{with $v.Props.lines}}{{template "planlist" (dict "v" $v "lines" . "own" $key "to" (addDays $v.Today 1))}}{{else}}<p class="empty">Nothing is planned in this period.</p>{{end}}
 </section>{{end}}

@@ -175,7 +175,12 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if p.IsDayPage {
 		plan = planActionOnDay(p.Title)
 	}
-	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), plan, action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
+	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), plan)
+	if p.Period != "" { // it lists the lines of other pages: its line actions stay templated, as a week's (view.LineAction)
+		out = append(out, lineActions()...)
+	} else {
+		out = append(out, action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
+	}
 	if !p.IsDayPage {
 		keeps := conversationDay(p.Title) != "" // its day names it
 		if p.Type == "page" && !keeps {

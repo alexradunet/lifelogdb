@@ -149,7 +149,8 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 			say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
 		}
 	} else if outcome, ok := take("outcome"); ok {
-		pageID, _ := take("page_id")
+		take("page_id")
+		undo, _ := take("href") // the result carries the address of the tick that undoes it
 		words, hasWords := take("text")
 		switch outcome {
 		case "reopen":
@@ -164,8 +165,8 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 		default:
 			say("%s.", map[bool]string{true: "Done", false: "Dropped"}[outcome == "done"])
 			// The Undo posts a reopen of the same line to its page, and the browser returns to where it is.
-			if n := Num(pageID); n != "" && n != "0" && hasLine && hasWords {
-				f := &resultForm{Href: lineHref("tick", pageID), Label: "Undo",
+			if href, _ := undo.(string); href != "" && hasLine && hasWords {
+				f := &resultForm{Href: href, Label: "Undo",
 					Hidden: [][2]string{{"line", Num(line)}, {"text", fmt.Sprint(words)}, {"outcome", "reopen"}}}
 				if here != "" {
 					f.Hidden = append([][2]string{{"back", here}}, f.Hidden...)
@@ -194,13 +195,14 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 	if ids, ok := take("tombstoned"); ok {
 		n, _ := take("count")
 		say("Deleted %s.", Count(n, "page", "pages"))
-		if list, _ := ids.([]any); len(list) == 1 {
-			f := &resultForm{Href: "/pages/" + Num(list[0]) + "/revive", Label: "Undo"}
+		revive, _ := take("revive") // the address of the one page's revive
+		if href, _ := revive.(string); href != "" {
+			f := &resultForm{Href: href, Label: "Undo"}
 			if here != "" {
 				f.Hidden = [][2]string{{"back", here}}
 			}
 			out[len(out)-1].Form = f
-		} else {
+		} else if list, _ := ids.([]any); len(list) > 1 {
 			say(`<a href="%s">See the deleted pages</a>.`, siren.BrowseHref(url.Values{"deleted": {"1"}}))
 		}
 	}

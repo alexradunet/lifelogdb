@@ -51,6 +51,9 @@ func TestPlanTickAndCarryWriteALineAndShowItWhereItBelongs(t *testing.T) {
 	if res["appended"] != "- [ ] Pay rent due:2031-06-14 every:month" || fmt.Sprint(res["appended_line"]) != "3" {
 		t.Errorf("the result of tick: %v", res)
 	}
+	if tick := apitest.Action(t, ticked, "tick"); res["href"] != tick.Href {
+		t.Errorf("the result of tick has href %v, the tick action of the page has %s", res["href"], tick.Href)
+	}
 	want := "- [x] Pay rent due:2031-05-14 every:month done:2031-05-14\n\n- [ ] Pay rent due:2031-06-14 every:month"
 	if props(ticked)["body"] != want {
 		t.Errorf("the body after the tick: %q, want %q", props(ticked)["body"], want)
@@ -103,7 +106,8 @@ func TestAPeriodPageShowsItsLinesAndAPlanIsRefusedWithReasons(t *testing.T) {
 	if !hasAction(week, "plan") || !hasAction(week, "tick") || !hasAction(week, "carry") {
 		t.Errorf("a week page offers %s", names(week))
 	}
-	tick := apitest.Action(t, week, "tick")
+	tick := apitest.Action(t, week, "tick") // templated: the line names its page
+	weekID := fmt.Sprint(props(week)["id"])
 	for _, tc := range []struct {
 		name string
 		v    map[string]string
@@ -115,7 +119,7 @@ func TestAPeriodPageShowsItsLinesAndAPlanIsRefusedWithReasons(t *testing.T) {
 		{"an outcome", map[string]string{"line": "1", "text": "Review the week", "outcome": "later"}, 422},
 		{"a changed text", map[string]string{"line": "1", "text": "Review", "outcome": "done"}, 409},
 	} {
-		if _, err := c.Do(t.Context(), tick, tc.v); apitest.Status(err) != tc.want {
+		if _, err := c.Do(t.Context(), tick, mergeID(tc.v, weekID)); apitest.Status(err) != tc.want {
 			t.Errorf("tick with %s: %v, want %d", tc.name, err, tc.want)
 		}
 	}
@@ -292,5 +296,35 @@ func TestATickOfACRLFBodyKeepsItsLineEnds(t *testing.T) {
 	got, _ := props(page)["body"].(string)
 	if got != want || !strings.Contains(got, "\r\n") || !strings.Contains(got, "done:") {
 		t.Errorf("the page read back: %q, want %q", got, want)
+	}
+}
+
+// mergeID is the values with the path field id: the templated tick of a period page needs the page of the line.
+func mergeID(v map[string]string, id string) map[string]string {
+	out := map[string]string{"id": id}
+	for k, x := range v {
+		out[k] = x
+	}
+	return out
+}
+
+// TestTheDeleteOfOnePageCarriesTheAddressOfItsRevive: the result of tombstone-pages for one page names the href of
+// the revive action of that page, so a client posts the undo there; for two pages there is no such field.
+func TestTheDeleteOfOnePageCarriesTheAddressOfItsRevive(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	var pages []*siren.Entity
+	for _, title := range []string{"Bank", "Garden", "Orchard"} {
+		pages = append(pages, apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": title, "text": "Call"})))
+	}
+	one := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, pages[0], "tombstone-pages"), nil))
+	gone := apitest.Must(t)(c.Get(t.Context(), "/pages/"+fmt.Sprint(props(pages[0])["id"])))
+	if revive := apitest.Action(t, gone, "revive"); one.Result.(map[string]any)["revive"] != revive.Href {
+		t.Errorf("the result has revive %v, the action has %s", one.Result, revive.Href)
+	}
+	ids := fmt.Sprintf("%v %v", props(pages[1])["id"], props(pages[2])["id"])
+	two := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, pages[1], "tombstone-pages"), map[string]string{"ids": ids}))
+	if _, has := two.Result.(map[string]any)["revive"]; has {
+		t.Errorf("a delete of two pages carries revive: %v", two.Result)
 	}
 }

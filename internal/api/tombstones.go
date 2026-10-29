@@ -62,6 +62,10 @@ func (h *server) tombstoneMany(r *http.Request, act spec, src string) (*siren.En
 	for _, id := range ids {
 		e.Entities = append(e.Entities, link("item", siren.PageHref(id), strconv.FormatInt(id, 10)))
 	}
-	e.Result = map[string]any{"tombstoned": ids, "count": len(ids)}
+	result := map[string]any{"tombstoned": ids, "count": len(ids)}
+	if len(ids) == 1 { // the address of the revive that undoes it
+		result["revive"] = action("revive", idParam(ids[0]), nil).Href
+	}
+	e.Result = result
 	return e, nil
 }

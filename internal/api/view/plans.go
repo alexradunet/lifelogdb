@@ -27,22 +27,28 @@ func boxHTML(box any) template.HTML {
 	return template.HTML(`<span class="box ` + g[0] + `" role="img" aria-label="` + g[0] + `">` + g[1] + `</span>`)
 }
 
-// lineHref is the address of an action on the page that holds a line: the line names its page, not the view.
-func lineHref(name string, pageID any) string {
+// hrefOf is the address of an action of the entity for the page with that id: the entity's href with {id} filled. A
+// view that lists the lines of many pages offers the action templated, and the line names its page. An action that
+// is filled already (the tick of a page) is the address of its own page. "" for a templated action and no page.
+func hrefOf(a siren.Action, pageID any) string {
+	if !strings.Contains(a.Href, "{id}") {
+		return a.Href
+	}
 	n := Num(pageID)
 	if n == "" || n == "0" {
 		return ""
 	}
-	return "/pages/" + url.PathEscape(n) + "/" + name
+	return strings.ReplaceAll(a.Href, "{id}", url.PathEscape(n))
 }
 
 // TickHref is the address of the tick of the page with that id, "" for no page or for a view that does not offer
 // tick. It makes the boxes of a body tick.
 func (v *view) TickHref(pageID any) string {
-	if v.Action("tick") == nil {
+	a := v.Action("tick")
+	if a == nil {
 		return ""
 	}
-	return lineHref("tick", pageID)
+	return hrefOf(a.Action, pageID)
 }
 
 // LineAction is the entity's action of that name for one line: it posts to the line's page, and its line and text
@@ -55,7 +61,7 @@ func (v *view) LineAction(name string, line any, values ...string) *shownAction 
 		return nil
 	}
 	c := *a
-	c.Href = lineHref(name, m["page_id"])
+	c.Href = hrefOf(a.Action, m["page_id"])
 	c.Fields = nil
 	for _, f := range a.Fields {
 		if f.In == "path" {

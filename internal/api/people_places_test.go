@@ -167,7 +167,7 @@ func TestTheWhereOfADayLinksAPlaceAndRemovesIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	where = section(browse(t, h, "/days/2026-03-02"), "Where")
-	unlink := regexp.MustCompile(`<form class="tiny" method="POST" action="` + regexp.QuoteMeta(dayPage) + `/unlink">.*name="kind" value="at">.*name="to" value="Lisbon"><button class="remove" aria-label="Remove Lisbon">`)
+	unlink := regexp.MustCompile(`<form method="POST" action="` + regexp.QuoteMeta(dayPage) + `/unlink" class="tiny">(?s:.*)name="to" value="Lisbon">(?s:.*)name="kind" value="at">(?s:.*)<button class="remove" aria-label="Remove Lisbon">`)
 	if !unlink.MatchString(where) {
 		t.Errorf("the place has no x that sends unlink:\n%s", where)
 	}

@@ -599,7 +599,7 @@ func TestMetricsAreGroupedByCategory(t *testing.T) {
 	}
 	// The metric's view holds its note and its categories, each a badge with its x.
 	s := browse(t, h, "/metrics/TSH")
-	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form class="tiny" method="POST" action="/pages/file"><input type="hidden" name="back" value="[^"]*"><input type="hidden" name="ids" value="\d+"><input type="hidden" name="from" value="Thyroid"`).MatchString(s) {
+	if !regexp.MustCompile(`<span class="badge category"><a href="/pages/\d+">Thyroid</a><form method="POST" action="/pages/file" class="tiny">\s*<input type="hidden" name="ids" value="\d+"><input type="hidden" name="from" value="Thyroid">`).MatchString(s) {
 		t.Error("a metric's page does not show its category as a badge with its x")
 	}
 	if !strings.Contains(s, "thyroid-stimulating hormone") {
