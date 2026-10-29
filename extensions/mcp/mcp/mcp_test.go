@@ -14,8 +14,8 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog-mcp/client"
-	"lifelog-mcp/siren"
+	"lifelog/client"
+	"lifelog/siren"
 )
 
 // TestTheToolsAreTheActionsThatAreNotTheOwners: each action of the catalog is a tool exactly when it is not the

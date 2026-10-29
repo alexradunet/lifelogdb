@@ -20,7 +20,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog-mcp/siren"
+	"lifelog/siren"
 )
 
 // The end-to-end test builds the real lifelog and lifelog-mcp into one folder and runs `lifelog mcp --agent test --db F`.

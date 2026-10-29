@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"lifelog-whatsapp/agent"
-	"lifelog-whatsapp/client"
-	"lifelog-whatsapp/siren"
 	"lifelog-whatsapp/terminal"
 	"lifelog-whatsapp/whatsapp"
+	"lifelog/client"
+	"lifelog/siren"
 )
 
 // Exit codes: 0 an interrupt or the end of the input, 1 an error (a new process may try again), 2 not paired,

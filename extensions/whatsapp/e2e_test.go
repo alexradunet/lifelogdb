@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"lifelog-whatsapp/siren"
+	"lifelog/siren"
 )
 
 // The end-to-end test builds the real lifelog and lifelog-whatsapp into one folder and runs

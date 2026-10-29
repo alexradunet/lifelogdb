@@ -11,9 +11,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"lifelog-whatsapp/client"
 	"lifelog-whatsapp/model"
-	"lifelog-whatsapp/siren"
+	"lifelog/client"
+	"lifelog/client/tools"
+	"lifelog/siren"
 )
 
 const (
@@ -55,7 +56,7 @@ type Agent struct {
 	Tick <-chan time.Time
 
 	logger   *log.Logger
-	tools    []tool
+	tools    []tools.Tool
 	actions  map[string]siren.Action
 	conv     *convo // only the worker uses it
 	watchErr string
@@ -76,7 +77,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("catalog: %w", err)
 	}
-	if a.tools, err = tools(list); err != nil {
+	if a.tools, err = toolsOf(list); err != nil {
 		return err
 	}
 	a.actions = map[string]siren.Action{}
@@ -492,7 +493,7 @@ func (a *Agent) answer(ctx context.Context, m *model.Client, body string, at tim
 	msgs := []model.Message{model.Text("system", systemText(at)), model.Text("user", tail(body))}
 	fns := make([]model.Tool, len(a.tools))
 	for i, t := range a.tools {
-		fns[i] = model.Tool{Name: t.name, Description: t.description, Parameters: t.schema}
+		fns[i] = model.Tool{Name: t.Name, Description: t.Description, Parameters: t.Schema}
 	}
 	last := ""
 	var lines []string
@@ -535,20 +536,20 @@ func (a *Agent) answer(ctx context.Context, m *model.Client, body string, at tim
 // call runs one tool call. It returns the text for the model (the Siren entity as JSON, cut at maxResult, or the
 // sentence of an error; an error of the API is its error entity, which has the status) and the line for the page.
 func (a *Agent) call(ctx context.Context, name, rawArgs string) (result, line string) {
-	var t *tool
+	var t *tools.Tool
 	for i := range a.tools {
-		if a.tools[i].name == name {
+		if a.tools[i].Name == name {
 			t = &a.tools[i]
 		}
 	}
 	if t == nil {
 		return fmt.Sprintf("error: there is no tool %q", name), fmt.Sprintf("- `%s` failed: unknown tool", name)
 	}
-	args, err := arguments([]byte(rawArgs))
+	args, err := tools.Arguments([]byte(rawArgs))
 	if err != nil {
 		return "error: " + err.Error(), fmt.Sprintf("- `%s` failed: bad arguments", name)
 	}
-	e, err := run(ctx, a.Client, *t, args)
+	e, err := tools.Run(ctx, a.Client, *t, args)
 	if err != nil {
 		code := "error"
 		var ce *client.Error

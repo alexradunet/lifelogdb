@@ -3,13 +3,6 @@ module lifelog-whatsapp
 go 1.27.2
 
 require (
-	go.mau.fi/whatsmeow v0.0.0-20261028111316-d24d079a3755
-	google.golang.org/protobuf v1.36.12
-	modernc.org/sqlite v1.60.1
-	rsc.io/qr v0.2.0
-)
-
-require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/beeper/argo-go v1.1.2 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
@@ -35,3 +28,13 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
+
+require (
+	go.mau.fi/whatsmeow v0.0.0-20261028111316-d24d079a3755
+	google.golang.org/protobuf v1.36.12
+	lifelog v0.0.0
+	modernc.org/sqlite v1.60.1
+	rsc.io/qr v0.2.0
+)
+
+replace lifelog => ../..

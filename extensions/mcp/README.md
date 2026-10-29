@@ -4,8 +4,9 @@
 stdio, for a model or a coding agent.
 
 It is a client of the lifelog HTTP API ([API.md](../../API.md)). It is a separate Go module, `lifelog-mcp`. It uses the
-standard library and the [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). It imports nothing from
-lifelog, and `lifelog` does not change when it does.
+standard library and the [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk). It imports `lifelog/siren`,
+`lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and nothing of
+`lifelog/internal`. `lifelog` does not change when it does.
 
 ```mermaid
 flowchart LR

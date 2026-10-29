@@ -142,12 +142,12 @@ func TestATurnWithNoModelGivesOneLineOnThePageAndInTheChatAndTheAgentGoesOn(t *t
 }
 
 func TestAnOwnerActionIsNeverATool(t *testing.T) {
-	list, err := tools(catalog())
+	list, err := toolsOf(catalog())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, x := range list {
-		if x.name == "snapshot" {
+		if x.Name == "snapshot" {
 			t.Error("the owner's action is a tool")
 		}
 	}

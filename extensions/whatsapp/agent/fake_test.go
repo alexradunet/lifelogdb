@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"lifelog-whatsapp/client"
-	"lifelog-whatsapp/siren"
+	"lifelog/client"
+	"lifelog/siren"
 )
 
 const owner = "40712345678"

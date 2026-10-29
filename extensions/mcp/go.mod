@@ -2,8 +2,6 @@ module lifelog-mcp
 
 go 1.27.2
 
-require github.com/modelcontextprotocol/go-sdk v1.8.0
-
 require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
@@ -14,3 +12,10 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
+
+require (
+	github.com/modelcontextprotocol/go-sdk v1.8.0
+	lifelog v0.0.0
+)
+
+replace lifelog => ../..

@@ -11,8 +11,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"lifelog-mcp/client"
-	"lifelog-mcp/siren"
+	"lifelog/client"
+	"lifelog/client/tools"
+	"lifelog/siren"
 )
 
 // Serve runs the MCP server on in and out, the stdin and the stdout of the process, until the client goes away. It
@@ -41,7 +42,7 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 	if err != nil {
 		return nil, err
 	}
-	list, err := tools(actions)
+	list, err := tools.Of(actions, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -49,27 +50,27 @@ func New(ctx context.Context, c *client.Client, version string) (*mcp.Server, er
 		Instructions: instructions,
 	})
 	for _, t := range list {
-		s.AddTool(&mcp.Tool{Name: t.name, Description: t.description, InputSchema: t.schema, Annotations: annotations(t)}, call(c, t))
+		s.AddTool(&mcp.Tool{Name: t.Name, Description: t.Description, InputSchema: t.Schema, Annotations: annotations(t)}, call(c, t))
 	}
 	return s, nil
 }
 
 // annotations say what a tool does to the database: a tool that only reads (get and a GET of the catalog) says so; a catalog action marked Danger is destructive, as a browser draws it.
-func annotations(t tool) *mcp.ToolAnnotations {
-	if t.action == nil || t.action.Method == "GET" {
+func annotations(t tools.Tool) *mcp.ToolAnnotations {
+	if t.Action == nil || t.Action.Method == "GET" {
 		return &mcp.ToolAnnotations{ReadOnlyHint: true}
 	}
-	danger := t.action.Danger
+	danger := t.Action.Danger
 	return &mcp.ToolAnnotations{DestructiveHint: &danger}
 }
 
-func call(c *client.Client, t tool) mcp.ToolHandler {
+func call(c *client.Client, t tools.Tool) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		args, err := arguments(req.Params.Arguments)
+		args, err := tools.Arguments(req.Params.Arguments)
 		if err != nil {
 			return failure(err), nil
 		}
-		return result(run(ctx, c, t, args))
+		return result(tools.Run(ctx, c, t, args))
 	}
 }
 

@@ -4,7 +4,8 @@
 reads and writes `life.db` through the action catalog of the API, as the [MCP server](../mcp/README.md) offers it.
 
 It is a client of the lifelog HTTP API ([API.md](../../API.md)). It is a separate Go module, `lifelog-whatsapp`. It
-imports nothing from lifelog, and `lifelog` does not change when it does. It writes as `agent:whatsapp`. The API
+imports `lifelog/siren`, `lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and
+nothing of `lifelog/internal`. `lifelog` does not change when it does. It writes as `agent:whatsapp`. The API
 refuses the owner-only actions to such a writer.
 
 ```mermaid

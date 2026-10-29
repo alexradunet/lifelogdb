@@ -12,9 +12,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"lifelog-mcp/client"
 	"lifelog-mcp/mcp"
-	"lifelog-mcp/siren"
+	"lifelog/client"
+	"lifelog/siren"
 )
 
 // version is the version of this extension. It starts equal to the version of lifelog, and the two change apart.

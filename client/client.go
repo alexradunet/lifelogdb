@@ -1,7 +1,7 @@
 // Package client is the hypermedia client of the API. The CLI and the Go extensions share it: the extensions import it
-// from the root module. It speaks HTTP to the API, either
-// to a running `lifelog serve` or to the same handler in-process, so every surface goes through one code path. It is
-// transport only: what a surface makes of an answer (the MCP tools, the output of the CLI) is that surface's own.
+// from the root module. It speaks HTTP to the API, either to a running `lifelog serve` or to the same handler
+// in-process, so every surface goes through one code path. It is transport only: what a surface makes of an answer
+// (the tools of a model, the output of the CLI) is that surface's own.
 package client
 
 import (
