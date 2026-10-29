@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **150**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **151**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [150](150-one-code-set-one-catalog.md) | One code set, one catalog: the duplication between the surfaces goes | P1 | L | owner word 2026-10-28; plan 135; `bc46b76` | TODO |
 | [149](149-the-browser-on-the-current-platform.md) | The browser on the current platform: HTML and CSS in place of a library | P2 | M | owner word 2026-10-28; plan 108; `f59554d` | IN REVIEW (owner) |
 | [148](148-the-chat-screen.md) | The chat screen: the conversation as a chat, with a card for each thing the agent touched | P1 | L | owner word 2026-10-28; plan 146; `87a7133` | IN REVIEW (owner) |
 | [147](147-serve-with-an-extension.md) | serve --with: the server runs an extension beside itself, so the agent and the API are one unit | P1 | M | owner word 2026-10-28; plan 146; `9cc622c` | IN REVIEW (owner) |
