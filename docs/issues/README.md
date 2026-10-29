@@ -4,11 +4,12 @@ An issue records an incident from real use — a failed import, a bug in the wri
 data could not answer, a rule that is ambiguous or untestable. It is the evidence a schema change needs
 ([how a change happens](../process.md)). One file per incident, named `NNNN-short-slug.md`, written from the
 [template](template.md), numbered on from the last: issues up to 0010 are closed and live in git history
-(`git log -- docs/issues`). Issues 0011–0090 are listed below; the next one is **0091**. Close an issue with its resolution and status, retaining the dated incident as
+(`git log -- docs/issues`). Issues 0011–0091 are listed below; the next one is **0092**. Close an issue with its resolution and status, retaining the dated incident as
 [the process](../process.md) requires. Earlier closed records remain available in git history.
 
 | id | title | status |
 |---|---|---|
+| [0091](0091-places-cost-more-than-they-give.md) | Places and the `at` link cost more than they give | open |
 | [0090](0090-the-writer-guesses-which-metrics-are-daily.md) | The writer guesses which metrics are daily | resolved |
 | [0089](0089-a-plan-line-added-to-a-crlf-body-gets-two-blank-lines.md) | A plan line added to a body with CRLF line ends gets two blank lines before it | resolved |
 | [0088](0088-open-plans-are-scattered-over-their-pages.md) | The open plans are scattered over their pages | resolved |

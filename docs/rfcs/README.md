@@ -30,5 +30,6 @@ becomes a [decision](../decisions/README.md). One file per proposal, named `NNNN
 | [0021](0021-a-capture-key.md) | A capture key: the writer keeps the key of each capture it adds | accepted | [0085](../issues/0085-a-resent-capture-appends-twice.md) | [D28](../decisions/D28-capture-keys.md) |
 | [0022](0022-plan-lines-and-period-pages.md) | Plan lines and period pages: the planning axis without a table | accepted | [0087](../issues/0087-a-plan-written-as-words-cannot-be-read-as-a-plan.md) | [D29](../decisions/D29-plan-lines.md), [D30](../decisions/D30-period-pages.md), [D23](../decisions/D23-no-tasks.md), [D15](../decisions/D15-recurrence.md) |
 | [0023](0023-a-daily-mark-on-a-metric.md) | A daily mark on a metric: the owner says which readings the writer asks for | accepted | [0090](../issues/0090-the-writer-guesses-which-metrics-are-daily.md) | [D31](../decisions/D31-daily-metrics.md) |
+| [0024](0024-no-places.md) | No places: a place is a plain page, and where a day was is the words of the day page | accepted | [0091](../issues/0091-places-cost-more-than-they-give.md) | [D16](../decisions/D16-places.md), [D21](../decisions/D21-location-history.md): rewritten by the change that follows |
 
 Status values: draft | accepted | rejected (with a one-line reason) | withdrawn.
