@@ -72,7 +72,7 @@ func TestThePhoneHasABottomBarAndASheet(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got := links(bar[1]); got != "/days/today /weeks/today /plans /days /metrics /browse /days/today/conversation popovertarget=\"sections\"" {
+	if got := links(bar[1]); got != "/days/today /weeks/today /days /metrics /browse /days/today/conversation popovertarget=\"sections\"" {
 		t.Errorf("the bottom bar: %s", got)
 	}
 	if !strings.Contains(bar[1], `<a href="/browse" aria-current="page">`) || strings.Contains(bar[1], `class="here"`) {
@@ -144,7 +144,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 	entry := regexp.MustCompile(`<a href="([^"]+)"( aria-current="page")?[^>]*><span class="icon icon-[a-z]+" aria-hidden="true"></span>([^<]+)</a>`)
 	for path, current := range map[string]string{
 		"/browse": "Browse", "/browse?kind=person": "Browse", "/browse?ghosts=1": "Browse", "/metrics": "Metrics",
-		"/metrics/Weight": "Metrics", "/days/" + fixedToday: "Today", "/months/2031-05": "Calendar", "/search": "", "/plans": "Plans", "/plans?order=page": "Plans",
+		"/metrics/Weight": "Metrics", "/days/" + fixedToday: "Today", "/months/2031-05": "Calendar", "/search": "",
 	} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Accept", "text/html")
@@ -166,7 +166,7 @@ func TestTheSidebarHasMetricsAndBrowse(t *testing.T) {
 				marked = append(marked, m[3])
 			}
 		}
-		if want := "Today=/days/today This week=/weeks/today Plans=/plans Calendar=/days Metrics=/metrics Browse=/browse Chat=/days/today/conversation"; strings.Join(got, " ") != want {
+		if want := "Today=/days/today This week=/weeks/today Calendar=/days Metrics=/metrics Browse=/browse Chat=/days/today/conversation"; strings.Join(got, " ") != want {
 			t.Errorf("%s: the sections are %v, want %s", path, got, want)
 		}
 		if strings.Join(marked, " ") != current {

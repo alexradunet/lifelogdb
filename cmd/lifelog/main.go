@@ -37,7 +37,6 @@ type opts struct {
 	given                                        []string // the flags the line named
 	serve                                        serveFlags
 	file                                         fileFlags
-	plan                                         planFlags
 }
 
 // serveFlags are the flags that only serve reads.
@@ -54,12 +53,6 @@ type serveFlags struct {
 type fileFlags struct {
 	title, text, preview, mime string
 	dryRun                     bool
-}
-
-// planFlags are the flags that only plan reads.
-type planFlags struct {
-	page, on, due, every string
-	fromDone             bool
 }
 
 // globalFlags are the flags every command takes.
@@ -171,21 +164,6 @@ var commands = []command{
 			}
 			return doAction(ctx, e, e.cmd.wraps, vals)
 		}},
-	{name: "plan", wraps: "plan", flags: []string{"--page", "--on", "--due", "--every", "--from-done"},
-		usage: "  lifelog plan TEXT... [--page T] [--on D] [--due D] [--every R] [--from-done]\n" +
-			"                                      add a plan line to a page (default today; a day, or a week 2026-W43, a month,\n" +
-			"                                      a quarter, a year): the plan action",
-		run: func(ctx context.Context, e env, args []string) error {
-			p := e.o.plan
-			vals := map[string]string{"page": p.page, "text": strings.Join(args, " "), "on": p.on, "due": p.due, "every": p.every}
-			if p.page == "" { // the server's today, as capture has it
-				vals["page"] = "today"
-			}
-			if p.fromDone {
-				vals["from_done"] = "1"
-			}
-			return doAction(ctx, e, e.cmd.wraps, vals)
-		}},
 	{name: "day", wraps: "open-day",
 		usage: "  lifelog day [YYYY-MM-DD]            the day view (default today)",
 		run: func(ctx context.Context, e env, args []string) error {
@@ -284,10 +262,9 @@ func parse(argv []string, getenv func(string) string) (opts, error) {
 	o.serve.addr = "127.0.0.1:7777"
 	vals := map[string]*string{"--db": &o.db, "--url": &o.url, "--source": &o.source, "--addr": &o.serve.addr,
 		"--mood": &o.mood, "--day": &o.day,
-		"--page": &o.plan.page, "--on": &o.plan.on, "--due": &o.plan.due, "--every": &o.plan.every,
 		"--title": &o.file.title, "--text": &o.file.text, "--preview": &o.file.preview, "--mime": &o.file.mime,
 		"--token-file": &o.serve.tokenFile, "--tls-cert": &o.serve.tlsCert, "--tls-key": &o.serve.tlsKey, "--snapshots": &o.snapshots}
-	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--from-done": &o.plan.fromDone, "--public": &o.serve.public}
+	bools := map[string]*bool{"--human": &o.human, "--dry-run": &o.file.dryRun, "--public": &o.serve.public}
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
 		if len(o.args) > 0 && o.args[0] != "help" && commandNamed(o.args[0]) == nil {

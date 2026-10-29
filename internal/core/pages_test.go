@@ -362,3 +362,34 @@ func TestSearchByKind(t *testing.T) {
 		t.Errorf("the kind metric: %v, want a 422", err)
 	}
 }
+
+// TestCreatePageOfAPeriodKeyMakesAPeriodPageWithNoDay: a plain title gets the day it was written, and a period key
+// (a week, a month, a quarter, a year) makes a period page, which has no day (entities_period_page). A period that does
+// not exist is the 422 of entities_period_exists, and the lower case key is spelled in upper case.
+func TestCreatePageOfAPeriodKeyMakesAPeriodPageWithNoDay(t *testing.T) {
+	s := fresh(t)
+	for title, period := range map[string]string{"2026-W43": "week", "2026-10": "month", "2026-Q4": "quarter", "2026": "year", "2026-w44": "week"} {
+		id, _, err := s.CreatePage(ctx, "cli", title, "words", "")
+		if err != nil {
+			t.Errorf("create-page %s: %v", title, err)
+			continue
+		}
+		p, err := s.PageByID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Period != period || p.Day != "" || p.Title != strings.ToUpper(title) {
+			t.Errorf("create-page %s: period %q, day %q, title %q; want period %q, no day, title %q", title, p.Period, p.Day, p.Title, period, strings.ToUpper(title))
+		}
+	}
+	plain, _, err := s.CreatePage(ctx, "cli", "Plain", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := s.PageByID(ctx, plain); p.Day == "" || p.Period != "" {
+		t.Errorf("a plain page: day %q, period %q; want a day and no period", p.Day, p.Period)
+	}
+	if _, _, err := s.CreatePage(ctx, "cli", "2026-W54", "", ""); status(err) != 422 || !strings.Contains(err.Error(), "entities_period_exists") {
+		t.Errorf("create-page of 2026-W54: %v, want 422 naming entities_period_exists", err)
+	}
+}

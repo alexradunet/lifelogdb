@@ -223,7 +223,6 @@ var navItems = []struct {
 	{"Lifelog", "/", "", []string{"/"}, "home", ""},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day", "t"},
 	{"This week", "/weeks/today", "week", []string{"/weeks"}, "day", ""},
-	{"Plans", "/plans", "plans", []string{"/plans"}, "day", ""},
 	{"Calendar", "/days", "calendar", []string{"/months", "/years", "/days"}, "day", ""},
 	{"Metrics", "/metrics", "metrics", []string{"/metrics"}, "day", ""},
 	{"Browse", "/browse", "browse", []string{"/browse"}, "day", ""},

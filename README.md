@@ -2,7 +2,7 @@
 
 `lifelog` is one Go binary that keeps a lifetime-scale, single-user SQLite database, `life.db` — a life log and
 its backup: a journal of day pages, notes, the people in them, health readings, and the
-files you keep — a recording's transcript, a PDF's text, a photo's small picture. A plan is a line of a page. It serves the file two ways: a hypermedia API (with an HTML face for
+files you keep — a recording's transcript, a PDF's text, a photo's small picture. It serves the file two ways: a hypermedia API (with an HTML face for
 the browser) and a CLI. Everything that names a third party is an extension beside it: the MCP server, the setup of a
 coding agent, Google Photos ([extensions](#extensions)).
 
@@ -123,8 +123,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the phone's sheet a popover; a field the browser refuses once the owner has typed in it (`:user-invalid`) shows the
   same danger edge as one the server refused (`aria-invalid`), and the select is the app's own where the browser lets
   a sheet draw it (`appearance: base-select`); no id or class is generated for a template to find, but the id of a
-  `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's name), the
-  id of a tick form and its box, and the id of a plan row, which a write returns to.
+  `datalist`, which the `list` of its input names (the form's id, or else the action's name, then the field's name).
   What a template cannot know comes from the entity: `danger` marks a destructive action's button, `owner` an
   owner-only one, `rows` a textarea's height, `options` a field's choices, `pages` a field whose value is a page's
   title and an error's `code` its first words, so no view decides any of them by an action's or a field's name.
@@ -139,12 +138,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   the People list names each person with the pages that mention it and the day of the last one
   ([plan 097](docs/plans/097-the-almanac-reflects.md)). A person's row starts with a round picture, its cover,
   else the icon of a person.
-- **Plan lines** ([plan 136](docs/plans/136-plan-lines-and-period-pages.md), [D29](docs/decisions/D29-plan-lines.md)).
-  A plan is a list item of a page body whose text starts with a box, with tokens at its end:
-  `- [ ] Pay rent due:2026-11-01 every:month`. The file has no table for it. The actions `plan`, `tick`, `carry` and `schedule`
-  write the line, and a day, a month, a year and a period page (`2026-W43`, `2026-Q4`) list the lines they hold.
-  Plans (`GET /plans`, [plan 140](docs/plans/140-the-plans-page.md)) lists every open line, by its day or by its page
-  ([the grammar](docs/contract/plan-lines.md)).
+- **Period pages** ([D30](docs/decisions/D30-period-pages.md)). A week (`2026-W43`), a month, a quarter and a year may
+  have a page: a plain page whose title is the key. `/weeks/{week}`, `/months/{m}` and `/years/{y}` show the page of
+  their period. A period with no page offers `create-page` with its key as the title, the one action that makes it.
 - **A cover for every page** ([plan 127](docs/plans/127-a-cover-for-every-page.md)). A page's cover is the first live
   file with a preview that its body embeds (`![[Ana.jpg]]`); a day page's first photo is its cover with no action. A
   file page has none: its own picture stands for it. The browser draws the cover as a square at the head of the
@@ -366,7 +362,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's and lets Enter send; every form
   works without it. The conversation view is the chat screen, not a page ([plan 148](docs/plans/148-the-chat-screen.md)): a day bar with the chips of the last days and a menu (a popover) of the page's own actions, links and backlinks, the thread, and the composer
   at the bottom. The server asks its own handler for each address in the tool lines of a turn (at most six a turn, the newest 36 addresses of the screen and the newest six of the column; the older draw their link; the request carries the source `agent:card`, so an owner-only read such as `/settings` or `/integrity` is refused and draws its link)
-  and the browser draws the entity that answers as a card by its class (a day, a page, a metric, a plan line, a search); the column draws the same cards on one line.
+  and the browser draws the entity that answers as a card by its class (a day, a page, a metric, a search); the column draws the same cards on one line.
 - **One delete, of one row or several** ([plan 107](docs/plans/107-delete-several-at-once.md),
   [plan 131](docs/plans/131-the-pareto-pass.md)). `tombstone-pages` (`POST /pages/tombstone`) takes `ids`, separated
   by spaces or commas, and tombstones them all in one write or none: a missing id is a 404 that writes nothing. A page
@@ -506,10 +502,6 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `say` | `POST /days/{day}/say` | `do say` | none, the owner's | every page: the chat column; the rail: Chat |
 | `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
-| `plan` | `POST /pages/plan` | `do plan`, `plan` | `plan` | a day, a page, a week, a month, a year: Plan |
-| `tick` | `POST /pages/{id}/tick` | `do tick` | `tick` | a plan line where it is drawn: Done, Dropped, Reopen |
-| `carry` | `POST /pages/{id}/carry` | `do carry` | `carry` | a plan line where it is drawn: Carry |
-| `schedule` | `POST /pages/{id}/schedule` | `do schedule` | `schedule` | a plan line where it is drawn: Schedule. The one action that changes the `on:` and `due:` of a line in place |
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
@@ -528,7 +520,6 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
 | `search` | `GET /search` | `do search`, `search` | `search` | the sidebar: Search (the search dialog) |
 | `browse` | `GET /browse` | `do browse` | `browse` | the sidebar: Browse |
-| `plans` | `GET /plans` | `do plans` | `plans` | the sidebar: Plans |
 | `find` | `GET /pages` | `do find`, `page` | `find` | a `[[wikilink]]` |
 | `open-day` | `GET /days/go` | `do open-day`, `day` | `open_day` | Calendar: Go to a day |
 | `random-page` | `GET /pages/random` | `do random-page` | `random_page` | Calendar: A random day; a Browse list: A random one |

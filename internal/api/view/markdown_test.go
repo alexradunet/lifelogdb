@@ -170,48 +170,11 @@ func TestMarkdownCoverLeavesOutTheCoverOnce(t *testing.T) {
 		{"an embed inside a link is not one", "[![[Lake.jpg]]](https://example.org) ![[Lake.jpg]]", "Lake.jpg",
 			[]string{img("Lake.jpg"), "example.org"}, []int{0, 1}},
 	} {
-		got := string(markdownCover(c.body, c.embed, "", ""))
+		got := string(markdownCover(c.body, c.embed))
 		for i, w := range c.want {
 			if n := strings.Count(got, w); n != c.count[i] {
 				t.Errorf("%s: %q drawn %d times, want %d, in %s", c.name, w, n, c.count[i], got)
 			}
 		}
-	}
-}
-
-// TestPlanBoxesInABody: the box of a plan line is a glyph, or the button of a tick form (done for an open box, reopen for a done or dropped one) that stands after the body (a
-// form inside a loose list would end its paragraph); the tokens are small words; a box in a quote, a code block or the
-// middle of a line is left as text; with no tick address no form is drawn.
-func TestPlanBoxesInABody(t *testing.T) {
-	body := "- [ ] Call on:2026-10-22\n\n- [x] Paid done:2026-10-01\n\n- [-] Skipped\n\n- [>] Moved\n\n- [x] Bad done:2026-13-45\n\n> - [ ] quoted\n\n```\n- [ ] code\n```\n\nText [ ] mid\n"
-	got := string(markdownCover(body, "", "/pages/7/tick", "/days/today"))
-	for _, want := range []string{
-		`<button class="box open" id="box-1" form="tick-1" name="outcome" value="done" aria-label="Done: Call">`,
-		`<span class="badge">on Thu 22 Oct</span>`, `<span class="badge">done Thu 1 Oct</span>`,
-		`<button class="box done" id="box-3" form="tick-3" name="outcome" value="reopen" aria-label="Reopen: Paid">☑</button> Paid`,
-		`<button class="box dropped" id="box-5" form="tick-5" name="outcome" value="reopen" aria-label="Reopen: Skipped">☒</button> Skipped`,
-		`<span class="box carried" role="img" aria-label="carried">`, `<span class="box done" role="img" aria-label="done">`,
-		`<form id="tick-1" method="post" action="/pages/7/tick"><input type="hidden" name="back" value="/days/today#box-1"><input type="hidden" name="line" value="1"><input type="hidden" name="text" value="Call"></form>`,
-		`[ ] quoted`, `- [ ] code`, `Text [ ] mid`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("the body does not carry %s:\n%s", want, got)
-		}
-	}
-	// The tokens are chips and not raw text. A malformed line stays as written.
-	for _, raw := range []string{"on:2026-10-22", "done:2026-10-01"} {
-		if strings.Contains(got, raw) {
-			t.Errorf("the raw token %s is drawn:\n%s", raw, got)
-		}
-	}
-	if !strings.Contains(got, "Bad done:2026-13-45") {
-		t.Errorf("a malformed line is not left as text:\n%s", got)
-	}
-	// The open line and the two closed lines tick; the carried line and the malformed one do not.
-	if n := strings.Count(got, "<form"); n != 3 {
-		t.Errorf("%d forms, want 3", n)
-	}
-	if plain := string(markdown(body)); strings.Contains(plain, "<form") || strings.Contains(plain, "<button") || !strings.Contains(plain, `class="box open"`) {
-		t.Errorf("a body with no tick address draws a form:\n%s", plain)
 	}
 }

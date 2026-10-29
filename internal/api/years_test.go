@@ -55,8 +55,8 @@ func TestTheYearHoldsTwelveMonths(t *testing.T) {
 			t.Errorf("link %s = %q, want %q", rel, got, want)
 		}
 	}
-	if names(y) != "plan,tick,carry,schedule" {
-		t.Errorf("actions: %s, want plan, and tick, carry and schedule for the lines: the day and the stream go to a day", names(y))
+	if names(y) != "create-page" {
+		t.Errorf("actions: %s, want create-page for the year page it does not have: the day and the stream go to a day", names(y))
 	}
 	if len(objects(props(apitest.Must(t)(c.Get(t.Context(), "/years/2028"))), "months")[1]["days"].([]any)) != 29 {
 		t.Error("February 2028 has not 29 days")

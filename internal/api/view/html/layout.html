@@ -167,7 +167,7 @@
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
-{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}{{range .Buttons}}<button name="{{.Field}}" value="{{.Value}}" class="{{.Class}}">{{.Label}}</button>{{else}}<button{{if .Aria}} class="remove" aria-label="{{.Aria}}"{{else if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{end}}{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
+{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Aria}} class="remove" aria-label="{{.Aria}}"{{else if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
      options as a row of radio buttons (the options of the field mood also carry their words; a flag that the action requires, as the value of a daily metric, is the words Done and Not done in place of 0 and 1: a small word in the slab, which the sheet shows on the chosen slab), other options as a
@@ -190,6 +190,18 @@
      closed <details>. An owner-only action carries the owner mark. A form with a group (the option "group") shares
      its name with the others of the group, so the browser keeps one of them open. */}}
 {{define "boxed"}}{{with .}}<details class="action"{{with .Group}} name="{{.}}"{{end}}{{if .Asked}} open{{end}}><summary class="button{{if .Lead}} primary{{end}}">{{if .Lead}}{{icon "new"}}{{end}}{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with or .Hint .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
+
+{{/* period-page is the page of a period (a week, a month, a year) in its view: the prose above, and the fold that edits
+     it. A period with no page shows the form that makes it (create-page, with the key as the title). It takes v (the
+     view, with page_id, body, version and cover as properties) and name (week, month or year). */}}
+{{define "period-page"}}{{$v := .v}}{{$name := .name}}{{$p := $v.Props}}{{with $p.page_id}}<section class="page-body" aria-label="The page of the period">
+<div class="panel-head"><h2>The {{$name}} page</h2><a href="/pages/{{num .}}">The page</a></div>
+{{if $p.body}}<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed}}</div>{{end}}
+{{template "body-editor" (dict "action" ($v.Action "save-body") "back" ($v.Link "self") "summary" "Edit the page")}}
+</section>{{else}}{{with $v.Action "create-page"}}<section class="group" aria-label="The page of the period">
+<p class="empty">This {{$name}} has no page yet.</p>
+{{template "boxed" (form . "hide" "title,category" "more" "*" "button" (printf "Make the %s page" $name) "back" ($v.Link "self"))}}
+</section>{{end}}{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
      An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}

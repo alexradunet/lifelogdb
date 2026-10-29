@@ -187,11 +187,11 @@ func TestAMetricsViewHoldsItsPage(t *testing.T) {
 			t.Errorf("the view of a metric still says %q", bad)
 		}
 	}
-	// Each action that a page draws as a form is drawn once, but file-pages (a badge has its own) and the lines' tick,
-	// carry and schedule (a line draws those) and set-cover (a link draws it).
+	// Each action that a page draws as a form is drawn once, but file-pages (a badge has its own) and set-cover (a link
+	// draws it).
 	for _, a := range page.Actions {
 		switch a.Name {
-		case "tick", "carry", "schedule", "set-cover", "promote", "file-pages":
+		case "set-cover", "promote", "file-pages":
 			continue
 		}
 		if n := strings.Count(body, `action="`+a.Href+`"`); n != 1 {

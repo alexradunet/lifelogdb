@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -139,17 +138,6 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 	apitest.Must(t)(do("register-metric", map[string]string{"name": "weight", "unit": "kg"}))
 	n := 0 // each call writes a new title, and sends a new photo
 	title := func(s string) string { n++; return fmt.Sprintf("%s %d", s, n) }
-	// dayIn reads the day that follows key: in the body of the page of an answer, where a plan line holds it.
-	dayIn := func(key string) func(*siren.Entity) any {
-		return func(e *siren.Entity) any {
-			body, _ := props(e)["body"].(string)
-			m := regexp.MustCompile(`\b` + key + `:(\S+)`).FindStringSubmatch(body)
-			if m == nil {
-				return body
-			}
-			return m[1]
-		}
-	}
 	cases := map[string]struct { // "action field"
 		send    func(word string) (*siren.Entity, error) // the action with the word in the field
 		refusal string                                   // a part of the message of the refusal of "Today"
@@ -188,34 +176,6 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 	caseOf := func(send func(word string) (*siren.Entity, error), refusal string) dayCase {
 		return dayCase{send, refusal}
 	}
-	reads := map[string]func(*siren.Entity) any{} // the day in the answer of a case that does not send it as the property day
-	cases["plan on"] = caseOf(func(w string) (*siren.Entity, error) {
-		return do("plan", map[string]string{"page": title("Plan on"), "text": "Call", "on": w})
-	}, "is not a day")
-	reads["plan on"] = dayIn("on")
-	cases["plan due"] = caseOf(func(w string) (*siren.Entity, error) {
-		return do("plan", map[string]string{"page": title("Plan due"), "text": "Call", "due": w})
-	}, "is not a day")
-	reads["plan due"] = dayIn("due")
-	cases["tick done"] = caseOf(func(w string) (*siren.Entity, error) {
-		planned, err := do("plan", map[string]string{"page": title("Tick"), "text": "Call"})
-		if err != nil {
-			return nil, err
-		}
-		res, _ := planned.Result.(map[string]any)
-		return do("tick", map[string]string{"id": fmt.Sprint(res["page_id"]), "line": fmt.Sprint(res["line"]), "text": "Call", "outcome": "done", "done": w})
-	}, "is not a day")
-	reads["tick done"] = dayIn("done")
-	scheduled := func(field string) func(string) (*siren.Entity, error) {
-		return func(w string) (*siren.Entity, error) {
-			planned, err := do("plan", map[string]string{"page": title("Schedule"), "text": "Call"})
-			if err != nil {
-				return nil, err
-			}
-			res, _ := planned.Result.(map[string]any)
-			return do("schedule", map[string]string{"id": fmt.Sprint(res["page_id"]), "line": fmt.Sprint(res["line"]), "text": "Call", field: w})
-		}
-	}
 	// promote and edit-person send a day of a person to a page that exists already.
 	idOf := func(e *siren.Entity, err error) (string, error) {
 		if err != nil {
@@ -240,10 +200,6 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 			return do("edit-person", map[string]string{"id": id, field: w})
 		}, refusal)
 	}
-	cases["schedule on"] = caseOf(scheduled("on"), "is not a day")
-	reads["schedule on"] = dayIn("on")
-	cases["schedule due"] = caseOf(scheduled("due"), "is not a day")
-	reads["schedule due"] = dayIn("due")
 	var fields []string
 	for _, a := range catalog.Actions {
 		for _, f := range a.Fields {
@@ -263,9 +219,6 @@ func TestEveryDayFieldReadsTheWordToday(t *testing.T) {
 				continue
 			}
 			got := props(e)["day"]
-			if read := reads[key]; read != nil {
-				got = read(e)
-			}
 			if person, ok := props(e)["person"].(map[string]any); ok { // a person's days are in its details
 				got = person[f.Name]
 			}

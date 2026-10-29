@@ -75,10 +75,8 @@ func TestAValueOutsideTheStaticOptionsIsRefused(t *testing.T) {
 		{"GET", "/browse?ghosts=2", "", "ghosts"},
 		{"GET", "/browse?kind=pages", "", "kind"},
 		{"GET", "/browse?kind=media&media=pdf", "", "media"},
-		{"GET", "/plans?order=newest", "", "order"},
 		{"POST", "/pages/1/metric", "daily=2", "daily"},
 		{"POST", "/days/2026-09-01/capture", "text=x&mood=6", "mood"},
-		{"POST", "/pages/1/tick", "line=1&text=x&outcome=later", "outcome"},
 	} {
 		code, body := send(h, tc.method, tc.target, form, strings.NewReader(tc.body))
 		if code != 422 || !strings.Contains(body, tc.field+" must be one of") {

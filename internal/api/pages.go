@@ -91,7 +91,7 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 	if err != nil {
 		return nil, err
 	}
-	e := &siren.Entity{Class: []string{p.Type}, Title: p.Title, Properties: pageProperties{Page: *p},
+	e := &siren.Entity{Class: []string{p.Type}, Title: p.Title, Properties: p,
 		Links: []siren.Link{link("self", siren.PageHref(id), p.Title), link("index", "/", "Home")}}
 	if p.IsDayPage {
 		e.Class = append(e.Class, "day-page")
@@ -136,15 +136,6 @@ func (h *server) pageEntity(ctx context.Context, id int64) (*siren.Entity, error
 		return nil, err
 	}
 	e.Actions = pageActions(p, kinds, cats)
-	if p.Period != "" && p.DeletedAt == "" { // the lines planned in the period (docs/contract/plan-lines.md)
-		if from, through, ok := periodWindow(p.Period, p.Title); ok {
-			lines, err := h.linesIn(ctx, from, through)
-			if err != nil {
-				return nil, err
-			}
-			e.Properties = pageProperties{Page: *p, Lines: lines}
-		}
-	}
 	return e, nil
 }
 
@@ -160,16 +151,7 @@ func pageActions(p *core.Page, kinds []string, cats []core.Category) []siren.Act
 	if slices.ContainsFunc(p.In, func(l core.Edge) bool { return l.Kind == "part-of" }) {
 		out = append(out, action("create-page", nil, map[string]any{"category": p.Title}))
 	}
-	plan := planAction(p.Title)
-	if p.IsDayPage {
-		plan = planActionOnDay(p.Title)
-	}
-	out = append(out, saveBodyAction(p.ID, p.Body, p.Version), plan)
-	if p.Period != "" { // it lists the lines of other pages: its line actions stay templated, as a week's (view.LineAction)
-		out = append(out, lineActions()...)
-	} else {
-		out = append(out, action("tick", ids, nil), action("carry", ids, nil), action("schedule", ids, nil))
-	}
+	out = append(out, saveBodyAction(p.ID, p.Body, p.Version))
 	if !p.IsDayPage {
 		keeps := conversationDay(p.Title) != "" // its day names it
 		if p.Type == "page" && !keeps {

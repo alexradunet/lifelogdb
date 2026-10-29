@@ -31,19 +31,15 @@
 </div>
 {{template "foot" .}}{{end}}
 
-{{/* page-sheet is the sheet of a page: the picture of a file, the empty state, the editor, the body, the lines planned in a period and Filed here. */}}
+{{/* page-sheet is the sheet of a page: the picture of a file, the empty state, the editor, the body and Filed here. */}}
 {{define "page-sheet"}}{{$p := .Props}}
 {{with .Link "preview"}}<figure><a href="{{.}}"><img class="preview" src="{{.}}" alt="{{$.Title}}"></a><figcaption>{{$.Title}}</figcaption></figure>{{end}}
 {{if not $p.body}}<p class="empty">Nothing written here yet.</p>{{end}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{if $p.body}}<section class="page-body" aria-label="The page">
-<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed ($.TickHref $p.id) $.Here}}</div>
+<div class="prose">{{$embed := ""}}{{with $p.cover}}{{$embed = .embed}}{{end}}{{markdownCover $p.body $embed}}</div>
 {{template "rejected-names" $p.body}}
 </section>{{end}}
-{{if $p.period}}{{if not $p.deleted_at}}<section class="group plan" aria-label="Planned">
-<div class="panel-head"><h2>Planned</h2>{{template "boxed" (form (.Action "plan") "page" .Title "autofocus" "text" "more" "*" "back" $.Here)}}</div>
-{{if $p.lines}}{{template "planlist" (dict "v" $ "lines" $p.lines "own" .Title "to" (addDays $.Today 1))}}{{else}}<p class="empty">Nothing is planned in this period.</p>{{end}}
-</section>{{end}}{{end}}
 {{with $.Filed}}<section class="group filed" aria-label="Filed here">
 <div class="panel-head"><h2>Filed here <small>{{len .Subs | add (len .Items)}}</small></h2><a href="/browse?in={{$.Title}}">Open in Browse</a>{{with $.Action "create-page"}}{{template "boxed" (form . "hide" "category" "button" "New page here" "back" $.Here)}}{{end}}</div>
 <ul class="plain rows">{{range .Subs}}<li><a class="entry" href="{{.Href}}"><span class="first">{{.Title}}</span><span class="meta"><span class="badge">category</span></span></a></li>{{end}}{{range .Items}}<li><a class="entry" href="{{.Href}}"><span class="first">{{$.Date .Title}}</span><span class="meta">{{range .Class}}{{if ne . "page"}}<span class="badge">{{.}}</span>{{end}}{{end}}</span></a></li>{{end}}</ul>
@@ -63,8 +59,7 @@
 {{template "links" .}}
 {{template "backlinks" .}}
 
-{{if or (.Action "plan") (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
-{{if not $p.period}}{{template "boxed" (form (.Action "plan") "page" .Title "button" "Plan a line here" "group" "more" "more" "*" "back" $.Here)}}{{end}}
+{{if or (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "rename") "group" "more")}}
 {{template "boxed" (form (.Action "edit-person") "group" "more" "placeholder" "name=Samuel Ortiz")}}
 {{if not .IsSeries}}{{template "boxed" (form (.Action "edit-metric") "group" "more" "button" "Save")}}{{end}}

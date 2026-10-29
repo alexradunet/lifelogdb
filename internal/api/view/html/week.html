@@ -1,8 +1,6 @@
-{{/* A week (docs/plans/136-plan-lines-and-period-pages.md): an ISO week, Monday first. The sheet holds the page of the
-     week when it has one, then the seven days, each with the lines planned for it and the lines done on it. The
-     margin holds the plan form for the week. */}}
+{{/* A week (docs/decisions/D30-period-pages.md): an ISO week, Monday first. The sheet holds the page of the week, or
+     the form that makes it, then the seven days. */}}
 {{define "week"}}{{template "head" .}}
-{{$w := .Props}}{{$to := addDays $.Today 1}}
 <header class="page-head"><div class="what"><h1>{{.Title}}</h1>
 {{template "zoom" (dict "v" . "current" "week")}}</div>
 <div class="tools">
@@ -12,19 +10,10 @@
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next week, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
 </div></header>
 
-<div class="sheet-margin">
 <div class="sheet">
 {{template "period-page" (dict "v" . "name" "week")}}
 <section class="week-days" aria-label="Days">
-<ul class="plain">{{range $w.days}}{{$day := .day}}<li>{{template "dayentry" (dict "v" $ "e" .)}}
-{{with $.LinesOn $day}}{{template "planlist" (dict "v" $ "lines" . "own" $day "to" $to)}}{{end}}</li>{{end}}</ul>
+<ul class="plain">{{range .Props.days}}<li>{{template "dayentry" (dict "v" $ "e" .)}}</li>{{end}}</ul>
 </section>
-</div>
-<div class="margin">
-<section class="group plan" aria-label="Plan">
-<div class="panel-head"><h2>Plan</h2>{{template "boxed" (form (.Action "plan") "page" $w.week "autofocus" "text" "more" "*" "back" $.Here)}}</div>
-{{if not $w.page_id}}<p class="empty">This week has no page yet. The first plan line makes it.</p>{{end}}
-</section>
-</div>
 </div>
 {{template "foot" .}}{{end}}

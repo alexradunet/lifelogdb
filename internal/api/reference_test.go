@@ -28,19 +28,13 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		"days": map[string]any{"today": "", "limit": 0, "offset": 0, "cards": []dayCard{}},
 		"browse": map[string]any{"kind": "", "in": browseIn{}, "unfiled": false, "ghosts": false, "deleted": false, "media": "", "counts": browseCounts{},
 			"media_counts": mediaCounts{}, "categories": []core.Category{}, "rows": []browseRow{}, "limit": 0, "offset": 0},
-		"plans":                     map[string]any{"today": "", "order": "", "total": 0, "lines": []planLine{}, "limit": 0, "offset": 0},
 		"search":                    map[string]any{"q": "", "order": "", "kind": "", "titles": []core.TitleMatch{}, "hits": []searchHit{}, "limit": 0, "offset": 0},
 		"day":                       dayView{},
-		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
-		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "lines": []planLine{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
-		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "lines": []planLine{}, "quarters": []yearQuarter{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
-		"page, person, file":        pageProperties{},
-		"plan line":                 planLine{},
-		"result of plan":            map[string]any{"page_id": int64(0), "line": 0, "written": ""},
-		"result of tick":            map[string]any{"line": 0, "outcome": "", "text": "", "page_id": int64(0), "appended": "", "appended_line": 0, "removed": "", "removed_line": 0, "next_kept": false, "href": ""},
+		"month":                     map[string]any{"month": "", "today": "", "days": []monthDay{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
+		"week":                      map[string]any{"week": "", "from": "", "through": "", "today": "", "days": []monthDay{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
+		"year":                      map[string]any{"year": "", "today": "", "written": 0, "readings": 0, "months": []yearMonth{}, "quarters": []yearQuarter{}, "page_id": int64(0), "body": "", "version": "", "cover": core.Cover{}},
+		"page, person, file":        core.Page{},
 		"result of tombstone-pages": map[string]any{"tombstoned": []int64{}, "count": 0, "revive": ""},
-		"result of carry":           map[string]any{"line": 0, "to_id": int64(0), "to_line": 0},
-		"result of schedule":        map[string]any{"line": 0, "page_id": int64(0), "written": "", "on": "", "due": ""},
 		"cover-choice":              coverChoiceProps{Rows: []coverRow{}},
 		"measurement":               core.Measurement{},
 		"series": map[string]any{"metric": "", "from": "", "to": "", "readings": []core.Reading{}, "unit": "", "daily": false,
@@ -67,11 +61,6 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 	for section, shape := range shapes {
 		want := map[string]bool{}
 		walk("", reflect.ValueOf(shape), want)
-		for p := range want { // the fields of a plan line are in their own section, "plan line"
-			if strings.HasPrefix(p, "planned[].") || strings.HasPrefix(p, "lines[].") {
-				delete(want, p)
-			}
-		}
 		got, ok := documented[section]
 		if !ok {
 			t.Errorf("API.md has no section %q", section)
@@ -107,7 +96,7 @@ func TestAPIReferenceMatchesTheCode(t *testing.T) {
 		{"day", "/days/2031-05-01"}, {"page, person, file", ids["page"]}, {"page, person, file", ids["person"]},
 		{"page, person, file", ids["file"]},
 		{"measurement", ids["measurement"]}, {"series", "/metrics/Weight"}, {"metrics", "/metrics"},
-		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"}, {"plans", "/plans"},
+		{"browse", "/browse?in=A+note"}, {"browse", "/browse?kind=person"}, {"browse", "/browse?kind=media"}, {"browse", "/browse?ghosts=1"}, {"browse", "/browse?deleted=1"},
 		{"integrity", "/integrity"}, {"settings", "/settings"}, {"conversation", "/days/2031-05-01/conversation"}, {"conversation", "/days/2031-05-02/conversation"}, {"cover-choice", ids["page"] + "/cover"},
 		{"month", "/months/2031-05"}, {"year", "/years/2031"}, {"week", "/weeks/2031-W20"},
 	}
