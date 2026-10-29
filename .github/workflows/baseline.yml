@@ -28,6 +28,7 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: |
             go.sum
+            extensions/googlephotos/go.sum
             extensions/mcp/go.sum
             extensions/whatsapp/go.sum
       - name: Report environment

@@ -201,7 +201,7 @@ func TestCoversFromGooglePhotosAgainstTheRealLifelog(t *testing.T) {
 	const textDay, coveredDay, clashDay, heicDay = "2031-05-02", "2031-05-03", "2031-05-04", "2031-05-06"
 	capture(t, base, textDay, "Words of the day that stay.")
 	capture(t, base, coveredDay, "A day with its own cover.")
-	ll := &lifelog.Client{Base: base, HTTP: http.DefaultClient}
+	ll := lifelog.New(base, "")
 	ctx := context.Background()
 	if title, err := ll.AddCover(ctx, coveredDay, "image/jpeg", jpegOf(t, 50), nil); err != nil || title != coveredDay+".jpg" {
 		t.Fatalf("set the cover of %s: %q, %v", coveredDay, title, err)

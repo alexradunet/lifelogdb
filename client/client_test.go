@@ -266,3 +266,57 @@ func TestAnErrorEntityIsATypedErrorWithItsCode(t *testing.T) {
 		t.Fatalf("%v %v", e, err)
 	}
 }
+
+func TestDoFilesStreamsAReaderAsTheFilePart(t *testing.T) {
+	type part struct{ file, body string }
+	got := map[string]part{}
+	fields := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			t.Errorf("not multipart: %v", err)
+			return
+		}
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Errorf("part: %v", err)
+				return
+			}
+			b, _ := io.ReadAll(p)
+			if p.FileName() != "" {
+				got[p.FormName()] = part{p.FileName(), string(b)}
+			} else {
+				fields[p.FormName()] = string(b)
+			}
+		}
+		w.Write([]byte(`{"title":"x.png"}`))
+	}))
+	defer srv.Close()
+	act := siren.Action{Name: "add-file", Method: "POST", Href: "/files", Fields: []siren.Field{
+		{Name: "day", Type: "date"}, {Name: "title", Type: "text"}, {Name: "original", Type: "file"}, {Name: "preview", Type: "file"}}}
+	c := Remote(srv.URL, "import:t", "")
+	e, err := c.DoFiles(t.Context(), act, map[string]string{"day": "2031-05-20", "title": "x.png"},
+		map[string]File{"original": Bytes("x.png", []byte("big")), "preview": Bytes("preview.jpg", []byte("small"))})
+	if err != nil || e.Title != "x.png" {
+		t.Fatalf("%v %v", e, err)
+	}
+	want := map[string]part{"original": {"x.png", "big"}, "preview": {"preview.jpg", "small"}}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("part %s = %v, want %v", name, got[name], w)
+		}
+	}
+	if len(got) != 2 || fields["day"] != "2031-05-20" || fields["title"] != "x.png" || len(fields) != 2 {
+		t.Errorf("parts %v, fields %v", got, fields)
+	}
+	if _, err := c.DoFiles(t.Context(), act, nil, map[string]File{"nope": Bytes("n", nil)}); err == nil {
+		t.Error("a file part that is not a field of the action was sent")
+	}
+	if _, err := c.DoFiles(t.Context(), act, map[string]string{"original": "p"}, map[string]File{"original": Bytes("n", nil)}); err == nil {
+		t.Error("a field given as a value and as a file was sent")
+	}
+}

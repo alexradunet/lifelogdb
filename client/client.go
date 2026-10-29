@@ -143,6 +143,18 @@ func fill(a siren.Action, values map[string]string) (string, url.Values, map[str
 	return href, form, files, nil
 }
 
+// File is a file part of a multipart action: its name on the wire and how to open its bytes. The client opens it
+// when it writes the part, and closes it after the copy.
+type File struct {
+	Name string
+	Open func() (io.ReadCloser, error)
+}
+
+// Bytes is a file part from bytes in memory.
+func Bytes(name string, b []byte) File {
+	return File{Name: name, Open: func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(b)), nil }}
+}
+
 // Do submits an action with field values. Fields of a templated href ({id}) are filled from values. The value of a
 // file field is the path of a local file: the action is then sent as multipart/form-data, the file streamed from
 // disk, never held whole in memory.
@@ -150,14 +162,48 @@ func (c *Client) Do(ctx context.Context, a siren.Action, values map[string]strin
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	href, form, files, err := fill(a, values)
+	href, form, paths, err := fill(a, values)
 	if err != nil {
 		return nil, err
 	}
+	files := map[string]File{}
+	for name, path := range paths {
+		files[name] = File{Name: filepath.Base(path), Open: func() (io.ReadCloser, error) { return os.Open(path) }}
+	}
+	return c.submit(ctx, a, href, form, files)
+}
+
+// DoFiles submits an action with its text values and its file parts from readers, for a client that holds a file in
+// memory or gets it from a stream. A name in files must be a file field of the action. A field is in values or in
+// files, not in both.
+func (c *Client) DoFiles(ctx context.Context, a siren.Action, values map[string]string, files map[string]File) (*siren.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	for name := range files {
+		if f := a.Field(name); f == nil || f.Type != "file" {
+			return nil, fmt.Errorf("%s has no file field %q", a.Name, name)
+		}
+	}
+	for name := range values {
+		if f := a.Field(name); f != nil && f.Type == "file" {
+			return nil, fmt.Errorf("%s: the file field %q is a File, not a value", a.Name, name)
+		}
+	}
+	href, form, _, err := fill(a, values)
+	if err != nil {
+		return nil, err
+	}
+	return c.submit(ctx, a, href, form, files)
+}
+
+// submit sends the filled action: as multipart/form-data when it has file parts, else as a form or a query.
+func (c *Client) submit(ctx context.Context, a siren.Action, href string, form url.Values, files map[string]File) (*siren.Entity, error) {
 	if len(files) > 0 {
 		return c.multipart(ctx, a.Method, href, form, files)
 	}
 	var req *http.Request
+	var err error
 	if a.Method == "GET" {
 		req, err = http.NewRequestWithContext(ctx, "GET", c.base+href+"?"+form.Encode(), nil)
 	} else {
@@ -172,8 +218,8 @@ func (c *Client) Do(ctx context.Context, a siren.Action, values map[string]strin
 	return c.send(req)
 }
 
-// multipart sends form and files (field name → path on disk) as multipart/form-data, each file streamed from disk.
-func (c *Client) multipart(ctx context.Context, method, href string, form url.Values, files map[string]string) (*siren.Entity, error) {
+// multipart sends form and files as multipart/form-data, each file streamed from its reader.
+func (c *Client) multipart(ctx context.Context, method, href string, form url.Values, files map[string]File) (*siren.Entity, error) {
 	pr, pw := io.Pipe()
 	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { pr.CloseWithError(ctx.Err()); pw.CloseWithError(ctx.Err()) })
@@ -189,19 +235,19 @@ func (c *Client) multipart(ctx context.Context, method, href string, form url.Va
 					}
 				}
 			}
-			for name, path := range files {
+			for name, file := range files {
 				if err := ctx.Err(); err != nil {
 					return err
 				}
-				f, err := os.Open(path)
+				r, err := file.Open()
 				if err != nil {
 					return err
 				}
-				part, err := mw.CreateFormFile(name, filepath.Base(path))
+				part, err := mw.CreateFormFile(name, file.Name)
 				if err == nil {
-					_, err = io.Copy(part, f)
+					_, err = io.Copy(part, r)
 				}
-				closeErr := f.Close()
+				closeErr := r.Close()
 				if err == nil {
 					err = closeErr
 				}

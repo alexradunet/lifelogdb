@@ -198,7 +198,7 @@ func newStack(t *testing.T, g *fakeGoogle, lifelogURL string, connected bool) *s
 	rev := review.New(review.Config{
 		Auth:    auth,
 		Picker:  &google.Picker{Base: g.URL + "/v1", HTTP: hc, Tokens: auth},
-		Lifelog: &lifelog.Client{Base: lifelogURL, HTTP: hc},
+		Lifelog: lifelog.New(lifelogURL, ""),
 		Zone:    time.UTC,
 		Log:     log.New(io.Discard, "", 0),
 	})

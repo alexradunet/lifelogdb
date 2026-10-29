@@ -4,7 +4,8 @@
 cover, with the photos of that day. One click keeps a photo as the cover of the day.
 
 It is a client of the lifelog HTTP API ([API.md](../../API.md)). It is a separate Go module, `lifelog-googlephotos`. It
-uses the standard library only. It imports nothing from lifelog, and `lifelog` does not change.
+imports `lifelog/siren` and `lifelog/client` of the root module (a `replace` directive) and writes through the
+`add-file` action of the catalog. `lifelog` does not change.
 
 ```mermaid
 flowchart TD

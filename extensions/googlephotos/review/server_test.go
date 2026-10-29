@@ -12,7 +12,7 @@ import (
 	"lifelog-googlephotos/review"
 )
 
-// fakeLifelog answers the three calls of the extension. Every day of May 2031 has no picture, except the days in
+// fakeLifelog answers the four calls of the extension. Every day of May 2031 has no picture, except the days in
 // covered. It records the files it was sent.
 type fakeLifelog struct {
 	*httptest.Server
@@ -49,6 +49,11 @@ func newFakeLifelog(t *testing.T, covered ...string) *fakeLifelog {
 			return
 		}
 		fmt.Fprint(w, `{"class":["day"],"properties":{}}`)
+	})
+	mux.HandleFunc("GET /actions", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"actions":[{"name":"add-file","method":"POST","href":"/files","fields":[
+{"name":"day","type":"date"},{"name":"title","type":"text"},{"name":"mime","type":"text"},
+{"name":"original","type":"file"},{"name":"preview","type":"file"}]}]}`)
 	})
 	mux.HandleFunc("POST /files", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseMultipartForm(1 << 20); err != nil {

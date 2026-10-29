@@ -8,20 +8,45 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"lifelog/client"
 )
 
-// titlesServer answers 409 exists for the first taken titles, then 200. It records the titles it was sent.
+const addFileAction = `{"actions":[{"name":"add-file","method":"POST","href":"/files","fields":[
+{"name":"day","type":"date"},{"name":"title","type":"text"},{"name":"mime","type":"text"},
+{"name":"original","type":"file"},{"name":"preview","type":"file"}]}]}`
+
+// titlesServer answers 409 exists for the first taken titles, then 200. It records the titles it was sent and checks
+// the header, the text fields and the file parts of each upload.
 func titlesServer(t *testing.T, taken int) (*Client, *[]string) {
 	var titles []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("Lifelog-Source") != Source ||
+		if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("Lifelog-Source") != "import:google-photos" ||
 			r.Header.Get("Accept") != "application/vnd.siren+json" {
 			t.Errorf("headers: %v", r.Header)
 		}
+		if r.URL.Path == "/actions" {
+			fmt.Fprint(w, addFileAction)
+			return
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/files" {
+			t.Errorf("request %s %s", r.Method, r.URL.Path)
+		}
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			t.Errorf("parse: %v", err)
+			return
 		}
-		titles = append(titles, r.FormValue("title"))
+		title := r.FormValue("title")
+		titles = append(titles, title)
+		if r.FormValue("day") != "2031-05-04" || r.FormValue("mime") != "image/png" {
+			t.Errorf("fields: %v", r.MultipartForm.Value)
+		}
+		if _, h, err := r.FormFile("original"); err != nil || h.Filename != title {
+			t.Errorf("original: %v, %v", h, err)
+		}
+		if _, h, err := r.FormFile("preview"); err != nil || h.Filename != "preview.jpg" {
+			t.Errorf("preview: %v, %v", h, err)
+		}
 		if len(titles) <= taken {
 			w.WriteHeader(http.StatusConflict)
 			fmt.Fprint(w, `{"class":["error"],"properties":{"status":409,"code":"exists","message":"title in use"}}`)
@@ -30,12 +55,12 @@ func titlesServer(t *testing.T, taken int) (*Client, *[]string) {
 		fmt.Fprint(w, `{"class":["file"]}`)
 	}))
 	t.Cleanup(srv.Close)
-	return &Client{Base: srv.URL + "/", Token: "secret", HTTP: srv.Client()}, &titles
+	return New(srv.URL+"/", "secret"), &titles
 }
 
 func TestAddCoverTriesNumberedTitlesAfterExists(t *testing.T) {
 	c, titles := titlesServer(t, 2)
-	got, err := c.AddCover(context.Background(), "2031-05-04", "image/png", []byte("x"), nil)
+	got, err := c.AddCover(context.Background(), "2031-05-04", "image/png", []byte("x"), []byte("p"))
 	if err != nil || got != "2031-05-04 3.png" {
 		t.Fatalf("AddCover = %q, %v; want 2031-05-04 3.png", got, err)
 	}
@@ -46,7 +71,7 @@ func TestAddCoverTriesNumberedTitlesAfterExists(t *testing.T) {
 
 func TestAddCoverStopsAfterTheBound(t *testing.T) {
 	c, titles := titlesServer(t, 100)
-	if _, err := c.AddCover(context.Background(), "2031-05-04", "image/jpeg", []byte("x"), nil); err == nil {
+	if _, err := c.AddCover(context.Background(), "2031-05-04", "image/png", []byte("x"), []byte("p")); err == nil {
 		t.Fatal("no error after every title was in use")
 	}
 	if len(*titles) != maxTitles {
@@ -60,10 +85,9 @@ func TestAnErrorEntityGivesItsCodeAndMessage(t *testing.T) {
 		fmt.Fprint(w, `{"class":["error"],"properties":{"status":422,"code":"invalid","message":"missing field day"}}`)
 	}))
 	defer srv.Close()
-	c := &Client{Base: srv.URL, HTTP: srv.Client()}
-	_, err := c.DayHasCover(context.Background(), "2031-05-04")
-	var ae *APIError
-	if !errors.As(err, &ae) || ae.Status != 422 || ae.Code != "invalid" || ae.Message != "missing field day" {
+	_, err := New(srv.URL, "").DayHasCover(context.Background(), "2031-05-04")
+	var ce *client.Error
+	if !errors.As(err, &ce) || ce.Status != 422 || ce.Code() != "invalid" || !strings.Contains(err.Error(), "missing field day") {
 		t.Errorf("error = %v, want the code and message of the entity", err)
 	}
 }

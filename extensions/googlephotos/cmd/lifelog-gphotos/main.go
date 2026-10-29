@@ -70,7 +70,7 @@ func run(ctx context.Context, args []string) error {
 	srv := review.New(review.Config{
 		Auth:    auth,
 		Picker:  &google.Picker{Base: google.DefaultPickerBase, HTTP: client, Tokens: auth},
-		Lifelog: &lifelog.Client{Base: *base, Token: os.Getenv("LIFELOG_TOKEN"), HTTP: client},
+		Lifelog: lifelog.New(*base, os.Getenv("LIFELOG_TOKEN")),
 		Zone:    zone,
 	})
 	ln, err := net.Listen("tcp", *addr)

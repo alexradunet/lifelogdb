@@ -1,64 +1,52 @@
-// Package lifelog is a client of the lifelog HTTP API (API.md). It reads Siren JSON and writes through add-file.
+// Package lifelog is the client of the extension. It is a thin layer over the shared client of the root module
+// (lifelog/client): it reads Siren entities and writes through the catalog's add-file.
 package lifelog
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
-	"net/url"
 	"strings"
+
+	"lifelog/client"
+	"lifelog/siren"
 )
 
 // Source is the provenance of every write of the extension.
-const Source = "import:google-photos"
+const Source = siren.ImportPrefix + "google-photos"
 
-const (
-	maxJSON   = 8 << 20 // the largest answer read from lifelog
-	maxTitles = 5       // titles tried for one day: "<day>.jpg", "<day> 2.jpg" ... "<day> 5.jpg"
-)
+const maxTitles = 5 // titles tried for one day: "<day>.jpg", "<day> 2.jpg" ... "<day> 5.jpg"
 
 // Client talks to one lifelog server.
 type Client struct {
-	Base  string       // for example http://127.0.0.1:7777
-	Token string       // the bearer token; "" sends none
-	HTTP  *http.Client // with a Timeout
+	c *client.Client
 }
 
-// APIError is an error entity of lifelog.
-type APIError struct {
-	Status  int
-	Code    string
-	Message string
-}
-
-func (e *APIError) Error() string {
-	return fmt.Sprintf("lifelog answered %d %s: %s", e.Status, e.Code, e.Message)
+// New makes a client of the server at base, for example http://127.0.0.1:7777. token is the bearer token; "" sends none.
+func New(base, token string) *Client {
+	return &Client{c: client.Remote(base, Source, token)}
 }
 
 // MonthsWithoutCover gives, for each month (YYYY-MM), the days that show no picture. A day with no page is one.
 func (c *Client) MonthsWithoutCover(ctx context.Context, months []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, m := range months {
-		var e struct {
-			Properties struct {
-				Days []struct {
-					Day     string `json:"day"`
-					Picture string `json:"picture"`
-				} `json:"days"`
-			} `json:"properties"`
+		t, ok := siren.MonthOf(m)
+		if !ok {
+			return nil, fmt.Errorf("read month %s: not YYYY-MM", m)
 		}
-		if err := c.get(ctx, "/months/"+url.PathEscape(m), &e); err != nil {
+		e, err := c.c.Get(ctx, siren.MonthHref(t))
+		if err != nil {
 			return nil, fmt.Errorf("read month %s: %w", m, err)
 		}
-		for _, d := range e.Properties.Days {
-			if d.Picture == "" {
-				out[d.Day] = true
+		props, _ := e.Properties.(map[string]any)
+		days, _ := props["days"].([]any)
+		for _, d := range days {
+			day, _ := d.(map[string]any)
+			if picture, _ := day["picture"].(string); picture == "" {
+				name, _ := day["day"].(string)
+				out[name] = true
 			}
 		}
 	}
@@ -67,17 +55,12 @@ func (c *Client) MonthsWithoutCover(ctx context.Context, months []string) (map[s
 
 // DayHasCover reads the day now: has its page a cover?
 func (c *Client) DayHasCover(ctx context.Context, day string) (bool, error) {
-	var e struct {
-		Properties struct {
-			Cover *struct {
-				Title string `json:"title"`
-			} `json:"cover"`
-		} `json:"properties"`
-	}
-	if err := c.get(ctx, "/days/"+url.PathEscape(day), &e); err != nil {
+	e, err := c.c.Get(ctx, siren.DayHref(day))
+	if err != nil {
 		return false, fmt.Errorf("read day %s: %w", day, err)
 	}
-	return e.Properties.Cover != nil, nil
+	props, _ := e.Properties.(map[string]any)
+	return props["cover"] != nil, nil
 }
 
 // AddCover keeps the original with the day (add-file). The title is "<day>.<ext>". After a 409 "exists" (another file
@@ -85,17 +68,34 @@ func (c *Client) DayHasCover(ctx context.Context, day string) (bool, error) {
 // The same original sent again writes nothing: lifelog keeps one file for one hash.
 func (c *Client) AddCover(ctx context.Context, day, mimeType string, original, preview []byte) (string, error) {
 	ext := Ext(mimeType)
+	catalog, err := c.c.Catalog(ctx)
+	if err != nil {
+		return "", fmt.Errorf("read the catalog: %w", err)
+	}
+	var addFile *siren.Action
+	for i := range catalog {
+		if catalog[i].Name == "add-file" {
+			addFile = &catalog[i]
+		}
+	}
+	if addFile == nil {
+		return "", errors.New("the catalog has no add-file action")
+	}
 	for n := 1; n <= maxTitles; n++ {
 		title := day + "." + ext
 		if n > 1 {
 			title = fmt.Sprintf("%s %d.%s", day, n, ext)
 		}
-		err := c.addFile(ctx, day, title, mimeType, original, preview)
-		var ae *APIError
+		files := map[string]client.File{"original": client.Bytes(title, original)}
+		if preview != nil {
+			files["preview"] = client.Bytes("preview.jpg", preview)
+		}
+		_, err := c.c.DoFiles(ctx, *addFile, map[string]string{"day": day, "title": title, "mime": mimeType}, files)
+		var ce *client.Error
 		switch {
 		case err == nil:
 			return title, nil
-		case errors.As(err, &ae) && ae.Status == http.StatusConflict && ae.Code == "exists":
+		case errors.As(err, &ce) && ce.Status == http.StatusConflict && ce.Code() == siren.CodeExists:
 			continue
 		default:
 			return "", fmt.Errorf("add file %q: %w", title, err)
@@ -127,100 +127,4 @@ func Ext(mimeType string) string {
 		return "bmp"
 	}
 	return "jpg"
-}
-
-func (c *Client) addFile(ctx context.Context, day, title, mimeType string, original, preview []byte) error {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	for _, f := range [][2]string{{"day", day}, {"title", title}} {
-		if err := w.WriteField(f[0], f[1]); err != nil {
-			return err
-		}
-	}
-	if err := filePart(w, "original", title, mimeType, original); err != nil {
-		return err
-	}
-	if preview != nil {
-		if err := filePart(w, "preview", "preview.jpg", "image/jpeg", preview); err != nil {
-			return err
-		}
-	}
-	if err := w.Close(); err != nil {
-		return err
-	}
-	req, err := c.request(ctx, http.MethodPost, "/files", &buf)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
-	return c.do(req, nil)
-}
-
-func filePart(w *multipart.Writer, field, name, mimeType string, b []byte) error {
-	h := textproto.MIMEHeader{}
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, field, name))
-	h.Set("Content-Type", mimeType)
-	p, err := w.CreatePart(h)
-	if err != nil {
-		return err
-	}
-	_, err = p.Write(b)
-	return err
-}
-
-func (c *Client) get(ctx context.Context, path string, out any) error {
-	req, err := c.request(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return err
-	}
-	return c.do(req, out)
-}
-
-func (c *Client) request(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.Base, "/")+path, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/vnd.siren+json")
-	req.Header.Set("Lifelog-Source", Source)
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
-	}
-	return req, nil
-}
-
-// do sends the request. A status of 300 or more is an *APIError, read from the error entity.
-func (c *Client) do(req *http.Request, out any) error {
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, maxJSON+1))
-	if err != nil {
-		return err
-	}
-	if len(b) > maxJSON {
-		return fmt.Errorf("answer is larger than %d bytes", maxJSON)
-	}
-	if resp.StatusCode >= 300 {
-		ae := &APIError{Status: resp.StatusCode, Code: http.StatusText(resp.StatusCode)}
-		var e struct {
-			Properties struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
-			} `json:"properties"`
-		}
-		if json.Unmarshal(b, &e) == nil {
-			ae.Code, ae.Message = e.Properties.Code, e.Properties.Message
-		}
-		return ae
-	}
-	if out == nil {
-		return nil
-	}
-	if err := json.Unmarshal(b, out); err != nil {
-		return fmt.Errorf("read answer: %w", err)
-	}
-	return nil
 }
