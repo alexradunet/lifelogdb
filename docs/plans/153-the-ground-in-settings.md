@@ -17,7 +17,8 @@
   test was wider than the switch. Two things differ from the plan as written: a failed settings read draws the boards
   and logs the fault, as a failed Today strip draws no strip, so a corrupt file costs no page; and the new tests are
   the files `ground_test.go` of `internal/api` and of `internal/api/view` and `ground_command_test.go` of
-  `cmd/lifelog`. The mock-up the owner chose from (2026-10-29) is a private artifact of the session that wrote this
+  `cmd/lifelog`. Live since 2026-10-29 18:28 (`~/.local/bin/lifelog` built from `8f0cdc4`, the service restarted, the previous
+  binary kept as `lifelog.prev`). The mock-up the owner chose from (2026-10-29) is a private artifact of the session that wrote this
   plan; of its nine grounds the owner kept four: plain oak, boards, firelight, embers.
 - **Resolves:** the owner's words of 2026-10-29 (below). No issue.
 
