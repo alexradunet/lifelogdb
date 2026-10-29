@@ -152,7 +152,10 @@ func prepareServe(e env, o opts) (opts, error) {
 // builds the handler of its listener itself: the local one takes only a request to its own loopback authority, and a
 // public one serves the API behind the token, the allowed origins and the login pages (api.Public). So no code in
 // another function decides what guards a public listener.
-func serve(ctx context.Context, e env, _ []string) error {
+func serve(ctx context.Context, e env, args []string) error {
+	if len(args) != 0 {
+		return errors.New(e.cmd.synopsis())
+	}
 	o, pub := e.o, e.o.serve.pub
 	listener, err := net.Listen("tcp", o.serve.addr)
 	if err != nil {

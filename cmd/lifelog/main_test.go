@@ -193,3 +193,44 @@ func TestAUsageErrorNamesTheCommandAndARepeatedFieldIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestAShortcutRefusesAnArgumentItDoesNotRead: a command that reads no argument, or one at most, refuses another with
+// its synopsis (AGENTS.md, "Refused, never ignored"). Nothing runs: no output, no copy of the file, no listener.
+func TestAShortcutRefusesAnArgumentItDoesNotRead(t *testing.T) {
+	dir := t.TempDir()
+	live := filepath.Join(dir, "life.db")
+	e, stdout, _ := testEnv(t)
+	if err := runArgs(t.Context(), e, []string{"init", live}); err != nil {
+		t.Fatal(err)
+	}
+	copies := filepath.Join(dir, "copies")
+	if err := os.Mkdir(copies, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		argv []string
+	}{
+		{"day", []string{"day", "2031-05-20", "extra"}},
+		{"snapshot", []string{"snapshot", "extra", "--snapshots", copies}},
+		{"actions", []string{"actions", "extra"}},
+		{"serve", []string{"serve", "extra", "--addr", "127.0.0.1:0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, stdout, _ := testEnv(t)
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			err := runArgs(ctx, e, append(tc.argv, "--db", live))
+			if want := commandNamed(tc.name).synopsis(); err == nil || err.Error() != want {
+				t.Errorf("%v: error %v, want %q", tc.argv, err, want)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("%v: wrote %q, want nothing", tc.argv, stdout.String())
+			}
+			if left, _ := os.ReadDir(copies); len(left) != 0 {
+				t.Errorf("%v: left %d file(s) in the snapshot folder", tc.argv, len(left))
+			}
+		})
+	}
+	_ = stdout
+}

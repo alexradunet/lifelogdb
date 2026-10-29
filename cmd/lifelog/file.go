@@ -32,7 +32,7 @@ func keepFile(ctx context.Context, e env, args []string) error {
 	if o.file.dryRun {
 		vals["dry_run"] = "1"
 	}
-	return doAction(ctx, e, "add-file", vals)
+	return doAction(ctx, e, e.cmd.wraps, vals)
 }
 
 // setCover is `lifelog cover PAGE-ID [PHOTO]`: the set-cover action, with a new photo streamed from disk (hashed by
@@ -52,5 +52,5 @@ func setCover(ctx context.Context, e env, args []string) error {
 	if o.file.preview != "" {
 		vals["preview"] = o.file.preview
 	}
-	return doAction(ctx, e, "set-cover", vals)
+	return doAction(ctx, e, e.cmd.wraps, vals)
 }

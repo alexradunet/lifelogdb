@@ -90,7 +90,7 @@ type env struct {
 }
 
 // command is one subcommand. The table commands is the one list of them: the usage, the dispatch, the flags a
-// command takes and whether an interrupt reaches it all read it.
+// command takes, whether an interrupt reaches it and what each shortcut wraps all read it.
 type command struct {
 	name       string
 	gap        bool                              // a blank line before its usage: the start of a group
@@ -98,6 +98,7 @@ type command struct {
 	flags      []string                          // the flags it takes, besides the global ones
 	refuses    []string                          // the global flags it does not take: it would ignore them
 	setup      bool                              // a setup command of the machine (init): no client, and the OS's interrupt
+	wraps      string                            // the catalog action this shortcut runs; "" for a command that is no shortcut
 	ownHandler bool                              // it builds the handler of its listener (serve): it gets the store and no client
 	prepare    func(e env, o opts) (opts, error) // what it checks before anything opens, and the line it runs with: o, changed or not
 	run        func(ctx context.Context, e env, args []string) error
@@ -153,8 +154,13 @@ var commands = []command{
 		}},
 	{name: "actions",
 		usage: "  lifelog actions                     list the actions and their fields",
-		run:   func(ctx context.Context, e env, _ []string) error { return listActions(ctx, e) }},
-	{name: "capture", gap: true, flags: []string{"--mood", "--day"},
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) != 0 {
+				return errors.New(e.cmd.synopsis())
+			}
+			return listActions(ctx, e)
+		}},
+	{name: "capture", wraps: "capture", gap: true, flags: []string{"--mood", "--day"},
 		usage: "  lifelog capture [TEXT...] [--mood N] [--day YYYY-MM-DD]\n" +
 			"                                      add to a day's journal page",
 		run: func(ctx context.Context, e env, args []string) error {
@@ -163,9 +169,9 @@ var commands = []command{
 			if e.o.mood != "" {
 				vals["mood"] = e.o.mood
 			}
-			return doAction(ctx, e, "capture", vals)
+			return doAction(ctx, e, e.cmd.wraps, vals)
 		}},
-	{name: "plan", flags: []string{"--page", "--on", "--due", "--every", "--from-done"},
+	{name: "plan", wraps: "plan", flags: []string{"--page", "--on", "--due", "--every", "--from-done"},
 		usage: "  lifelog plan TEXT... [--page T] [--on D] [--due D] [--every R] [--from-done]\n" +
 			"                                      add a plan line to a page (default today; a day, or a week 2026-W43, a month,\n" +
 			"                                      a quarter, a year): the plan action",
@@ -178,44 +184,47 @@ var commands = []command{
 			if p.fromDone {
 				vals["from_done"] = "1"
 			}
-			return doAction(ctx, e, "plan", vals)
+			return doAction(ctx, e, e.cmd.wraps, vals)
 		}},
-	{name: "day",
+	{name: "day", wraps: "open-day",
 		usage: "  lifelog day [YYYY-MM-DD]            the day view (default today)",
 		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) > 1 {
+				return errors.New(e.cmd.synopsis())
+			}
 			vals := map[string]string{} // no day is today: open-day reads the clock of the API
 			if len(args) == 1 {
 				vals["day"] = args[0]
 			}
-			return doAction(ctx, e, "open-day", vals)
+			return doAction(ctx, e, e.cmd.wraps, vals)
 		}},
-	{name: "page",
+	{name: "page", wraps: "find",
 		usage: "  lifelog page TITLE                  a page by its title",
 		run: func(ctx context.Context, e env, args []string) error {
-			return doAction(ctx, e, "find", map[string]string{"title": strings.Join(args, " ")})
+			return doAction(ctx, e, e.cmd.wraps, map[string]string{"title": strings.Join(args, " ")})
 		}},
-	{name: "search",
+	{name: "search", wraps: "search",
 		usage: "  lifelog search QUERY...             full-text search",
 		run: func(ctx context.Context, e env, args []string) error {
-			return doAction(ctx, e, "search", map[string]string{"q": strings.Join(args, " ")})
+			return doAction(ctx, e, e.cmd.wraps, map[string]string{"q": strings.Join(args, " ")})
 		}},
-	{name: "rename",
+	{name: "rename", wraps: "rename",
 		usage: "  lifelog rename PAGE-ID NEW-TITLE    rename a named object, retaining its id and old-name aliases",
 		run: func(ctx context.Context, e env, args []string) error {
 			if len(args) != 2 {
 				return errors.New(e.cmd.synopsis())
 			}
-			return doAction(ctx, e, "rename", map[string]string{"id": args[0], "title": args[1]})
+			return doAction(ctx, e, e.cmd.wraps, map[string]string{"id": args[0], "title": args[1]})
 		}},
-	{name: "file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--dry-run"},
+	{name: "file", wraps: "add-file", flags: []string{"--title", "--text", "--preview", "--mime", "--day", "--dry-run"},
 		usage: "  lifelog file PATH [--title T] [--text FILE] [--preview PICTURE] [--mime TYPE] [--day D] [--dry-run]\n" +
 			"                                      keep a file: the add-file action (lifelog actions says the rest)",
 		run: func(ctx context.Context, e env, args []string) error { return keepFile(ctx, e, args) }},
-	{name: "cover", flags: []string{"--title", "--preview"},
+	{name: "cover", wraps: "set-cover", flags: []string{"--title", "--preview"},
 		usage: "  lifelog cover PAGE-ID [PHOTO] [--title T] [--preview PICTURE]\n" +
 			"                                      set a page's cover: the set-cover action (lifelog actions says the rest)",
 		run: func(ctx context.Context, e env, args []string) error { return setCover(ctx, e, args) }},
-	{name: "snapshot", flags: []string{"--snapshots"},
+	{name: "snapshot", wraps: "snapshot", flags: []string{"--snapshots"},
 		usage: "  lifelog snapshot [--snapshots DIR]  a dated copy of life.db (life-YYYY-MM-DD.db, beside it or in DIR),\n" +
 			"                                      then its restore check (docs/cookbook/take-a-snapshot.md); with --url the\n" +
 			"                                      server's folder (serve --snapshots), and --snapshots is refused",
@@ -231,7 +240,12 @@ var commands = []command{
 			}
 			return o, nil
 		},
-		run: func(ctx context.Context, e env, _ []string) error { return doAction(ctx, e, "snapshot", nil) }},
+		run: func(ctx context.Context, e env, args []string) error {
+			if len(args) != 0 {
+				return errors.New(e.cmd.synopsis())
+			}
+			return doAction(ctx, e, e.cmd.wraps, nil)
+		}},
 }
 
 // commandNamed is the command of a name, nil for none.

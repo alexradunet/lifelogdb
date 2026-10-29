@@ -205,7 +205,7 @@ it draws the entity on the origin of the API, with the forms that post to it.
   (`fieldsOf(r, act)`) and reads no field the row does not list; `Required` of the row is the handler's rule. A field
   read outside the catalog is unreachable from the CLI and the MCP tools, which refuse what the catalog does not
   name, so it is a parity defect, not a convenience.
-- **Refused, never ignored.** What a surface does not take is refused with its reason: a flag a command does not
+- **Refused, never ignored.** What a surface does not take is refused with its reason: a flag or an argument a command does not
   read, a field an action does not list, which the API refuses (422) for every surface, a body type an action does not take (a multipart body to an action with
   no file field is 415), two flags that name one thing twice. Nothing is dropped in silence.
 - **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror

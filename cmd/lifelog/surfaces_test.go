@@ -33,6 +33,7 @@ func TestTheTableOfTheSurfacesIsTheCatalog(t *testing.T) {
 		t.Errorf("the table has %d rows, the catalog %d actions", len(rows), len(catalog))
 	}
 	backticked := regexp.MustCompile("`([^`]+)`")
+	shown := map[string]string{} // the shortcuts that the table shows, each with the action of its row
 	for i, a := range catalog {
 		if i >= len(rows) {
 			break
@@ -52,6 +53,11 @@ func TestTheTableOfTheSurfacesIsTheCatalog(t *testing.T) {
 		for _, s := range cli[min(1, len(cli)):] {
 			if commandNamed(s[1]) == nil {
 				t.Errorf("%s: the CLI names %s, which is no command of the program", a.Name, s[1])
+				continue
+			}
+			shown[s[1]] = a.Name
+			if w := commandNamed(s[1]).wraps; w != a.Name {
+				t.Errorf("%s: the CLI names %s, which wraps %q", a.Name, s[1], w)
 			}
 		}
 		want := "`" + strings.ReplaceAll(a.Name, "-", "_") + "`"
@@ -63,6 +69,11 @@ func TestTheTableOfTheSurfacesIsTheCatalog(t *testing.T) {
 		}
 		if strings.TrimSpace(r[5]) == "" {
 			t.Errorf("%s: the table names no place in the browser", a.Name)
+		}
+	}
+	for _, c := range commands {
+		if c.wraps != "" && shown[c.name] != c.wraps {
+			t.Errorf("%s wraps %s, and the row of %s does not name it", c.name, c.wraps, c.wraps)
 		}
 	}
 }
