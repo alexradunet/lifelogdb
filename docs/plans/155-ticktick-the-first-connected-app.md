@@ -21,8 +21,12 @@
   program runs on a server; `04927cc`). The first sync wrote 0: a probe with the owner's token (counts only) showed
   that the live `POST /task/completed` answers an empty list to every `startDate` and `endDate` in every form, and the
   whole list to an empty body; `completedTime` has the form the client parses, with the zone `Europe/Bucharest`. The
-  client now asks with an empty body and the connector keeps the tasks since its cursor (`e157f2c`, `c4b20cd`). The
-  rest of the live steps (the sync, the unit) are the owner's.
+  client now asks with an empty body and the connector keeps the tasks since its cursor (`e157f2c`, `c4b20cd`).
+  The first live sync wrote 11 entries (the done tasks of the last 30 days, each on its day with its list), a second
+  wrote 0; the unit gained `--with ticktick` and the writable state folder, and the service restarted at 20:37:24
+  (`with ticktick: a catalog of 3 actions on 127.0.0.1:38957`). Open: the clock of an imported entry is the minute of
+  the sync, not of the completion; an optional `at` field of `capture` would carry the completion's minute (the
+  owner decides).
 - **Resolves:** the owner's word of 2026-10-29 (below). No issue: the schema and the contract do not change.
 
 ## The owner's words (2026-10-29)
