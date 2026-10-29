@@ -92,14 +92,23 @@ func TestSyncWritesADoneTaskOnceAndMovesTheCursor(t *testing.T) {
 	}
 }
 
-func TestTheFirstSyncAsksForTheLastThirtyDays(t *testing.T) {
+func TestTheFirstSyncKeepsTheLastThirtyDaysAndSendsNoFilter(t *testing.T) {
 	tick, tt := newFakeTick(t)
-	_, ll := newFakeLife(t)
-	if _, err := Sync(t.Context(), tt, ll, &State{Seen: map[string]string{}}, now); err != nil {
-		t.Fatal(err)
+	life, ll := newFakeLife(t)
+	tick.add("old", "p-home", "Old")
+	tick.finish("old", now.Add(-31*24*time.Hour))
+	tick.add("new", "p-home", "New")
+	tick.finish("new", now.Add(-29*24*time.Hour))
+	n, err := Sync(t.Context(), tt, ll, &State{Seen: map[string]string{}}, now)
+	if err != nil || n != 1 {
+		t.Fatalf("Sync = %d, %v, want 1, nil (the task done 29 days ago, not the one done 31 days ago)", n, err)
 	}
-	if want := `"startDate":"2030-02-03T12:00:00.000+0000"`; !strings.Contains(tick.completedBody, want) {
-		t.Errorf("body = %s, want it to hold %s", tick.completedBody, want)
+	if got := life.got(); len(got) != 1 || !strings.Contains(got[0].Text, "New") {
+		t.Errorf("written = %+v, want the one task New", got)
+	}
+	// The live server answers nothing to a date filter: the body carries none, and the cursor is applied here.
+	if strings.TrimSpace(tick.completedBody) != "{}" {
+		t.Errorf("body = %s, want {}", tick.completedBody)
 	}
 }
 
@@ -122,8 +131,12 @@ func TestTheCursorNeverMovesBackAndTheNextAskStartsAtIt(t *testing.T) {
 	if !st.Cursor.Equal(cursor) {
 		t.Errorf("cursor = %v, want %v", st.Cursor, cursor)
 	}
-	if want := `"startDate":"` + cursor.UTC().Format(ticktick.TimeLayout) + `"`; !strings.Contains(tick.completedBody, want) {
-		t.Errorf("body = %s, want it to hold %s", tick.completedBody, want)
+	// A completion before the cursor is not written again or at all: the cursor is the filter.
+	tick.add("t3", "p-home", "C")
+	tick.finish("t3", cursor.Add(-time.Hour))
+	n, err := Sync(t.Context(), tt, ll, st, now.Add(2*time.Minute))
+	if err != nil || n != 0 {
+		t.Errorf("a completion before the cursor: Sync = %d, %v, want 0, nil", n, err)
 	}
 }
 

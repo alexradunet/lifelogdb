@@ -63,9 +63,9 @@ func TestEveryCallUsesItsRouteAndTheToken(t *testing.T) {
 			"POST", "/open/v1/project/p1/task/t1/complete", nil, ""},
 		{"completed", `[{"id":"t1","status":2}]`,
 			func() (any, error) {
-				return c.Completed(ctx, time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC), time.Date(2030, 1, 3, 3, 4, 5, 0, time.UTC), nil)
+				return c.Completed(ctx)
 			},
-			"POST", "/open/v1/task/completed", []Task{{ID: "t1", Status: 2}}, `"startDate":"2030-01-02T03:04:05.000+0000"`},
+			"POST", "/open/v1/task/completed", []Task{{ID: "t1", Status: 2}}, `{}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCompletedWithoutTheEndpointIsTold(t *testing.T) {
 	f, c := newFake(t)
 	for _, status := range []int{404, 405} {
 		f.status = status
-		_, err := c.Completed(context.Background(), time.Now(), time.Now(), nil)
+		_, err := c.Completed(context.Background())
 		if !errors.Is(err, ErrNoCompletedEndpoint) {
 			t.Errorf("status %d: err = %v, want ErrNoCompletedEndpoint", status, err)
 		}
@@ -113,7 +113,7 @@ func TestANon2xxAnswerIsAStatusErrorWithoutTheBody(t *testing.T) {
 		t.Errorf("the error holds the body: %v", err)
 	}
 	f.status = 500
-	if _, err := c.Completed(context.Background(), time.Now(), time.Now(), nil); !errors.As(err, &se) || se.Status != 500 {
+	if _, err := c.Completed(context.Background()); !errors.As(err, &se) || se.Status != 500 {
 		t.Errorf("a 500 of Completed = %v, want StatusError 500", err)
 	}
 }

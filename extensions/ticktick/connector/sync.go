@@ -78,7 +78,13 @@ func Sync(ctx context.Context, tt *ticktick.Client, lf *client.Client, st *State
 		if since.IsZero() {
 			since = now.Add(-firstWindow)
 		}
-		done, err = tt.Completed(ctx, since, now, nil)
+		done, err = tt.Completed(ctx)
+		if err == nil { // the server lists every done task it has: the cursor is applied here
+			done = slices.DeleteFunc(done, func(t ticktick.Task) bool {
+				at, ok := t.Done()
+				return !ok || at.Before(since)
+			})
+		}
 		if errors.Is(err, ticktick.ErrNoCompletedEndpoint) {
 			log.Print("the server has no /task/completed: finding done tasks by the ones that left their lists")
 			st.fetchOnly, err = true, nil

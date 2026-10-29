@@ -96,7 +96,7 @@ The program finds the done tasks in one of two ways. It picks one while it runs.
 
 ```mermaid
 flowchart TD
-  P["a poll"] --> A["POST /task/completed from the cursor"]
+  P["a poll"] --> A["POST /task/completed, then the tasks since the cursor"]
   A -->|"a list of tasks"| W["capture each one"]
   A -->|"404 or 405: an older server"| V["vanish and fetch, for the rest of the run"]
   V --> S["read the open tasks of every list"]
@@ -105,8 +105,9 @@ flowchart TD
   G -->|"404: deleted"| N["nothing"]
 ```
 
-- **The first way** asks for the tasks done since the cursor. The cursor is the newest `completedTime` seen, minus one
-  day. The overlap costs one request, and the keys make it safe. The first poll, with no cursor, asks for the last 30
+- **The first way** asks for the done tasks and keeps the ones since the cursor. The live server answers an empty list
+  to every date filter it was sent (probed 2026-10-29) and the whole list to an empty body, so the filter is the connector's. The cursor is the newest `completedTime` seen, minus one
+  day. The overlap costs one request, and the keys make it safe. The first poll, with no cursor, keeps the last 30
   days. A first sync does not import a lifetime: your log starts where the connector starts.
 - **The second way** is for a server without `/task/completed`. It keeps the ids of the open tasks. A task that
   left its list is read by its id. This way has two limits: a task that you make and finish between two polls is not

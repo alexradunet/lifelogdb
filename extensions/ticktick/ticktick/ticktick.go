@@ -172,16 +172,13 @@ func (c *Client) Complete(ctx context.Context, project, id string) error {
 	return c.call(ctx, http.MethodPost, "/project/"+url.PathEscape(project)+"/task/"+url.PathEscape(id)+"/complete", nil, nil)
 }
 
-// Completed reads the tasks completed from from to to. No projects means every list. It is ErrNoCompletedEndpoint
-// when the server does not have the call.
-func (c *Client) Completed(ctx context.Context, from, to time.Time, projects []string) ([]Task, error) {
-	body := struct {
-		ProjectIDs []string `json:"projectIds,omitempty"`
-		StartDate  string   `json:"startDate"`
-		EndDate    string   `json:"endDate"`
-	}{projects, from.UTC().Format(TimeLayout), to.UTC().Format(TimeLayout)}
+// Completed reads the done tasks that the server lists. It sends no filter: the live server (probed 2026-10-29)
+// answers an empty list to every startDate and endDate it was sent, in every form, and the whole list to an empty
+// body, so the caller keeps the tasks it wants by their completedTime. It is ErrNoCompletedEndpoint when the server
+// does not have the call.
+func (c *Client) Completed(ctx context.Context) ([]Task, error) {
 	var out []Task
-	err := c.call(ctx, http.MethodPost, "/task/completed", body, &out)
+	err := c.call(ctx, http.MethodPost, "/task/completed", struct{}{}, &out)
 	var se *StatusError
 	if errors.As(err, &se) && (se.Status == http.StatusNotFound || se.Status == http.StatusMethodNotAllowed) {
 		return nil, ErrNoCompletedEndpoint
