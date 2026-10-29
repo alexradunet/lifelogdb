@@ -245,18 +245,22 @@ func TestTheShellIsAFrame(t *testing.T) {
 		t.Error("app.css: .column is not filled with var(--desk)")
 	}
 	for _, sel := range []string{".chat-open", ".chat:popover-open"} {
-		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(sel) + `\{[^}]*var\(--frame\)`).MatchString(app) {
-			t.Errorf("app.css: %s is not placed from var(--frame)", sel)
+		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(sel) + `\{[^}]*inset-inline-end:[^;}]*var\(--frame\)`).MatchString(app) {
+			t.Errorf("app.css: the end of %s is not placed from var(--frame)", sel)
 		}
 	}
 	if !regexp.MustCompile(`anchor\(--shell end, [^)]*var\(--frame\)`).MatchString(app) {
 		t.Error("app.css: the chat parts do not take the edge of the shell as the anchor, with the floor as the fallback")
 	}
-	if !regexp.MustCompile(`@media \(max-width:899px\)\{\s*\.shell\{[^}]*border-inline:0`).MatchString(app) {
-		t.Error("app.css: under 900 px the shell keeps its outline")
+	phone := regexp.MustCompile(`@media \(max-width:899px\)\{\s*\.shell\{([^}]*)\}`).FindStringSubmatch(app)
+	if phone == nil || !strings.Contains(phone[1], "outline:0") || strings.Contains(phone[1], "max-inline-size") {
+		t.Error("app.css: under 900 px the shell keeps its outline or its cap")
+	}
+	if !regexp.MustCompile(`@media \(max-width:899px\)\{[^@]*\.column\{flex:1 1 auto\}`).MatchString(app) {
+		t.Error("app.css: under 900 px the column does not fill the screen, so the floor shows under a short page")
 	}
 	print := regexp.MustCompile(`@media print\{.*`).FindString(app)
-	if !strings.Contains(print, "box-shadow:none") || !strings.Contains(print, "background:none") || strings.Count(print, "border-inline:0") < 2 {
+	if !strings.Contains(print, "box-shadow:none") || !strings.Contains(print, "background:none") || strings.Count(print, "outline:0") < 2 {
 		t.Error("app.css: the print rule keeps the slab, the bevel or the outline")
 	}
 }

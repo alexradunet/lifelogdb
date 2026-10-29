@@ -27,8 +27,8 @@ main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text
 /* The shell: the sidebar, then the column of the page. It is a frame: at most --frame wide and centred, so the sidebar and
    the column move together, and the floor shows at both sides on a wide screen. Its outline is the edge of the frame,
    and the sidebar's own border stays as the seam between wood and oak. Under 900 px the sidebar is a bar over the page. */
-.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh; max-inline-size:var(--frame); margin-inline:auto; border-inline:2px solid var(--outline)}
-.shell.bare{display:block}
+.shell{display:grid; grid-template-columns:var(--rail-width) minmax(0,1fr); min-block-size:100vh; max-inline-size:var(--frame); margin-inline:auto;
+  outline:2px solid var(--outline)} /* an outline takes no width: main reaches --block, and under --frame the lines are off the screen */
 /* The ground: a faint tile of boards under the page, a third of the rail's strength. It is pixel art, so it is drawn
    unsmoothed; the column sets smoothing back, so a picture in the page is drawn as a picture. */
 body{background-image:url(/assets/ground.png),var(--grain-ground); background-size:480px 288px,4px 4px; image-rendering:pixelated}
@@ -38,8 +38,8 @@ body{background-image:url(/assets/ground.png),var(--grain-ground); background-si
   &>main{flex:1; inline-size:100%; max-inline-size:var(--block); display:flex; flex-direction:column; gap:var(--space-4);
     &>h2{margin-block-start:var(--space-4)}}
   &>footer{inline-size:100%; max-inline-size:var(--block); margin-block-start:var(--space-10); padding-block-start:var(--space-3); border-block-start:2px dotted var(--line)}}
-.shell.bare{max-inline-size:none; border-inline:0}
-.shell.bare>.column{max-inline-size:34rem; margin:0 auto; border-inline:2px solid var(--outline)}
+.shell.bare{display:block; max-inline-size:none; outline:0}
+.shell.bare>.column{max-inline-size:34rem; margin:0 auto; outline:2px solid var(--outline)}
 
 /* An icon is a glyph of icons.png (10 by 10 pixels in a cell of 16 by 16, 15 cells in a row: 240 by 16), used as a
    mask over the colour of the text, so it takes the ink of the place it is in. It is drawn at 2 screen pixels a
@@ -259,7 +259,8 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
    sheets ask. A layout inside the page asks its column instead (@container column), at the screen's width less
    the column's padding (899 → 867). */
 @media (max-width:899px){
-  .shell{display:block; border-inline:0}
+  .shell{display:flex; flex-direction:column; min-block-size:100dvh; outline:0} /* the column fills the screen under the bar: the floor never shows */
+  .column{flex:1 1 auto}
   .rail{position:sticky; inset-block-start:0; z-index:20; block-size:auto; overflow:visible; flex-direction:row; align-items:center; gap:var(--space-2);
     padding:calc(var(--space-2) + env(safe-area-inset-top, 0px)) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-2) calc(var(--space-4) + env(safe-area-inset-left, 0px));
     border-inline-end:0; border-block-end:2px solid var(--outline); box-shadow:inset 0 3px 0 var(--bevel-light),inset 0 -3px 0 var(--bevel-dark)}
@@ -306,7 +307,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
   html{scroll-padding-block-end:calc(var(--control) + var(--space-4) + env(safe-area-inset-bottom, 0px))} /* a focused field stays above the bottom bar */
   footer .keys{display:none}
 }
-@media print{.rail,.skip,.chat,.chat-open{display:none} .shell{display:block; border-inline:0} .column{padding:0; background:none; box-shadow:none; border-inline:0} body{background-image:none} .sheet::after,.day-card::after{display:none}}
+@media print{.rail,.skip,.chat,.chat-open{display:none} .shell{display:block; outline:0} .column{padding:0; background:none; box-shadow:none; outline:0} body{background-image:none} .sheet::after,.day-card::after{display:none}}
 
 /* Type helpers: the mono styles of the design system. A component restyles them, so they are not utilities. */
 .date,.meta,.value,.reading{font-family:var(--mono); font-variant-numeric:tabular-nums}
@@ -1014,7 +1015,7 @@ details.metric-sub>summary>h3::after{content:none} /* a small group has no stitc
 /* The utilities: a class with one purpose that no component restyles, so it may come last in the cascade. */
 @layer utilities{
 /* The way past the sidebar, for a keyboard and its reader. */
-.skip{position:absolute; inset-block-start:6px; inset-inline-start:6px; z-index:40; padding:8px 14px; background:var(--primary); color:var(--on-accent); border:2px solid var(--outline); transform:translateY(-250%);
+.skip{position:absolute; inset-block-start:6px; inset-inline-start:6px; inset-inline-start:calc(anchor(--shell start, 0px) + 6px); /* in the frame, where there is one */ z-index:40; padding:8px 14px; background:var(--primary); color:var(--on-accent); border:2px solid var(--outline); transform:translateY(-250%);
   &:focus-visible{transform:none; color:var(--on-accent)}}
 /* Words for a reader alone. */
 .sr{position:absolute; inline-size:1px; block-size:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
