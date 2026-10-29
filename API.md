@@ -71,6 +71,51 @@ An error is an entity of class `error` with `properties`:
 | `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page. When `create-person` meets a live plain page, the link `promote` is the address of that page with the promote form open and the fields filled), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), `unavailable` (503 with `Retry-After`: an app connected by `serve --with` is not running), `upstream` (502: the app answered something that is not an entity), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found` (for a metric that does not exist, the link `register` is the address of the Metrics board with the form of `register-metric` open and the name filled), `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person; a fault of the server (500 `internal`) says only `internal error`, and the server's log has the cause |
 
+## Connected apps
+
+`lifelog serve --with NAME` may run an app that serves a catalog of its own ([the contract of an
+extension](extensions/README.md#a-catalog-of-its-own)). The server merges that catalog into its own. A client needs no
+code for an app: it follows `GET /actions`.
+
+```mermaid
+flowchart LR
+  C["a client"] -->|"GET /actions"| L["lifelog serve"]
+  L -->|"the static catalog + NAME-action for each action of each app that runs"| C
+  C -->|"any method on /with/NAME/..."| L
+  L -->|"the same request, as the writer of the request"| A["the app NAME"]
+  A -->|"an entity"| L
+  L -->|"the entity with its hrefs and action names prefixed"| C
+```
+
+- **The merged `GET /actions`.** The static catalog is the table in the [README](README.md#every-action-on-every-surface).
+  An action of an app is dynamic: it is there while the app runs. Its `name` is `NAME-action`, and its `href` starts
+  with `/with/NAME`. It has the `owner`, `danger` and `fields` that the app gave. An app that does not run has no
+  action in the list.
+- **The routes** are `/with/NAME` and `/with/NAME/...`, for every method. A request that matches an action of the app
+  is checked as every action is: a field that the action does not name, a missing required field or a value outside
+  `options` is 422 `invalid`, and an `owner` action is 403 `forbidden` for an `agent:*` or `import:*` writer. In both
+  cases the app is not called. A `GET` that matches no action goes to the app as it is, without `back`, `feedback` and
+  `new`. Any other method that matches no action is 404.
+- **The writer** of the app's request is the writer of yours (`Lifelog-Source`). The app gets no cookie and no token.
+- **The answer** is the entity of the app, with `/with/NAME` before each `href` and `NAME-` before each action name.
+  A link or an action whose `href` has a scheme or a host is dropped. A `POST` from a browser is answered 303 to the
+  `self` link of the answer.
+
+| status | `code` | when |
+|---|---|---|
+| 404 | `not_found` | no app has this name |
+| 503 | `unavailable` | the app does not run; `Retry-After` says when to ask again |
+| 502 | `upstream` | the app answered something that is not an entity |
+| 504 | `timeout` | the app did not answer in 30 seconds |
+| the app's own | the app's own | the app answered with an error entity: it passes with its status and code |
+
+The server sends a request to the app once. There is no retry on any method.
+
+**Limits.** A running `serve` has the apps. The in-process CLI and the temporary server of `lifelog NAME` have none, so
+`lifelog do NAME-action` needs `--url`, and an agent reaches the apps with `lifelog mcp --url`. The MCP tool of
+`NAME-action` is `NAME_action`, and an `owner` action is no tool. An action with a field of the type `file` is refused
+when the catalog of the app is read; a multipart body is not forwarded.
+
 ## Pages of a list
 
 `/days`, `/browse` and `/search` take `limit` (1–500; defaults 30 for days, 50 for search, 200 for browse) and

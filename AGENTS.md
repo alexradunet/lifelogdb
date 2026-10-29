@@ -165,7 +165,7 @@ flowchart TB
     K["internal/api and cmd/lifelog: one catalog, one Siren handler, the forms, the CLI's do, all generated from the catalog. siren, client and app are public packages of this ring (app: the package a connected app serves its catalog with)."]
   end
   subgraph R3["ring 3: extensions, in any language"]
-    X["extensions/NAME, the program lifelog-NAME: a client of API.md, run as lifelog NAME. It names the third party."]
+    X["extensions/NAME, the program lifelog-NAME: a client of API.md, run as lifelog NAME. It names the third party. It may serve a catalog of its own, which ring 2 aggregates under /with/NAME (plan 154)."]
   end
   S --> C --> K --> X
 ```
@@ -175,14 +175,16 @@ flowchart TD
   Q["does it open life.db, or run inside a transaction?"] -->|"yes"| C["ring 0 or 1: the file, the writer"]
   Q -->|"no"| R["does it draw or dispatch the catalog on the same origin as the API?"]
   R -->|"yes"| K["ring 2: the forms, the CLI"]
-  R -->|"no"| E["ring 3: an extension"]
+  R -->|"no"| E["ring 3: an extension; its own catalog, if it has one, is merged by ring 2"]
 ```
 
 Two tests of `cmd/lifelog` (`boundary_test.go`) keep the rings, and a change preserves them: **the core names no
 third party** (no Go source of `internal/` or `cmd/` holds a product's or a company's name: the list is in the test,
 and a new one is added in the change that moves the thing out), and **the core dials only its own server** (outside
 `client`, no Go source of `internal/`, `cmd/` or `siren/` makes an HTTP client or dials a socket). Go enforces the
-third: an extension never imports `lifelog/internal`. The browser stays in ring 2 by the owner's word (2026-10-19):
+third: an extension never imports `lifelog/internal`. The core dials its own server and the children that `serve --with`
+started, and only in the files that `remoteAllowed` names (`cmd/lifelog/with.go`, `internal/api/with.go`). The list of
+third parties has `ticktick`, so the core never says it: the first connector lives in another repo. The browser stays in ring 2 by the owner's word (2026-10-19):
 it draws the entity on the origin of the API, with the forms that post to it.
 
 - **Ordinary Go first.** Follow [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments): clear names,

@@ -65,7 +65,8 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   say. Ring 2 is the catalog and its surfaces, `internal/api` and `cmd/lifelog`: one catalog, one handler, the forms
   and the CLI's `do`, all generated from the catalog. Ring 3 is the extensions: one program `lifelog-NAME` each, a
   client of [API.md](API.md), run as `lifelog NAME`, in any language, and the only ring that names a third party
-  ([the contract of an extension](extensions/README.md)). Two tests of `cmd/lifelog` keep the rings: the core names
+  ([the contract of an extension](extensions/README.md)); it may also serve a catalog that ring 2 merges into its own
+  ([connected apps](#decisions)). Two tests of `cmd/lifelog` keep the rings: the core names
   no third party, and the core dials only its own server. The browser stays in ring 2: it draws the entity on the
   origin of the API, with the forms that post to it.
 
@@ -81,10 +82,19 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
       K["internal/api and cmd/lifelog: the API, the browser, the CLI"]
     end
     subgraph R3["ring 3: extensions"]
-      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos, lifelog-whatsapp: clients of API.md"]
+      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos, lifelog-whatsapp: clients of API.md; they may serve a catalog of their own"]
     end
     S --> C --> K --> X
   ```
+- **Connected apps through the catalog** ([plan 154](docs/plans/154-connected-apps-through-the-catalog.md)). The
+  interface between `lifelog` and an app is the Siren catalog and nothing else. An extension that `serve --with NAME`
+  runs may serve its own `GET /actions` on the loopback address `LIFELOG_LISTEN`. The server puts its actions in
+  `GET /actions` as `NAME-action` and forwards `/with/NAME/...` to it, as the writer of the request. So the CLI's `do`,
+  the MCP tools and the browser carry an app with no further work. The core names no app and no domain: the code of
+  a third party stays in the connector. A ring 3 program may serve a catalog that ring 2 aggregates. Only two files of
+  the core may call `client.Remote`: `cmd/lifelog/with.go` and `internal/api/with.go`, besides `cmd/lifelog/main.go`
+  and the test helper. The protocol is in [the contract of an extension](extensions/README.md#a-catalog-of-its-own),
+  and the wire shape is in [API.md](API.md#connected-apps).
 - **One handler, three surfaces.** `internal/api` is the only thing the surfaces call. `serve` mounts it on a
   socket; the CLI calls it in-process (`client`), or a running server with `--url`. The MCP server is the
   extension `lifelog-mcp` ([extensions/mcp](extensions/mcp/README.md)): a client of the HTTP API, run as
@@ -466,7 +476,9 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   `--allow-origin`, `--tls-cert` and `--tls-key` are refused without `--public`, never ignored.
   `--with NAME` (repeatable, [plan 147](docs/plans/147-serve-with-an-extension.md)) runs the extension `lifelog-NAME`
   as a child of the server and keeps it running; [the contract of an extension](extensions/README.md#run-by-serve)
-  says how. An unknown name refuses the command before the file opens, and `--with` with `--tls-cert` is refused.
+  says how. The child gets a free loopback address in `LIFELOG_LISTEN`, and the server merges its catalog, if it serves
+  one, into the catalog of the server ([connected apps](#decisions)). An unknown name refuses the command before the
+  file opens, and `--with` with `--tls-cert` is refused.
 - **`--public` opens the listener to other devices** ([plan 078](docs/plans/078-network-server.md)) and requires a
   **token**: `--token-file PATH` (one line of at least 32 characters; the command line never carries the secret) or
   `LIFELOG_TOKEN`; `--public` without one is refused before the listener opens. The default bind becomes `0.0.0.0:7777`
@@ -527,6 +539,16 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `rebuild-search` | `POST /search/rebuild` | `do rebuild-search` | none, the owner's | Integrity checks: Rebuild search |
 | `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks: Resync links |
 
+This table lists the core alone. The actions of a connected app ([plan 154](docs/plans/154-connected-apps-through-the-catalog.md))
+are in the catalog while the app runs, and each is on every surface by its name `NAME-action`:
+
+| surface | an action of the app NAME |
+|---|---|
+| API | `GET /actions` lists `NAME-action`; the route is `GET` or `POST /with/NAME/...` ([API.md](API.md#connected-apps)) |
+| CLI | `do NAME-action field=value --url URL`, over a running `serve` |
+| MCP | the tool `NAME_action` over `lifelog mcp --url URL`; none for an owner's action |
+| browser | the form on `/actions` and on the pages of the app; the rail has one entry for each app that runs |
+
 The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/weeks/{week}`, `/months/{m}`,
 `/years/{y}`, `/days/{day}/conversation`, `/settings`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
 which the CLI's `get` and the MCP tool `get` read, or the browser's presentation (`/render`, the fonts, the manifest,
@@ -537,7 +559,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | path | what | test it at |
 |---|---|---|
 | `schema.go` (root) | `lifelog.Schema`: `docs/schema/schema.sql`, embedded so the binary carries the DDL; `internal/db` reads it | `internal/db` applies it in every test; `tests/` builds from the file itself |
-| `cmd/lifelog` | the binary: `init`, `serve`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them); the table of commands names what each shortcut wraps, and `TestTheTableOfTheSurfacesIsTheCatalog` holds the README table to it | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
+| `cmd/lifelog` | the binary: `init`, `serve`, `get`, `do`, `actions` and the shortcuts (`file`, `snapshot` among them); the table of commands names what each shortcut wraps, and `TestTheTableOfTheSurfacesIsTheCatalog` holds the README table to it; `with.go` is the handshake of `serve --with`, and `testdata/withapp` is the connected app of its end-to-end test | the parity table `TestParityOfTheSurfaces` for a surface; `runArgs` with `testEnv` for a command line in process; `TestExecutableServeDrainsActiveRequest` for the process |
 | `internal/db` | open, pragmas, `BEGIN IMMEDIATE`, the embedded schema; `dbtest` makes the fresh file of a test | `db.Init` and `db.Open` on a file in `t.TempDir()` |
 | `internal/text` | the title predicate, `title_key`, wikilink and `#tag` extraction, the parse of a day and an instant, the markers that a plain-text line cuts (`BlockMark`) and the marks of a match in a snippet of the search (`SnippetOpen`, `SnippetClose`); tested against the vectors of [titles and wikilinks](docs/contract/titles-and-wikilinks.md) | the pure functions with table tests, and the vectors of the contract page (`TestWikilinkVectors`, `TestTitleKeyVectors`) |
 | `internal/core` | the cookbook's writes and reads; the save contract; metrics; renames; files | `core.Store` on `dbtest.New`, with a fixed `Clock` for a test of today |
