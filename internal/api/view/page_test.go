@@ -162,6 +162,8 @@ func TestAnErrorCodePicksItsWords(t *testing.T) {
 		"internal":             {"Not done.", true},
 		"snapshot_refused":     {"Not taken.", false},
 		"restore_check_failed": {"Taken, but the restore check failed.", true},
+		"unavailable":          {"Not done. The app is not running.", false},
+		"upstream":             {"Not done.", true},
 		"invalid":              {},
 		"bad_request":          {},
 		"not_found":            {},

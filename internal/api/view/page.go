@@ -423,6 +423,10 @@ func alertOf(code any) alertView {
 		return alertView{"Taken, but the restore check failed.", true}
 	case siren.CodeBusy:
 		return alertView{"Not done. The file is busy. Nothing was written, and a retry is safe.", false}
+	case siren.CodeUnavailable:
+		return alertView{"Not done. The app is not running.", false}
+	case siren.CodeUpstream:
+		return alertView{"Not done.", true}
 	}
 	return alertView{}
 }

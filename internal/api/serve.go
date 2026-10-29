@@ -407,14 +407,17 @@ func codeOf(status int) string {
 		return siren.CodeInvalid
 	case http.StatusServiceUnavailable:
 		return siren.CodeBusy
+	case http.StatusBadGateway:
+		return siren.CodeUpstream
 	case http.StatusGatewayTimeout:
 		return siren.CodeTimeout
 	}
 	return siren.CodeInternal
 }
 
-// retryAfter is the Retry-After of a 503, in seconds. The only 503 is a busy file (siren.CodeBusy), which the writer
-// has waited on for busy_timeout already, so a short wait before the next try is enough.
+// retryAfter is the Retry-After of a 503, in seconds. A 503 is a busy file (siren.CodeBusy) or an app that is not
+// running (siren.CodeUnavailable). The writer has waited on a busy file for busy_timeout already, so a short wait
+// before the next try is enough for both.
 const retryAfter = "1"
 
 // writeError answers with the error entity of err, as JSON or as a page with no shell. The guards, the pictures and

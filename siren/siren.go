@@ -49,6 +49,10 @@ const (
 	// CodeBusy is the code of a write that met a locked file (SQLITE_BUSY): the CLI and the service write one file,
 	// and a write can wait longer than busy_timeout for the other.
 	CodeBusy = "busy"
+	// CodeUnavailable is the code of a request for an app, connected by serve --with, that is not running (503).
+	CodeUnavailable = "unavailable"
+	// CodeUpstream is the code of an app that answered something that is not an entity (502).
+	CodeUpstream = "upstream"
 )
 
 // Codes is the one list of the codes. The tests hold it equal to the constants above, to API.md (Errors) and to
@@ -58,6 +62,7 @@ func Codes() []string {
 		CodeBadRequest, CodeUnauthorized, CodeForbidden, CodeNotFound, CodeConflict, CodeTooLarge,
 		CodeUnsupportedMedia, CodeInvalid, CodeTimeout, CodeInternal, CodeExists, CodeCrossOrigin,
 		CodeTokenRequired, CodeStaleVersion, CodeSnapshotRefused, CodeRestoreCheckFailed, CodeBusy,
+		CodeUnavailable, CodeUpstream,
 	}
 }
 

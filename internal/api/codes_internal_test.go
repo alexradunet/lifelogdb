@@ -58,6 +58,7 @@ func TestEveryErrorCodeIsInTheContractAndTheStatusTable(t *testing.T) {
 		http.StatusUnsupportedMediaType:  siren.CodeUnsupportedMedia,
 		http.StatusUnprocessableEntity:   siren.CodeInvalid,
 		http.StatusServiceUnavailable:    siren.CodeBusy,
+		http.StatusBadGateway:            siren.CodeUpstream,
 		http.StatusGatewayTimeout:        siren.CodeTimeout,
 	} {
 		got := codeOf(status)
