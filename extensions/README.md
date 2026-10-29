@@ -102,11 +102,6 @@ flowchart TD
 - `--with` and `--tls-cert` together are refused: the child would have to trust the certificate.
 - **A catalog of its own.** A child may serve a Siren catalog on `LIFELOG_LISTEN`: see [a catalog of its own](#a-catalog-of-its-own).
 
-### A catalog of its own
-
-A child may serve a Siren catalog on the address in `LIFELOG_LISTEN`. `serve` reads `GET /actions` once for each start
-and adds the actions to its own catalog as `NAME-action`, at `/with/NAME`.
-
 ## A catalog of its own
 
 An extension that `serve --with NAME` runs may serve a catalog of its own. It is then a connected app. The server
