@@ -14,6 +14,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -196,7 +197,7 @@ func login(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	}
 	o := ticktick.OAuth{ClientID: *id, ClientSecret: *secret, AuthorizeURL: cfg.AuthorizeURL, TokenURL: cfg.TokenURL,
 		RedirectURI: "http://127.0.0.1:" + strconv.Itoa(*port) + "/callback"}
-	code, err := waitForCode(ctx, o, *port, stdout)
+	code, err := waitForCode(ctx, o, *port, in, stdout)
 	if err != nil {
 		return err
 	}
@@ -214,8 +215,10 @@ func login(ctx context.Context, args []string, stdin io.Reader, stdout, stderr i
 	return nil
 }
 
-// waitForCode prints the authorize link and waits for the redirect on the loopback. It checks state.
-func waitForCode(ctx context.Context, o ticktick.OAuth, port int, stdout io.Writer) (string, error) {
+// waitForCode prints the authorize link and waits for the redirect on the loopback, or for the address of the redirect
+// pasted on the terminal: when this program runs on a server, the browser lands on the 127.0.0.1 of the owner's own
+// machine, and the owner brings the address here. It checks state in both.
+func waitForCode(ctx context.Context, o ticktick.OAuth, port int, in *bufio.Reader, stdout io.Writer) (string, error) {
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -248,11 +251,52 @@ func waitForCode(ctx context.Context, o ticktick.OAuth, port int, stdout io.Writ
 		_ = srv.Shutdown(sctx)
 		<-done
 	}()
+	pasted, pasteErr := make(chan string, 1), make(chan error, 1)
+	go func() { // a read of the terminal cannot be stopped: this goroutine ends with the process, right after the login
+		line, _ := in.ReadString('\n')
+		if line = strings.TrimSpace(line); line == "" { // the end of the input, or an empty line: the redirect is the way
+			return
+		}
+		code, err := pastedCode(line, state)
+		if err != nil {
+			pasteErr <- err
+			return
+		}
+		pasted <- code
+	}()
 	fmt.Fprintf(stdout, "Open this address and agree:\n%s\n", o.AuthorizeLink(state))
+	fmt.Fprintln(stdout, "If the browser is on another machine, paste the address it lands on here and press Enter.")
 	select {
 	case code := <-got:
 		return code, nil
+	case code := <-pasted:
+		return code, nil
+	case err := <-pasteErr:
+		return "", err
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+// pastedCode is the code in a line the owner pasted: the address of the redirect (its state must be the one of this
+// login), or the code alone.
+func pastedCode(line, state string) (string, error) {
+	if !strings.Contains(line, "code=") {
+		if strings.ContainsAny(line, " \t?&=") {
+			return "", errors.New("the pasted line is not the address of the redirect and not a code")
+		}
+		return line, nil
+	}
+	u, err := url.Parse(line)
+	if err != nil {
+		return "", fmt.Errorf("the pasted address: %w", err)
+	}
+	q := u.Query()
+	if q.Get("state") != state {
+		return "", errors.New("the pasted address is not the answer to this login: its state differs")
+	}
+	if q.Get("code") == "" {
+		return "", errors.New("the pasted address has no code")
+	}
+	return q.Get("code"), nil
 }

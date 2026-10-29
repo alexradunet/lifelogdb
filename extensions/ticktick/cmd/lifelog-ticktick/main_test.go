@@ -177,3 +177,85 @@ func TestLoginExchangesTheCodeAndWritesTheFiles(t *testing.T) {
 		t.Error("the secret was printed")
 	}
 }
+
+// TestLoginTakesTheAddressPastedOnTheTerminal: the program runs on a server, the browser lands on the owner's own
+// machine, and the owner pastes the address of the redirect. The state of a pasted address is checked as the state of
+// a redirect is.
+func TestLoginTakesTheAddressPastedOnTheTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name, state string
+		ok          bool
+	}{{"the right state", "", true}, {"a wrong state", "wrong", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", config)
+			state := filepath.Join(config, "lifelog-ticktick")
+			if err := os.MkdirAll(state, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			var gotCode string
+			token := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = r.ParseForm()
+				gotCode = r.PostForm.Get("code")
+				_, _ = io.WriteString(w, `{"access_token":"the-token"}`)
+			}))
+			defer token.Close()
+			if err := os.WriteFile(filepath.Join(state, "config.json"),
+				[]byte(`{"authorize_url":"https://x.example/authorize","token_url":"`+token.URL+`"}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			port := freePort(t)
+			out := new(lockedBuffer)
+			stdin, write := io.Pipe()
+			done := make(chan error, 1)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+			defer cancel()
+			go func() {
+				done <- run(ctx, []string{"login", "--port", strconv.Itoa(port)}, noEnv, stdin, out, io.Discard)
+			}()
+			if _, err := io.WriteString(write, "the-id\nthe-secret\n"); err != nil {
+				t.Fatal(err)
+			}
+			var link *url.URL
+			for link == nil {
+				select {
+				case err := <-done:
+					t.Fatalf("login ended early: %v\n%s", err, out)
+				case <-time.After(10 * time.Millisecond):
+				}
+				for _, l := range strings.Split(out.String(), "\n") {
+					if strings.HasPrefix(l, "https://x.example/authorize?") {
+						link, _ = url.Parse(l)
+					}
+				}
+			}
+			st := link.Query().Get("state")
+			if tc.state != "" {
+				st = tc.state
+			}
+			paste := "http://127.0.0.1:8765/callback?code=pasted-code&state=" + url.QueryEscape(st) + "&iss=https://x.example\n"
+			if _, err := io.WriteString(write, paste); err != nil {
+				t.Fatal(err)
+			}
+			err := <-done
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("login: %v\n%s", err, out)
+				}
+				if gotCode != "pasted-code" {
+					t.Errorf("the token request had code %q", gotCode)
+				}
+				if tok, err := connector.LoadToken(state); err != nil || tok != "the-token" {
+					t.Errorf("token = %q, %v", tok, err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), "state") {
+					t.Fatalf("login with a wrong state: %v, want the refusal", err)
+				}
+				if gotCode != "" {
+					t.Error("the code was exchanged although the state was wrong")
+				}
+			}
+		})
+	}
+}

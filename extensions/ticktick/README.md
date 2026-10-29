@@ -44,6 +44,11 @@ The program prints an address. Open it in a browser and agree. TickTick sends th
 `http://127.0.0.1:8765/callback`, and the program takes the code, trades it for a token and ends. No browser is opened by
 the program.
 
+When the program runs on a server and the browser on another machine, the browser lands on the `127.0.0.1` of that
+other machine, where nothing listens. Copy the address of the page it landed on
+(`http://127.0.0.1:8765/callback?code=...&state=...`), paste it into the terminal of the program and press Enter: the
+program takes the code from it, with the same check of `state`.
+
 It writes two files in `~/.config/lifelog-ticktick/` (`os.UserConfigDir()/lifelog-ticktick/`):
 
 | file | what it holds |
