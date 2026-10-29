@@ -10,6 +10,8 @@ User=OWNER
 ExecStart=/home/OWNER/.local/bin/lifelog --db /home/OWNER/lifelog/life.db serve --snapshots /home/OWNER/snapshots
 # add --with whatsapp to run the WhatsApp agent beside the server (extensions/whatsapp)
 # with ProtectHome=read-only, the agent's state folder must be writable: ReadWritePaths=/home/OWNER/.config/lifelog-whatsapp
+# add --with ticktick to run TickTick, a connected app, beside the server (extensions/ticktick)
+# with ProtectHome=read-only, its state folder must be writable: ReadWritePaths=/home/OWNER/.config/lifelog-ticktick
 # the same holds for the state folder of any connected app: ReadWritePaths=/home/OWNER/.config/lifelog-NAME
 Restart=on-failure
 # systemd stops the server with SIGTERM. lifelog then drains the requests that it admitted (up to 10 seconds) and

@@ -5,6 +5,7 @@ any language. It may also serve a catalog of its own ([a catalog of its own](#a-
 third party: an extension does.
 
 [`googlephotos`](googlephotos/README.md) is the worked example. Read its code and its end-to-end test first.
+[`ticktick`](ticktick/README.md) is the first connected app, and the worked example of [a catalog of its own](#a-catalog-of-its-own).
 
 ## What an extension is
 
@@ -226,4 +227,5 @@ the rule that exists already ([API.md](../API.md)). `GET /actions` of the server
 | `extensions/googlephotos` | `lifelog-gphotos` | `lifelog gphotos [--addr A] [--credentials F] [--zone Z]` | `import:google-photos` | yes |
 | `extensions/agentic` | `lifelog-agentic-init` | `lifelog agentic-init [--force]` | nothing | no: it reads `LIFELOG_EXE` and `LIFELOG_DB`, and refuses to run without them |
 | `extensions/mcp` | `lifelog-mcp` | `lifelog mcp [--agent NAME]` | `agent:NAME`, default `agent:mcp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `--source` is refused as today |
+| `extensions/ticktick` | `lifelog-ticktick` | `lifelog ticktick login`, `lifelog ticktick sync [--url U]`, and `lifelog serve --with ticktick` (the always-on way, with a catalog of its own) | `import:ticktick` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `login` needs none |
 | `extensions/whatsapp` | `lifelog-whatsapp` | `lifelog serve --with whatsapp` (the always-on way), `lifelog whatsapp login` and `lifelog whatsapp [--terminal] [--url U] [--token-file F]` (the number is the setting `owner_number`) | `agent:whatsapp` | yes: `LIFELOG_URL`, else `--url`, else it refuses; `login` needs none |

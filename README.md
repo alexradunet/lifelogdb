@@ -26,6 +26,7 @@ go build -o lifelog ./cmd/lifelog   # Go >= 1.27, no cgo
 go build -C extensions/mcp -o ../../lifelog-mcp ./cmd/lifelog-mcp   # the MCP server, beside lifelog (an extension)
 go build -C extensions/agentic -o ../../lifelog-agentic-init ./cmd/lifelog-agentic-init   # agentic-init, beside lifelog (an extension)
 go build -C extensions/whatsapp -o ../../lifelog-whatsapp ./cmd/lifelog-whatsapp   # the WhatsApp agent, beside lifelog (an extension)
+go build -C extensions/ticktick -o ../../lifelog-ticktick ./cmd/lifelog-ticktick   # TickTick, the first connected app, beside lifelog (an extension)
 lifelog init                               # life.db beside the program; --db PATH or $LIFELOG_DB names another
 lifelog agentic-init                       # AGENTS.md, skills and MCP configs here, for a coding agent opened here
 
@@ -82,7 +83,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
       K["internal/api and cmd/lifelog: the API, the browser, the CLI"]
     end
     subgraph R3["ring 3: extensions"]
-      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos, lifelog-whatsapp: clients of API.md; they may serve a catalog of their own"]
+      X["lifelog-mcp, lifelog-agentic-init, lifelog-gphotos, lifelog-whatsapp, lifelog-ticktick: clients of API.md; they may serve a catalog of their own"]
     end
     S --> C --> K --> X
   ```
@@ -572,6 +573,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `client/tools` | the catalog as the functions of a model: a tool for each action that is not the owner's, its JSON Schema from the fields, the arguments flattened to form values; public: the MCP server and the chat agent build their lists from it | its table tests |
 | `extensions/mcp` | its own module, `lifelog-mcp`: the catalog as MCP tools, over HTTP; it imports `lifelog/siren`, `lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and nothing of `lifelog/internal` | `mcp.New` on a fake catalog (`go test ./...` in the folder); `TestTheMCPServerOnTheRealLifelog` builds the real `lifelog` and `lifelog-mcp` and runs `lifelog mcp --agent test` |
 | `extensions/whatsapp` | its own module, `lifelog-whatsapp`: an always-on agent; the owner writes on WhatsApp, a model answers through the action catalog; it imports `lifelog/siren`, `lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and nothing of `lifelog/internal` | the tests of its packages (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog` |
+| `extensions/ticktick` | its own module, `lifelog-ticktick`: TickTick, the first connected app; it polls the done tasks into the day pages as `import:ticktick` and serves a catalog of its own (`ticktick-add-task`, `ticktick-complete-task`, `ticktick-sync`); it imports `lifelog/siren`, `lifelog/client` and `lifelog/app` of the root module (a `replace` directive), and nothing of `lifelog/internal` | the tests of its packages against a fake TickTick (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog` and runs `lifelog serve --with ticktick` |
 | `extensions/agentic` | its own module, `lifelog-agentic`: `lifelog agentic-init`, the texts and MCP configs for a coding agent opened in the folder of the program; it reads `LIFELOG_EXE` and `LIFELOG_DB`, and imports nothing of `lifelog/internal` | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog`, `lifelog-mcp` and `lifelog-agentic-init` |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
@@ -614,6 +616,9 @@ the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`.
 - [`extensions/whatsapp`](extensions/whatsapp/README.md): an always-on agent on WhatsApp, `lifelog whatsapp`. It answers
   the owner's number through a model at an OpenAI-compatible endpoint and writes through the catalog as
   `agent:whatsapp`.
+- [`extensions/ticktick`](extensions/ticktick/README.md): TickTick, the first connected app. What you finish in
+  TickTick comes back as a `Done:` entry of its day, once. Its catalog adds `ticktick-add-task`,
+  `ticktick-complete-task` and `ticktick-sync` to every surface. Run it with `lifelog serve --with ticktick`.
 
 ## Engineering references
 

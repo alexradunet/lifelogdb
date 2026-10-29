@@ -1,0 +1,179 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"lifelog-ticktick/connector"
+)
+
+func noEnv(string) string { return "" }
+
+func TestUsageAndRefusals(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	tests := []struct {
+		name string
+		args []string
+		env  func(string) string
+		want string
+	}{
+		{"no command and no LIFELOG_LISTEN", nil, noEnv, "no command"},
+		{"an unknown command", []string{"frobnicate"}, noEnv, `unknown argument "frobnicate"`},
+		{"an unknown flag of sync", []string{"sync", "--nope"}, noEnv, "flag provided but not defined"},
+		{"a word after sync", []string{"sync", "extra"}, noEnv, `unexpected argument "extra"`},
+		{"a word after login", []string{"login", "extra"}, noEnv, `unexpected argument "extra"`},
+		{"a port that is not a port", []string{"login", "--port", "70000"}, noEnv, "--port"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := run(t.Context(), tc.args, tc.env, strings.NewReader(""), io.Discard, io.Discard)
+			var ec *exitCode
+			if !errors.As(err, &ec) || ec.code != 2 || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want status 2 and %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestSyncWithoutATokenSaysToLogInAndWithoutAnAddressSaysWhatToRun(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	err := run(t.Context(), []string{"sync", "--url", "http://127.0.0.1:1"}, noEnv, strings.NewReader(""), io.Discard, io.Discard)
+	if !errors.Is(err, connector.ErrLoginAgain) {
+		t.Errorf("no token: err = %v, want ErrLoginAgain", err)
+	}
+	err = run(t.Context(), nil, func(k string) string {
+		if k == "LIFELOG_LISTEN" {
+			return "127.0.0.1:1"
+		}
+		return ""
+	}, strings.NewReader(""), io.Discard, io.Discard)
+	if !errors.Is(err, connector.ErrLoginAgain) {
+		t.Errorf("serve with no token: err = %v, want ErrLoginAgain (exit 2 at once)", err)
+	}
+}
+
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+func TestLoginExchangesTheCodeAndWritesTheFiles(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	state := filepath.Join(config, "lifelog-ticktick")
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var gotCode, gotUser string
+	token := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		gotCode = r.PostForm.Get("code")
+		gotUser, _, _ = r.BasicAuth()
+		_, _ = io.WriteString(w, `{"access_token":"the-token"}`)
+	}))
+	defer token.Close()
+	if err := os.WriteFile(filepath.Join(state, "config.json"),
+		[]byte(`{"authorize_url":"https://x.example/authorize","token_url":"`+token.URL+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	port := freePort(t)
+	out := new(lockedBuffer)
+	done := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	go func() {
+		done <- run(ctx, []string{"login", "--port", strconv.Itoa(port)}, noEnv,
+			strings.NewReader("the-id\nthe-secret\n"), out, io.Discard)
+	}()
+
+	var link *url.URL
+	for link == nil { // the program prints the address after it listens; wait for that line
+		select {
+		case err := <-done:
+			t.Fatalf("login ended early: %v\n%s", err, out)
+		case <-time.After(10 * time.Millisecond):
+		}
+		for _, l := range strings.Split(out.String(), "\n") {
+			if strings.HasPrefix(l, "https://x.example/authorize?") {
+				link, _ = url.Parse(l)
+			}
+		}
+	}
+	q := link.Query()
+	if q.Get("client_id") != "the-id" || q.Get("redirect_uri") != "http://127.0.0.1:"+strconv.Itoa(port)+"/callback" {
+		t.Errorf("link = %s", link)
+	}
+	callback := "http://127.0.0.1:" + strconv.Itoa(port) + "/callback"
+
+	res, err := http.Get(callback + "?code=evil&state=wrong")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("a callback with the wrong state = %d, want 400", res.StatusCode)
+	}
+	res, err = http.Get(callback + "?code=the-code&state=" + url.QueryEscape(q.Get("state")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if err := <-done; err != nil {
+		t.Fatalf("login: %v\n%s", err, out)
+	}
+	if gotCode != "the-code" || gotUser != "the-id" {
+		t.Errorf("the token request had code %q and user %q", gotCode, gotUser)
+	}
+	tok, err := connector.LoadToken(state)
+	if err != nil || tok != "the-token" {
+		t.Errorf("token = %q, %v", tok, err)
+	}
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(filepath.Join(state, "token.json")); err != nil || info.Mode().Perm() != 0o600 {
+			t.Errorf("token.json mode = %v, %v, want 0600", info.Mode(), err)
+		}
+	}
+	if !strings.Contains(out.String(), "logged in; now `lifelog ticktick sync --url http://127.0.0.1:7777`, or add --with ticktick to serve") {
+		t.Errorf("the last line is missing:\n%s", out)
+	}
+	if strings.Contains(out.String(), "the-secret") {
+		t.Error("the secret was printed")
+	}
+}
