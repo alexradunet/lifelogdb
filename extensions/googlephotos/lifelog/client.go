@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"lifelog/client"
 	"lifelog/siren"
@@ -21,6 +22,9 @@ const maxTitles = 5 // titles tried for one day: "<day>.jpg", "<day> 2.jpg" ... 
 // Client talks to one lifelog server.
 type Client struct {
 	c *client.Client
+
+	mu      sync.Mutex
+	addFile *siren.Action // the add-file action, read from the catalog once; a failed read is not kept
 }
 
 // New makes a client of the server at base, for example http://127.0.0.1:7777. token is the bearer token; "" sends none.
@@ -63,23 +67,34 @@ func (c *Client) DayHasCover(ctx context.Context, day string) (bool, error) {
 	return props["cover"] != nil, nil
 }
 
+// addFileAction gives the add-file action of the catalog. It reads the catalog on the first call only.
+func (c *Client) addFileAction(ctx context.Context) (*siren.Action, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.addFile != nil {
+		return c.addFile, nil
+	}
+	catalog, err := c.c.Catalog(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read the catalog: %w", err)
+	}
+	for i := range catalog {
+		if catalog[i].Name == "add-file" {
+			c.addFile = &catalog[i]
+			return c.addFile, nil
+		}
+	}
+	return nil, errors.New("the catalog has no add-file action")
+}
+
 // AddCover keeps the original with the day (add-file). The title is "<day>.<ext>". After a 409 "exists" (another file
 // holds the title) it tries "<day> 2.<ext>" and so on, up to a small bound. preview may be nil. It gives the title kept.
 // The same original sent again writes nothing: lifelog keeps one file for one hash.
 func (c *Client) AddCover(ctx context.Context, day, mimeType string, original, preview []byte) (string, error) {
 	ext := Ext(mimeType)
-	catalog, err := c.c.Catalog(ctx)
+	addFile, err := c.addFileAction(ctx)
 	if err != nil {
-		return "", fmt.Errorf("read the catalog: %w", err)
-	}
-	var addFile *siren.Action
-	for i := range catalog {
-		if catalog[i].Name == "add-file" {
-			addFile = &catalog[i]
-		}
-	}
-	if addFile == nil {
-		return "", errors.New("the catalog has no add-file action")
+		return "", err
 	}
 	for n := 1; n <= maxTitles; n++ {
 		title := day + "." + ext

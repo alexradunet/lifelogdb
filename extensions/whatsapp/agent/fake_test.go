@@ -179,6 +179,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(403, "forbidden")
 			break
 		}
+		if refuseUnknown(r, "say") {
+			fail(422, "invalid")
+			break
+		}
 		day := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/days/"), "/say")
 		if day == "today" {
 			day = today
@@ -195,6 +199,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.body, p.version = p.body+"\n\n**Owner** "+stamp+": "+r.PostForm.Get("text"), p.version+1
 		e = f.conversation(day)
 	case strings.HasSuffix(r.URL.Path, "/body") && r.Method == "POST":
+		if refuseUnknown(r, "save-body") {
+			fail(422, "invalid")
+			break
+		}
 		fmt.Sscanf(r.URL.Path, "/pages/%d/body", &id)
 		p := f.pages[id-1]
 		if f.sneak != "" || f.alwaysStale {
@@ -234,13 +242,29 @@ func (f *fakeAPI) writes() []seen {
 	return out
 }
 
+// refuseUnknown reports a form name that the row of the action in the catalog does not list: the real API answers 422
+// for it (API.md, "A request names only the fields of the action").
+func refuseUnknown(r *http.Request, action string) bool {
+	for _, a := range catalog() {
+		if a.Name != action {
+			continue
+		}
+		for name := range r.PostForm {
+			if a.Field(name) == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func catalog() []siren.Action {
 	return []siren.Action{
 		{Name: "open-day", Method: "GET", Href: "/days/{day}", Fields: []siren.Field{{Name: "day", Type: "date", In: "path"}}},
 		{Name: "capture", Method: "POST", Href: "/days/{day}/capture", Fields: []siren.Field{
 			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Title: "Text"}}},
 		{Name: "say", Owner: true, Method: "POST", Href: "/days/{day}/say", Fields: []siren.Field{
-			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Required: true}}},
+			{Name: "day", Type: "date", In: "path", Required: true}, {Name: "text", Type: "textarea", Required: true}, {Name: "via", Type: "hidden"}}},
 		{Name: "save-body", Method: "POST", Href: "/pages/{id}/body", Fields: []siren.Field{
 			{Name: "id", Type: "number", In: "path", Required: true}, {Name: "body", Type: "textarea", Required: true}, {Name: "version", Type: "hidden", Required: true}}},
 		{Name: "snapshot", Owner: true, Method: "POST", Href: "/snapshot"},

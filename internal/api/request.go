@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lifelog/internal/api/view"
 	"lifelog/internal/core"
 	"lifelog/siren"
 )
@@ -102,13 +103,13 @@ func form(r *http.Request) (url.Values, error) {
 func fieldsOf(r *http.Request, act spec) (url.Values, error) {
 	if act.Method == "GET" {
 		v := r.URL.Query()
-		return v, checked(v, act, r.Method)
+		return v, checked(v, act, r)
 	}
 	v, err := form(r)
 	if err != nil {
 		return nil, err
 	}
-	return v, checked(v, act, r.Method)
+	return v, checked(v, act, r)
 }
 
 // browserFields are the names that a request may carry beside the fields of its action: back is the page a browser
@@ -116,19 +117,14 @@ func fieldsOf(r *http.Request, act spec) (url.Values, error) {
 // of a page asks for (view/forms.go).
 var browserFields = []string{"back", "feedback", "new"}
 
-// sharedForms names, by action, the action whose form a browser also sends to it. The Delete button of a list's pick
-// bar sends the form of file-pages to tombstone-pages (view.Or, the pick-bar template): so a browser sends the fields of
-// file-pages to tombstone-pages, and known allows them there. The names come from the catalog, never from a list here.
-var sharedForms = map[string]string{"tombstone-pages": "file-pages"}
-
 // checked refuses values that break the shape of the action act: a required field left empty (required), a name the
 // action does not list (known), and a value outside the options of a field (options). The shape of a request is the
 // API's rule, not the data's, so it has one home for every surface.
-func checked(v url.Values, act spec, method string) error {
+func checked(v url.Values, act spec, r *http.Request) error {
 	if err := required(v, act); err != nil {
 		return err
 	}
-	if err := known(v, act, method); err != nil {
+	if err := known(v, act, r); err != nil {
 		return err
 	}
 	return options(v, act)
@@ -152,13 +148,14 @@ func unknownField(name string, s spec) error {
 
 // known refuses a name that is not a field of the action and not one of browserFields. A GET that has new may carry
 // the fields of the action that new names, as a link asks for its form (view/forms.go). A new that names no action is
-// refused.
-func known(v url.Values, act spec, method string) error {
+// refused. A browser form also carries the fields of the form that view.SharedForms gives the action; another client
+// does not.
+func known(v url.Values, act spec, r *http.Request) error {
 	allowed := fieldNames(act)
-	if shared, ok := sharedForms[act.Name]; ok {
+	if shared, ok := view.SharedForms[act.Name]; ok && wantsHTML(r) {
 		allowed = append(allowed, fieldNames(specOf(shared))...)
 	}
-	if asked := v.Get("new"); method == "GET" && asked != "" {
+	if asked := v.Get("new"); r.Method == "GET" && asked != "" {
 		s, ok := lookup(asked)
 		if !ok {
 			return core.Invalid("unknown form %s: new names an action of GET /actions", asked)

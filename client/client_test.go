@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,5 +319,8 @@ func TestDoFilesStreamsAReaderAsTheFilePart(t *testing.T) {
 	}
 	if _, err := c.DoFiles(t.Context(), act, map[string]string{"original": "p"}, map[string]File{"original": Bytes("n", nil)}); err == nil {
 		t.Error("a field given as a value and as a file was sent")
+	}
+	if _, err := c.DoFiles(t.Context(), act, nil, map[string]File{"original": {Name: "n"}}); err == nil || !strings.Contains(err.Error(), "has no Open") {
+		t.Errorf("a file with no Open: %v", err)
 	}
 }

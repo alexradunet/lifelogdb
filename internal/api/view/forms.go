@@ -401,3 +401,8 @@ func segmented(f siren.Field) bool {
 func checkbox(f siren.Field) bool {
 	return !f.Pages && !f.Required && slices.Equal(f.Options, []string{"0", "1"})
 }
+
+// SharedForms names, by action, the action whose form a browser also sends to it. The pick bar of a list (pick-bar in
+// html/layout.html, formView.Or) sends the form of file-pages to tombstone-pages by a second button, because HTML
+// cannot join one checkbox to two forms. The API allows these fields to a browser form only.
+var SharedForms = map[string]string{"tombstone-pages": "file-pages"}

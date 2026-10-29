@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"lifelog/client"
+	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
+	"lifelog/internal/api/view"
 )
 
 // idOfSelf is the id at the end of an entity's self link.
@@ -170,5 +173,49 @@ func TestDeletingOnePageOffersItsUndo(t *testing.T) {
 	}
 	if slices.Contains(apitest.Must(t)(c.Get(ctx, "/pages/"+pageID)).Class, "deleted") {
 		t.Error("the page is still deleted after the Undo")
+	}
+}
+
+// TestThePickBarSendsOnlyWhatTheAPIAllows: every control of the pick bar of a list is a field of file-pages or a field
+// of a browser, its Delete button leads to tombstone-pages, and the exception for that shared form is a browser's alone.
+func TestThePickBarSendsOnlyWhatTheAPIAllows(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	ctx := t.Context()
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	e := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan 1.jpg", "sha256": strings.Repeat("07", 32), "mime": "image/jpeg"}))
+	id := idOfSelf(t, apitest.Href(e, "self"))
+	list := browse(t, h, "/browse?kind=media")
+	m := regexp.MustCompile(`(?s)<form id="pick"[^>]*>(.*?)</form>`).FindStringSubmatch(list)
+	if m == nil {
+		t.Fatal("the media list has no pick bar")
+	}
+	allowed := append(api.FieldNamesOf("file-pages"), api.BrowserFields...)
+	for _, n := range regexp.MustCompile(`name="([^"]+)"`).FindAllStringSubmatch(m[1], -1) {
+		if !slices.Contains(allowed, n[1]) {
+			t.Errorf("the pick bar sends %s, which file-pages does not list", n[1])
+		}
+	}
+	for _, n := range regexp.MustCompile(`name="([^"]+)"[^>]*\sform="pick"`).FindAllStringSubmatch(list, -1) {
+		if !slices.Contains(allowed, n[1]) {
+			t.Errorf("a box of the list sends %s, which file-pages does not list", n[1])
+		}
+	}
+	if want := `<button class="danger" formaction="` + api.PathOf("tombstone-pages") + `"`; !strings.Contains(m[1], want) {
+		t.Errorf("the Delete button does not lead to tombstone-pages: want %s", want)
+	}
+	if view.SharedForms["tombstone-pages"] != "file-pages" {
+		t.Errorf("SharedForms = %v", view.SharedForms)
+	}
+	// A browser form may carry the fields of the shared form; another client is refused them.
+	if rec := submit(h, "/pages/tombstone", url.Values{"ids": {id}, "category": {"x"}}, ""); rec.Code != http.StatusSeeOther {
+		t.Errorf("a browser form with category: %d %.300s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest("POST", "/pages/tombstone", strings.NewReader(`{"ids":"`+id+`","category":"x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.siren+json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "unknown field category") {
+		t.Errorf("an API client with category: %d %.300s", rec.Code, rec.Body.String())
 	}
 }

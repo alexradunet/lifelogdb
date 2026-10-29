@@ -116,3 +116,6 @@ One part, one commit, each buildable and tested with the root baseline and, wher
 - The hand list of commands in `site/`: the public page is documentation, not an interface, and no test reads it.
 - The README table's browser column: free text, checked only to be non-empty.
 - MCP resources: none exist; the catalog lists actions only.
+- The cover tiles of `cover-choice` (`html/page.html`): each tile is a form whose one button holds a picture and two
+  lines of text. The `form` template draws a button with a label only, so it cannot draw a tile without a change of
+  the look. The tile stays a hand-written form with the action's `Href`.

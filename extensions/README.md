@@ -10,6 +10,7 @@ any language. The core names no third party: an extension does.
 - It lives in its own folder under `extensions/`, with its own module and its own `README.md` that gives its build line.
 - It never imports `lifelog/internal`: Go refuses it. In Go it requires `lifelog v0.0.0` with `replace lifelog => ../..`
   and imports `lifelog/siren`, `lifelog/client` and, for the tools of a model, `lifelog/client/tools`.
+  `go mod verify` reports `lifelog v0.0.0: missing ziphash`: a directory replace has no zip, and this is not a fault; `go mod tidy -diff` is the check that the module files are in order.
 - It never opens `life.db`. There is one writer per file. The extension reads and writes through the HTTP API.
 - It keeps its own state (a token, a cursor) in its own folder under the user's configuration folder, for example
   `os.UserConfigDir()/lifelog-NAME/`. It never keeps state in `life.db`.

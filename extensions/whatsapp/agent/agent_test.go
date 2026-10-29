@@ -116,7 +116,7 @@ func TestTheSettingsAreReadAtEveryTurnWithTheOwnersTokenAndNoSourceAndEveryOther
 		}
 	}
 	if reads != 2 || writes != 2 {
-		t.Errorf("%d settings reads and %d writes, want 2 and 4", reads, writes)
+		t.Errorf("%d settings reads and %d writes, want 2 and 2", reads, writes)
 	}
 }
 

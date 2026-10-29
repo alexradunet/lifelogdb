@@ -116,7 +116,9 @@ func TestAMultipartPartWithAnUnknownNameIsRefusedBeforeItIsRead(t *testing.T) {
 	body := &zeros{left: size}
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
+	wrote := make(chan struct{}) // the writer ended: body.given is read only after it
 	go func() {
+		defer close(wrote)
 		p, err := mw.CreateFormField("unknown")
 		if err == nil {
 			_, err = io.Copy(p, body)
@@ -136,7 +138,8 @@ func TestAMultipartPartWithAnUnknownNameIsRefusedBeforeItIsRead(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("the handler did not answer")
 	}
-	pr.Close()
+	pr.Close() // the writer's next write fails, and it ends
+	<-wrote
 	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "unknown") {
 		t.Fatalf("%d %s, want 422 naming the field", rec.Code, rec.Body.String())
 	}

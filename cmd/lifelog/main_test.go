@@ -199,7 +199,7 @@ func TestAUsageErrorNamesTheCommandAndARepeatedFieldIsRefused(t *testing.T) {
 func TestAShortcutRefusesAnArgumentItDoesNotRead(t *testing.T) {
 	dir := t.TempDir()
 	live := filepath.Join(dir, "life.db")
-	e, stdout, _ := testEnv(t)
+	e, _, _ := testEnv(t)
 	if err := runArgs(t.Context(), e, []string{"init", live}); err != nil {
 		t.Fatal(err)
 	}
@@ -232,5 +232,4 @@ func TestAShortcutRefusesAnArgumentItDoesNotRead(t *testing.T) {
 			}
 		})
 	}
-	_ = stdout
 }

@@ -244,7 +244,7 @@ it draws the entity on the origin of the API, with the forms that post to it.
   an error, never a finding or a result. An error status has its code in `siren`, its line in [API.md](API.md) and
   its first words in the view (`alertOf`); a new status adds the three together, and `codeOf` never answers
   `internal` for a status it knows. `siren.Codes()` is the one list of the codes, and
-  `TestEveryErrorCodeIsInTheContractAndTheStatusTable` holds the three equal.
+  `TestEveryErrorCodeIsInTheContractAndTheStatusTable` holds that list, API.md and `codeOf` equal, and `TestAnErrorCodePicksItsWords` holds `alertOf`.
 - **Resources and transactions.** Close rows, files and response bodies and call cancellation functions with clear
   ownership. Use existing transaction helpers; do not mix pool calls with an active transaction's operations or perform
   avoidable network/file processing while holding a write transaction. Do not bypass connection setup for convenience

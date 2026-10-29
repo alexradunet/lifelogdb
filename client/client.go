@@ -185,6 +185,9 @@ func (c *Client) DoFiles(ctx context.Context, a siren.Action, values map[string]
 		if f := a.Field(name); f == nil || f.Type != "file" {
 			return nil, fmt.Errorf("%s has no file field %q", a.Name, name)
 		}
+		if files[name].Open == nil {
+			return nil, fmt.Errorf("%s: the file %q has no Open", a.Name, name)
+		}
 	}
 	for name := range values {
 		if f := a.Field(name); f != nil && f.Type == "file" {

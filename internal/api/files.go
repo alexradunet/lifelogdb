@@ -87,7 +87,7 @@ func parseFileForm(r *http.Request, act spec) (fileForm, error) {
 	if err != nil {
 		return fileForm{}, err
 	}
-	if err := checked(m.text, act, "POST"); err != nil {
+	if err := checked(m.text, act, r); err != nil {
 		return fileForm{}, err
 	}
 	in, sent, err := verifyOriginal(m)
