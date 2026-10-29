@@ -162,12 +162,17 @@ func serve(ctx context.Context, e env, args []string) error {
 		return err
 	}
 	defer listener.Close()
+	// The apps of --with: known before the listener opens, so a request to /with/NAME before the child is up is 503.
+	apps := api.NewApps()
+	for _, name := range o.serve.with {
+		apps.Expect(name)
+	}
 	var networkHandler http.Handler
 	scheme, note := "http", ""
 	if pub == nil {
-		networkHandler, err = api.NetworkAuthority(listener.Addr(), api.New(e.store))
+		networkHandler, err = api.NetworkAuthority(listener.Addr(), api.NewWith(e.store, apps))
 	} else {
-		if networkHandler, err = api.Public(e.store, *pub); err != nil {
+		if networkHandler, err = api.Public(e.store, api.PublicOptions{Token: pub.Token, Origins: pub.Origins, TLS: pub.TLS, Apps: apps}); err != nil {
 			return err
 		}
 		note = " (public: token required; the token travels in clear, use a private network)"
@@ -189,7 +194,7 @@ func serve(ctx context.Context, e env, args []string) error {
 	}
 	fmt.Fprintf(e.stderr, "lifelog: serving %s on %s://%s%s (version %s, user_version %d)\n", o.db, scheme, listener.Addr(), note, version, userVersion)
 	// The children end before the server drains: an extension may still write while it ends (extensions/README.md).
-	serveCtx, waitWith := startWith(ctx, e, listener.Addr())
+	serveCtx, waitWith := startWith(ctx, e, listener.Addr(), apps)
 	err = serveHTTP(serveCtx, srv, listener, 10*time.Second)
 	waitWith()
 	// After the drain, before the database closes: the log shows that the stop was clean, or why it was not.
