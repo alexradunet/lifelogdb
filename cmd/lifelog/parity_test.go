@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -134,6 +135,8 @@ func cliLine(action string, args map[string]string) []string {
 			}
 		}
 		return line
+	case action == "snapshot" && len(args) == 0:
+		return []string{"snapshot"}
 	case action == "open-day" && len(args) == 0:
 		return []string{"day"}
 	case action == "open-day" && len(args) == 1 && onlyDay:
@@ -323,6 +326,13 @@ func parityRows() []parityRow {
 		parityRow{"random-page kind=day", rowRandomDay},
 		parityRow{"random-page kind=person", rowRandomPage},
 		parityRow{"search kind=person", rowSearchKind},
+		parityRow{"create-page with a category", rowCreatePage},
+		parityRow{"create-person", rowCreatePerson},
+		parityRow{"tombstone-pages then revive", rowTombstoneAndRevive},
+		parityRow{"link and unlink", rowLinkAndUnlink},
+		parityRow{"correct and retract", rowCorrectAndRetract},
+		parityRow{"integrity-check", rowIntegrityCheck},
+		parityRow{"snapshot", rowSnapshot},
 		parityRow{"an unknown field", rowUnknownField},
 		parityRow{"a value outside the options", rowAValueOutsideTheOptions},
 	)
@@ -1382,5 +1392,209 @@ func rowSay(x *parityRun) {
 	got := apitest.Must(x.t)(x.read.Get(x.t.Context(), "/days/today/conversation"))
 	if turns, _ := props(x.t, got)["turns"].([]any); len(turns) != 2 {
 		x.t.Errorf("GET /days/today/conversation: %v, want two turns", turns)
+	}
+}
+
+// create-page makes a page with a body and files it in a category in one write, and makes the category when it is new.
+// A second page with the same title is 409 exists, and the first page stays as it was.
+func rowCreatePage(x *parityRun) {
+	e := x.ok("create-page", map[string]string{"title": "Trip notes", "body": "Packed light.", "category": "Trips"})
+	pid, err := x.store.PageID(x.t.Context(), "Trip notes")
+	if err != nil || pid == 0 {
+		x.t.Fatalf("Trip notes: %d %v", pid, err)
+	}
+	if p := props(x.t, e); e.Title != "Trip notes" || p["body"] != "Packed light." {
+		x.t.Errorf("create-page: %q %v", e.Title, p["body"])
+	}
+	if got := x.categories(pid); got != "Trips" {
+		x.t.Errorf("the categories of Trip notes: %q, want Trips", got)
+	}
+	if got := x.browse("in=Trips"); got != "Trip notes" {
+		x.t.Errorf("the things in Trips: %q, want Trip notes", got)
+	}
+	before := x.pageByID(pid)
+	x.refused("create-page", map[string]string{"title": "Trip notes", "body": "Another text."}, http.StatusConflict, "exists")
+	if after := x.pageByID(pid); !reflect.DeepEqual(after, before) {
+		x.t.Errorf("Trip notes after the refusal: %v, want %v", after, before)
+	}
+}
+
+// create-person makes a person with a name and two dates. A death before the birth is 422 and writes no page.
+func rowCreatePerson(x *parityRun) {
+	args := map[string]string{"title": "Sam (barber)", "name": "Samuel Ortiz", "birth_day": "1980-02-03", "death_day": "2020-01-01"}
+	e := x.ok("create-person", args)
+	if p := props(x.t, e); e.Title != "Sam (barber)" || p["entity_type"] != "person" {
+		x.t.Errorf("create-person: %q %v", e.Title, p["entity_type"])
+	}
+	pid, err := x.store.PageID(x.t.Context(), "Sam (barber)")
+	if err != nil || pid == 0 {
+		x.t.Fatalf("Sam (barber): %d %v", pid, err)
+	}
+	person, _ := x.pageByID(pid)["person"].(map[string]any)
+	if person["name"] != "Samuel Ortiz" || person["birth_day"] != "1980-02-03" || person["death_day"] != "2020-01-01" {
+		x.t.Errorf("the person: %v, want Samuel Ortiz, 1980-02-03, 2020-01-01", person)
+	}
+	x.refused("create-person", map[string]string{"title": "Lee", "birth_day": "2000-01-01", "death_day": "1999-01-01"}, http.StatusUnprocessableEntity, "invalid")
+	x.absent("Lee")
+}
+
+// isDeleted says that the page with the id is a tombstone.
+func (x *parityRun) isDeleted(pid int64) bool {
+	x.t.Helper()
+	e := apitest.Must(x.t)(x.read.Get(x.t.Context(), fmt.Sprintf("/pages/%d", pid)))
+	return slices.Contains(e.Class, "deleted")
+}
+
+// tombstone-pages takes ids separated by spaces or commas and deletes all of them. An id that no page has refuses the
+// whole action (404) and writes nothing. revive undoes one tombstone.
+func rowTombstoneAndRevive(x *parityRun) {
+	ctx := x.t.Context()
+	var ids []int64
+	for _, title := range []string{"One", "Two", "Three"} {
+		pid, _, err := x.store.CreatePage(ctx, "cli", title, "", "")
+		if err != nil {
+			x.t.Fatal(err)
+		}
+		ids = append(ids, pid)
+	}
+	x.refused("tombstone-pages", map[string]string{"ids": id(ids[2]) + " 99999"}, http.StatusNotFound, "not_found")
+	if x.isDeleted(ids[2]) {
+		x.t.Error("the refused tombstone-pages deleted a page")
+	}
+	x.ok("tombstone-pages", map[string]string{"ids": id(ids[0]) + ", " + id(ids[1])})
+	for i, want := range []bool{true, true, false} {
+		if got := x.isDeleted(ids[i]); got != want {
+			x.t.Errorf("the page %d: deleted %v, want %v", ids[i], got, want)
+		}
+	}
+	x.ok("revive", map[string]string{"id": id(ids[0])})
+	for i, want := range []bool{false, true, false} {
+		if got := x.isDeleted(ids[i]); got != want {
+			x.t.Errorf("after revive: the page %d: deleted %v, want %v", ids[i], got, want)
+		}
+	}
+}
+
+// atPlaces are the titles of the places that a page links with at.
+func (x *parityRun) atPlaces(pid int64) string {
+	x.t.Helper()
+	var out []string
+	links, _ := x.pageByID(pid)["links"].([]any)
+	for _, l := range links {
+		if l := l.(map[string]any); l["kind"] == "at" {
+			out = append(out, fmt.Sprint(l["title"]))
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+// link with the kind at says that a day was at a place, and unlink takes it away. The unlink of a link that is not
+// there changes nothing.
+func rowLinkAndUnlink(x *parityRun) {
+	ctx := x.t.Context()
+	day, _, err := x.store.Capture(ctx, "cli", "2031-05-10", "A walk.", nil)
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	if _, err := x.store.CreatePlace(ctx, "cli", "Lakeside"); err != nil {
+		x.t.Fatal(err)
+	}
+	args := map[string]string{"id": id(day), "to": "Lakeside", "kind": "at"}
+	x.ok("link", args)
+	if got := x.atPlaces(day); got != "Lakeside" {
+		x.t.Errorf("the places of the day after link: %q, want Lakeside", got)
+	}
+	x.ok("unlink", args)
+	if got := x.atPlaces(day); got != "" {
+		x.t.Errorf("the places of the day after unlink: %q, want none", got)
+	}
+	before := x.pageByID(day)
+	x.refused("unlink", args, http.StatusNotFound, "not_found")
+	if after := x.pageByID(day); !reflect.DeepEqual(after, before) {
+		x.t.Errorf("the day after the unlink of no link: %v, want %v", after, before)
+	}
+}
+
+// readings are the values of the readings that the series of the metric shows, oldest first.
+func (x *parityRun) readings(metric string) string {
+	x.t.Helper()
+	var out []string
+	series := props(x.t, apitest.Must(x.t)(x.read.Get(x.t.Context(), "/metrics/"+url.PathEscape(metric)+"?from=2031-05-01")))
+	rows, _ := series["readings"].([]any)
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r.(map[string]any)["value"]))
+	}
+	return strings.Join(out, ",")
+}
+
+// correct gives a reading a new value, once; retract removes a reading from the series.
+func rowCorrectAndRetract(x *parityRun) {
+	ctx := x.t.Context()
+	if _, err := x.store.CreateMetric(ctx, "cli", core.NewMetric{Name: "Weight", Unit: "kg"}); err != nil {
+		x.t.Fatal(err)
+	}
+	first, err := x.store.Record(ctx, "cli", core.Reading{Metric: "Weight", Day: "2031-05-10", Value: 80})
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	second, err := x.store.Record(ctx, "cli", core.Reading{Metric: "Weight", Day: "2031-05-11", Value: 90})
+	if err != nil {
+		x.t.Fatal(err)
+	}
+	if got := x.readings("Weight"); got != "80,90" {
+		x.t.Fatalf("the readings at the start: %q, want 80,90", got)
+	}
+	x.ok("correct", map[string]string{"id": id(first), "value": "81"})
+	if got := x.readings("Weight"); got != "81,90" {
+		x.t.Errorf("the readings after correct: %q, want 81,90", got)
+	}
+	m := props(x.t, apitest.Must(x.t)(x.read.Get(ctx, "/measurements/"+id(first))))
+	if m["current"] != false || m["superseded_by"] == nil {
+		x.t.Errorf("the corrected reading: %v, want not current and superseded", m)
+	}
+	x.refused("correct", map[string]string{"id": id(first), "value": "82"}, http.StatusUnprocessableEntity, "invalid") // the UNIQUE of supersedes_id refuses it
+	if got := x.readings("Weight"); got != "81,90" {
+		x.t.Errorf("the readings after a second correct: %q, want 81,90", got)
+	}
+	x.ok("retract", map[string]string{"id": id(second)})
+	if got := x.readings("Weight"); got != "81" {
+		x.t.Errorf("the readings after retract: %q, want 81", got)
+	}
+}
+
+// integrity-check is the owner's: an agent is refused (403).
+func rowIntegrityCheck(x *parityRun) {
+	if !x.owner {
+		x.refused("integrity-check", nil, http.StatusForbidden, "forbidden")
+		return
+	}
+	e := x.ok("integrity-check", nil)
+	if p := props(x.t, e); !slices.Contains(e.Class, "integrity") || p["ok"] != true {
+		x.t.Errorf("integrity-check: %v %v, want the class integrity and ok", e.Class, p["ok"])
+	}
+}
+
+// snapshot is the owner's: the copy is a file beside the database, named by the answer. An agent is refused (403)
+// by the API, and no file is written.
+func rowSnapshot(x *parityRun) {
+	const name = "life-" + parityToday + ".db"
+	beside := filepath.Join(filepath.Dir(x.store.DB.Path()), name)
+	if !x.owner {
+		x.refused("snapshot", nil, http.StatusForbidden, "forbidden")
+		if _, err := os.Stat(beside); err == nil {
+			x.t.Errorf("a refused snapshot wrote %s", beside)
+		}
+		return
+	}
+	e := x.ok("snapshot", nil)
+	p := props(x.t, e)
+	if !slices.Contains(e.Class, "snapshot") || p["snapshot"] != beside {
+		x.t.Errorf("snapshot: %v %v, want the class snapshot and %s", e.Class, p["snapshot"], beside)
+	}
+	if st, err := os.Stat(beside); err != nil || st.Size() == 0 {
+		x.t.Errorf("the snapshot file: %v %v, want a file", st, err)
+	}
+	if rc, _ := p["restore_check"].(map[string]any); rc["ok"] != true {
+		x.t.Errorf("the restore check: %v, want ok", rc)
 	}
 }
