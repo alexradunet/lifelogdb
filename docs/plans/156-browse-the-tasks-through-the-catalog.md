@@ -7,11 +7,13 @@
 
 - **Date / baseline:** 2026-10-29, `b3d0a89` (master), after [plan 155](155-ticktick-the-first-connected-app.md).
 - **Priority:** P2. **Effort:** S. **Risk:** LOW: nothing of the file or the core changes; the connector serves more resources.
-- **Status:** BUILT 2026-10-29 by a sub-agent in a worktree, in review. Checks in `extensions/ticktick`: `gofmt -l .`
-  printed nothing; `go vet ./... && go test ./...` passed (the end-to-end test included); `go mod tidy -diff` was
-  empty. In the root: `go test ./cmd/lifelog -run With` (see the commit message for its result). Two small choices:
-  the helper that answers a GET route is `respond`, because `write` is the name of the capture sender in `sync.go`;
-  the task page links its list only when the list is one that TickTick reported (the Inbox has no page).
+- **Status:** IN REVIEW (owner). Built 2026-10-29 on master (`9f1c584`) by a sub-agent in a worktree, reviewed before the
+  merge. Checks in `extensions/ticktick`: `gofmt -l .` printed nothing; `go vet ./... && go test ./...` passed (the
+  end-to-end test on the real `lifelog serve --with ticktick` included); `go mod tidy -diff` empty; `staticcheck ./...`
+  clean; `govulncheck ./...` found no vulnerability. In the root: `go test ./cmd/lifelog -run With` passed. Two small
+  choices: the helper that answers a GET route is `respond`, because `write` is the name of the capture sender in
+  `sync.go`; the task page links its list only when the list is one that TickTick reported (the Inbox has no page).
+  Live: the owner rebuilds `~/.local/bin/lifelog-ticktick` and restarts the service (Part 4).
 
 ## Context
 
