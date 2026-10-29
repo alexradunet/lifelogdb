@@ -44,6 +44,14 @@ func Remote(base, source, token string) *Client {
 	return &Client{hc: &http.Client{Transport: remoteTransport(headerTimeout)}, base: strings.TrimRight(base, "/"), source: source, token: token}
 }
 
+// As is a copy of c that writes as source (the Lifelog-Source header). It shares the transport, the base and the
+// token. A connected app has one transport: a new transport for each request would leak idle connections.
+func (c *Client) As(source string) *Client {
+	cp := *c
+	cp.source = source
+	return &cp
+}
+
 const dialTimeout = 10 * time.Second
 
 // headerTimeout is the longest wait for the headers of an answer once the request is sent. The server ends a request

@@ -324,3 +324,34 @@ func TestDoFilesStreamsAReaderAsTheFilePart(t *testing.T) {
 		t.Errorf("a file with no Open: %v", err)
 	}
 }
+
+func TestAsWritesAsAnotherSourceOnTheSameServer(t *testing.T) {
+	var got []string
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Header.Get(siren.SourceHeader)+"|"+r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/vnd.siren+json")
+		io.WriteString(w, `{"class":["x"]}`)
+	})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	for name, c := range map[string]*Client{"in-process": InProcess(h, "first"), "remote": Remote(srv.URL, "first", "tok")} {
+		got = nil
+		other := c.As("second")
+		if _, err := other.Get(t.Context(), "/"); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if _, err := c.Get(t.Context(), "/"); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		tok := ""
+		if name == "remote" {
+			tok = "Bearer tok"
+		}
+		if len(got) != 2 || got[0] != "second|"+tok || got[1] != "first|"+tok {
+			t.Errorf("%s: sources %q", name, got)
+		}
+		if other.hc != c.hc {
+			t.Errorf("%s: As made a new transport", name)
+		}
+	}
+}
