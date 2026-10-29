@@ -64,8 +64,6 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 	"rel":           func(r []string) string { return strings.Join(r, " ") },
 	"markdown":      markdown,
 	"markdownCover": markdownCover,
-	"inline":        inline,
-	"box":           boxHTML,
 	"periodWords":   periodWords,
 	"mark":          mark,
 	"rejected":      rejected,
@@ -135,7 +133,7 @@ func Num(v any) string {
 // viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
 var viewOf = map[string]string{
 	"day": "day", "page": "page", "person": "page", "file": "page",
-	"days": "stream", "search": "search", "browse": "browse", "plans": "plans",
+	"days": "stream", "search": "search", "browse": "browse",
 
 	"metrics": "metrics", "series": "metric", "conversation": "conversation", "settings": "settings", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
 	"month": "month", "year": "year", "week": "week",

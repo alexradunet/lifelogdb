@@ -101,7 +101,7 @@ func TestABrowserFormReturnsToThePageThatSentIt(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	for _, tc := range []struct{ back, want string }{
 		{"/days?limit=5&offset=10", "/days?limit=5&offset=10"},
-		{"/plans?order=page#row-1-3", "/plans?order=page#row-1-3"}, // the fragment names where the page opens
+		{"/metrics?order=page#row-1-3", "/metrics?order=page#row-1-3"}, // the fragment names where the page opens
 		{"//evil.example/", "/days/2026-09-29"},
 	} {
 		rec := submit(h, "/days/2026-09-29/capture", url.Values{"text": {"a line"}, "back": {tc.back}}, "")
@@ -220,7 +220,7 @@ func TestBrowserFormCarriesRevisionAndRefusesOldClockToken(t *testing.T) {
 	}
 }
 
-// One way to make a thing (docs/plans/114-one-way-to-do-a-thing.md): the rail's New is a menu of the kinds, each
+// One way to make a thing (docs/metrics/114-one-way-to-do-a-thing.md): the rail's New is a menu of the kinds, each
 // made on its list, and ?new=<action> opens that action's form on any page.
 
 func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
@@ -281,7 +281,7 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 		t.Error("a name no action has opens a form")
 	}
 
-	// Home is the page of today (docs/plans/129-the-ux-pass.md, part 10): New page is in the New menu of the rail, and
+	// Home is the page of today (docs/metrics/129-the-ux-pass.md, part 10): New page is in the New menu of the rail, and
 	// the page has no fold of every create form.
 	home := browse(t, h, "/days/"+fixedToday)
 	if strings.Contains(home, `<details id="new">`) {

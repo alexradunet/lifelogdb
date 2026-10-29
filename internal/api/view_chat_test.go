@@ -3,7 +3,6 @@ package api_test
 // The browser's side of plan 146: the Settings page, the conversation view and the chat column of every page.
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -128,7 +127,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 	order := []string{`<h1>Chat</h1><span class="day">Wed 14 May · today</span>`,
 		`<nav class="days" aria-label="Days"><a href="/days/2031-05-10/conversation">Sat 10</a><a href="/days/2031-05-12/conversation">Mon 12</a><a href="/days/2031-05-13/conversation">Tue 13</a><a href="/days/today/conversation" aria-current="page">Today</a></nav>`,
 		`<button type="button" class="more" popovertarget="chat-menu"`, `<div class="more-body" id="chat-menu" popover>`, `popovertargetaction="hide">Close</button>`,
-		`the day view</a>`, `aria-label="Categories"`, `<summary>Edit</summary>`, `Plan a line`, `aria-label="Links"`, `aria-label="Backlinks"`, `class="danger">Delete`, `<section class="thread"`,
+		`the day view</a>`, `aria-label="Categories"`, `<summary>Edit</summary>`, `aria-label="Links"`, `aria-label="Backlinks"`, `class="danger">Delete`, `<section class="thread"`,
 		`<li class="turn text">`, "A note the owner typed.",
 		`<li class="turn owner">`, `<span class="from">You</span><time datetime="`, `How did I <strong>sleep</strong>?`, `<a href="/pages?title=Sleep+notes" class="wikilink">Sleep notes</a>`,
 		`<li class="turn agent">`, `<span class="from">lifelog</span>`, `<li><b>search_pages</b> words=sleep</li>`, `<li><b>read_day</b> failed: not_found</li>`, `You slept <em>well</em>.`,
@@ -283,7 +282,7 @@ func TestChatJSIsServedAsJavaScript(t *testing.T) {
 }
 
 // cardsWorld makes the things that an agent touches, each by the API: a day with a mood, a page, a person, a metric
-// with a reading, a plan line and a word to search. It returns the addresses, in the order of the tool lines that name
+// with a reading and a word to search. It returns the addresses, in the order of the tool lines that name
 // them. Today is fixedToday, so the reading of the day before is "yesterday".
 func cardsWorld(t *testing.T, c *client.Client) []string {
 	t.Helper()
@@ -295,13 +294,8 @@ func cardsWorld(t *testing.T, c *client.Client) []string {
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "register-metric"), map[string]string{"name": "Weight", "unit": "kg"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": "2031-05-12", "value": "70.4"}))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "record"), map[string]string{"metric": "Weight", "day": "2031-05-13", "value": "71.2"}))
-	plan := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "plan"), map[string]string{"page": "today", "text": "Call the bank", "on": "today"}))
-	line, err := plan.Result.(map[string]any)["line"].(json.Number).Int64()
-	if err != nil {
-		t.Fatal(err)
-	}
 	return []string{"/days/" + fixedToday, apitest.Href(river, "self"), apitest.Href(sam, "self"), "/metrics/Weight",
-		fmt.Sprintf("/days/%s#line-%d", fixedToday, line), "/search?q=heron"}
+		"/search?q=heron"}
 }
 
 // toolLines are the tool lines that name each address, as an agent writes them.
@@ -319,7 +313,7 @@ func cardsOf(page string) [][]string {
 }
 
 // TestTheConversationDrawsACardForEachThingTheAgentTouched: the tool lines of an agent's turn name a day, a page, a
-// person, a metric, a plan line and a search, each made by the API first. The turn draws one card each, in that
+// person, a metric and a search, each made by the API first. The turn draws one card each, in that
 // order, each a link to the thing with the icon, the title and the value of its class, on the badge of its tool line
 // above the words. An address that answers 404 draws the plain link, and so does the seventh address of a turn.
 func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
@@ -332,10 +326,10 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 	page := browse(t, h, "/days/"+fixedToday+"/conversation")
 	cards := cardsOf(page)
 	var kinds, hrefs []string
-	for _, card := range cards[:6] {
+	for _, card := range cards[:5] {
 		kinds, hrefs = append(kinds, card[1]), append(hrefs, card[2])
 	}
-	if got, want := strings.Join(kinds, " "), "day page person series plan search"; got != want {
+	if got, want := strings.Join(kinds, " "), "day page person series search"; got != want {
 		t.Fatalf("the cards of the first turn are %s, want %s", got, want)
 	}
 	if got, want := strings.Join(hrefs, " "), strings.Join(refs, " "); got != want {
@@ -346,7 +340,6 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 		{`<span class="icon icon-files"`, `<b class="card-title">River walk</b>`},
 		{`<span class="icon icon-people"`, `<b class="card-title">Sam</b>`},
 		{`<span class="icon icon-metrics"`, `<b class="card-title">Weight</b>`, `<span class="card-value">71.2 kg · yesterday</span>`},
-		{`<span class="icon icon-plans"`, `<b class="card-title">Call the bank</b>`, `<span class="card-value">open</span>`},
 		{`<span class="icon icon-search"`, `<b class="card-title">Search: heron</b>`, `<span class="card-value">3 hits</span>`}, // the day page, the page and the conversation itself, which says heron in its tool line
 	} {
 		for _, part := range want {
@@ -357,19 +350,19 @@ func TestTheConversationDrawsACardForEachThingTheAgentTouched(t *testing.T) {
 	}
 	// The second turn names a 404 and six days: the plain link, five day cards, and the seventh address is the plain
 	// link too, since the server resolves six a turn.
-	if cards[6][1] != "link" || cards[6][2] != "/pages/999999" || cards[6][3] != "/pages/999999" {
-		t.Errorf("the card of a 404 is %q, want the plain link", cards[6][0])
+	if cards[5][1] != "link" || cards[5][2] != "/pages/999999" || cards[5][3] != "/pages/999999" {
+		t.Errorf("the card of a 404 is %q, want the plain link", cards[5][0])
 	}
-	for _, card := range cards[7:12] {
+	for _, card := range cards[6:11] {
 		if card[1] != "day" {
 			t.Errorf("the card of %s is %s, want a day", card[2], card[1])
 		}
 	}
-	if cards[12][1] != "link" || cards[12][2] != seven[6] || cards[12][3] != seven[6] {
-		t.Errorf("the seventh address of a turn is %v, want the plain link", cards[12][:3])
+	if cards[11][1] != "link" || cards[11][2] != seven[6] || cards[11][3] != seven[6] {
+		t.Errorf("the seventh address of a turn is %v, want the plain link", cards[11][:3])
 	}
 	// The third turn names today by the word: the redirect is followed, and the card is the day's.
-	if len(cards) != 14 || cards[13][1] != "day" || cards[13][2] != "/days/today" || !strings.Contains(cards[13][3], `<b class="card-title">Wed 14 May</b>`) {
+	if len(cards) != 13 || cards[12][1] != "day" || cards[12][2] != "/days/today" || !strings.Contains(cards[12][3], `<b class="card-title">Wed 14 May</b>`) {
 		t.Errorf("the card of /days/today: %d cards, the last %v; want the day card of the 14th", len(cards), cards[len(cards)-1][:3])
 	}
 	// The badges stand above the words of the turn, on the badge of the tool line that named the thing.

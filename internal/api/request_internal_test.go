@@ -108,24 +108,6 @@ func TestNumberReadsADecimalNumberOnly(t *testing.T) {
 	}
 }
 
-// TestLineNumberIsAWholeNumberOfOneOrMore: the field line takes the decimal numbers of number, and refuses what is not
-// a whole line.
-func TestLineNumberIsAWholeNumberOfOneOrMore(t *testing.T) {
-	for _, tc := range []struct {
-		in   string
-		want int
-	}{{"1", 1}, {"1.0", 1}, {"1e0", 1}, {"12", 12}, {"2147483647", 2147483647}} {
-		if got, err := lineNumber(url.Values{"line": {tc.in}}); err != nil || got != tc.want {
-			t.Errorf("lineNumber(%q)=%d,%v want %d", tc.in, got, err, tc.want)
-		}
-	}
-	for _, in := range []string{"", "0", "-1", "1.5", "NaN", "Inf", "2147483648", "x", "1_0", "0x1", " 1"} {
-		if got, err := lineNumber(url.Values{"line": {in}}); err == nil {
-			t.Errorf("lineNumber(%q)=%d accepted", in, got)
-		}
-	}
-}
-
 // TestFormReadsAJSONBodyAsFormFields: a JSON body becomes the fields of a form. A string is itself, a number, a
 // boolean, an array and an object are their JSON text, null is absent, the last value of a duplicate key is kept,
 // and only one object is a body.

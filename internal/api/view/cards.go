@@ -18,11 +18,11 @@ const CardsPerTurn = 6
 
 // Card is one address of a turn, as a badge of the thread draws it: an icon (or a small picture), a title and one
 // value. Kind picks the icon and the words: link (the address alone), day, page, person, file, metric, series,
-// measurement, plan, search, conversation or other. A part that a kind does not use stays empty.
+// measurement, search, conversation or other. A part that a kind does not use stays empty.
 type Card struct {
 	Href, Kind, Title string
 	Icon              string
-	Value             string // a mood, a reading, a count, the state of a plan line
+	Value             string // a mood, a reading, a count
 	Picture           string
 }
 
@@ -32,7 +32,7 @@ func (v *view) CardOf(href string) Card { return v.cardOf(href, v.cards[href]) }
 
 // cardIcons are the icons of the kinds of a card that is not a leaf.
 var cardIcons = map[string]string{"page": "files", "person": "people", "file": "image", "metric": "metrics",
-	"series": "metrics", "measurement": "metrics", "plan": "plans", "search": "search", "conversation": "chat", "day": "calendar"}
+	"series": "metrics", "measurement": "metrics", "search": "search", "conversation": "chat", "day": "calendar"}
 
 // cardOf is the card of the entity e at href. A nil entity, an entity with a property that JSON cannot carry, and
 // an entity of no title give the plain link.
@@ -48,10 +48,7 @@ func (v *view) cardOf(href string, e *siren.Entity) Card {
 	props, _ := shape.(map[string]any)
 	cv := &view{Entity: e, Props: shape, Shell: v.Shell}
 	c := Card{Href: href, Title: e.Title}
-	line := planLineOf(href, props)
 	switch kind := cardKind(e.Class); {
-	case line != nil:
-		c = cv.planCard(c, line)
 	case kind == "day" || kind == "day-page":
 		c = cv.dayCard(c, props, kind)
 	case kind == "series":
@@ -158,33 +155,4 @@ func (v *view) searchCard(c Card, props map[string]any) Card {
 	c.Title = "Search: " + Num(props["q"])
 	c.Value = Count(len(anyList(props["hits"])), "hit", "hits")
 	return c
-}
-
-// planCard is one plan line: its words and its box.
-func (v *view) planCard(c Card, line map[string]any) Card {
-	c.Kind, c.Title = "plan", Num(line["text"])
-	c.Value = map[string]string{" ": "open", "x": "done", "-": "dropped", ">": "carried"}[Num(line["box"])]
-	return c
-}
-
-// planLineOf is the plan line that an address names with a fragment, #line-N: the entity at the address lists the
-// line in planned[] (a day) or in lines[] (a period page), and the line is on the page of the entity. nil when the
-// address names no line or the entity does not list it.
-func planLineOf(href string, props map[string]any) map[string]any {
-	_, frag, ok := strings.Cut(href, "#line-")
-	if !ok || props == nil {
-		return nil
-	}
-	owner := Num(props["page_id"])
-	if owner == "" {
-		owner = Num(props["id"])
-	}
-	for _, list := range []string{"planned", "lines"} {
-		for _, x := range anyList(props[list]) {
-			if m, _ := x.(map[string]any); m != nil && Num(m["line"]) == frag && Num(m["page_id"]) == owner {
-				return m
-			}
-		}
-	}
-	return nil
 }

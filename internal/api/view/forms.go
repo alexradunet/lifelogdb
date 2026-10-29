@@ -59,9 +59,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 // ("field=words") gives a field a title in this form only (the score form calls its unit Range), "placeholder"
 // ("field=words") and "key" ("field=letter") give a field its prompt and its access key, "required" lists fields
 // that the form requires though the action does not, "pattern" ("field=regexp") is what the browser accepts in a
-// field (a score's range), "buttons" ("field=a,b") draws the listed options of that field as submit buttons (name the
-// field, value the option, the words the option with a capital) in place of the form's one button, and does not draw
-// the field: the first button is the primary one when there are two or more, "aria" is the aria-label of an icon-only
+// field (a score's range), "aria" is the aria-label of an icon-only
 // button that removes something (the × of a list: the button then has the class remove), and any other name fixes a
 // field to a value (hidden).
 type formView struct {
@@ -79,7 +77,6 @@ type formView struct {
 	Lead          bool          // boxed draws the button as the primary one with the new icon
 	Primary       bool          // the button is the primary one: a form with fields to fill
 	Aria          string        // the aria-label of the button, for a button that is a glyph (the ×)
-	Buttons       []formButton  // the options of one field as submit buttons, in place of the form's one button
 	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
 	Shown         []siren.Field // the fields most writes need
 	More          []siren.Field // optional fields, folded; still in the form, so a browser sends them with no script
@@ -89,9 +86,6 @@ type formView struct {
 	patterns      map[string]string            // field name to the pattern of its value
 	labels        map[string]map[string]string // field name to the words of each of its options (Labels)
 }
-
-// formButton is one option of a field, drawn as a submit button: the browser sends Field=Value.
-type formButton struct{ Field, Value, Label, Class string }
 
 // Labels gives the options of a field words to show beside their value: a category is offered as its path. The
 // value that the form sends stays the option.
@@ -202,9 +196,7 @@ func (f *formView) MoreOpen() bool {
 type formOptions struct {
 	button, class, id, back string
 	autocomplete, aria      string
-	buttonsOf               string   // "buttons": the field whose options are submit buttons
-	buttons                 []string // the options that are buttons
-	plain                   bool     // "plain" was given: the form offers no Preview
+	plain                   bool // "plain" was given: the form offers no Preview
 	group                   string
 	send                    bool // "send" was given
 	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
@@ -246,10 +238,6 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.autocomplete = v
 		case "aria":
 			o.aria = v
-		case "buttons":
-			if field, list, ok := strings.Cut(v, "="); ok {
-				o.buttonsOf, o.buttons = field, strings.Split(list, ",")
-			}
 		case "lead":
 			o.lead = v != ""
 		case "group":
@@ -327,14 +315,6 @@ func formOf(x any, opts ...string) (*formView, error) {
 		}
 		switch {
 		case o.outside[fd.Name]:
-		case fd.Name == o.buttonsOf: // its options are the buttons
-			for i, option := range o.buttons {
-				class := "small"
-				if i > 0 || len(o.buttons) == 1 {
-					class = "small quiet"
-				}
-				f.Buttons = append(f.Buttons, formButton{fd.Name, option, capital(option), class})
-			}
 		case fd.Type == "hidden" || o.hide[fd.Name]:
 			f.Hidden = append(f.Hidden, fd)
 		case (o.more[fd.Name] || o.more["*"]) && !fd.Required:
@@ -350,12 +330,6 @@ func formOf(x any, opts ...string) (*formView, error) {
 		f.Focus = f.Shown[0].Name
 	}
 	return f, nil
-}
-
-// capital is the word with its first letter in capitals.
-func capital(s string) string {
-	r, n := utf8.DecodeRuneInString(s)
-	return strings.ToUpper(string(r)) + s[n:]
 }
 
 // opener is the form of a templated action that has path fields (GET /actions): a browser cannot fill a path, so

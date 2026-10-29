@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"lifelog/internal/text"
 	"lifelog/siren"
 )
 
@@ -17,7 +16,7 @@ import (
 // no sentence knows is shown as a fact, so nothing of a result is lost.
 
 // resultLine is one line of the toast: a sentence, or the facts of what no sentence said. A sentence may carry one
-// form, a button that posts one more write (the Undo of a tick).
+// form, a button that posts one more write (the Undo of a delete).
 type resultLine struct {
 	HTML template.HTML
 	Form *resultForm
@@ -137,59 +136,6 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 		say("Shown on its day page.")
 	}
 
-	// plan, tick and carry (docs/plans/136-plan-lines-and-period-pages.md). The line is the number in the body.
-	line, hasLine := take("line")
-	if _, ok := take("written"); ok {
-		pageID, _ := take("page_id")
-		if on, scheduled := take("on"); scheduled {
-			// schedule has no Undo: the new dates are in the sentence, and a second schedule puts the old ones back.
-			due, _ := take("due")
-			say(`Scheduled line %s of <a href="/pages/%s">its page</a>: %s.`, Num(line), Num(pageID), esc(c.datesWords(fmt.Sprint(on), fmt.Sprint(due))))
-		} else {
-			say(`Planned on line %s of <a href="/pages/%s">its page</a>.`, Num(line), Num(pageID))
-		}
-	} else if outcome, ok := take("outcome"); ok {
-		take("page_id")
-		undo, _ := take("href") // the result carries the address of the tick that undoes it
-		words, hasWords := take("text")
-		switch outcome {
-		case "reopen":
-			say("Reopened.")
-			if gone, ok := take("removed_line"); ok {
-				delete(left, "removed")
-				say("The next one, line %s, is removed.", Num(gone))
-			}
-			if b, _ := take("next_kept"); b == true {
-				say("The next one was changed since, so it stays.")
-			}
-		default:
-			say("%s.", map[bool]string{true: "Done", false: "Dropped"}[outcome == "done"])
-			// The Undo posts a reopen of the same line to its page, and the browser returns to where it is.
-			if href, _ := undo.(string); href != "" && hasLine && hasWords {
-				f := &resultForm{Href: href, Label: "Undo",
-					Hidden: [][2]string{{"line", Num(line)}, {"text", fmt.Sprint(words)}, {"outcome", "reopen"}}}
-				if here != "" {
-					f.Hidden = append([][2]string{{"back", here}}, f.Hidden...)
-				}
-				out[len(out)-1].Form = f
-			}
-			if next, ok := take("appended_line"); ok {
-				appended, _ := take("appended")
-				// The new line is read back with the one parser of the grammar. Its days are the words; with none, the line number.
-				if ps := text.Plans(fmt.Sprint(appended)); len(ps) == 1 && (ps[0].On != "" || ps[0].Due != "") {
-					say("The next one is %s.", esc(c.datesWords(ps[0].On, ps[0].Due)))
-				} else {
-					say("The next one is line %s.", Num(next))
-				}
-			}
-		}
-	} else if to, ok := take("to_id"); ok {
-		toLine, _ := take("to_line")
-		say(`Carried to <a href="/pages/%s">its page</a>, line %s.`, Num(to), Num(toLine))
-	} else if hasLine {
-		left["line"] = line
-	}
-
 	// tombstone-pages. One page offers its Undo (a revive that returns to where the owner is); several offer the
 	// list of the deleted, where each is restored from its page.
 	if ids, ok := take("tombstoned"); ok {
@@ -229,22 +175,6 @@ func resultSentences(m map[string]any, c clock, here string) []resultLine {
 		out = append(out, resultLine{HTML: template.HTML(sb.String())})
 	}
 	return out
-}
-
-// datesWords says the dates of a plan line in plain words: "on Tue 21 Oct, due Fri 24 Oct", or "no dates". An empty
-// day is none.
-func (c clock) datesWords(on, due string) string {
-	var parts []string
-	if on != "" {
-		parts = append(parts, "on "+c.day(on))
-	}
-	if due != "" {
-		parts = append(parts, "due "+c.day(due))
-	}
-	if len(parts) == 0 {
-		return "no dates"
-	}
-	return strings.Join(parts, ", ")
 }
 
 // stringList are the strings of a JSON list, in order.

@@ -1,7 +1,7 @@
 package api
 
-// A week is an ISO 8601 week (docs/contract/plan-lines.md): it starts on Monday, and week 1 holds 4 January. Its page
-// is the period page titled 2026-W43. The view lists the seven days and the plan lines of the week.
+// A week is an ISO 8601 week (docs/decisions/D30-period-pages.md): it starts on Monday, and week 1 holds 4 January. Its page
+// is the period page titled 2026-W43. The view lists the seven days and the page of the week.
 
 import (
 	"context"
@@ -64,13 +64,8 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	lines, err := h.linesIn(ctx, from, through)
-	if err != nil {
-		return nil, err
-	}
 	key, name := weekKey(monday), weekName(monday)
-	e := &siren.Entity{Class: []string{"week"}, Title: name, Links: []siren.Link{link("self", weekHref(monday), name)},
-		Actions: append([]siren.Action{planAction(key)}, lineActions()...)}
+	e := &siren.Entity{Class: []string{"week"}, Title: name, Links: []siren.Link{link("self", weekHref(monday), name)}}
 	prev, next := monday.AddDate(0, 0, -7), monday.AddDate(0, 0, 7)
 	e.Links = append(e.Links, neighbourLinks(
 		neighbour{prev, weekHref(prev), weekName(prev)},
@@ -80,7 +75,7 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 	for _, d := range days {
 		e.Entities = append(e.Entities, link("day", siren.DayHref(d.Day), d.Day))
 	}
-	props := map[string]any{"week": key, "from": from, "through": through, "today": today, "days": days, "lines": lines}
+	props := map[string]any{"week": key, "from": from, "through": through, "today": today, "days": days}
 	if err := h.withPeriodPage(ctx, e, props, key); err != nil {
 		return nil, err
 	}
@@ -89,12 +84,16 @@ func (h *server) week(r *http.Request) (*siren.Entity, error) {
 }
 
 // withPeriodPage adds the page of a period to the entity of its view, when the page exists: its id, body, version and
-// cover as properties, a link to the page and the action that saves its body. A period page is made by its first
-// plan line or by hand, so a period with no page shows none.
+// cover as properties, a link to the page and the action that saves its body. A period with no page offers create-page
+// with its key as the title: that is the one way to make the page.
 func (h *server) withPeriodPage(ctx context.Context, e *siren.Entity, props map[string]any, key string) error {
 	id, err := h.s.PageID(ctx, key)
-	if err != nil || id == 0 {
+	if err != nil {
 		return err
+	}
+	if id == 0 {
+		e.Actions = append(e.Actions, action("create-page", nil, map[string]any{"title": key}))
+		return nil
 	}
 	p, err := h.s.PageByID(ctx, id)
 	if err != nil || p.DeletedAt != "" {

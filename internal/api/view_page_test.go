@@ -75,7 +75,6 @@ func TestEveryViewRenders(t *testing.T) {
 	}
 	draft := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Draft", "body": "old words"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, draft, "rename"), map[string]string{"title": "Essay"}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "plan"), map[string]string{"page": "Errands", "text": "Call the bank"}))
 	gone := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Scratch"}))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, gone, "tombstone-pages"), nil))
 
@@ -94,7 +93,7 @@ func TestEveryViewRenders(t *testing.T) {
 			`<a href="/days" aria-current="page">Days</a>`, `</span>Ana</a>`,
 			`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
-		{"/weeks/2026-W40", http.StatusOK, nil}, // a week draws a body with its boxes and the plan rows: no id repeats
+		{"/weeks/2026-W40", http.StatusOK, nil}, // a week draws its days and the form that makes its page: no id repeats
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
 			`<a href="/pages?title=running" class="wikilink">#running</a>`}},
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
@@ -108,8 +107,6 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/metrics/weight", http.StatusOK, []string{`<svg class="chart"`, "71.2"}},
 		{"/measurements/1", http.StatusOK, nil},
 		{reading, http.StatusOK, []string{`action="/measurements/`, "Correct"}},
-		{"/plans", http.StatusOK, []string{"<h1>Plans</h1>", "1 open plan", `<h3>No day</h3>`, `/schedule"`, `aria-label="Order"`}},
-		{"/plans?order=page", http.StatusOK, []string{`<a href="/plans?order=page" aria-current="page">By page</a>`, `>Errands</a></h3>`}},
 		{"/search", http.StatusOK, nil},
 		{"/search?q=ran", http.StatusOK, []string{`<nav class="kinds chips" aria-label="Kind">`, `<a href="/search?q=ran" aria-current="page">All</a>`,
 			`<section class="result-group" aria-label="Days"><div class="panel-head"><h2>Days</h2><a class="meta" href="/search?kind=day&amp;q=ran">Show only these</a>`,

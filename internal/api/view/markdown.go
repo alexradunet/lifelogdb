@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -22,20 +21,15 @@ import (
 // not this rendering, is what the save contract wrote.
 var bodyMD = goldmark.New()
 
-func markdown(src string) template.HTML { return markdownCover(src, "", "", "") }
+func markdown(src string) template.HTML { return markdownCover(src, "") }
 
 // markdownCover is markdown with the page's cover drawn apart, above the body (docs/plans/127-a-cover-for-every-page.md):
 // the first embed that names the cover (embed, its title as the body writes it) is left out, and so is its paragraph
 // when nothing else is in it. An empty embed leaves out nothing.
-//
-// tickHref is the address of the tick action of the page the body belongs to, and back the page the browser returns to
-// after it: they turn the open plan lines of the body into boxes that tick. An empty tickHref draws every box without
-// a form (a deleted page, the preview, a search snippet, a card of the stream).
-func markdownCover(src, embed, tickHref, back string) template.HTML {
+func markdownCover(src, embed string) template.HTML {
 	var b bytes.Buffer
 	source := []byte(src)
 	doc := bodyMD.Parser().Parse(gtext.NewReader(source))
-	forms := enhancePlans(doc, source, tickHref, back)
 	enhanceText(doc, source)
 	if embed != "" {
 		leaveOutEmbed(doc, source, text.TitleKey(embed))
@@ -43,167 +37,7 @@ func markdownCover(src, embed, tickHref, back string) template.HTML {
 	if err := bodyMD.Renderer().Render(&b, source, doc); err != nil {
 		return template.HTML("<pre>" + template.HTMLEscapeString(src) + "</pre>")
 	}
-	if forms != "" {
-		b.WriteString("<div hidden>" + forms + "</div>")
-	}
 	return template.HTML(b.String())
-}
-
-// inline draws the words of a plan line in a list as one inline run: CommonMark emphasis, [[Title]], ![[embed]] and
-// #tag as the body draws them. A line has no block structure, so the one paragraph around the run is cut.
-func inline(words string) template.HTML {
-	html := string(markdownCover(words, "", "", ""))
-	html = strings.TrimSpace(html)
-	if strings.HasPrefix(html, "<p>") && strings.HasSuffix(html, "</p>") && strings.Count(html, "<p>") == 1 {
-		html = html[3 : len(html)-4]
-	}
-	return template.HTML(html)
-}
-
-// A plan line in a body (docs/contract/plan-lines.md, which is the one home of the grammar; text.Plans reads it). Its
-// box becomes a glyph, and the tokens (on:, due:, done:, every:, from:) become small words, so the words read first.
-// The box of an open line is a button of a tick form, and so is the box of a done or dropped line (it reopens). The form cannot stand inside the item: in a loose list the item
-// holds a paragraph, and a form would end it. So the forms stand together after the body, and each button names its
-// form (form="tick-N", N the line).
-var boxGlyph = map[byte][2]string{' ': {"open", "\u2610"}, 'x': {"done", "\u2611"}, '-': {"dropped", "\u2612"}, '>': {"carried", "\u25b7"}}
-
-// span is a range of the source that is drawn as html instead.
-type span struct {
-	start, end int
-	html       string
-}
-
-// enhancePlans replaces the box and the tokens of each plan line in doc, and returns the tick forms that the open,
-// done and dropped lines need ("" when tickHref is empty or no line ticks).
-func enhancePlans(doc ast.Node, source []byte, tickHref, back string) string {
-	plans := text.Plans(string(source))
-	if len(plans) == 0 {
-		return ""
-	}
-	byBox := make(map[int]text.Plan, len(plans))
-	for _, p := range plans {
-		byBox[p.BoxAt] = p
-	}
-	esc := template.HTMLEscapeString
-	var forms strings.Builder
-	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		item, ok := n.(*ast.ListItem)
-		if !entering || !ok {
-			return ast.WalkContinue, nil
-		}
-		switch item.FirstChild().(type) {
-		case *ast.TextBlock, *ast.Paragraph:
-		default:
-			return ast.WalkContinue, nil
-		}
-		block := item.FirstChild()
-		if block.Lines().Len() == 0 {
-			return ast.WalkContinue, nil
-		}
-		p, ok := byBox[block.Lines().At(0).Start]
-		if !ok {
-			return ast.WalkContinue, nil
-		}
-		word, glyph := boxGlyph[p.Box][0], boxGlyph[p.Box][1]
-		box := `<span class="box ` + word + `" role="img" aria-label="` + word + `">` + glyph + `</span>`
-		// An open box ticks done. A done or dropped box reopens its line. A carried box stays a glyph.
-		outcome, verb := "done", "Done"
-		if p.Box == 'x' || p.Box == '-' {
-			outcome, verb = "reopen", "Reopen"
-		}
-		if p.Box != '>' && p.Bad == "" && p.Text != "" && tickHref != "" {
-			n := strconv.Itoa(p.Line)
-			id := "tick-" + n
-			// The button has an id, and the form returns to it: after the write the browser opens the page at this box.
-			box = `<button class="box ` + word + `" id="box-` + n + `" form="` + id + `" name="outcome" value="` + outcome + `" aria-label="` + verb + `: ` + esc(p.Text) + `">` + glyph + `</button>`
-			forms.WriteString(`<form id="` + id + `" method="post" action="` + esc(tickHref) + `">` +
-				`<input type="hidden" name="back" value="` + esc(back+"#box-"+n) + `">` +
-				`<input type="hidden" name="line" value="` + n + `">` +
-				`<input type="hidden" name="text" value="` + esc(p.Text) + `"></form>`)
-		}
-		spans := []span{{p.BoxAt, p.BoxAt + 3, box}}
-		for _, t := range p.Tokens {
-			spans = append(spans, span{t[0], t[1], tokenChip(string(source[t[0]:t[1]]))})
-		}
-		replaceSpans(block, spans)
-		return ast.WalkSkipChildren, nil
-	})
-	return forms.String()
-}
-
-// tokenChip draws a token of a well-formed plan line (on:, due:, done:, every:, from:done) as the badge that the plan
-// rows use (planrow in plan.html): "on Tue 20 Oct", "every week". The days are in the words of shortDay, which needs no
-// clock. The grammar has been checked already, so the key and the value are known.
-func tokenChip(token string) string {
-	key, value, _ := strings.Cut(token, ":")
-	words := key + " " + value
-	switch key {
-	case "on", "due", "done":
-		words = key + " " + shortDay(value)
-	case "from":
-		words = "from " + value
-	}
-	return `<span class="badge">` + template.HTMLEscapeString(words) + `</span>`
-}
-
-// replaceSpans draws the spans of the source as html in the text nodes of a block. A span may cover parts of several
-// nodes (goldmark splits "[ ]" at the brackets), and html is written where the span starts. The spans are in order.
-func replaceSpans(block ast.Node, spans []span) {
-	for c := block.FirstChild(); c != nil; {
-		next := c.NextSibling()
-		if t, ok := c.(*ast.Text); ok {
-			if pieces := splitText(t, spans); pieces != nil {
-				for _, n := range pieces {
-					block.InsertBefore(block, c, n)
-				}
-				block.RemoveChild(block, c)
-			}
-		}
-		c = next
-	}
-}
-
-// splitText is the nodes that replace t when a span overlaps it, and nil when none does. The line break of t stays
-// on the last node.
-func splitText(t *ast.Text, spans []span) []ast.Node {
-	a, b := t.Segment.Start, t.Segment.Stop
-	out := []ast.Node{} // empty and not nil when a span covers all of t: t goes away
-	cursor, hit := a, false
-	piece := func(from, to int) {
-		if to > from {
-			out = append(out, ast.NewTextSegment(gtext.NewSegment(from, to)))
-		}
-	}
-	for _, s := range spans {
-		if s.end <= a || s.start >= b {
-			continue
-		}
-		hit = true
-		piece(cursor, s.start)
-		if s.start >= a {
-			h := ast.NewString([]byte(s.html))
-			h.SetCode(true) // written as it is: the html was escaped when it was built
-			out = append(out, h)
-		}
-		cursor = min(max(cursor, s.end), b)
-	}
-	if !hit {
-		return nil
-	}
-	piece(cursor, b)
-	if t.SoftLineBreak() || t.HardLineBreak() {
-		var last *ast.Text
-		if len(out) > 0 {
-			last, _ = out[len(out)-1].(*ast.Text)
-		}
-		if last == nil {
-			last = ast.NewTextSegment(gtext.NewSegment(b, b))
-			out = append(out, last)
-		}
-		last.SetSoftLineBreak(t.SoftLineBreak())
-		last.SetHardLineBreak(t.HardLineBreak())
-	}
-	return out
 }
 
 // leaveOutEmbed removes the first embed whose title has the key, in the order of the text, and its paragraph when

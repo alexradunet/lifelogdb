@@ -41,15 +41,18 @@ func (t *Tx) SetBody(id int64, body string) (Sync, error) {
 }
 
 // CreatePage creates a page written on purpose; day is the day it was written ("" = today). A title that is a
-// day makes that day's page.
+// day makes that day's page. A title that is a period key makes a period page, which has no day (D30).
 func (t *Tx) CreatePage(title, body, day string) (id int64, r Sync, err error) {
+	var stored any = day
 	switch {
 	case text.IsDay(title):
-		day = title
+		stored = title
+	case periodKey.MatchString(text.TitleKey(title)):
+		stored = nil
 	case day == "":
-		day = t.today()
+		stored = t.today()
 	}
-	if id, err = t.createNamed("page", title, body, day, nil); err != nil {
+	if id, err = t.createNamed("page", title, body, stored, nil); err != nil {
 		return id, r, err
 	}
 	r, err = t.syncWikilinks(id, body)

@@ -111,12 +111,12 @@ func (h *server) root(r *http.Request) (*siren.Entity, error) {
 	actions := []siren.Action{
 		action("capture", map[string]string{"day": today}, nil), action("search", nil, nil), action("find", nil, nil), action("open-day", nil, nil),
 		action("create-page", nil, nil), action("create-person", nil, nil), action("add-file", nil, nil),
-		record, planAction(today), action("register-metric", nil, nil), action("snapshot", nil, nil)}
+		record, action("register-metric", nil, nil), action("snapshot", nil, nil)}
 	return &siren.Entity{
 		Class: []string{"root"}, Title: "Lifelog",
 		Properties: map[string]any{"today": today, "recent": recent},
 		Links: []siren.Link{link("self", "/", "Lifelog"), link("today", siren.DayHref(today), "Today"), link("days", "/days", "Days"),
-			link("browse", siren.BrowseHref(nil), "Browse"), link("plans", "/plans", "Plans"), link("people", siren.BrowseKindHref("person"), "People"),
+			link("browse", siren.BrowseHref(nil), "Browse"), link("people", siren.BrowseKindHref("person"), "People"),
 			link("media", siren.BrowseKindHref("media"), "Media"), link("files", siren.BrowseKindHref("document"), "Documents"),
 			link("metrics", "/metrics", "Metrics"), link("ghosts", siren.GhostsHref(), "Ghost pages"), link("actions", "/actions", "All actions"),
 			link("calendar", siren.MonthHref(now), "Calendar"),
@@ -270,10 +270,6 @@ type dayView struct {
 	core.Day
 	Mood  []float64 `json:"mood"`
 	Today string    `json:"today"`
-	// Planned are the plan lines of the day: from today on, the open lines planned on or before it; before today,
-	// the lines of that day. PlannedMore counts the open lines left out (docs/contract/plan-lines.md).
-	Planned     []planLine `json:"planned"`
-	PlannedMore int        `json:"planned_more"`
 	// Recent are the newest day pages, on the day of today only: Home is the page of today.
 	Recent []recentDay `json:"recent,omitempty"`
 	// Earlier are the day pages of this day in the years before, the nearest year first: "On this day".
@@ -311,10 +307,6 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 			return nil, err
 		}
 	}
-	planned, plannedMore, err := h.plannedFor(ctx, day)
-	if err != nil {
-		return nil, err
-	}
 	earlier, err := h.sameDayEarlier(ctx, day)
 	if err != nil {
 		return nil, err
@@ -328,9 +320,9 @@ func (h *server) dayEntity(ctx context.Context, day string) (*siren.Entity, erro
 	t, _ := text.ParseDay(day)
 	e := &siren.Entity{
 		Class: []string{"day"}, Title: day,
-		Properties: dayView{Day: *d, Mood: mood, Today: today, Planned: planned, PlannedMore: plannedMore, Recent: recent, Earlier: earlier, Units: units, Daily: daily},
+		Properties: dayView{Day: *d, Mood: mood, Today: today, Recent: recent, Earlier: earlier, Units: units, Daily: daily},
 		Links:      []siren.Link{link("self", siren.DayHref(day), day)},
-		Actions:    append([]siren.Action{action("capture", map[string]string{"day": day}, nil), record, planActionOnDay(day)}, lineActions()...),
+		Actions:    []siren.Action{action("capture", map[string]string{"day": day}, nil), record},
 	}
 	// 0000-01-01 has no day before it, and 9999-12-31 none after it.
 	before, after := t.AddDate(0, 0, -1), t.AddDate(0, 0, 1)

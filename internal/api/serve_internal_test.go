@@ -39,14 +39,14 @@ var backCases = []struct{ back, want string }{
 	{"/\t/evil.example/", ""},
 	{"/a\x7fb", ""},
 	{"/page#part", "/page#part"}, // an id fragment names where the page opens
-	{"/plans#row-1-3", "/plans#row-1-3"},
-	{"/plans?order=page#row-1-3", "/plans?order=page#row-1-3"},
-	{"/plans#", ""},
-	{"/plans#a b", ""},
+	{"/metrics#row-1-3", "/metrics#row-1-3"},
+	{"/metrics?order=page#row-1-3", "/metrics?order=page#row-1-3"},
+	{"/metrics#", ""},
+	{"/metrics#a b", ""},
 	{"/#<script>", ""},
-	{"/plans#a#b", ""},
-	{"/plans#" + strings.Repeat("a", 64), "/plans#" + strings.Repeat("a", 64)},
-	{"/plans#" + strings.Repeat("a", 65), ""},
+	{"/metrics#a#b", ""},
+	{"/metrics#" + strings.Repeat("a", 64), "/metrics#" + strings.Repeat("a", 64)},
+	{"/metrics#" + strings.Repeat("a", 65), ""},
 	{"/%zz", ""}, // not a URL: the escape is not hex
 }
 
@@ -57,7 +57,7 @@ func requestWithBack(back string) *http.Request {
 	return r
 }
 
-// TestBackOf: backOf keeps a path on this server and drops every other value (docs/plans/091-the-browser-for-daily-use.md).
+// TestBackOf: backOf keeps a path on this server and drops every other value (docs/metrics/091-the-browser-for-daily-use.md).
 func TestBackOf(t *testing.T) {
 	for _, tc := range backCases {
 		if got := backOf(requestWithBack(tc.back)); got != tc.want {

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -109,7 +108,7 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	for _, tool := range listed.Tools {
 		have[tool.Name] = true
 	}
-	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "plan", "tick", "carry", "schedule", "plans", "edit_person", "edit_metric"} {
+	for _, name := range []string{"find", "capture", "get", "save_body", "add_file", "edit_person", "edit_metric"} {
 		if !have[name] {
 			t.Errorf("no tool %q", name)
 		}
@@ -150,31 +149,6 @@ func TestTheMCPServerOnTheRealLifelog(t *testing.T) {
 	capture, _ := call(t, ctx, session, "capture", map[string]any{"day": "2031-05-20", "text": text})
 	if capture.Title != "2031-05-20" {
 		t.Errorf("capture answered %q, want the day page 2031-05-20", capture.Title)
-	}
-
-	// plan adds a plan line to a day page (a flag field is a number), and tick closes it: a repeat adds the next line.
-	planned, _ := call(t, ctx, session, "plan", map[string]any{"page": "2031-05-20", "text": "Pay rent", "due": "2031-05-20", "every": "month", "from_done": 1})
-	// the capture begins with its stamp: the hour of the server's clock, via test (the source of the server is agent:test)
-	if want := regexp.MustCompile(`^\(\d\d:\d\d, via test\) Walked by the river, synthetic entry\.\n\n- \[ \] Pay rent due:2031-05-20 every:month from:done$`); !want.MatchString(fmt.Sprint(props(t, planned)["body"])) {
-		t.Errorf("plan wrote the body %q, want %s", props(t, planned)["body"], want)
-	}
-	ticked, _ := call(t, ctx, session, "tick", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 3, "text": "Pay rent", "outcome": "done", "done": "2031-05-20"})
-	if res, _ := ticked.Result.(map[string]any); res["appended"] != "- [ ] Pay rent due:2031-06-20 every:month from:done" {
-		t.Errorf("tick answered the result %v, want the next line", ticked.Result)
-	}
-
-	// schedule changes the dates of the next line that the tick added (line 5), and plans lists it with the new day.
-	call(t, ctx, session, "schedule", map[string]any{"id": fmt.Sprint(props(t, planned)["id"]), "line": 5, "text": "Pay rent", "on": "2031-06-01", "due": "2031-06-03"})
-	list, _ := call(t, ctx, session, "plans", map[string]any{})
-	lines, _ := props(t, list)["lines"].([]any)
-	found := false
-	for _, l := range lines {
-		if l, _ := l.(map[string]any); l["title"] == "2031-05-20" && l["text"] == "Pay rent" && l["on"] == "2031-06-01" && l["due"] == "2031-06-03" {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("plans lists %v, want the scheduled line Pay rent", lines)
 	}
 
 	// save_body with a stale version is the error entity stale_version.

@@ -1,7 +1,6 @@
 package view
 
 import (
-	"slices"
 	"strings"
 	"testing"
 )
@@ -38,49 +37,10 @@ func TestAResultIsSaidInSentences(t *testing.T) {
 		{"a capture sent again", map[string]any{"already": true}, "Already added. Nothing changed."},
 		{"snapshot", map[string]any{"snapshot": "snaps/life-2026-10-12.db", "restore_check": "ok"},
 			`Took a snapshot: <code>snaps/life-2026-10-12.db</code>. | <dl class="facts"><dt>restore check</dt><dd>ok</dd></dl>`},
-		{"plan", map[string]any{"page_id": 4.0, "line": 3.0, "written": "- [ ] Call"}, `Planned on line 3 of <a href="/pages/4">its page</a>.`},
-		// A line nested two levels deep is an indented code block when it is read alone: the message reads the dates of
-		// the result, not the written line.
-		{"schedule of a nested line", map[string]any{"page_id": 4.0, "line": 3.0, "written": "    - [ ] deep on:2026-10-13", "on": "2026-10-13", "due": ""},
-			`Scheduled line 3 of <a href="/pages/4">its page</a>: on Tue 13 Oct.`},
-		{"schedule with no date left", map[string]any{"page_id": 4.0, "line": 3.0, "written": "- [ ] Call", "on": "", "due": ""},
-			`Scheduled line 3 of <a href="/pages/4">its page</a>: no dates.`},
-		{"tick done", map[string]any{"line": 2.0, "outcome": "done"}, "Done."},
-		{"tick dropped", map[string]any{"line": 2.0, "outcome": "dropped"}, "Dropped."},
-		{"tick with the next line", map[string]any{"line": 2.0, "outcome": "done", "appended": "- [ ] Pay due:2026-12-01", "appended_line": 5.0}, "Done. | The next one is due Tue 1 Dec."},
-		{"tick with the next line on a day", map[string]any{"line": 2.0, "outcome": "done", "appended": "- [ ] Water on:2026-10-27 every:week", "appended_line": 7.0}, "Done. | The next one is on Tue 27 Oct."},
-		{"tick with a next line that has no day", map[string]any{"line": 2.0, "outcome": "done", "appended": "garbage", "appended_line": 5.0}, "Done. | The next one is line 5."},
-		{"tick reopen", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0}, "Reopened."},
-		{"tick reopen removed the next", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0, "removed": "- [ ] Pay", "removed_line": 5.0}, "Reopened. | The next one, line 5, is removed."},
-		{"tick reopen kept the next", map[string]any{"line": 2.0, "outcome": "reopen", "text": "Pay", "page_id": 4.0, "next_kept": true}, "Reopened. | The next one was changed since, so it stays."},
-		{"carry", map[string]any{"line": 2.0, "to_id": 9.0, "to_line": 1.0}, `Carried to <a href="/pages/9">its page</a>, line 1.`},
 		{"unknown", map[string]any{"foo_bar": 1.0}, `<dl class="facts"><dt>foo bar</dt><dd>1</dd></dl>`},
 	} {
 		if got := say(tc.in); got != tc.want {
 			t.Errorf("%s:\n got %s\nwant %s", tc.name, got, tc.want)
 		}
-	}
-}
-
-// TestATickOffersItsUndo: the line of a done or dropped tick carries one form that posts a reopen of the same line to
-// its page and returns to the page the toast is on. Without the page or the words there is no form.
-func TestATickOffersItsUndo(t *testing.T) {
-	m := map[string]any{"line": 2.0, "outcome": "dropped", "text": "Pay <rent>", "page_id": 4.0, "href": "/ticks/4"}
-	lines := resultSentences(m, clock{today: "2026-10-12"}, "/days/2026-10-12")
-	if len(lines) != 1 || lines[0].Form == nil {
-		t.Fatalf("lines %+v", lines)
-	}
-	want := resultForm{Href: "/ticks/4", Label: "Undo",
-		Hidden: [][2]string{{"back", "/days/2026-10-12"}, {"line", "2"}, {"text", "Pay <rent>"}, {"outcome", "reopen"}}}
-	if got := *lines[0].Form; got.Href != want.Href || got.Label != want.Label || !slices.Equal(got.Hidden, want.Hidden) {
-		t.Errorf("form %+v, want %+v", got, want)
-	}
-	for _, l := range resultSentences(map[string]any{"line": 2.0, "outcome": "done"}, clock{}, "/") {
-		if l.Form != nil {
-			t.Errorf("a form without a page: %+v", l)
-		}
-	}
-	if l := resultSentences(map[string]any{"line": 2.0, "outcome": "reopen", "text": "x", "page_id": 4.0}, clock{}, "/"); l[0].Form != nil {
-		t.Errorf("a reopen offers no undo: %+v", l)
 	}
 }

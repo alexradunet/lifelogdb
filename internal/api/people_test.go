@@ -142,7 +142,7 @@ func TestAPeriodPageOrACategoryIsNotOfferedAsAPersonOrAMetric(t *testing.T) {
 	c, h, _ := apitest.Fresh(t, "cli")
 	ctx := t.Context()
 	root := apitest.Must(t)(c.Get(ctx, "/"))
-	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "plan"), map[string]string{"page": "2026-W43", "text": "Synthetic plan"}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "2026-W43"}))
 	week := apitest.Must(t)(c.Get(ctx, "/pages?title=2026-W43"))
 	apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Run", "category": "Body"}))
 	body := apitest.Must(t)(c.Get(ctx, "/pages?title=Body"))

@@ -50,11 +50,7 @@ func (h *server) year(r *http.Request) (*siren.Entity, error) {
 	for _, n := range byDay {
 		readings += n
 	}
-	lines, err := h.linesIn(ctx, from, through)
-	if err != nil {
-		return nil, err
-	}
-	e := &siren.Entity{Class: []string{"year"}, Title: s, Actions: append([]siren.Action{planAction(s)}, lineActions()...)}
+	e := &siren.Entity{Class: []string{"year"}, Title: s}
 	months := []yearMonth{}
 	days := writtenDays(entries, first, last) // the days of the year, built once: each month takes its own
 	for m := first; m.Year() == year; m = m.AddDate(0, 1, 0) {
@@ -78,11 +74,11 @@ func (h *server) year(r *http.Request) (*siren.Entity, error) {
 	}
 	e.Links = append(e.Links, zoomLinks(anchorIn(h.s.Today(), first, last))...)
 	e.Links = append(e.Links, link("index", "/", "Home"))
-	props := map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months, "lines": lines}
+	props := map[string]any{"year": s, "today": h.s.Today(), "written": len(entries), "readings": readings, "months": months}
 	if err := h.withPeriodPage(ctx, e, props, s); err != nil {
 		return nil, err
 	}
-	// The four quarters have no view of their own: each is a link to its page, or to the plan form that makes it.
+	// The four quarters have no view of their own: each is a link to its page, or to the form that makes it.
 	quarters := make([]yearQuarter, 4)
 	for i := range quarters {
 		key := fmt.Sprintf("%s-Q%d", s, i+1)

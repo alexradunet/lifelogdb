@@ -16,6 +16,7 @@ import (
 	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 	"lifelog/internal/api/view"
+	"lifelog/siren"
 )
 
 // idOfSelf is the id at the end of an entity's self link.
@@ -217,5 +218,26 @@ func TestThePickBarSendsOnlyWhatTheAPIAllows(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "unknown field category") {
 		t.Errorf("an API client with category: %d %.300s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTheDeleteOfOnePageCarriesTheAddressOfItsRevive: the result of tombstone-pages for one page names the href of
+// the revive action of that page, so a client posts the undo there; for two pages there is no such field.
+func TestTheDeleteOfOnePageCarriesTheAddressOfItsRevive(t *testing.T) {
+	c, _, _ := apitest.FreshOn(t, "cli", fixedToday)
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	var pages []*siren.Entity
+	for _, title := range []string{"Bank", "Garden", "Orchard"} {
+		pages = append(pages, apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": title})))
+	}
+	one := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, pages[0], "tombstone-pages"), nil))
+	gone := apitest.Must(t)(c.Get(t.Context(), "/pages/"+fmt.Sprint(props(pages[0])["id"])))
+	if revive := apitest.Action(t, gone, "revive"); one.Result.(map[string]any)["revive"] != revive.Href {
+		t.Errorf("the result has revive %v, the action has %s", one.Result, revive.Href)
+	}
+	ids := fmt.Sprintf("%v %v", props(pages[1])["id"], props(pages[2])["id"])
+	two := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, pages[1], "tombstone-pages"), map[string]string{"ids": ids}))
+	if _, has := two.Result.(map[string]any)["revive"]; has {
+		t.Errorf("a delete of two pages carries revive: %v", two.Result)
 	}
 }
