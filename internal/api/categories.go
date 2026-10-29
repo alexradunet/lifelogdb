@@ -22,10 +22,7 @@ func (h *server) filePages(r *http.Request, act spec, src string) (*siren.Entity
 		return nil, err
 	}
 	from := v.Get("from")
-	move, err := flag(v, "move")
-	if err != nil {
-		return nil, err
-	}
+	move := flag(v, "move")
 	f, err := h.s.FilePages(r.Context(), src, ids, v.Get("category"), from, move)
 	if err != nil {
 		return nil, err

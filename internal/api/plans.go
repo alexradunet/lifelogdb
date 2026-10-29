@@ -9,8 +9,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"slices"
-	"strings"
 	"time"
 
 	"lifelog/internal/core"
@@ -138,11 +136,7 @@ func (h *server) plan(r *http.Request, act spec, src string) (*siren.Entity, err
 	if err != nil {
 		return nil, err
 	}
-	fromDone, err := flag(v, "from_done")
-	if err != nil {
-		return nil, err
-	}
-	res, err := h.s.Plan(r.Context(), src, h.dayNamed(v.Get("page")), v.Get("text"), h.dayNamed(v.Get("on")), h.dayNamed(v.Get("due")), v.Get("every"), fromDone)
+	res, err := h.s.Plan(r.Context(), src, h.dayNamed(v.Get("page")), v.Get("text"), h.dayNamed(v.Get("on")), h.dayNamed(v.Get("due")), v.Get("every"), flag(v, "from_done"))
 	if err != nil {
 		return nil, err
 	}
@@ -237,9 +231,6 @@ func (h *server) plans(r *http.Request, act spec, _ string) (*siren.Entity, erro
 	order := v.Get("order")
 	if order == "" {
 		order = planOrders[0]
-	}
-	if !slices.Contains(planOrders, order) {
-		return nil, core.Invalid("order must be one of %s", strings.Join(planOrders, ", "))
 	}
 	limit, offset, err := pageOf(r, plannedLimit)
 	if err != nil {

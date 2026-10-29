@@ -177,9 +177,9 @@ func TestMultipartAggregateLimits(t *testing.T) {
 						return
 					}
 				case "text-at", "text-over":
-					// An unknown field fills the text of the request to the limit, less a short body. The body comes
+					// A repeated body field fills the text of the request to the limit, less a short body. The body comes
 					// last: it is kept only when the text of all the fields is at most 16 MiB.
-					p, e := mw.CreateFormField("unknown")
+					p, e := mw.CreateFormField("body")
 					if e != nil {
 						return
 					}
@@ -195,12 +195,7 @@ func TestMultipartAggregateLimits(t *testing.T) {
 					}
 				case "aggregate", "unique":
 					for i := 0; i < 17; i++ {
-						p, e := mw.CreateFormField(func() string {
-							if kind == "unique" {
-								return fmt.Sprint("unknown", i)
-							}
-							return "unknown"
-						}())
+						p, e := mw.CreateFormField("body")
 						if e != nil {
 							return
 						}
@@ -210,7 +205,7 @@ func TestMultipartAggregateLimits(t *testing.T) {
 					}
 				case "parts":
 					for i := 0; i < 65; i++ {
-						if mw.WriteField("unknown", "") != nil {
+						if mw.WriteField("body", "") != nil {
 							return
 						}
 					}

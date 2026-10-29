@@ -274,11 +274,12 @@ func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 		t.Error("more than the asked form is open")
 	}
 
-	// A name no action has opens nothing, and with no ?new= every form stays closed.
-	for _, path := range []string{"/browse?kind=person&new=nothing&title=Ana", "/browse?kind=person"} {
-		if body := browse(t, h, path); strings.Contains(body, `<details class="action" open>`) || strings.Contains(body, `value="Ana"`) {
-			t.Errorf("%s opens or fills a form", path)
-		}
+	// With no ?new= every form stays closed. A name no action has is refused (422), and opens nothing.
+	if body := browse(t, h, "/browse?kind=person"); strings.Contains(body, `<details class="action" open>`) {
+		t.Error("a list with no ?new= opens a form")
+	}
+	if body := browseStatus(t, h, "/browse?kind=person&new=nothing&title=Ana", http.StatusUnprocessableEntity); strings.Contains(body, `<details class="action" open>`) {
+		t.Error("a name no action has opens a form")
 	}
 
 	// Home is the page of today (docs/plans/129-the-ux-pass.md, part 10): New page is in the New menu of the rail, and

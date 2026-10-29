@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 
 	"lifelog/internal/core"
 	"lifelog/siren"
@@ -95,17 +98,90 @@ func form(r *http.Request) (url.Values, error) {
 }
 
 // fieldsOf reads the fields of the catalog action act: the query of a GET, the form of a POST. It refuses a request
-// that leaves a required field empty (required).
+// that breaks the shape the catalog gives the action (checked).
 func fieldsOf(r *http.Request, act spec) (url.Values, error) {
 	if act.Method == "GET" {
 		v := r.URL.Query()
-		return v, required(v, act)
+		return v, checked(v, act, r.Method)
 	}
 	v, err := form(r)
 	if err != nil {
 		return nil, err
 	}
-	return v, required(v, act)
+	return v, checked(v, act, r.Method)
+}
+
+// browserFields are the names that a request may carry beside the fields of its action: back is the page a browser
+// form returns to (backOf), feedback is the token of the toast after a redirect, and new names the form that a link
+// of a page asks for (view/forms.go).
+var browserFields = []string{"back", "feedback", "new"}
+
+// sharedForms names, by action, the action whose form a browser also sends to it. The Delete button of a list's pick
+// bar sends the form of file-pages to tombstone-pages (view.Or, the pick-bar template): so a browser sends the fields of
+// file-pages to tombstone-pages, and known allows them there. The names come from the catalog, never from a list here.
+var sharedForms = map[string]string{"tombstone-pages": "file-pages"}
+
+// checked refuses values that break the shape of the action act: a required field left empty (required), a name the
+// action does not list (known), and a value outside the options of a field (options). The shape of a request is the
+// API's rule, not the data's, so it has one home for every surface.
+func checked(v url.Values, act spec, method string) error {
+	if err := required(v, act); err != nil {
+		return err
+	}
+	if err := known(v, act, method); err != nil {
+		return err
+	}
+	return options(v, act)
+}
+
+// fieldNames are the names of the fields of the action s that a request sends: a path field is in the route.
+func fieldNames(s spec) []string {
+	var names []string
+	for _, f := range s.Fields {
+		if f.In != "path" {
+			names = append(names, f.Name)
+		}
+	}
+	return names
+}
+
+// unknownField is the refusal of a name that the action does not take.
+func unknownField(name string, s spec) error {
+	return core.Invalid("unknown field %s: %s takes %s", name, s.Name, strings.Join(fieldNames(s), ", "))
+}
+
+// known refuses a name that is not a field of the action and not one of browserFields. A GET that has new may carry
+// the fields of the action that new names, as a link asks for its form (view/forms.go). A new that names no action is
+// refused.
+func known(v url.Values, act spec, method string) error {
+	allowed := fieldNames(act)
+	if shared, ok := sharedForms[act.Name]; ok {
+		allowed = append(allowed, fieldNames(specOf(shared))...)
+	}
+	if asked := v.Get("new"); method == "GET" && asked != "" {
+		s, ok := lookup(asked)
+		if !ok {
+			return core.Invalid("unknown form %s: new names an action of GET /actions", asked)
+		}
+		allowed = append(allowed, fieldNames(s)...)
+	}
+	for _, name := range slices.Sorted(maps.Keys(v)) {
+		if !slices.Contains(allowed, name) && !slices.Contains(browserFields, name) {
+			return unknownField(name, act)
+		}
+	}
+	return nil
+}
+
+// options refuses a non-empty value outside the static options of a field. The options of a field that the catalog
+// leaves empty are known at run time (withOptions), and the handler checks them.
+func options(v url.Values, s spec) error {
+	for _, f := range s.Fields {
+		if x := v.Get(f.Name); f.In != "path" && x != "" && len(f.Options) > 0 && !slices.Contains(f.Options, x) {
+			return core.Invalid("%s must be one of %s", f.Name, strings.Join(f.Options, ", "))
+		}
+	}
+	return nil
 }
 
 // required refuses values that leave a required field of the action s empty. The catalog is the one list of the
@@ -166,16 +242,9 @@ func parseDecimal(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
-// flag is a 0/1 field: false when it is empty.
-func flag(v url.Values, name string) (bool, error) {
-	switch v.Get(name) {
-	case "", "0":
-		return false, nil
-	case "1":
-		return true, nil
-	}
-	return false, core.Invalid("%s must be 0 or 1", name)
-}
+// flag is a 0/1 field: false when it is empty. fieldsOf has refused any other value (the options of flagField), so
+// the reader does not.
+func flag(v url.Values, name string) bool { return v.Get(name) == "1" }
 
 // The lists page (docs/plans/079-client-contract-hygiene.md): limit and offset select a page, and the entity
 // links the next one when a further row exists, the previous one when offset > 0.

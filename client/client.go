@@ -112,7 +112,7 @@ func (c *Client) Get(ctx context.Context, href string) (*siren.Entity, error) {
 }
 
 // fill is an action's href with its path fields filled, its other field values as a form, and its file fields (field
-// name → path of a local file).
+// name → path of a local file). A value whose name is no field of the action stays in the form: the server refuses it.
 func fill(a siren.Action, values map[string]string) (string, url.Values, map[string]string, error) {
 	href := a.Href
 	form, files := url.Values{}, map[string]string{}
@@ -135,9 +135,10 @@ func fill(a siren.Action, values map[string]string) (string, url.Values, map[str
 			form.Set(f.Name, v)
 		}
 	}
-	for k := range values {
+	// A name that is no field of the action is sent as it is: the server refuses it (422), the same for every client.
+	for k, v := range values {
 		if a.Field(k) == nil {
-			return "", nil, nil, fmt.Errorf("%s has no field %q", a.Name, k)
+			form.Set(k, v)
 		}
 	}
 	return href, form, files, nil

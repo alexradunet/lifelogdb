@@ -1,0 +1,174 @@
+package api_test
+
+import (
+	"bytes"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"lifelog/internal/api/apitest"
+)
+
+// send makes one request to the handler and gives back the status and the body.
+func send(h http.Handler, method, target, ctype string, body io.Reader) (int, string) {
+	req := httptest.NewRequest(method, target, body)
+	if ctype != "" {
+		req.Header.Set("Content-Type", ctype)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec.Code, rec.Body.String()
+}
+
+// TestAnUnknownFieldIsRefused: a request names only the fields of its action and the three names of a browser. Any
+// other name is 422, in a form, in JSON and in a query, and nothing is written.
+func TestAnUnknownFieldIsRefused(t *testing.T) {
+	_, h, s := apitest.Fresh(t, "cli")
+	const form = "application/x-www-form-urlencoded"
+	pages := func() string { return scalar(t, s, "SELECT count(*) FROM entities") }
+	before := pages()
+
+	for _, tc := range []struct{ name, method, target, ctype, body string }{
+		{"a form", "POST", "/days/2026-09-01/capture", form, "text=x&nope=1"},
+		{"a JSON body", "POST", "/days/2026-09-01/capture", "application/json", `{"text":"x","nope":"1"}`},
+		{"a query of a GET", "GET", "/search?q=a&nope=1", "", ""},
+		{"a new that names no action", "GET", "/browse?new=typo", "", ""},
+		{"a field of the asked form and one more", "GET", "/browse?new=create-page&nope=1", "", ""},
+	} {
+		code, body := send(h, tc.method, tc.target, tc.ctype, strings.NewReader(tc.body))
+		if code != 422 || !strings.Contains(body, "invalid") {
+			t.Errorf("%s: %d %s, want 422 invalid", tc.name, code, body)
+		}
+	}
+	code, body := send(h, "POST", "/days/2026-09-01/capture", form, strings.NewReader("text=x&nope=1"))
+	if code != 422 || !strings.Contains(body, "nope") || !strings.Contains(body, "capture") {
+		t.Errorf("the message: %d %s, want the field and the action named", code, body)
+	}
+	if got := pages(); got != before {
+		t.Errorf("entities %s, want %s: a refused request wrote", got, before)
+	}
+
+	for _, target := range []string{"/search?q=a", "/browse?new=create-page&title=x", "/search?q=a&back=%2F&feedback=t&new=create-page"} {
+		if code, body := send(h, "GET", target, "", nil); code != 200 {
+			t.Errorf("%s: %d %s, want 200", target, code, body)
+		}
+	}
+	if code, body := send(h, "POST", "/days/2026-09-01/capture", form, strings.NewReader("text=x&back=%2F&feedback=t")); code >= 400 {
+		t.Errorf("a browser's own names: %d %s", code, body)
+	}
+}
+
+// TestAValueOutsideTheStaticOptionsIsRefused: the options that GET /actions lists bind the server. An empty value
+// passes. The options of a metric are runtime, so a metric that does not exist reaches the handler's own refusal.
+func TestAValueOutsideTheStaticOptionsIsRefused(t *testing.T) {
+	_, h, _ := apitest.Fresh(t, "cli")
+	const form = "application/x-www-form-urlencoded"
+	for _, tc := range []struct{ method, target, body, field string }{
+		{"GET", "/search?q=a&kind=planet", "", "kind"},
+		{"GET", "/pages/random?kind=x", "", "kind"},
+		{"GET", "/browse?unfiled=yes", "", "unfiled"},
+		{"GET", "/browse?ghosts=2", "", "ghosts"},
+		{"GET", "/browse?kind=pages", "", "kind"},
+		{"GET", "/browse?kind=media&media=pdf", "", "media"},
+		{"GET", "/plans?order=newest", "", "order"},
+		{"POST", "/pages/1/metric", "daily=2", "daily"},
+		{"POST", "/days/2026-09-01/capture", "text=x&mood=6", "mood"},
+		{"POST", "/pages/1/tick", "line=1&text=x&outcome=later", "outcome"},
+	} {
+		code, body := send(h, tc.method, tc.target, form, strings.NewReader(tc.body))
+		if code != 422 || !strings.Contains(body, tc.field+" must be one of") {
+			t.Errorf("%s %s %s: %d %s, want 422 %q must be one of", tc.method, tc.target, tc.body, code, body, tc.field)
+		}
+	}
+	if code, body := send(h, "GET", "/search?q=a&kind=", "", nil); code != 200 {
+		t.Errorf("an empty kind: %d %s, want 200", code, body)
+	}
+	code, body := send(h, "POST", "/measurements", form, strings.NewReader(url.Values{"metric": {"Unknown"}, "day": {"2026-09-01"}, "value": {"1"}}.Encode()))
+	if code != 404 {
+		t.Errorf("a metric that does not exist: %d %s, want the handler's 404", code, body)
+	}
+}
+
+// zeros is a reader of n zero bytes that counts the bytes it gave.
+type zeros struct{ left, given int64 }
+
+func (z *zeros) Read(p []byte) (int, error) {
+	if z.left == 0 {
+		return 0, io.EOF
+	}
+	n := min(int64(len(p)), z.left)
+	clear(p[:n])
+	z.left -= n
+	z.given += n
+	return int(n), nil
+}
+
+// TestAMultipartPartWithAnUnknownNameIsRefusedBeforeItIsRead: the refusal is 422, not the limit 413, and the handler
+// stops before it reads the part's bytes.
+func TestAMultipartPartWithAnUnknownNameIsRefusedBeforeItIsRead(t *testing.T) {
+	_, h, _ := apitest.Fresh(t, "cli")
+	const size = 20 << 20
+	body := &zeros{left: size}
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		p, err := mw.CreateFormField("unknown")
+		if err == nil {
+			_, err = io.Copy(p, body)
+		}
+		if err == nil {
+			err = mw.Close()
+		}
+		pw.CloseWithError(err)
+	}()
+	req := httptest.NewRequest("POST", "/files", pr)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() { h.ServeHTTP(rec, req); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the handler did not answer")
+	}
+	pr.Close()
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "unknown") {
+		t.Fatalf("%d %s, want 422 naming the field", rec.Code, rec.Body.String())
+	}
+	if body.given > 1<<20 {
+		t.Errorf("the handler read %d bytes of the part before it refused it", body.given)
+	}
+}
+
+// TestSetCoverTakesOnlyItsOwnFields: set-cover lists original, title and preview. The other names of a file form are
+// refused, in a plain form and in a multipart form.
+func TestSetCoverTakesOnlyItsOwnFields(t *testing.T) {
+	c, h, _ := apitest.Fresh(t, "cli")
+	root := apitest.Must(t)(c.Get(t.Context(), "/"))
+	trip := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Trip"}))
+	scan, _ := jpegFile(t, "scan.jpg", 20, 20)
+	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "add-file"), map[string]string{"title": "Scan.jpg", "original": scan}))
+	cover := apitest.Href(trip, "self") + "/cover"
+	for _, name := range []string{"dry_run", "day", "body", "sha256", "mime"} {
+		code, body := send(h, "POST", cover, "application/x-www-form-urlencoded", strings.NewReader("title=Scan.jpg&"+name+"=1"))
+		if code != 422 || !strings.Contains(body, name) {
+			t.Errorf("%s: %d %s, want 422", name, code, body)
+		}
+		var b bytes.Buffer
+		mw := multipart.NewWriter(&b)
+		mw.WriteField("title", "Scan.jpg")
+		mw.WriteField(name, "1")
+		mw.Close()
+		if code, body := send(h, "POST", cover, mw.FormDataContentType(), &b); code != 422 {
+			t.Errorf("multipart %s: %d %s, want 422", name, code, body)
+		}
+	}
+	if code, body := send(h, "POST", cover, "application/x-www-form-urlencoded", strings.NewReader("title=Scan.jpg")); code >= 400 {
+		t.Errorf("a kept picture: %d %s, want success", code, body)
+	}
+}

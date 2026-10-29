@@ -22,7 +22,7 @@ func TestFileKind(t *testing.T) {
 
 // TestBrowseQueryOf: the filters of GET /browse, each as browseQueryOf reads it: the kind (its default when the URL
 // names none), whether the URL names it, and the other filters. A combination that means nothing is a 422 with its
-// sentence.
+// sentence. A value outside the options of a field is refused before (options).
 func TestBrowseQueryOf(t *testing.T) {
 	for _, tc := range []struct{ query, want string }{
 		{"", "kind=page named=false in= unfiled=false ghosts=false media="},
@@ -41,11 +41,6 @@ func TestBrowseQueryOf(t *testing.T) {
 		{"ghosts=1&unfiled=1", "422 ghosts is a list of pages: it takes no other kind, no in and no unfiled"},
 		{"media=image", "422 media needs kind media"},
 		{"kind=page&media=image", "422 media needs kind media"},
-		{"kind=media&media=pdf", "422 media must be image, video or audio"},
-		{"kind=media&media=document", "422 media must be image, video or audio"}, // a kind of Browse, not a kind of media
-		{"kind=pages", "422 kind must be one of page, person, place, media, document, metric, all"},
-		{"unfiled=yes", "422 unfiled must be 0 or 1"},
-		{"ghosts=2", "422 ghosts must be 0 or 1"},
 	} {
 		q, err := url.ParseQuery(tc.query)
 		if err != nil {

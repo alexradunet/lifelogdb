@@ -148,8 +148,8 @@ func TestFormReadsAJSONBodyAsFormFields(t *testing.T) {
 		t.Errorf("null: %v,%v want no field", v, err)
 	}
 	v, _ := read(`{"a":true}`)
-	if _, err := flag(v, "a"); err == nil || !strings.Contains(err.Error(), "must be 0 or 1") {
-		t.Errorf("flag of true: %v want a refusal", err)
+	if flag(v, "a") {
+		t.Errorf("flag of true: true, want false: only 1 is yes (the options check refuses the rest)")
 	}
 	if _, err := read(`{"a":"x"}{"b":"y"}`); err == nil || !strings.Contains(err.Error(), "expected one JSON object") {
 		t.Errorf("two objects: %v", err)

@@ -574,7 +574,7 @@ copies of the docs, the mutants). `go test -short ./...` skips the mutants.
 
 Action JSON and URL-encoded bodies are limited to 20 MiB of encoded data; JSON
 must contain exactly one object. Multipart uploads allow up to 64 parts, 16 MiB
-per text field and 16 MiB total text (including unknown or repeated fields),
+per text field and 16 MiB total text (including repeated fields; an unknown name is refused (422) before its bytes are read),
 and at most one original and one preview part. A supplied preview may be up to
 64 MiB. Over-limit requests return HTTP 413 without writing; after a JSON or
 URL-encoded body over the limit, the server also closes an HTTP/1.1 connection (over

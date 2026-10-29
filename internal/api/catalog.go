@@ -49,7 +49,7 @@ func area(name, title string, rows int) siren.Field {
 }
 
 // flagField is a 0 or 1 choice: a browser draws a checkbox, and a program sends 1 for yes. Any other value is refused
-// (flag).
+// (options).
 func flagField(name, title string) siren.Field {
 	return siren.Field{Name: name, Type: "number", Title: title, Options: []string{"0", "1"}}
 }
@@ -299,12 +299,21 @@ var catalog = []spec{
 }
 
 func specOf(name string) spec {
+	s, ok := lookup(name)
+	if !ok {
+		panic("no action " + name)
+	}
+	return s
+}
+
+// lookup is the catalog action with the name, for a name that comes from a request.
+func lookup(name string) (spec, bool) {
 	for _, s := range catalog {
 		if s.Name == name {
-			return s
+			return s, true
 		}
 	}
-	panic("no action " + name)
+	return spec{}, false
 }
 
 // base is a spec's action before its fields: what action and templated share.

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 
 	"lifelog/internal/core"
@@ -128,20 +127,9 @@ type browseQuery struct {
 // browseQueryOf reads the filters of GET /browse and refuses a combination that means nothing (422).
 func browseQueryOf(q url.Values) (browseQuery, error) {
 	b := browseQuery{kind: q.Get("kind"), in: q.Get("in"), media: q.Get("media")}
-	var err error
-	if b.unfiled, err = flag(q, "unfiled"); err != nil {
-		return b, err
-	}
-	if b.ghosts, err = flag(q, "ghosts"); err != nil {
-		return b, err
-	}
-	if b.deleted, err = flag(q, "deleted"); err != nil {
-		return b, err
-	}
+	b.unfiled, b.ghosts, b.deleted = flag(q, "unfiled"), flag(q, "ghosts"), flag(q, "deleted")
 	b.named = b.kind != ""
 	switch {
-	case b.named && !slices.Contains(browseKinds, b.kind):
-		return b, core.Invalid("kind must be one of %s", strings.Join(browseKinds, ", "))
 	case !b.named && b.in != "":
 		b.kind = "all"
 	case !b.named:
@@ -158,8 +146,6 @@ func browseQueryOf(q url.Values) (browseQuery, error) {
 		return b, core.Invalid("deleted is the list of the tombstones: it takes no kind, no in, no unfiled and no ghosts")
 	case b.media != "" && b.kind != "media":
 		return b, core.Invalid("media needs kind media")
-	case b.media != "" && !slices.Contains(core.MediaKinds(), b.media):
-		return b, core.Invalid("media must be image, video or audio")
 	}
 	return b, nil
 }

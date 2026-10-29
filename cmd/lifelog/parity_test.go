@@ -323,7 +323,20 @@ func parityRows() []parityRow {
 		parityRow{"random-page kind=day", rowRandomDay},
 		parityRow{"random-page kind=person", rowRandomPage},
 		parityRow{"search kind=person", rowSearchKind},
+		parityRow{"an unknown field", rowUnknownField},
+		parityRow{"a value outside the options", rowAValueOutsideTheOptions},
 	)
+}
+
+// A field that the action does not list is the 422 of the server on every surface, and the capture writes no day page.
+func rowUnknownField(x *parityRun) {
+	x.refused("capture", map[string]string{"day": "today", "text": "x", "nope": "1"}, http.StatusUnprocessableEntity, "invalid")
+	x.absent(parityToday)
+}
+
+// A value outside the static options of a field is the 422 of the server on every surface.
+func rowAValueOutsideTheOptions(x *parityRun) {
+	x.refused("search", map[string]string{"q": "a", "kind": "planet"}, http.StatusUnprocessableEntity, "invalid")
 }
 
 // A capture sent again with the same import_key changes nothing (issue 0085, D28): the answer is "Already added" with

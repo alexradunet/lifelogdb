@@ -338,7 +338,7 @@ func TestBrowserMultipartRecoversAcceptedBody(t *testing.T) {
 				p, _ := mw.CreateFormFile("preview", "bad.png")
 				p.Write([]byte("invalid"))
 			case "overflow":
-				mw.WriteField("unknown", strings.Repeat("x", 16<<20))
+				mw.WriteField("body", strings.Repeat("x", 16<<20))
 			}
 			mw.Close()
 			req := httptest.NewRequest("POST", "/files", &b)

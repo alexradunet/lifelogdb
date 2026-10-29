@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -13,9 +14,8 @@ import (
 	"lifelog/internal/core"
 )
 
-// TestMultipartUnknownNameProjection: parseFileForm keeps the value of a name it knows, and of any other name it keeps
-// neither the name nor the value. Four parts have a name of 64 KiB and no value: modest headers, each one legal, not
-// a stress fixture.
+// TestMultipartUnknownNameProjection: parseFileForm keeps the value of a name the action lists, and refuses any other
+// name (a name of 64 KiB too, which is a modest header and no stress fixture).
 func TestMultipartUnknownNameProjection(t *testing.T) {
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -30,16 +30,12 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 	}
 	sum := strings.Repeat("ab", 32)
 	for _, f := range [][2]string{{"title", "Scan"}, {"sha256", sum}, {"mime", "application/pdf"}, {"body", "the text"},
-		{"day", "2031-05-14"}, {"category", "Letters"}, {"dry_run", "1"}, {"back", "/browse?kind=document"}} {
+		{"day", "2031-05-14"}, {"dry_run", "1"}, {"back", "/browse?kind=document"}} {
 		field(f[0], f[1])
 	}
-	// After the names it knows, so that a name read as one of them changes its value. "original" and "preview" with no
-	// file name are file inputs left empty.
-	for _, name := range []string{"", "unknown", "Title", "title-extra", "original", "preview"} {
+	// "original" and "preview" with no file name are file inputs left empty.
+	for _, name := range []string{"original", "preview"} {
 		field(name, "NOT KEPT")
-	}
-	for i := range 4 {
-		field(fmt.Sprint("unknown", i, strings.Repeat("x", 64<<10)), "")
 	}
 	if err := mw.Close(); err != nil {
 		t.Fatal(err)
@@ -55,5 +51,27 @@ func TestMultipartUnknownNameProjection(t *testing.T) {
 	// Only the body and the page to return to are kept for the browser.
 	if got := fmt.Sprint(r.PostForm); got != "map[back:[/browse?kind=document] body:[the text]]" {
 		t.Errorf("the form kept for the browser: %s", got)
+	}
+}
+
+func TestMultipartRefusesAnyNameTheActionDoesNotList(t *testing.T) {
+	for _, name := range []string{"", "unknown", "Title", "title-extra", "category", "unknown" + strings.Repeat("x", 64<<10)} {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		if w, err := mw.CreateFormField(name); err != nil {
+			t.Fatal(err)
+		} else if _, err := io.WriteString(w, "NOT KEPT"); err != nil {
+			t.Fatal(err)
+		}
+		if err := mw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest("POST", "/files", &body)
+		r.Header.Set("Content-Type", mw.FormDataContentType())
+		_, err := parseFileForm(r, specOf("add-file"))
+		var ce *core.Error
+		if !errors.As(err, &ce) || ce.Status != 422 {
+			t.Errorf("a part named %.20q: %v, want 422", name, err)
+		}
 	}
 }

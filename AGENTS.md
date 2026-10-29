@@ -195,7 +195,7 @@ it draws the entity on the origin of the API, with the forms that post to it.
   version 409), a read's bounds, the title predicate and the algorithms the contract assigns to the writer
   (wikilinks, calendars, zones), the owner-only rule, and a comparison of a resent payload. A Go check that
   repeats a CHECK or a trigger is a defect (issue 0068): delete it, and let `core.refused` carry the sentence
-  SQLite gives. The same holds when a rule changes: edit the trigger, not the code around it.
+  SQLite gives. The same holds when a rule changes: edit the trigger, not the code around it. The shape of a request (the names it uses, a value outside the options the catalog lists) is the API's rule, not the data's: `fieldsOf` holds it once, for every surface.
 - **Read what the schema stores.** A value the DDL holds or generates (`is_journal`, a day, a count) is read from the
   row, never derived again in Go or in a second SQL expression; a Go predicate or a join that recomputes a stored
   column is a defect ([plan 133](docs/plans/133-what-the-code-holds-twice.md)). One home per concept holds in the
@@ -206,7 +206,7 @@ it draws the entity on the origin of the API, with the forms that post to it.
   read outside the catalog is unreachable from the CLI and the MCP tools, which refuse what the catalog does not
   name, so it is a parity defect, not a convenience.
 - **Refused, never ignored.** What a surface does not take is refused with its reason: a flag a command does not
-  read, a field an action does not list, a body type an action does not take (a multipart body to an action with
+  read, a field an action does not list, which the API refuses (422) for every surface, a body type an action does not take (a multipart body to an action with
   no file field is 415), two flags that name one thing twice. Nothing is dropped in silence.
 - **Concrete types by default.** Put a small interface at the consumer that actually needs substitution; do not mirror
   every struct with an interface or add a service/repository layer solely for mocks. Use generics only when they make

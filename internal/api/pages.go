@@ -288,9 +288,6 @@ func (h *server) search(r *http.Request, act spec, _ string) (*siren.Entity, err
 	if err != nil {
 		return nil, err
 	}
-	if kind != "" && !slices.Contains(core.SearchKinds(), kind) {
-		return nil, core.Invalid("kind must be one of %s", strings.Join(core.SearchKinds(), ", "))
-	}
 	e := &siren.Entity{Class: []string{"search"}, Title: "Search",
 		Links:   []siren.Link{link("self", searchHref(q, order, kind), "Search"), link("index", "/", "Home")},
 		Actions: []siren.Action{action("search", nil, map[string]any{"q": q, "order": order, "kind": kind})}}
@@ -432,10 +429,7 @@ func (h *server) editMetric(r *http.Request, act spec, src string) (*siren.Entit
 	if err != nil {
 		return nil, err
 	}
-	daily, err := flag(v, "daily")
-	if err != nil {
-		return nil, err
-	}
+	daily := flag(v, "daily")
 	if err := h.s.EditMetric(r.Context(), src, id, daily); err != nil {
 		return nil, err
 	}

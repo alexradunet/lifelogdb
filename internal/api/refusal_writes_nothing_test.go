@@ -7,18 +7,18 @@ import (
 	"lifelog/internal/api/apitest"
 )
 
-// TestANumberThatIsNotDecimalIsRefusedAndWritesNothing: a reading and a mood take a decimal number only. Go's float
-// syntax also reads 1_000 and 0x1p-2; the field refuses them with 422 before the core runs, and the file does not
+// TestANumberThatIsNotDecimalIsRefusedAndWritesNothing: a reading takes a decimal number only, and a mood one of its options. Go's float
+// syntax also reads 1_000 and 0x1p-2; the API refuses them with 422 before the core runs, and the file does not
 // change.
 func TestANumberThatIsNotDecimalIsRefusedAndWritesNothing(t *testing.T) {
 	c, _, s := apitest.Fresh(t, "cli")
 	root := apitest.Must(t)(c.Get(t.Context(), "/"))
 	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
 	count := func(table string) string { return scalar(t, s, "SELECT count(*) FROM "+table) }
-	refused := func(err error) {
+	refused := func(err error, want string) {
 		t.Helper()
-		if apitest.Status(err) != 422 || !strings.Contains(err.Error(), "is not a number") {
-			t.Fatalf("error=%v want 422 \"is not a number\"", err)
+		if apitest.Status(err) != 422 || !strings.Contains(err.Error(), want) {
+			t.Fatalf("error=%v want 422 %q", err, want)
 		}
 	}
 
@@ -26,7 +26,7 @@ func TestANumberThatIsNotDecimalIsRefusedAndWritesNothing(t *testing.T) {
 	before := count("measurements")
 	for _, v := range []string{"NaN", "Inf", "1_000", "0x1p-2"} {
 		_, err := c.Do(t.Context(), record, map[string]string{"metric": "weight", "value": v})
-		refused(err)
+		refused(err, "is not a number")
 		if got := count("measurements"); got != before {
 			t.Fatalf("value %q: measurements %s, want %s", v, got, before)
 		}
@@ -41,7 +41,7 @@ func TestANumberThatIsNotDecimalIsRefusedAndWritesNothing(t *testing.T) {
 	entities, readings := count("entities"), count("measurements")
 	for _, mood := range []string{"NaN", "Inf", "0x1p1"} {
 		_, err := c.Do(t.Context(), capture, map[string]string{"text": "entry 1", "mood": mood})
-		refused(err)
+		refused(err, "mood must be one of") // the options of the field refuse it before the parser of numbers
 		if e, m := count("entities"), count("measurements"); e != entities || m != readings {
 			t.Fatalf("mood %q: entities %s readings %s, want %s and %s", mood, e, m, entities, readings)
 		}
