@@ -260,7 +260,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   routes the CLI and the MCP server do not carry. **Rejected:** a separate web client. It would be a second
   implementation of every view to keep equal to the catalog, it would hold the token where JavaScript can read it,
   and it would bring a toolchain that changes every year.
-- **The stylesheet is this application's own: two embedded sheets, three embedded faces, four embedded pictures (the
+- **The stylesheet is this application's own: two embedded sheets, three embedded faces, five embedded pictures (the
   wood tile, the ground tile, the sparks of the embers floor, the sprite sheet and the icon sheet, drawn by `internal/pixelart`), no vendored framework and no CDN.** `base.css` holds the tokens and styles ordinary HTML by element — type, colour, forms, tables, buttons, a
   print sheet, light and dark — and `app.css` only what this app's own vocabulary needs (the shell and its
   components, `.wikilink`, `.chart`); a test keeps the app's names out of the base sheet. The two sheets are one

@@ -4,6 +4,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"lifelog/internal/core"
@@ -72,14 +73,15 @@ func (h *server) saveSettings(r *http.Request, act spec, _ string) (*siren.Entit
 	return e, nil
 }
 
-// shellGround is the floor that a page with the shell draws: the setting, and boards when nothing is set. The answer
-// is boards too when the settings cannot be read, with the error: the floor is a help, and the page must still come.
+// shellGround is the floor that a page with the shell draws: the setting, and boards when nothing is set or the file
+// holds a word that is not a floor (a hand edit: the action refuses it). The answer is boards too when the settings
+// cannot be read, with the error: the floor is a help, and the page must still come.
 func shellGround(s *core.Store) (string, error) {
 	if s.SettingsPath == "" { // a store with no settings file has no choice
 		return grounds[0], nil
 	}
 	v, err := s.ReadSettings()
-	if err != nil || v.Ground == "" {
+	if err != nil || !slices.Contains(grounds, v.Ground) {
 		return grounds[0], err
 	}
 	return v.Ground, nil

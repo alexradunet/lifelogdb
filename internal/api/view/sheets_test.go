@@ -162,8 +162,11 @@ func TestTheSheetsQueryTheColumnNotTheScreen(t *testing.T) {
 	if got := widths(string(baseCSS)); got != "899px" {
 		t.Errorf("base.css asks the screen's width at %s, want 899px alone", got)
 	}
-	if got := widths(string(appCSS)); got != "899px" {
-		t.Errorf("app.css asks the screen's width at %s, want 899px alone", got)
+	// The second width of app.css is the frame's: the floor beside the frame is a thing of the screen, not of the
+	// column, and the layers of a moving floor exist only where it shows (TestTheGroundIsTheOwnersChoice holds the
+	// number equal to --frame).
+	if got := widths(string(appCSS)); got != "1512px 899px" {
+		t.Errorf("app.css asks the screen's width at %s, want 1512px and 899px alone", got)
 	}
 	app := cssComments.ReplaceAllString(string(appCSS), "")
 	if n := strings.Count(app, "@container column ("); n < 8 {
@@ -309,7 +312,7 @@ func motionsAskFirst(t *testing.T, app string, scroll bool) {
 		for at := strings.Index(app, token); at >= 0; at = strings.Index(app, token) {
 			stack := enclosing(at)
 			// animation:none under reduce is the sheet's own switch, so it is the one place this token may stand.
-			if !within(stack, "prefers-reduced-motion:no-preference") && !(token == "animation:" && within(stack, "prefers-reduced-motion:reduce")) {
+			if !within(stack, "prefers-reduced-motion:no-preference") && !(strings.HasPrefix(app[at:], "animation:none") && within(stack, "prefers-reduced-motion:reduce")) {
 				t.Errorf("%s at %q is outside a block that asks for motion", token, strings.Join(stack, " > "))
 			}
 			if strings.HasPrefix(token, "animation-timeline:") && !within(stack, "@supports (animation-timeline:scroll())") {

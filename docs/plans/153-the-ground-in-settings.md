@@ -9,8 +9,16 @@
 - **Priority:** P2. **Effort:** M. **Risk:** LOW. Nothing for the schema or the contract: a setting is a key of the
   application's file beside `life.db` ([plan 146](146-settings-and-the-chat-column.md)). The catalog's action
   `settings` gains one field; the browser's shell reads it; one picture is drawn; the sheets gain the four grounds.
-- **Status:** PLANNED. The mock-up the owner chose from (2026-10-29) is a private artifact of the session that wrote
-  this plan; of its nine grounds the owner kept four: plain oak, boards, firelight, embers.
+- **Status:** IN REVIEW (owner). Built in `32c9605`; the counter-review's findings are fixed in the commit after it:
+  print drew the sparks and the glows over the page; the two layers animated under the slab on every screen no wider
+  than the frame (now they exist only above 1512 px, where the floor shows, and never in print); the README counted
+  four pictures and listed five; the sheet's header named three; a word in the file that is not a floor reached the
+  body (now boards); the ground test named selectors instead of what they draw; the reduce exception of the motion
+  test was wider than the switch. Two things differ from the plan as written: a failed settings read draws the boards
+  and logs the fault, as a failed Today strip draws no strip, so a corrupt file costs no page; and the new tests are
+  the files `ground_test.go` of `internal/api` and of `internal/api/view` and `ground_command_test.go` of
+  `cmd/lifelog`. The mock-up the owner chose from (2026-10-29) is a private artifact of the session that wrote this
+  plan; of its nine grounds the owner kept four: plain oak, boards, firelight, embers.
 - **Resolves:** the owner's words of 2026-10-29 (below). No issue.
 
 ## The owner's words (2026-10-29)
@@ -34,10 +42,10 @@ attribute. The pictures are embedded, served immutable, and a test holds each fi
 | the setting | `ground`, a string of `core.Settings` (`json:"ground,omitempty"`), one of `boards`, `oak`, `firelight`, `embers`; empty is `boards`, the floor of today. |
 | the field | the action `settings` gains the field `ground` with those four options, in that order, titled "Ground". The browser draws it as the catalog's generic select; the CLI line is `lifelog do settings ground=embers`; the MCP has no `settings` tool (owner-only, as before). A value outside the options is 422 by `fieldsOf`, so Go checks nothing. |
 | the resource | `GET /settings` carries `ground` among its properties and fills the action's value; the entity's property is the stored string, empty when unset. |
-| the shell | `view.Shell` gains `Ground string`, read from the settings in `serve.go` where the shell is built, normalised there: empty is `boards`. The layout opens `<body data-ground="{{.Shell.Ground}}">` on a page with the shell and a bare `<body>` without one (the login has the floor of today). A read of the settings file fails the page as any read does. |
+| the shell | `view.Shell` gains `Ground string`, read from the settings where the shell is built, normalised there: empty, or a word that is not a floor, is `boards`. The layout opens `<body data-ground="{{.Shell.Ground}}">` on a page with the shell and a bare `<body>` without one (the login has the floor of today). A failed read of the settings file draws the boards and logs the fault once: the floor is a help, and the page must still come. |
 | the floor | `app.css` draws the ground from the attribute. `boards`, and no attribute, is today's rule. `oak` drops the tile: the grain alone. `firelight` keeps the boards and adds two warm glows low on the floor, `body::before` and `body::after`, fixed over the viewport under the frame (`z-index:-1`), breathing on cycles of 7 and 11 seconds (`opacity` .55 to 1, `scale` 1 to 1.07). `embers` keeps the boards and adds one picture, `embers.png`, on the same two pseudo-elements at two speeds: the tile slides up by its own height on a loop (`background-position`, `steps()` so the sparks move by whole pixels), the second layer slower and fainter. |
 | the picture | `pixelart.Embers()`: a tile of 96 by 96, transparent, with about twelve sparks of 1 or 2 pixels in gold (`#f2c14e`) and ember (`#ff8c2e`), placed by a seeded generator so the drawing is deterministic; it wraps at its edges. `tools/pixelart` writes it beside the other pictures; it is served at `/assets/embers.png` as the others are, public, immutable; `TestThePicturesAreTheDrawings` holds it. |
-| motion | every `animation:` of the two moving grounds is inside `@media (prefers-reduced-motion:no-preference)`; outside it the glows and the sparks stand still (the first frame). `TestTheMotionsAreOffUnderReducedMotion` gains `animation:` in its list of tokens, so the rule is held for every animation of the sheets. |
+| motion | every `animation:` of the two moving grounds is inside `@media (prefers-reduced-motion:no-preference)`; outside it the glows and the sparks stand still (the first frame). `TestTheMotionsAreOffUnderReducedMotion` gains `animation:` in its list of tokens, so the rule is held for every animation of the sheets. The layers exist only where the floor shows: on a screen wider than the frame (`@media (max-width:1512px)` removes them, and a test holds that number equal to `--frame`), and never in print. |
 | the mock-up's thumbnails | not built: the Settings form draws the catalog's select, one way to draw a field. The owner sees the floor on the next page after a save. |
 | the README and API.md | the settings paragraph of the README names `ground` and its four values; the look paragraph says the floor is the owner's choice; API.md's property table of `GET /settings` gains the row. The surfaces table does not change: `settings` is one action. `site/` does not change. |
 
