@@ -8,7 +8,17 @@
 - **Date / baseline:** 2026-10-29, `054138b` (master), after [plan 154](154-connected-apps-through-the-catalog.md).
 - **Priority:** P1. **Effort:** M. **Risk:** LOW for the file and the core: nothing of them changes. The risk is in the
   third party's API, which no test reaches; the owner tests the live login and the first sync.
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Built 2026-10-29 on master by a sub-agent in a worktree and reviewed before the merge;
+  in `extensions/ticktick`: `go mod tidy -diff` empty, `go vet`, `go test ./...` (the end-to-end test on the real
+  `lifelog serve --with ticktick` and a fake TickTick, both ways of finding the done tasks) and `staticcheck` pass; at
+  the root `go vet ./...` and the tests of `cmd/lifelog` and `tests` pass. `~/.local/bin/lifelog-ticktick` is built
+  beside the installed `lifelog`. Three things differ from the plan as written: a `Poller` type owns the clients, the
+  state and the one lock (the plan's `Sync` had no home for a mutex); `Task.Done()` and `Due()` take no argument;
+  `GET /tasks/{id}` is an outer route around `app.Catalog`, which has no hook for a route that is not an action. Two
+  limits are in the extension's README: the Open API lists no Inbox project, so the home and the vanish-and-fetch way
+  do not see Inbox tasks (`/task/completed` does), and that way misses a task created and done between two polls.
+  Not tested: the live TickTick (the login, the shapes of its answers, which way the account takes); the owner's
+  steps are in the Tests section.
 - **Resolves:** the owner's word of 2026-10-29 (below). No issue: the schema and the contract do not change.
 
 ## The owner's words (2026-10-29)
