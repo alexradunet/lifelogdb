@@ -11,7 +11,15 @@
   and an index across the schema, the contract, the writer, the browser and the suites; then a new mechanism of the
   server (a child's catalog aggregated into the one catalog) that touches the boundary rule of the rings; the live
   file is converted by a one-off program before the new binary runs (Part 4, local).
-- **Status:** TODO.
+- **Status:** IN REVIEW (owner). Parts 0 to 3 built on 2026-10-29 on master, each part by a sub-agent in a worktree
+  and reviewed before its merge; the baseline, `staticcheck`, `govulncheck`, a shuffled run and the race detector on
+  the end-to-end tests of the handshake pass; the mermaid render check was not run (`mmdc` is not installed). Part 4
+  waits for the owner: the one-off program is written and tested on a seeded file at
+  `~/.local/share/lifelog-oneoff/plan154/` (`OLD.sql` is `schema.sql` at `cda8c4d`, the live file's schema; `NEW.sql`
+  is `schema.sql` at `06bd6d2`). One thing differs from the plan as written: `create-page` of a period key stored
+  today as the page's day and was refused by `entities_period_page`; Part 1 made it store no day, as D30 requires, so
+  the period views can offer it. The by-hand run of the server with the test app was not done; the end-to-end test
+  holds the same assertions on the real `lifelog serve --with`.
 - **Resolves:** [issue 0092](../issues/0092-plan-lines-cost-more-than-they-give.md) through
   [RFC 0025](../rfcs/0025-no-plan-lines-and-connected-apps.md), which rewrites [D29](../decisions/D29-plan-lines.md),
   [D23](../decisions/D23-no-tasks.md), [D15](../decisions/D15-recurrence.md) and [D30](../decisions/D30-period-pages.md)
