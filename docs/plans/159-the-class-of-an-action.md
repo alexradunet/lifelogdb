@@ -9,8 +9,8 @@
 - **Priority:** P2. **Effort:** L. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the head of every page, the More section and the Facts change, and many view tests pin the old HTML.
 - **Status:** IN PROGRESS. Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
-  of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The mock-up of
-  Part 0 is in review by the owner. Parts B and C wait for the owner's picks. Not live: the service runs the binary of
+  of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The owner
+  picked the four elements of the mock-up and the order of B1, B2 and C (2026-10-30). Not live: the service runs the binary of
   before.
 - **Resolves:** the owner's words of 2026-10-30 (below). No issue: the API change is additive, and no rule of the data
   changes.
@@ -77,15 +77,19 @@ Four pitfalls shape the vocabulary below:
 | where a template names an action | only where the action has a place in the domain: the body editor (`save-body`), the capture box, a reading tile, the composer, the search box, the pick bar. The table of the views (`viewOf`) lists these names for each template. Every other action is drawn by its class. |
 | every action once | each action that an entity offers is drawn once on its page: in its domain place, or by its class. A test holds this for every class of entity. |
 | the field hint | the field member `placeholder` (the name of HAL-FORMS and Ion) moves the nine example texts from the templates into the catalog (Part C). No `pattern`, `min` or `max`. |
-| the mock-up | Part 0 comes first, as with plans 137 and 152: a mock-up artifact of a page, a list and an app page, light and dark, wide and phone. The owner picks before the build. |
+| the mock-up | the owner (2026-10-30) picked all four elements of the [mock-up](https://claude.ai/artifact/Nn1caAhm7DBmJbuq9QyZXb): the ⋯ menu with its dialogs, the meta line, the pencil of the title, the create buttons in the head. |
+| a create form | the owner: an anchored popover under its button, as the pencil's form and the New menu of the rail. A form of the ⋯ menu is a dialog, since the menu closes when an item is picked. |
+| the steps | the owner: Part B ships in two steps, B1 (the menu, every action once) and B2 (the head), with screenshots between them. Part C runs beside B1. |
+| a toggle in the head | none. The one core `toggle`, `revive`, has its place in the alert of a deleted page. The class places an action on a row only. |
+| the day | the day keeps its own head. Every action it offers has a place of its own (the capture box, the tiles, the editor, the cover link), so its menu is empty and is not drawn. |
 
 ## The vocabulary
 
 | class | what the action does | the browser draws it | core actions | an app (TickTick) |
 |---|---|---|---|---|
-| `create` | it makes a new thing, and the answer is that thing or its list | a lead button in the head of the page, which opens its form in a dialog. On an app page, the first `create` action with one required text field is the quick-add line instead. | `create-page`, `create-person`, `add-file`, `register-metric`, `record`, `capture`, `snapshot` | `add-task` |
+| `create` | it makes a new thing, and the answer is that thing or its list | a button in the head of the page, which opens its form in a popover anchored to it. On an app page, the first `create` action with one required text field is the quick-add line instead. | `create-page`, `create-person`, `add-file`, `register-metric`, `record`, `capture`, `snapshot` | `add-task` |
 | `edit` | it changes this resource's own properties | the first group of the ⋯ menu, each in a dialog. An `edit` whose one field is `title` is a ✎ beside the title, with its form in a popover anchored to it. | `rename`, `edit-person`, `edit-metric`, `correct`, `save-body`, `set-cover`, `settings`, `file-pages`, `promote` | — |
-| `toggle` | it flips one state of this resource: no field, or one field of two options | a button that says the current state, beside the thing it changes. With one field, it sends the option that is not the current value. On a row, the round button. | `revive` | `complete-task` |
+| `toggle` | it flips one state of this resource: no field, or one field of two options | on a row, the round button (with no field). A page has no toggle in its head: `revive` has its place in the alert of a deleted page. | `revive` | `complete-task` |
 | none | anything else | the ⋯ menu, middle group | `say`, `search`, `find`, `browse`, `open-day`, `random-page`, `integrity-check`, `rebuild-search`, `resync-links` | — |
 
 `tombstone-pages` and `retract` have no class: they are `danger`, which puts them last in the ⋯ menu, apart, in the
@@ -97,8 +101,8 @@ flowchart TD
   A["an action the entity offers"] --> P{"does the template place it by name (viewOf)?"}
   P -->|"yes"| D["its domain place: the editor, the capture box, a tile, the composer, the pick bar"]
   P -->|"no"| C{"its class"}
-  C -->|"create"| L["a lead button in the head; its form in a dialog (the quick-add line on an app page)"]
-  C -->|"toggle"| T["a button that says the state, beside what it changes; the round button on a row"]
+  C -->|"create"| L["a button in the head; its form in a popover under it (the quick-add line on an app page)"]
+  C -->|"toggle"| T["the round button of a row"]
   C -->|"edit, field title only"| R["the pencil beside the title; a popover anchored to it"]
   C -->|"edit"| E["the menu, first group; a dialog"]
   C -->|"none"| M["the menu, middle group; a dialog"]
@@ -109,120 +113,128 @@ flowchart TD
 
 ## The head of a page
 
-Every view gets one head, drawn by one template:
+Every view but the day gets one head, drawn by one template:
 
 ```mermaid
 flowchart LR
   K["the kind"] --> H["the title, and the pencil of a title edit"]
-  H --> B["the create buttons; the toggle buttons"]
+  H --> B["the create buttons"]
   B --> O["the ⋯ button: the menu"]
   H --> F["one quiet line under the title: the facts, then the categories"]
 ```
 
 - **The facts move into the head.** The Facts section of the margin goes. Its values become one quiet line under the
-  title: the kind, `created 3 Oct 2026`, and for a person the full name and the dates, for a file the type and the
-  short SHA-256. On the generic view, the scalar properties are this line, as chips; an object property stays a
-  panel.
+  title: for a person the full name and the dates, for a file the type and the short SHA-256, then `created 3 Oct
+  2026`. On the generic view, the scalar properties are this line; an object property stays a panel.
 - **The ⋯ menu** is a popover anchored to its button (anchor positioning, as the New menu of
   [plan 149](149-the-browser-on-the-current-platform.md)). Each item is a button with `commandfor` and
   `command="show-modal"`, which opens a `<dialog closedby="any">` that holds the form. There is no script. On a phone the
-  menu is a sheet from the bottom, as the More sheet of the rail. The owner's actions carry the `owner` mark.
+  menu is a sheet from the bottom, as the More sheet of the rail. The owner's actions carry the `owner` mark. A page
+  whose menu is empty draws no ⋯ button.
+- **The pencil and the create buttons** each open a popover anchored under the button (`popovertarget`), which holds the
+  form. The button stays in view. A popover keeps its typed text when it closes and opens again.
 - **The ⋯ button needs the menu before the page is drawn.** The head comes before the body, so the view cannot learn
   from the body which actions it placed. The table of the views says it: `viewOf` maps a class to its template **and**
   to the names that template places itself. The menu draws the other actions. The test "every action once" catches a
   template that draws a name the table does not list, or does not draw a name it lists.
 - **A form asked by its link** (`?new=rename`, the forms that a link of the rail or a list opens) is drawn as an open
-  dialog (`<dialog open>`, not modal), in the place of the toast, with Close. A refused form still answers with the
-  error page, which keeps the text sent.
-- **The More section, the Actions section and the boxed header tools go.** The page, the measurement, Browse, Metrics,
-  the period pages, the integrity page and the generic view all use the one head. The ⋯ menu of the conversation
-  (plan 148) holds its links and backlinks as today, and its actions come from the same menu template.
+  dialog (`<dialog open>`, not modal) at the top of the column, with Close, wherever the form lives otherwise: HTML
+  cannot open a popover or a modal dialog with no script. A refused form still answers with the error page, which
+  keeps the text sent.
+- **The day keeps its own head**: its date, its steps and the Today strip. Each action it offers has its own place.
 - **`/actions` stays as it is.** It is the catalog, so it lists every action boxed. The head does not apply there.
 
-## Part 0: the mock-up (main session, before any code)
+## Part 0: the mock-up (done)
 
-One artifact page, Hearthwood light and dark, wide and phone: a page (a person with categories, links and the ⋯ menu
-open), a dialog of `rename` and of `tombstone-pages`, a Browse list with its create buttons, and a TickTick list with
-the quick-add and the round buttons. The owner picks each element: the facts line, the ⋯ menu, the dialog, the pencil
-of the title, the create buttons. A screenshot of the real pages before the change goes beside it, from the review
-server, when the owner allows it to run.
+The [mock-up](https://claude.ai/artifact/Nn1caAhm7DBmJbuq9QyZXb) has seven boards, in the Hearthwood tokens: a person
+before and after, the Delete dialog, the pencil, a phone in dark with the menu as a sheet, People in Browse, and a
+TickTick list. The owner picked all four elements (2026-10-30).
 
-## Part A: the class in the contract (ring 2)
+## Part A: the class in the contract (ring 2, done)
 
-- `siren.Action` gets `Class []string` with `json:"class,omitempty"`. `siren.Field` does not get a class: no rule needs
-  one.
-- `spec` in `internal/api/catalog.go` gets `Class`; `base()` copies it. Each action of the table above gets its class.
-- `siren` gets one exported list of the values, `ActionClasses()`, as `siren.Codes()` is the one list of the error
-  codes.
-- `inNamespace` (`internal/api/with.go`) keeps the classes of an app's actions, on the entity and on its embedded
-  links. A class that is not in the list is dropped, so an app cannot make the browser draw something unknown.
-- `extensions/ticktick`: `add-task` is `create`, `complete-task` is `toggle`.
-- **The quick-add rule and the round-button rule read the class.** The quick-add is the first `create` action with one
-  required text field and no path field. A round button is a `toggle` action of a row. A no-field action with no class
-  on a row is boxed, as an action with fields is. The rule of the shape alone goes: one rule for the core and the apps.
-- Docs: `API.md`, the entity section: the action member `class`, and a new section "Action classes" with the table of
-  the values (the what, not the look; the look is the browser's). `extensions/README.md`, "How the browser draws a page
-  of an app": the three rules read the class.
-- Tests:
-  - `TestEveryActionClassIsInTheContract`: the list in `siren` equals the table of API.md.
-  - A catalog test: every class of the catalog is in the list, and no action has two.
-  - An `inNamespace` test: a known class passes, an unknown class is dropped.
-  - The tests of the quick-add and the round button (`internal/api/view/rows_test.go`) change with the rule, and say so in
-    the commit message.
+- `siren.Action.Class` and `siren.ActionClasses()`; `spec.Class`, copied by `base()`; the classes of the vocabulary;
+  `knownClasses` in `inNamespace` and `specOfApp` drops a class that is not in the list.
+- The quick-add is the first `create` action with one required text field and no path field. A round button is a
+  `toggle` action of a row with no field. Any other row action is boxed.
+- The task service of plan 158: `add-task` is `create`, `edit-task` is `edit`, `complete-task` and `reopen-task` are
+  `toggle`, in the core rows and in `extensions/ticktick`.
+- API.md has "Action classes"; `extensions/README.md` says the rules read the class. Tests in
+  `internal/api/class_internal_test.go`.
 
-## Part B: the head and the menu (ring 2, the view)
+## Part B1: the menu and every action once (ring 2, the view)
 
-- `viewOf` becomes a table of `{template, places []string}`. `view.Placed(name)` reports a name of the table. `view.Menu()`
-  is the actions of the entity that are not placed, not `create`, not `toggle` and not a title edit. The order is the
-  `edit` actions, then the others, then the `danger` actions.
-- One template `page-head` (in `layout.html`): the kind, the title with its pencil, the facts line, the categories, the
-  create buttons, the toggle buttons, the ⋯ button and the menu with its dialogs. `day.html`, `page.html`,
-  `metrics.html`, `browse.html`, the period pages and `generic` call it. The day keeps its date head and its steps.
+- `viewOf` becomes a table of `{template, places []string}`: the actions each template draws by name. `view.Menu()` is
+  the actions of the entity that are not placed and not `create`: the `edit` actions first, then the others, then the
+  `danger` actions. A `toggle` that no template places goes to the menu too.
+- One template `menu` (in `layout.html`): the ⋯ button, the anchored popover with its three groups, and one `<dialog>`
+  for each item with the form inside. `page.html`, the measurement, `metrics.html` (the series and the board),
+  `browse.html`, the period pages, the integrity page and `generic` (with `/with/` and `/tasks`) draw it in their head.
+  The ⋯ menu of the conversation (plan 148) keeps its links and backlinks, and its actions come from this template.
+- The `create` actions stay where they are drawn today (the boxed tools of the head with the `lead` option, the
+  quick-add), through one template `creates`, which B2 changes. Rename goes to the menu in B1 and to the pencil in B2.
+- An asked form (`?new=NAME`) is an open dialog at the top of the column.
 - Each form carries `data-action="NAME"`, so a test counts the forms of an action on a page.
-- The hard-coded lists go: the condition and the More section of `page.html` (lines 62 to 68), the boxed header tools
-  of `browse.html` and `metrics.html`, the Actions section of `generic`, and the `lead` option of the form helper (the
-  head draws `create` as the lead).
-- `app.css`: the head, the facts line, the menu (anchored, a sheet on a phone), the dialog of a form, the danger group.
-  The tokens of the design system only: no new colour.
+- The hard-coded lists go: the condition and the More section of `page.html`, and the Actions section of `generic`.
+- `app.css`: the menu (anchored, a sheet under 900 px), the dialog of a form, the danger group. The tokens of the design
+  system only: no new colour.
 - Tests:
-  - `TestEveryActionOfAnEntityIsDrawnOnce`, in `internal/api`: for every class of entity, built through the real
-    writer with synthetic data, the HTML has exactly one form (or one link that opens it) for each action that the
-    JSON of the same address offers.
-  - The head: a `create` action is a lead button with a dialog; a title edit is the pencil; a `danger` action is last
-    in the menu; an owner action has the owner mark; `?new=NAME` draws an open dialog.
+  - `TestEveryActionOfAnEntityIsDrawnOnce`, in `internal/api`: for every class of entity that a browser draws, built
+    through the real writer with synthetic data (a page, a person, a file, a metric and its series, a measurement, a
+    deleted page, Browse, Metrics, a week, the integrity page, a page of the test app and of `/tasks` with a fake
+    service), the HTML has exactly one form or one opening link for each action that the JSON of the same address
+    offers.
+  - The menu: a `danger` action is last and apart; an owner action has the owner mark; an empty menu draws no button;
+    `?new=NAME` draws an open dialog with the form filled.
   - The tests that pin `<details class="action"` change with the drawing, and say so in the commit message:
     `view_forms_test.go`, `view_page_test.go` (`TestTheMoreRowOfAPageOpensOneFormAtATime` becomes a test of the menu),
     `actions_page_test.go`, `snapshot_test.go`, `measurements_test.go`, `periods_test.go`, `view_strip_test.go`,
     `view/forms_test.go`, `view/rows_test.go`, `cmd/lifelog/with_app_test.go`, `extensions/ticktick/e2e_test.go`.
-- README: the column "browser" of [every action on every surface](../../README.md#every-action-on-every-surface) names the
-  new places (the ⋯ menu, the pencil, the head). The section of the browser says the head and the menu.
+- README: the column "browser" of [every action on every surface](../../README.md#every-action-on-every-surface) names
+  the menu where an action moves to it. The section of the browser says the menu.
+- Screenshots after B1 (the owner allows the review server, or runs it with `!`).
 
-## Part C: the placeholder of a field in the catalog (ring 2)
+## Part B2: the head (ring 2, the view; after B1 is on master)
+
+- One template `page-head`: the kind, the title with its pencil, the meta line, the categories, the create buttons and
+  the menu of B1. The pages of B1 call it; the day does not.
+- **The meta line** takes the place of the Facts section of `page-margin`, and of the Properties panel of `generic` for
+  its scalar values.
+- **The pencil**: an `edit` action whose one field that is not a path field is `title` (today `rename`) is a pencil
+  beside the title, with its form in a popover anchored under it. It leaves the menu.
+- **The create buttons**: the template `creates` draws each `create` action that no template places as a button in the
+  head, with its form in a popover anchored under it. The `lead` option of the form helper goes. On a page drawn by
+  shape, the quick-add stays the one line; another `create` action is a button.
+- Tests: a title edit is the pencil and is not in the menu; a `create` action is a button with a popover; the meta line
+  of a person, a file and a generic entity; the Facts section is gone.
+- README: the browser column names the pencil and the head.
+- Screenshots after B2.
+
+## Part C: the placeholder of a field in the catalog (ring 2, beside B1)
 
 - `siren.Field` gets `Placeholder string` with `json:"placeholder,omitempty"`: an example of a value, which a client may
   show in an empty field and may ignore. It is an extension of Siren, named as in HAL-FORMS and Ion.
-- The nine texts of the templates move to their fields in the catalog: `create-person` `name` and `title`,
-  `capture` `text`, `record` `metric`, `file-pages` `category` (two copies in `layout.html` today, one field in the catalog), `register-metric` `name`, `note`
-  and `unit`, `edit-person` `name`. The `placeholder` option of the form helper goes.
+- The nine texts of the templates move to their fields in the catalog: `create-person` `name` and `title`, `capture`
+  `text`, `record` `metric`, `file-pages` `category` (two copies in `layout.html` today, one field in the catalog),
+  `register-metric` `name`, `note` and `unit`, `edit-person` `name`. The `placeholder` option of the form helper goes.
 - The MCP extension puts a placeholder in the description of the tool's field as an example. `lifelog actions` shows it
   after the field.
 - Docs: API.md, the field member. Tests: a field of the catalog with a placeholder draws it; the form helper has no
-  `placeholder` option.
+  `placeholder` option; the MCP tool's field describes the example.
+- C touches `catalog.go`, `siren`, `forms.go` (the option), the templates' `placeholder` arguments and `extensions/mcp`.
+  B1 touches the templates around the forms. The two merge by hand where a template line holds both.
 
 ## Order and checks
 
-1. Part 0, the mock-up. The owner picks.
-2. Part A, then Parts B and C, each by a Sonnet sub-agent in a worktree from master; the main session reviews and
-   merges. B and C touch different files and run in parallel.
-3. Screenshots on the review server (wide, phone, light, dark) of a day, a page, a person, a file, a metric, a
-   measurement, Browse, Metrics, a week, the integrity page and the TickTick test app.
-4. A Fable counter-review of the merged diff.
+1. B1 and C, in parallel, each by a Sonnet sub-agent in a worktree from master; the main session reviews and merges
+   C first (it is small), then B1. Screenshots.
+2. B2 on top of B1. Screenshots.
+3. A Fable counter-review of the merged diff of B1, B2 and C.
 
 - Root: `go vet ./... && go test ./...`, `go test -count=1 -shuffle=on ./...`, `staticcheck ./...`, `govulncheck ./...`.
-- In `extensions/mcp`, `extensions/ticktick` and `extensions/whatsapp` (the `siren` package changes): `go vet ./... &&
-  go test ./...` and `go mod tidy -diff`.
-- Live (the owner, with `!`): rebuild `~/.local/bin/lifelog` and `~/.local/bin/lifelog-ticktick`, restart the
-  service, read its log.
+- In `extensions/mcp`, `extensions/ticktick` and `extensions/whatsapp`: `go vet ./... && go test ./...` and
+  `go mod tidy -diff`.
+- Live (the owner, with `!`): rebuild `~/.local/bin/lifelog` and `~/.local/bin/lifelog-ticktick` together (an old
+  connector sends no class, and its rows lose the round button), restart the service, read its log.
 
 ## Not taken
 
@@ -240,9 +252,9 @@ server, when the owner allows it to run.
 
 ## Decided by default
 
-- `capture` and `record` are `create`, but the day draws them in their domain places (the capture box, the tiles), so
-  the day's head has no create button of its own. The owner may ask for one.
+- `capture` and `record` are `create`, but the day draws them in their domain places (the capture box, the tiles).
+- `reopen-task` is `toggle`, as `complete-task` is: it flips the same state.
 - `set-cover` is placed by the link `choose-cover` (the picker), which the table lists for the page and the day.
 - `file-pages` is `edit`: its domain places are the category badges and the pick bar, so it never reaches the menu.
-- Skills: Part A `a-philosophy-of-software-design` + `code-complete`; Parts B and C `refactoring` +
+- Skills: Part A `a-philosophy-of-software-design` + `code-complete`; Parts B1, B2 and C `refactoring` +
   `a-philosophy-of-software-design`.
