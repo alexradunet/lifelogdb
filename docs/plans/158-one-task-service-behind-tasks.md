@@ -20,6 +20,16 @@
   `extensions/whatsapp` and `extensions/mcp`: `go vet` and `go test -count=1 -shuffle=on ./...` passed. Not done:
   screenshots, and the live check of reopen and of a cleared due day or notes against the real TickTick, which no
   test can reach. Linux only.
+  Counter-review 2026-10-30 (Opus; Fable was at its usage limit), five findings, all fixed: `538cc45` (two lists of
+  one name get unique names, and a list id given twice refuses the service; new tests prove that a refused write
+  never calls the service and that Tasks and its six actions go when the service ends), `282e78d` (an edit sends back
+  the whole task as TickTick gave it, so the priority, the tags, the reminders and the completion time stay; a new due
+  day moves the start day too; the zone is a real zone name, never "Local"; no message to a client names the task
+  manager) and `19102d4` (the values of TickTick pass byte for byte, so a number over 2^53 does not change). Checks
+  on master `19102d4`, after plan 159 Part A: root `go vet ./... && go test ./...` and `go test -count=1
+  -shuffle=on ./...` passed, `staticcheck ./...` clean, `govulncheck ./...` no vulnerabilities, `CGO_ENABLED=1 go test
+  -race -count=1 ./cmd/lifelog -run 'Task|With'` passed; in `extensions/ticktick`, `extensions/whatsapp` and
+  `extensions/mcp`: `go vet`, `go test -count=1 -shuffle=on ./...`, `go mod tidy -diff` and `staticcheck` clean.
 
 ## Context
 
