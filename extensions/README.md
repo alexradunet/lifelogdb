@@ -102,6 +102,7 @@ flowchart TD
   then kills it. Then it drains its own requests and closes the file, so the child may still write while it ends.
 - `--with` and `--tls-cert` together are refused: the child would have to trust the certificate.
 - **A catalog of its own.** A child may serve a Siren catalog on `LIFELOG_LISTEN`: see [a catalog of its own](#a-catalog-of-its-own).
+- **A task service.** One child may be the task service, which `lifelog` draws under `/tasks`: see [a task service](#a-task-service).
 
 ## A catalog of its own
 
@@ -176,7 +177,7 @@ flowchart LR
   M --> A["the other actions, boxed"]
 ```
 
-1. **Quick-add.** On a page under `/with/NAME`, the first action of the entity that writes (not a `GET`), has no path field and has exactly one
+1. **Quick-add.** On a page under `/with/NAME` or `/tasks`, the first action of the entity that writes (not a `GET`), has no path field and has exactly one
    required field, of the type `text`, is one line at the top of the main column: that field, the button with the
    title of the action, and the other fields folded under "More fields". The Actions section does not draw it again.
 2. **Rows.** Each embedded link is a row. An embedded link may carry `properties` and `actions`
@@ -227,11 +228,79 @@ owner acts (the login is missing) ends with status 2, so `serve` does not start 
 
 The package `lifelog/app` serves a catalog and never dials. `Listen(ctx, handler)` serves on `LIFELOG_LISTEN`, refuses an
 unset value or an address that is not a loopback address, and drains on the end of `ctx`. `Catalog(title, home, actions,
-handlers)` is the handler: it serves `GET /actions`, `GET /` and one route for each action, and it panics at the start
+handlers)` is the handler (`CatalogOf(role, ...)` adds a role to the class of `GET /actions`; the role `tasks` marks the [task service](#a-task-service)): it serves `GET /actions`, `GET /` and one route for each action, and it panics at the start
 when an action has no handler. `Fail` writes an error entity. `StateDir(name)` makes the state folder. `ExitOwnerActs`
 is 2. [`cmd/lifelog/testdata/withapp/main.go`](../cmd/lifelog/testdata/withapp/main.go) is the whole example, and
 `cmd/lifelog/with_app_test.go` runs it on the real `lifelog serve --with`. An app in another language serves the same
 routes with any HTTP library.
+
+## A task service
+
+One child of `serve --with` may be the **task service**: the program that stands for the task manager the owner plans
+in. `lifelog` builds the pages and the forms of Tasks, and the service is a small data adapter. The server does not know
+which task manager it is. Only one task service runs at one time. The file keeps no task
+([D23](../docs/decisions/D23-no-tasks.md)). The routes and the actions that a client sees are in
+[API.md](../API.md#tasks).
+
+```mermaid
+flowchart LR
+  B["the browser, lifelog do, the MCP tools"] -->|"GET /tasks...; add-task, complete-task, ..."| L["lifelog serve: the pages and the six actions of Tasks"]
+  L -->|"the protocol below, as the writer of the request, on LIFELOG_LISTEN"| S["lifelog-NAME: the task service"]
+  S -->|"the API of the task manager"| T["the task manager outside this repository"]
+  S -->|"capture with import_key, as import:NAME"| L
+```
+
+### The marker and the refusals
+
+The service is an app that serves a catalog ([the handshake](#the-handshake)) with one difference: the `class` of
+`GET /actions` is `actions` **and `tasks`**. The server then reads `GET /lists` and registers the child as the task
+service, not as an app: it has no `/with/NAME`, no entry in the rail and no action with the prefix `NAME-`.
+
+```mermaid
+flowchart TD
+  P["GET /actions answers class actions and tasks"] --> L["serve reads GET /lists"]
+  L -->|"no list entity, or no answer"| X["refused: one line in the log; the child stays a plain child"]
+  L --> C{"a task service runs already?"}
+  C -->|"yes"| R1["refused: a task service runs already: NAME"]
+  C -->|"no"| W{"does the catalog have the six writes?"}
+  W -->|"no"| R2["refused: the task service has no action POST /tasks/{id}/reopen"]
+  W -->|"yes"| OK["the task service: Tasks is in the rail, the six actions are in GET /actions"]
+  OK -->|"the child ends"| E["Tasks leaves the rail; every /tasks route is 503 unavailable"]
+```
+
+The catalog must hold an action with the method `POST` and each of these `href` values (the names are the service's
+own; the server calls the `href`, not the name): `/tasks`, `/tasks/{id}`, `/tasks/{id}/complete`,
+`/tasks/{id}/reopen`, `/tasks/{id}/delete` and `/sync`. A catalog that lacks one is refused. The lists are read once,
+when the service registers: a new list needs a restart of the service.
+An app whose prefixed action name is one of the six names of [API.md](../API.md#tasks) is refused too.
+
+### The protocol
+
+All answers are Siren JSON. Data is in `properties`. An error is the error entity, as for any app.
+
+| route | answer |
+|---|---|
+| `GET /actions` | Class `actions` and `tasks`. The actions are the six writes below. |
+| `GET /lists` | `properties.lists`: `[{id, name}]` in the order of the service. The default list may be absent. |
+| `GET /open[?list=ID]` | `properties.tasks`: the open tasks, in the order of the service. |
+| `GET /done?since=YYYY-MM-DD[&list=ID]` | `properties.tasks`: the tasks done on that day or later. |
+| `GET /tasks/{id}` | Class `task`, `properties` = one task. An unknown id is 404 `not_found`. |
+| `POST /tasks` | Fields `title` (required), `list` (an id; absent means the default list), `due` (a day), `notes`. Answer: the task. |
+| `POST /tasks/{id}` | Edit: `title`, `notes`, `due`. A field that is not sent stays as it is. An empty `due` or `notes` clears it. |
+| `POST /tasks/{id}/complete`, `/reopen`, `/delete` | Answer: the task (delete: the task as it was). |
+| `POST /sync` | Read the done tasks and write a Done entry for each, once. Answer: `properties.written`. |
+
+A task is `{id, title, list, notes?, due?, done, done_day?, done_at?}`:
+
+- `list` is the list id, or `""` for the default list.
+- `due` and `done_day` are days (`YYYY-MM-DD`) in the zone of the task.
+- `done_at` is an RFC 3339 instant.
+
+`lifelog` sorts and filters: the service need not. Today is the day of the owner's clock in `lifelog`, and the window of
+Done (30 days) is sent as `since`. There is no priority in the protocol. The service writes its Done entries as any app
+does ([what the app writes back](#what-the-app-writes-back)).
+[`cmd/lifelog/testdata/taskservice/main.go`](../cmd/lifelog/testdata/taskservice/main.go) is the whole example, in Go with
+`app.CatalogOf("tasks", ...)`, and `cmd/lifelog/tasks_test.go` runs it on the real `lifelog serve --with`.
 
 ## Who writes
 

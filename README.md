@@ -550,6 +550,13 @@ are in the catalog while the app runs, and each is on every surface by its name 
 | MCP | the tool `NAME_action` over `lifelog mcp --url URL`; none for an owner's action |
 | browser | the form on `/actions` and on the pages of the app; the rail has one entry for each app that runs |
 
+One child of `serve --with` may be the **task service** ([plan 158](docs/plans/158-one-task-service-behind-tasks.md)).
+It is not an app: it has no `/with/NAME`, no rail entry and no `NAME-` prefix. `lifelog` draws its tasks under `/tasks`
+(the rail has Tasks), and six actions are in the catalog while it runs: `add-task`, `edit-task`, `complete-task`,
+`reopen-task`, `delete-task` (the owner's) and `sync-tasks`. Each is on every surface like any action. The routes, the
+503 while no service runs and the protocol are in [API.md](API.md#tasks) and
+[the contract of an extension](extensions/README.md#a-task-service).
+
 The routes that are not actions are reads of a resource (`GET /`, `/days`, `/days/{day}`, `/weeks/{week}`, `/months/{m}`,
 `/years/{y}`, `/days/{day}/conversation`, `/settings`, `/pages/{id}`, `/pages/{id}/cover`, `/metrics`, `/metrics/{name}`, `/measurements/{id}`, `/actions`),
 which the CLI's `get` and the MCP tool `get` read, or the browser's presentation (`/render`, the fonts, the manifest,

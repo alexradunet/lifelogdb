@@ -38,6 +38,9 @@ var appNameRE = regexp.MustCompile(`^[a-z0-9-]+$`)
 type Apps struct {
 	mu   sync.RWMutex
 	apps map[string]liveApp // by name; a name that is here is known
+	// tasks is the task service, the one child whose catalog has the class tasks (tasks.go). It is not an app: it has
+	// no name in apps, no /with/NAME and no action with a prefix. Nil while none runs.
+	tasks *taskService
 }
 
 // liveApp is a connected app that the server knows. c is nil while the app does not run.
@@ -73,7 +76,7 @@ func (a *Apps) Set(name, base, title string, actions []siren.Action) error {
 			return fmt.Errorf("the app %s: %w", name, err)
 		}
 		taken := name + "-" + act.Name
-		if _, ok := lookup(taken); ok {
+		if _, ok := lookup(taken); ok || isTaskAction(taken) {
 			return fmt.Errorf("the app %s: the action %s is in the catalog already", name, taken)
 		}
 		for other, o := range a.apps {
@@ -89,6 +92,37 @@ func (a *Apps) Set(name, base, title string, actions []siren.Action) error {
 	}
 	a.apps[name] = liveApp{c: client.Remote(base, "", ""), title: title, actions: slices.Clone(actions)}
 	return nil
+}
+
+// SetTasks says that the child NAME is the task service, at base (http://127.0.0.1:PORT), with its catalog and its
+// lists (docs/plans/158-one-task-service-behind-tasks.md). It refuses the child, and the registry stays as it was,
+// when another task service runs, or when the catalog lacks one of the six writes of the protocol (taskWrites). The
+// name stops being an app: Expect made it known, and SetTasks takes it back, so /with/NAME is 404.
+func (a *Apps) SetTasks(name, base string, actions []siren.Action, lists []TaskList) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.tasks != nil && a.tasks.name != name {
+		return fmt.Errorf("a task service runs already: %s", a.tasks.name)
+	}
+	for _, w := range taskWrites {
+		if !slices.ContainsFunc(actions, func(x siren.Action) bool { return x.Method == "POST" && x.Href == w.Href }) {
+			return fmt.Errorf("the task service has no action POST %s", w.Href)
+		}
+	}
+	delete(a.apps, name)
+	a.tasks = &taskService{name: name, c: client.Remote(base, "", ""), lists: slices.Clone(lists)}
+	return nil
+}
+
+// taskService is the task service that runs, and false when none does. The value is a copy that the registry never
+// changes, so a request reads one consistent service.
+func (a *Apps) taskService() (taskService, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.tasks == nil {
+		return taskService{}, false
+	}
+	return *a.tasks, true
 }
 
 // checkAppAction refuses an action that Set does not take, with the reason.
@@ -108,10 +142,13 @@ func checkAppAction(act siren.Action) error {
 	return nil
 }
 
-// Remove says that the app NAME does not run. Its name stays known.
+// Remove says that the app NAME does not run. Its name stays known. If NAME is the task service, the role is free.
 func (a *Apps) Remove(name string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.tasks != nil && a.tasks.name == name {
+		a.tasks = nil
+	}
 	if _, ok := a.apps[name]; ok {
 		a.apps[name] = liveApp{}
 	}
@@ -153,6 +190,7 @@ func (a *Apps) links() []view.AppLink {
 }
 
 // specs are the actions of the apps that run, as rows of the merged catalog: by app, then in the order of the app.
+// The six actions of the task service follow while it runs.
 func (a *Apps) specs() []spec {
 	var out []spec
 	for _, name := range a.Names() {
@@ -160,6 +198,9 @@ func (a *Apps) specs() []spec {
 		for _, act := range x.actions {
 			out = append(out, specOfApp(name, act))
 		}
+	}
+	if svc, ok := a.taskService(); ok {
+		out = append(out, svc.specs()...)
 	}
 	return out
 }

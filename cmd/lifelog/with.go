@@ -212,6 +212,9 @@ func probeCatalog(ctx context.Context, name, addr string, apps *api.Apps, say fu
 		switch {
 		case ctx.Err() != nil:
 			return
+		case err == nil && slices.Contains(e.Class, "actions") && slices.Contains(e.Class, "tasks"):
+			registerTasks(ctx, c, name, base, addr, e.Actions, apps, say)
+			return
 		case err == nil && slices.Contains(e.Class, "actions"):
 			title := name // the home gives the title; without it the name is the title
 			if home, err := probeGet(ctx, c, "/"); err == nil && home.Title != "" {
@@ -245,6 +248,28 @@ func probeCatalog(ctx context.Context, name, addr string, apps *api.Apps, say fu
 		case <-t.C:
 		}
 	}
+}
+
+// registerTasks makes the child the task service (extensions/README.md, "A task service"): it reads the lists and
+// registers the child with the role, not as an app. The registry refuses a second task service and a catalog that
+// lacks one of the six writes; the line says why.
+func registerTasks(ctx context.Context, c *client.Client, name, base, addr string, actions []siren.Action, apps *api.Apps, say func(string, ...any)) {
+	e, err := probeGet(ctx, c, "/lists")
+	var lists []api.TaskList
+	if err == nil {
+		lists, err = api.TaskListsOf(e)
+	}
+	if err != nil {
+		if ctx.Err() == nil {
+			say("catalog refused: the task service gives no lists: %v", err)
+		}
+		return
+	}
+	if err := apps.SetTasks(name, base, actions, lists); err != nil {
+		say("catalog refused: %v", err)
+		return
+	}
+	say("the task service, %d lists, on %s", len(lists), addr)
 }
 
 // probeGet is one probe: a GET that does not wait for a child that holds the connection open.

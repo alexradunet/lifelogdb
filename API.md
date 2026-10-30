@@ -117,6 +117,47 @@ The server sends a request to the app once. There is no retry on any method.
 `NAME-action` is `NAME_action`, and an `owner` action is no tool. An action with a field of the type `file` is refused
 when the catalog of the app is read; a multipart body is not forwarded.
 
+## Tasks
+
+While a **task service** runs ([the contract of an extension](extensions/README.md#a-task-service)), `lifelog` draws
+its tasks under `/tasks` and offers six actions. The service is not an app: it has no `/with/NAME` and no action with a
+prefix. The file keeps no task ([D23](docs/decisions/D23-no-tasks.md)); the pages are made at each request.
+
+| route | the page |
+|---|---|
+| `GET /tasks` | Today: the open tasks due today or before, across the lists, sorted by due day. Today is the day of the clock of the server, in the zone of the owner. |
+| `GET /tasks/week` | Next 7 days: the open tasks due from today to today + 6. |
+| `GET /tasks/lists/{id}` | The open tasks of one list. An unknown list is 404 `not_found`. |
+| `GET /tasks/done`, `GET /tasks/lists/{id}/done` | The tasks done in the last 30 days, newest first. |
+| `GET /tasks/items/{id}` | One task, with the forms `edit-task` and `delete-task`. An unknown task is 404 `not_found`. |
+
+A task with no due day is last, and tasks with the same day keep the order of the service. A row is an embedded link
+with the chips `due`, `list` (on a page that mixes lists) and `done`, and the round button `complete-task` (`reopen-task`
+on a done row). The pages follow the [rules of the generic view](extensions/README.md#how-the-browser-draws-a-page-of-an-app).
+
+| action | route | fields | |
+|---|---|---|---|
+| `add-task` | `POST /tasks` | `title` (required), `list` (a name; `options` are the names of the lists), `due` (a day), `notes` | |
+| `edit-task` | `POST /tasks/items/{id}` | `id`, `title`, `notes`, `due` | A field that is not sent stays as it is. An empty `due` or `notes` clears it. |
+| `complete-task` | `POST /tasks/items/{id}/complete` | `id` | |
+| `reopen-task` | `POST /tasks/items/{id}/reopen` | `id` | |
+| `delete-task` | `POST /tasks/items/{id}/delete` | `id` | `owner`, `danger` |
+| `sync-tasks` | `POST /tasks/sync` | none | |
+
+The actions are in `GET /actions` while a task service runs, so the table of the [README](README.md#every-action-on-every-surface)
+(the core alone) does not list them. They are checked as every action is: a field that the action does not name, a
+missing `title`, a `list` that is not a name, a `due` that is not a day (`YYYY-MM-DD`) or a blank `title` is 422
+`invalid`, and `delete-task` is 403 `forbidden` for an `agent:*` or `import:*` writer. In these cases the service is not
+called. The service is called as the writer of the request, once, with a limit of 30 seconds. An error of the service
+passes with its status and code.
+
+| status | `code` | when |
+|---|---|---|
+| 503 | `unavailable` | no task service runs ("no task service runs"), or it is not reachable; `Retry-After` says when to ask again |
+| 502 | `upstream` | the service answered something that is not an entity of the protocol |
+| 504 | `timeout` | the service did not answer in 30 seconds |
+| the service's own | the service's own | the service answered with an error entity: it passes with its status and code |
+
 ## Pages of a list
 
 `/days`, `/browse` and `/search` take `limit` (1–500; defaults 30 for days, 50 for search, 200 for browse) and

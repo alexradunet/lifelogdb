@@ -165,7 +165,7 @@ flowchart TB
     K["internal/api and cmd/lifelog: one catalog, one Siren handler, the forms, the CLI's do, all generated from the catalog. siren, client and app are public packages of this ring (app: the package a connected app serves its catalog with)."]
   end
   subgraph R3["ring 3: extensions, in any language"]
-    X["extensions/NAME, the program lifelog-NAME: a client of API.md, run as lifelog NAME. It names the third party. It may serve a catalog of its own, which ring 2 aggregates under /with/NAME (plan 154)."]
+    X["extensions/NAME, the program lifelog-NAME: a client of API.md, run as lifelog NAME. It names the third party. It may serve a catalog of its own, which ring 2 aggregates under /with/NAME (plan 154), or it is the one task service, which ring 2 draws under /tasks (plan 158)."]
   end
   S --> C --> K --> X
 ```
@@ -175,7 +175,7 @@ flowchart TD
   Q["does it open life.db, or run inside a transaction?"] -->|"yes"| C["ring 0 or 1: the file, the writer"]
   Q -->|"no"| R["does it draw or dispatch the catalog on the same origin as the API?"]
   R -->|"yes"| K["ring 2: the forms, the CLI"]
-  R -->|"no"| E["ring 3: an extension; its own catalog, if it has one, is merged by ring 2"]
+  R -->|"no"| E["ring 3: an extension; its own catalog, if it has one, is merged by ring 2; the task service is drawn by ring 2 under /tasks"]
 ```
 
 Two tests of `cmd/lifelog` (`boundary_test.go`) keep the rings, and a change preserves them: **the core names no

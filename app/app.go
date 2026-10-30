@@ -97,6 +97,18 @@ func write(w http.ResponseWriter, status int, e *siren.Entity) {
 // it must show at the start.
 func Catalog(title string, home func(*http.Request) (*siren.Entity, error), actions []siren.Action,
 	run map[string]func(*http.Request) (*siren.Entity, error)) http.Handler {
+	return CatalogOf("", title, home, actions, run)
+}
+
+// CatalogOf is Catalog for a program with a role. The class of GET /actions then has the role besides actions: the
+// server reads it in the handshake. The one role today is "tasks", the task service (extensions/README.md, "A task
+// service"). An empty role is Catalog.
+func CatalogOf(role, title string, home func(*http.Request) (*siren.Entity, error), actions []siren.Action,
+	run map[string]func(*http.Request) (*siren.Entity, error)) http.Handler {
+	class := []string{"actions"}
+	if role != "" {
+		class = append(class, role)
+	}
 	named := map[string]bool{}
 	for _, a := range actions {
 		if run[a.Name] == nil {
@@ -115,7 +127,7 @@ func Catalog(title string, home func(*http.Request) (*siren.Entity, error), acti
 	})
 	mux.HandleFunc("GET /actions", func(w http.ResponseWriter, r *http.Request) {
 		write(w, http.StatusOK, &siren.Entity{
-			Class:   []string{"actions"},
+			Class:   class,
 			Title:   "Actions",
 			Links:   []siren.Link{{Rel: []string{"self"}, Href: "/actions", Title: "Actions"}, {Rel: []string{"index"}, Href: "/", Title: "Home"}},
 			Actions: actions,

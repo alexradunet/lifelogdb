@@ -153,6 +153,7 @@ func newServer(s *core.Store) *server {
 	m.HandleFunc("GET /measurements/{id}", h.serve(h.measurement))
 	m.HandleFunc("POST /render", h.render)
 	h.mountWith(m)
+	h.mountTasks(m)
 	m.HandleFunc("GET /assets/fonts/{file}", fonts)
 	m.HandleFunc("GET /manifest.webmanifest", install("manifest.webmanifest", "application/manifest+json", "public, max-age=3600"))
 	// The rules of speculation. JSON has no comments, so the reasons are here. No address with a query string: a
@@ -502,6 +503,7 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 		f.Shell.Chat = chat
 		if fr.srv != nil {
 			f.Shell.Apps = fr.srv.with.links()
+			_, f.Shell.Tasks = fr.srv.with.taskService()
 		}
 		if fr.srv != nil && status < http.StatusBadRequest {
 			f.Cards, f.ChatDays = fr.srv.chatExtras(r, e, chat, f.Shell.Today)

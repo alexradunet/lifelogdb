@@ -24,6 +24,7 @@ type Shell struct {
 	Strip  *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
 	Chat   *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
 	Apps   []AppLink      // the connected apps that run (docs/plans/154-connected-apps-through-the-catalog.md): a link each in the rail
+	Tasks  bool           // a task service runs (docs/plans/158-one-task-service-behind-tasks.md): the rail has Tasks
 }
 
 // AppLink is a connected app in the rail: its name, which is its address /with/NAME, and the title of its home.
@@ -215,11 +216,7 @@ func (v *view) Streak() int {
 // one the browser is on is marked (Nav). A page's own neighbours need no entry here, since every template places them
 // from the entity's links. Chat is the conversation of any day. Browse is the one list of the record (docs/plans/117-one-browse-view.md, rule 7). Key is
 // the access key of an item, "" for none: t is Today.
-var navItems = []struct {
-	Title, Href, Icon string
-	Paths             []string // the pages it stands for: these paths and the paths under them
-	Group, Key        string
-}{
+var navItems = []navEntry{
 	{"Lifelog", "/", "", []string{"/"}, "home", ""},
 	{"Today", "/days/today", "today", []string{"/days/today"}, "day", "t"},
 	{"This week", "/weeks/today", "week", []string{"/weeks"}, "day", ""},
@@ -230,6 +227,26 @@ var navItems = []struct {
 	{"Every action", "/actions", "", []string{"/actions"}, "owner", ""},
 	{"Integrity checks", "/integrity", "", []string{"/integrity"}, "owner", ""},
 	{"Settings", "/settings", "", []string{"/settings"}, "owner", ""},
+}
+
+// navEntry is a row of the table of the sidebar.
+type navEntry struct {
+	Title, Href, Icon string
+	Paths             []string // the pages it stands for: these paths and the paths under them
+	Group, Key        string
+}
+
+// tasksEntry is the sidebar link of Tasks. It is in the sidebar only while a task service runs (Shell.Tasks), after
+// Browse (docs/plans/158-one-task-service-behind-tasks.md).
+var tasksEntry = navEntry{"Tasks", "/tasks", "tasks", []string{"/tasks"}, "day", ""}
+
+// navTable is navItems, with Tasks after Browse while a task service runs.
+func (v *view) navTable() []navEntry {
+	if v.Shell == nil || !v.Shell.Tasks {
+		return navItems
+	}
+	at := slices.IndexFunc(navItems, func(it navEntry) bool { return it.Href == "/browse" })
+	return slices.Insert(slices.Clone(navItems), at+1, tasksEntry)
 }
 
 // navItem is one sidebar link, marked when the browser is on a page it stands for.
@@ -263,9 +280,10 @@ func (v *view) Nav() []navItem {
 	if strings.HasPrefix(path, "/days/") && strings.HasSuffix(path, "/conversation") { // the conversation of any day is Chat
 		path = "/days/today/conversation"
 	}
-	out := make([]navItem, len(navItems))
+	table := v.navTable()
+	out := make([]navItem, len(table))
 	best, at, length := -1, 0, 0
-	for i, it := range navItems {
+	for i, it := range table {
 		out[i] = navItem{Title: it.Title, Href: it.Href, Icon: it.Icon, Group: it.Group, Key: it.Key}
 		for _, p := range it.Paths {
 			if n := navMatch(path, p); n > at || n == at && n > 0 && len(p) > length {
