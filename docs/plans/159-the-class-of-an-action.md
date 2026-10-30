@@ -192,6 +192,13 @@ TickTick list. The owner picked all four elements (2026-10-30).
 - README: the column "browser" of [every action on every surface](../../README.md#every-action-on-every-surface) names
   the menu where an action moves to it. The section of the browser says the menu.
 - Screenshots after B1 (the owner allows the review server, or runs it with `!`).
+- Done: `8c865ad` (a Sonnet sub-agent; reviewed, every check passed again in the main session). What the build found:
+  `create` actions go through `Creates()`, so the Metrics board now has an Add a reading button (the board offers
+  `record`, and the test of every action once found that no form drew it); "Make it a metric" is a link, not an
+  action, so it moved from the old More section to the margin; `/actions` has its own template, `catalog`; the day and
+  the pages of `/tasks` are not in the test of every action once (the day draws one `record` form for each metric, and
+  the fake task service of the tests answers 500), and a test of their own covers each. Not seen in a browser yet: the
+  anchoring of the menu, the bottom sheet, and whether the menu closes when a dialog opens.
 
 ## Part B2: the head (ring 2, the view; after B1 is on master)
 
