@@ -8,10 +8,9 @@
 - **Date / baseline:** 2026-10-30, `5046b38` (master), after [plan 157](157-a-task-manager-feel-through-the-catalog.md).
 - **Priority:** P2. **Effort:** L. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the head of every page, the More section and the Facts change, and many view tests pin the old HTML.
-- **Status:** BUILT, not seen in a browser and not live. B2 is on master (`d1fc733`, `1124bdf`). Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
+- **Status:** LIVE 2026-10-30 22:11 (`ff0f1c7`: `lifelog`, `lifelog-ticktick` and `lifelog-mcp` rebuilt, the service restarted). Not seen in a browser. B2 is on master (`d1fc733`, `1124bdf`). Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
   of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The owner
-  picked the four elements of the mock-up and the order of B1, B2 and C (2026-10-30). Not live: the service runs the binary of
-  before.
+  picked the four elements of the mock-up and the order of B1, B2 and C (2026-10-30).
 - **Counter-review:** the review ran on Opus, because the Fable limit was reached. It found six fixes, and they are
   on master: a non-modal menu dialog was drawn off the screen; the pencil and create popovers were never bottom
   sheets on a phone; the focus of a danger dialog started on the danger button; the `@supports` guard did not check
