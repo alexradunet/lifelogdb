@@ -15,11 +15,13 @@
   on master: a non-modal menu dialog was drawn off the screen; the pencil and create popovers were never bottom
   sheets on a phone; the focus of a danger dialog started on the danger button; the `@supports` guard did not check
   `anchor-scope`; the classes of the TickTick connector were dead data (the core catalog of the task protocol is the one
-  home); an app action with two classes passed. Open for the owner: the focus return to the ⋯ button after a dialog
+  home); an app action with two classes passed. Open then: the focus return to the ⋯ button after a dialog
   closes (it needs script), and the nits. The nits are: `railOwns` is always false; `_ = http.StatusOK`; the
   every-action-once test has no `/with` and no `/tasks`; no test of the `lead` refusal; a `<div popover>` inside a
   `<span>`; `aria-haspopup="menu"` without `role=menu`; loose fits of some classes, such as `file-pages`; `?new=` is kept
   in `back`. The CSS was not rendered in a browser.
+  The open items are now done: the one script returns the focus to the ⋯ button, the test and HTML nits are fixed,
+  `new` is dropped from `back`, `file-pages` has no class, and `edit` covers a correction.
 - **Resolves:** the owner's words of 2026-10-30 (below). No issue: the API change is additive, and no rule of the data
   changes.
 
@@ -96,9 +98,9 @@ Four pitfalls shape the vocabulary below:
 | class | what the action does | the browser draws it | core actions | task actions (core catalog) |
 |---|---|---|---|---|
 | `create` | it makes a new thing, and the answer is that thing or its list | a button in the head of the page, which opens its form in a popover anchored to it. On an app page, the first `create` action with one required text field is the quick-add line instead. | `create-page`, `create-person`, `add-file`, `register-metric`, `record`, `capture`, `snapshot` | `add-task` |
-| `edit` | it changes this resource's own properties | the first group of the ⋯ menu, each in a dialog. An `edit` whose one field is `title` is a ✎ beside the title, with its form in a popover anchored to it. | `rename`, `edit-person`, `edit-metric`, `correct`, `save-body`, `set-cover`, `settings`, `file-pages`, `promote` | — |
+| `edit` | it changes this resource: its own properties, or, for an append-only resource, a new row that takes its place (`correct`) | the first group of the ⋯ menu, each in a dialog. An `edit` whose one field is `title` is a ✎ beside the title, with its form in a popover anchored to it. | `rename`, `edit-person`, `edit-metric`, `correct`, `save-body`, `set-cover`, `settings`, `promote` | — |
 | `toggle` | it flips one state of this resource: no field, or one field of two options | on a row, the round button (with no field). A page has no toggle in its head: `revive` has its place in the alert of a deleted page. | `revive` | `complete-task` |
-| none | anything else | the ⋯ menu, middle group | `say`, `search`, `find`, `browse`, `open-day`, `random-page`, `integrity-check`, `rebuild-search`, `resync-links` | — |
+| none | anything else | the ⋯ menu, middle group | `say`, `search`, `find`, `browse`, `open-day`, `random-page`, `integrity-check`, `rebuild-search`, `resync-links`, `file-pages` (it names pages for a category and does not change the resource it is on, so it has no class) | — |
 
 `tombstone-pages` and `retract` have no class: they are `danger`, which puts them last in the ⋯ menu, apart, in the
 danger colour. Their dialog says what they do; it is the confirm step. A GET action keeps its own drawing where a

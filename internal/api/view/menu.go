@@ -108,7 +108,7 @@ func (v *view) pageHere() string {
 	if props, ok := v.Props.(map[string]any); ok && v.IsSeries() {
 		return fmt.Sprintf("/pages/%s", Num(props["id"]))
 	}
-	return v.Here
+	return v.ReturnHere()
 }
 
 // isTitleEdit reports an `edit` action whose one field apart from the path fields is the title: the rename of a page.

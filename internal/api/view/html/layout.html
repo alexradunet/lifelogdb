@@ -210,7 +210,7 @@
      whose menu is empty draws no button. menu-list and menu-dialogs are its two parts: the chat screen draws them in
      the popover of its own. */}}
 {{define "menu"}}{{$m := .Menu}}{{if not $m.Empty}}<div class="menu">
-<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions" aria-haspopup="menu">⋯</button>
+<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions">⋯</button>
 <div class="menu-list" id="menu" popover><div class="menu-head"><span class="label">More</span><button type="button" class="button small" popovertarget="menu" popovertargetaction="hide">Close</button></div>
 {{template "menu-list" $m}}</div>
 {{template "menu-dialogs" $m}}</div>{{end}}{{end}}
@@ -245,12 +245,12 @@
 <header class="page-head"><div class="what">
 {{with .above}}{{slot . $}}{{end}}
 {{with .kind}}<span class="kind">{{.}}</span>{{end}}
-<div class="title-line"><h1>{{.title}}</h1>{{with $pencil}}<span class="pop"><button type="button" class="button pencil" aria-label="{{.Title}}" title="{{.Title}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M11 1.5l3.5 3.5-8.5 8.5-4.5 1 1-4.5z"/></svg></button>{{template "head-popover" .}}</span>{{end}}</div>
+<div class="title-line"><h1>{{.title}}</h1>{{with $pencil}}<div class="pop"><button type="button" class="button pencil" aria-label="{{.Title}}" title="{{.Title}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M11 1.5l3.5 3.5-8.5 8.5-4.5 1 1-4.5z"/></svg></button>{{template "head-popover" .}}</div>{{end}}</div>
 {{with $meta}}<p class="meta-line">{{range $i, $m := .}}{{if $i}} · {{end}}{{$m}}{{end}}</p>{{end}}
-{{if .categories}}{{template "categories" (dict "v" $v "back" $v.Here)}}{{end}}
+{{if .categories}}{{template "categories" (dict "v" $v "back" $v.ReturnHere)}}{{end}}
 {{with .sub}}{{slot . $}}{{end}}
 </div>
-<div class="tools">{{range $creates}}<span class="pop"><button type="button" class="button{{if .Primary}} primary{{end}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}>{{if .Primary}}{{icon "new"}}{{end}}{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</button>{{template "head-popover" .}}</span>{{end}}
+<div class="tools">{{range $creates}}<div class="pop"><button type="button" class="button{{if .Primary}} primary{{end}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}>{{if .Primary}}{{icon "new"}}{{end}}{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</button>{{template "head-popover" .}}</div>{{end}}
 {{with .tools}}{{slot . $}}{{end}}{{template "menu" $v}}</div></header>
 {{with $pencil}}{{if .Open}}{{template "item-dialog" .}}{{end}}{{end}}{{range $creates}}{{if .Open}}{{template "item-dialog" .}}{{end}}{{end}}{{end}}
 

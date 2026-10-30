@@ -15,7 +15,7 @@
 <div class="group-tools"><a href="/pages/{{.Page}}">Open {{.Title}}</a></div></details>
 {{end}}</details>
 {{else}}<p class="empty">No metric yet. Make the first one with <a href="{{.NewMetricHref}}">New metric</a>.</p>{{end}}
-{{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "button" "Add to" "back" $.Here "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
+{{with $file}}{{if $sections}}{{template "pick-bar" (dict "file" . "button" "Add to" "back" $.ReturnHere "words" "Check the metrics, then type a category. A new name makes a new category.")}}{{end}}{{end}}</div>
 {{template "foot" .}}{{end}}
 
 {{/* The view of a metric (/metrics/{name}): its page and its readings in one place (docs/plans/144-one-view-for-a-metric.md).
@@ -33,9 +33,9 @@
 <div class="sheet">
 {{if $s.id}}{{template "page-sheet" .}}{{end}}
 {{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
-{{template "form" ((form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "back" $.Here).Prompt "value" (or $unit "a count, or 1 done and 0 not done"))}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
+{{template "form" ((form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "back" $.ReturnHere).Prompt "value" (or $unit "a count, or 1 done and 0 not done"))}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
 {{with .Action "edit-metric"}}<section class="daily-mark" aria-label="Every day"><h2>Every day</h2>
-{{template "form" (form . "button" "Save" "back" $.Here)}}</section>{{end}}
+{{template "form" (form . "button" "Save" "back" $.ReturnHere)}}</section>{{end}}
 
 <section class="readings-all" aria-label="Readings">
 <div class="panel-head"><h2>Readings</h2><span class="meta">{{len $s.readings}}</span></div>

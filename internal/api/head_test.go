@@ -27,7 +27,7 @@ func TestATitleEditIsThePencilAndNotInTheMenu(t *testing.T) {
 	essay := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Essay"}))
 	body := browse(t, h, apitest.Href(essay, "self"))
 	head := headOf(t, body)
-	if !regexp.MustCompile(`<h1>Essay</h1><span class="pop"><button type="button" class="button pencil" aria-label="Rename" title="Rename" popovertarget="pencil">`).MatchString(head) {
+	if !regexp.MustCompile(`<h1>Essay</h1><div class="pop"><button type="button" class="button pencil" aria-label="Rename" title="Rename" popovertarget="pencil">`).MatchString(head) {
 		t.Errorf("the pencil is not beside the title:\n%s", head)
 	}
 	if !strings.Contains(head, `<div class="head-pop" id="pencil" popover`) || !strings.Contains(head, `<input type="text" name="title" value="Essay" required autofocus>`) {

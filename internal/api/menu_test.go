@@ -18,7 +18,7 @@ func TestTheMenuHoldsTheActionsNoTemplatePlaces(t *testing.T) {
 	essay := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Essay"}))
 	body := browse(t, h, apitest.Href(essay, "self"))
 	for _, want := range []string{
-		`<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions" aria-haspopup="menu">`,
+		`<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions">`,
 		`<div class="menu-group" role="group" aria-label="Edit"><span class="menu-label">Edit</span>`,
 		`<button type="button" class="menu-item" commandfor="do-promote" command="show-modal">Make it a person</button>`,
 		`<dialog class="menu-dialog" id="do-promote" closedby="any" aria-label="Make it a person">`,

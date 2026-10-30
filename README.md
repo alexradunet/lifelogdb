@@ -236,8 +236,10 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **One script, and every form works without it** ([plan 108](docs/plans/108-the-browser-made-current.md); the
   owner's rule of 2026-10-14: as native as HTML can be, even at the cost of a small convenience;
   [plan 146](docs/plans/146-settings-and-the-chat-column.md)). A page carries its two sheets and at most one
-  `script` element: `/assets/chat.js`, loaded with `defer` on a page that has the chat column, under 80 lines, with
-  no framework and no build step. A test holds both. It does three things for the column and nothing else. While
+  `script` element: `/assets/chat.js`, loaded with `defer` on every page of the shell, under 80 lines, with
+  no framework and no build step. A test holds both. It does one thing on every page: when a dialog of the ⋯ menu
+  closes, it gives the focus back to the ⋯ button (the button that opened the dialog is in a popover that is hidden
+  again), or, for a form that the page's link asked for, to its head button. It does three things for the column. While
   the last turn of the column is the owner's, it asks `GET /days/today/conversation` every 3 seconds and, when the
   `version` differs from the column's `data-version`, fetches the current page and swaps the column's content. It
   posts the composer with `fetch` and swaps the column from the answer, so the page does not reload. It keeps the open
@@ -370,7 +372,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   page is a 303 to it, so there is one view of a conversation. A live conversation page keeps its title: it offers no
   `rename` or `promote`, and `rename` to such a title is 409. The agent (`lifelog whatsapp`) watches today's page
   and answers on it; the core calls no model. In the browser, a right column on every page shows today's turns and the
-  composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's and lets Enter send; every form
+  composer, and one script, `/assets/chat.js`, polls for the answer while the last turn is the owner's and lets Enter send (it also returns the focus to the ⋯ button when a menu dialog closes); every form
   works without it. The conversation view is the chat screen, not a page ([plan 148](docs/plans/148-the-chat-screen.md)): a day bar with the chips of the last days and a menu (a popover) of the page's own actions, links and backlinks, the thread, and the composer
   at the bottom. The server asks its own handler for each address in the tool lines of a turn (at most six a turn, the newest 36 addresses of the screen and the newest six of the column; the older draw their link; the request carries the source `agent:card`, so an owner-only read such as `/settings` or `/integrity` is refused and draws its link)
   and the browser draws the entity that answers as a card by its class (a day, a page, a metric, a search); the column draws the same cards on one line.

@@ -69,7 +69,7 @@ func TestTheCatalogGivesEachActionItsClass(t *testing.T) {
 		"create-page": "create", "create-person": "create", "add-file": "create", "register-metric": "create",
 		"record": "create", "capture": "create", "snapshot": "create",
 		"rename": "edit", "edit-person": "edit", "edit-metric": "edit", "correct": "edit", "save-body": "edit",
-		"set-cover": "edit", "settings": "edit", "file-pages": "edit", "promote": "edit",
+		"set-cover": "edit", "settings": "edit", "promote": "edit",
 		"revive":   "toggle",
 		"add-task": "create", "edit-task": "edit", "complete-task": "toggle", "reopen-task": "toggle",
 	}

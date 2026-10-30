@@ -1,12 +1,15 @@
 package api_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
 
+	"lifelog/internal/api"
 	"lifelog/internal/api/apitest"
 	"lifelog/siren"
 )
@@ -68,38 +71,86 @@ func TestEveryActionOfAnEntityIsDrawnOnce(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			body := mainOf(browse(t, h, row.path))
-			for _, a := range e.Actions {
-				if rel := drawnByLink[a.Name]; rel != "" {
-					if l := e.LinkByRel(rel); l == nil || strings.Count(body, `href="`+l.Href+`"`) != 1 {
-						t.Errorf("%s: the link %s of %s is not drawn once", row.path, rel, a.Name)
-					}
-					continue
-				}
-				forms := strings.Count(body, `data-action="`+a.Name+`"`)
-				links := strings.Count(body, `?new=`+a.Name)
-				// A form is the one place. Only an action with no form is opened by a link, once (the quarters of a year
-				// link the same create-page beside its form: they open it for a title of their own).
-				if forms != 1 && !(forms == 0 && links == 1) {
-					t.Errorf("%s: the action %s is drawn %d times as a form and %d as a link, want once", row.path, a.Name, forms, links)
-				}
-			}
-			// Nothing is drawn that the entity does not offer.
-			offered := map[string]bool{}
-			for _, a := range e.Actions {
-				offered[a.Name] = true
-			}
-			for _, m := range regexp.MustCompile(` data-action="([^"]*)"`).FindAllStringSubmatch(body, -1) {
-				if !offered[m[1]] && !railOwns(m[1]) {
-					t.Errorf("%s draws a form of %s, which the entity does not offer", row.path, m[1])
-				}
-			}
+			drawnOnce(t, row.path, e, mainOf(browse(t, h, row.path)))
 		})
 	}
 }
 
-// railOwns names the actions that the shell draws on every page, whatever the entity offers: the search of the rail.
-func railOwns(name string) bool { return name == "search" && false }
+// drawnOnce holds the rule of the test above for one address: body is the HTML and e the JSON of the same address.
+// The expected answer is the JSON of the entity, never the table of the views.
+func drawnOnce(t *testing.T, path string, e *siren.Entity, body string) {
+	t.Helper()
+	offered := map[string]bool{}
+	for _, a := range e.Actions {
+		offered[a.Name] = true
+		if rel := drawnByLink[a.Name]; rel != "" {
+			if l := e.LinkByRel(rel); l == nil || strings.Count(body, `href="`+l.Href+`"`) != 1 {
+				t.Errorf("%s: the link %s of %s is not drawn once", path, rel, a.Name)
+			}
+			continue
+		}
+		forms := strings.Count(body, `data-action="`+a.Name+`"`)
+		links := strings.Count(body, `?new=`+a.Name)
+		// A form is the one place. Only an action with no form is opened by a link, once (the quarters of a year
+		// link the same create-page beside its form: they open it for a title of their own).
+		if forms != 1 && !(forms == 0 && links == 1) {
+			t.Errorf("%s: the action %s is drawn %d times as a form and %d as a link, want once", path, a.Name, forms, links)
+		}
+	}
+	// Nothing is drawn that the entity does not offer.
+	for _, m := range regexp.MustCompile(` data-action="([^"]*)"`).FindAllStringSubmatch(body, -1) {
+		if !offered[m[1]] {
+			t.Errorf("%s draws a form of %s, which the entity does not offer", path, m[1])
+		}
+	}
+}
+
+// fakeTaskService answers the reads of the task protocol: two open tasks, and the first of them by its address.
+func fakeTaskService(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tasks := []map[string]any{}
+		if r.URL.Path == "/open" {
+			tasks = []map[string]any{{"id": "t1", "title": "Water the plants", "list": "home", "due": "2000-01-01"}, {"id": "t2", "title": "Call Ana", "list": "work"}}
+		}
+		props := map[string]any{"tasks": tasks}
+		if r.URL.Path == "/tasks/t1" {
+			props = map[string]any{"id": "t1", "title": "Water the plants", "list": "home", "due": "2000-01-01"}
+		}
+		w.Header().Set("Content-Type", "application/vnd.siren+json")
+		if err := json.NewEncoder(w).Encode(&siren.Entity{Class: []string{"tasks"}, Properties: props}); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestEveryActionOfAnAppAndOfTheTaskServiceIsDrawnOnce is the test above for the pages that a connected app and the
+// task service send: the actions of their entities are drawn by class, and each of them once.
+func TestEveryActionOfAnAppAndOfTheTaskServiceIsDrawnOnce(t *testing.T) {
+	h, apps, _ := withServer(t)
+	apps.Expect("svc")
+	var writes []siren.Action
+	for _, href := range []string{"/tasks", "/tasks/{id}", "/tasks/{id}/complete", "/tasks/{id}/reopen", "/tasks/{id}/delete", "/sync"} {
+		writes = append(writes, siren.Action{Name: "w" + href, Method: "POST", Href: href})
+	}
+	if err := apps.SetTasks("svc", fakeTaskService(t).URL, writes, []api.TaskList{{ID: "home", Name: "Home"}, {ID: "work", Name: "Work"}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/with/testapp/", "/tasks", "/tasks/week", "/tasks/items/t1"} {
+		t.Run(path, func(t *testing.T) {
+			var e siren.Entity
+			if rec := call(h, "GET", path, "", nil); rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &e) != nil {
+				t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body)
+			}
+			if len(e.Actions) == 0 {
+				t.Fatalf("%s offers no action: the test proves nothing", path)
+			}
+			drawnOnce(t, path, &e, mainOf(browse(t, h, path)))
+		})
+	}
+}
 
 // TestADayDrawsNoMenu: every action of a day has a place of its own (the capture box, the tiles, the editor, the
 // cover link), so its menu is empty and draws no button.
@@ -121,5 +172,27 @@ func TestADayDrawsNoMenu(t *testing.T) {
 			}
 		}
 	}
-	_ = http.StatusOK
+}
+
+// TestAnAskedFormIsNotInTheBackOfAForm: a form that the link of the page asked for (?new=NAME) is open on that page
+// only. No form on it carries that query in its back, so another write does not open the dialog again.
+func TestAnAskedFormIsNotInTheBackOfAForm(t *testing.T) {
+	ctx := t.Context()
+	c, h, _ := apitest.FreshOn(t, "cli", "2026-09-30")
+	root := apitest.Must(t)(c.Get(ctx, "/"))
+	lisbon := apitest.Must(t)(c.Do(ctx, apitest.Action(t, root, "create-page"), map[string]string{"title": "Lisbon", "body": "A city."}))
+	apitest.Must(t)(c.Do(ctx, apitest.Action(t, lisbon, "file-pages"), map[string]string{"category": "Cities"}))
+	self := apitest.Href(lisbon, "self")
+	backs := regexp.MustCompile(`name="back" value="([^"]*)"`)
+	for _, path := range []string{self + "?new=rename", self + "?new=tombstone-pages", self + "?new=file-pages", "/browse?in=Cities&new=file-pages"} {
+		found := backs.FindAllStringSubmatch(browse(t, h, path), -1)
+		if len(found) == 0 {
+			t.Errorf("%s draws no form with a back: the test proves nothing", path)
+		}
+		for _, m := range found {
+			if strings.Contains(m[1], "new=") {
+				t.Errorf("%s: a form has the back %q, which asks for a form again", path, m[1])
+			}
+		}
+	}
 }

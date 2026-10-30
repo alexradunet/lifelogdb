@@ -148,7 +148,7 @@ var catalog = []spec{
 		Fields: []siren.Field{req("ids", "text", "Page ids, separated by spaces or commas")},
 		Danger: true,
 	},
-	{Name: "file-pages", Title: "Put in a category", Class: []string{"edit"},
+	{Name: "file-pages", Title: "Put in a category",
 		Description: "File several pages (metrics among them) in the category page titled `category`, in one write (a part-of link from each), or with `from` take them out of the category page titled `from` (the link from each is removed; nothing else changes): ids are page ids, separated by spaces or commas. One of category or from is required, never both. A missing category is made as an empty page. With move 1, every other part-of link of those pages is removed first (with category only). An id no page has refuses the whole action.",
 		Hint:        "Put the checked pages in a category, or take them out of one. A category that does not exist yet is made.",
 		Method:      "POST", Path: "/pages/file",

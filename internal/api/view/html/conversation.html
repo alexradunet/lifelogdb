@@ -14,7 +14,7 @@
 <div class="more-body" id="chat-menu" popover>
 <div class="more-head"><span class="label">More</span><button type="button" class="button small" popovertarget="chat-menu" popovertargetaction="hide">Close</button></div>
 <p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>
-{{if $p.id}}{{template "categories" (dict "v" $ "back" $.Here)}}
+{{if $p.id}}{{template "categories" (dict "v" $ "back" $.ReturnHere)}}
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{template "links" .}}
 {{template "backlinks" .}}

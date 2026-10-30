@@ -1,13 +1,19 @@
-// The one script of the app (README, "No script"). It only helps the chat column (#chat) and the chat screen
-// (#conversation); every form works without it. It polls while the agent has not answered, posts the composer in
-// place, and lets Enter send (Shift+Enter breaks a line). The thread is a reversed column, so after a swap it is still
-// at its newest turn. For the column it also remembers whether the popover is open. Any error leaves the page as it is.
-// A prerendered page runs it too; it polls only while the dots are drawn and guards showPopover, so it does nothing there.
+// The one script of the app (README, "No script"). Every form works without it. On every page it gives the focus back
+// when a menu dialog closes: its opening button is in a hidden popover, so the focus goes to the ⋯ button, or, for a
+// form that the page's link asked for, to its head button (close does not bubble: one listener, capture phase). On the
+// chat column (#chat) and the chat screen (#conversation) it polls while the agent has not answered, posts the
+// composer in place, and lets Enter send (Shift+Enter breaks a line). The thread is a reversed column, so after a swap
+// it is still at its newest turn. The column remembers whether its popover is open. Any error leaves the page as it is.
+// A prerendered page runs it too; it guards showPopover.
 (() => {
+  document.addEventListener('close', (e) => {
+    const d = e.target, at = document.activeElement;
+    if (!d.matches || !d.matches('dialog.menu-dialog') || (at !== document.body && !d.contains(at))) return;
+    (d.closest('.menu')?.querySelector('.menu-button') || document.querySelector(`[commandfor="${CSS.escape(d.id)}"][command="close"]`))?.focus();
+  }, true);
   const chat = document.getElementById('chat') || document.getElementById('conversation');
   if (!chat) return;
-  const same = { credentials: 'same-origin' };
-  const KEY = 'lifelog.chat.open';
+  const same = { credentials: 'same-origin' }, KEY = 'lifelog.chat.open';
   let timer;
 
   // swap replaces the column's content with the one in a page's HTML, keeps a draft that is being typed, and gives the

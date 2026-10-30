@@ -71,7 +71,7 @@ class is any other action.
 | class | what the action does |
 |---|---|
 | `create` | It makes a new thing. The answer is that thing or its list. |
-| `edit` | It changes the own properties of the resource it is on. |
+| `edit` | It changes the resource it is on: its own properties, or, for an append-only resource, a new row that takes its place. |
 | `toggle` | It flips one state of the resource it is on. It has no field, or one field with two options. |
 
 A client may ignore a class: an action with a class works as an action with none. The placement of an action is the
