@@ -169,7 +169,7 @@ var viewOf = map[string]placing{
 	"week":         {"week", []string{"create-page", "save-body"}},
 	"cover-choice": {"cover-choice", []string{"set-cover"}},
 	"actions":      {"catalog", nil}, // the catalog page draws every action boxed: nothing is placed, and it has no menu
-	"error":        {"error", nil}, "login": {"login", nil}, "preview": {"preview", nil},
+	"error":        {"error", nil}, "login": {"login", nil}, "locked": {"locked", nil}, "preview": {"preview", nil},
 }
 
 // placingOf is the way an entity is drawn: that of the first of its classes that has one, else the generic view.
@@ -462,6 +462,8 @@ func alertOf(code any) alertView {
 		return alertView{"Not done. The app is not running.", false}
 	case siren.CodeUpstream:
 		return alertView{"Not done.", true}
+	case siren.CodeLocked:
+		return alertView{"Locked. Unlock this browser with the PIN, then try again.", false}
 	}
 	return alertView{}
 }

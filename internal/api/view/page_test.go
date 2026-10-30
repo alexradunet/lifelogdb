@@ -163,6 +163,7 @@ func TestAnErrorCodePicksItsWords(t *testing.T) {
 		"snapshot_refused":     {"Not taken.", false},
 		"restore_check_failed": {"Taken, but the restore check failed.", true},
 		"unavailable":          {"Not done. The app is not running.", false},
+		"locked":               {"Locked. Unlock this browser with the PIN, then try again.", false},
 		"upstream":             {"Not done.", true},
 		"invalid":              {},
 		"bad_request":          {},

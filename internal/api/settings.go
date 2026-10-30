@@ -15,10 +15,14 @@ import (
 // floor of a page with no choice (docs/plans/153-the-ground-in-settings.md).
 var grounds = []string{"boards", "oak", "firelight", "embers"}
 
+// lockAfters are the idle minutes of the lock, the options of the field lock_after; off is the default
+// (docs/plans/160-the-lock.md).
+var lockAfters = []string{"off", "5", "10", "15", "30", "60"}
+
 // settingsEntity is the settings resource. It holds the values, the key too: only the owner reads it
 // (GET /settings), while the catalog (GET /actions) offers the action with no value in it.
 func settingsEntity(s core.Settings) *siren.Entity {
-	props := map[string]any{"model_url": s.ModelURL, "model": s.Model, "ground": s.Ground}
+	props := map[string]any{"model_url": s.ModelURL, "model": s.Model, "ground": s.Ground, "lock_after": lockAfterOf(s)}
 	if s.OwnerNumber != "" {
 		props["owner_number"] = s.OwnerNumber
 	}
@@ -31,7 +35,21 @@ func settingsEntity(s core.Settings) *siren.Entity {
 		Links: []siren.Link{link("self", "/settings", "Settings"), link("index", "/", "Home"),
 			link("snapshot", "/actions?new=snapshot", "Take a snapshot")},
 		Actions: []siren.Action{action("settings", nil,
-			map[string]any{"model_url": s.ModelURL, "model": s.Model, "model_key": s.ModelKey, "owner_number": s.OwnerNumber, "ground": s.Ground})}}
+			map[string]any{"model_url": s.ModelURL, "model": s.Model, "model_key": s.ModelKey, "owner_number": s.OwnerNumber, "ground": s.Ground, "lock_after": lockAfterOf(s)})}}
+}
+
+// lockAfterOf is the value that the form shows for lock_after: off when the file holds none. The hash and the PIN are
+// never shown, and the field lock_pin is always empty.
+func lockAfterOf(s core.Settings) string {
+	if s.LockAfter == "" {
+		return "off"
+	}
+	return s.LockAfter
+}
+
+// pinOK reports a PIN of 4 to 8 ASCII digits.
+func pinOK(pin string) bool {
+	return len(pin) >= 4 && len(pin) <= 8 && strings.Trim(pin, "0123456789") == ""
 }
 
 // settings is GET /settings: the owner's alone.
@@ -47,7 +65,7 @@ func (h *server) settings(r *http.Request) (*siren.Entity, error) {
 }
 
 // saveSettings is the action settings. A field that the request leaves out stays as it is, and an empty one clears
-// that setting (a browser form sends all five).
+// that setting (a browser form sends all of them).
 func (h *server) saveSettings(r *http.Request, act spec, _ string) (*siren.Entity, error) {
 	v, err := fieldsOf(r, act)
 	if err != nil {
@@ -57,13 +75,29 @@ func (h *server) saveSettings(r *http.Request, act spec, _ string) (*siren.Entit
 	if err != nil {
 		return nil, err
 	}
-	for name, to := range map[string]*string{"model_url": &s.ModelURL, "model": &s.Model, "model_key": &s.ModelKey, "owner_number": &s.OwnerNumber, "ground": &s.Ground} {
+	for name, to := range map[string]*string{"model_url": &s.ModelURL, "model": &s.Model, "model_key": &s.ModelKey, "owner_number": &s.OwnerNumber, "ground": &s.Ground, "lock_after": &s.LockAfter} {
 		if v.Has(name) {
 			*to = strings.TrimSpace(v.Get(name))
 		}
 	}
 	if s.OwnerNumber != "" && strings.Trim(s.OwnerNumber, "0123456789") != "" {
 		return nil, core.Invalid("owner_number: digits with the country code, such as 40712345678")
+	}
+	if s.LockAfter == "off" {
+		s.LockAfter = ""
+	}
+	// lock_pin is the one field whose empty value keeps the setting: the form never shows the PIN, so it cannot send it
+	// back. The file keeps the hash only.
+	if pin := strings.TrimSpace(v.Get("lock_pin")); pin != "" {
+		if !pinOK(pin) {
+			return nil, core.Invalid("lock_pin: 4 to 8 digits")
+		}
+		if s.LockPINHash, err = core.HashPIN(pin); err != nil {
+			return nil, err
+		}
+	}
+	if s.LockAfter != "" && s.LockPINHash == "" {
+		return nil, core.Invalid("lock_after: set lock_pin as well, a PIN of 4 to 8 digits")
 	}
 	if err := h.s.WriteSettings(s); err != nil {
 		return nil, err

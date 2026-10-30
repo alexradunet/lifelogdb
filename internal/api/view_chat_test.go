@@ -427,7 +427,11 @@ func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 	if _, _, err := s.CreatePage(t.Context(), "cli", "Conversation "+today, "[["+today+"]]\n\n- `open_day` → [/days/"+today+"](/days/"+today+")\n\n**lifelog** (09:00): Here.\n", ""); err != nil {
 		t.Fatal(err)
 	}
-	with := map[string]string{"Accept": "text/html", "Cookie": api.CookieName + "=" + testToken}
+	login := request(public, "POST", "/login", "token="+url.QueryEscape(testToken), map[string]string{"Sec-Fetch-Site": "same-origin"})
+	if len(login.Result().Cookies()) == 0 {
+		t.Fatalf("login: %d", login.Code)
+	}
+	with := map[string]string{"Accept": "text/html", "Cookie": login.Result().Cookies()[0].Name + "=" + login.Result().Cookies()[0].Value}
 	rec = request(public, "GET", "/days/today/conversation", "", with)
 	if got := cardsOf(rec.Body.String()); rec.Code != 200 || len(got) != 1 || got[0][1] != "day" {
 		t.Errorf("the public listener with the cookie: %d, cards %v, want a day card", rec.Code, got)

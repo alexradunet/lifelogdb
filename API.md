@@ -85,7 +85,7 @@ An error is an entity of class `error` with `properties`:
 | property | type | meaning |
 |---|---|---|
 | `status` | integer | the HTTP status |
-| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page. When `create-person` meets a live plain page, the link `promote` is the address of that page with the promote form open and the fields filled), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), `unavailable` (503 with `Retry-After`: an app connected by `serve --with` is not running), `upstream` (502: the app answered something that is not an entity), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found` (for a metric that does not exist, the link `register` is the address of the Metrics board with the form of `register-metric` open and the name filled), `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
+| `code` | string | what went wrong, to branch on: `stale_version` (a save with an old `version`), `exists` (a title in use; the link `existing` names the page. When `create-person` meets a live plain page, the link `promote` is the address of that page with the promote form open and the fields filled), `cross_origin` (a browser write from another origin), `token_required` (a public listener without a credential), `snapshot_refused` (the snapshot folder refused it), `restore_check_failed` (the snapshot is written but fails its restore check), `busy` (503 with `Retry-After`: another writer holds the file; nothing was written, so a retry is safe), `unavailable` (503 with `Retry-After`: an app connected by `serve --with` is not running), `upstream` (502: the app answered something that is not an entity), `locked` (401: a public listener holds that browser session shut by its lock; the PIN opens it at `/locked`; a request with the bearer token is never locked), or the status's general name: `bad_request`, `unauthorized`, `forbidden`, `not_found` (for a metric that does not exist, the link `register` is the address of the Metrics board with the form of `register-metric` open and the name filled), `conflict`, `too_large`, `unsupported_media` (415: a multipart body to an action that takes no file), `invalid` (422), `timeout`, `internal` |
 | `message` | string | the text, for a person; a fault of the server (500 `internal`) says only `internal error`, and the server's log has the cause |
 
 ## Connected apps
@@ -856,12 +856,27 @@ category is 422 (`links_endpoint_types`). The answer embeds an `item` link to ea
 ### login
 
 `GET /login` on a public listener: the one page served without a credential. `POST /login` with `token` sets the
-cookie (valid for one year) and redirects home; `POST /logout` clears it.
+cookie `lifelog_session` (an id and its HMAC, valid for one year; the token is not in it) and redirects home;
+`POST /logout` ends the session and clears the cookie. The older cookie `lifelog_token` is no longer a credential.
 
 | property | type | meaning |
 |---|---|---|
 | `failed` | boolean | the last attempt was refused |
 | `logged_in` | boolean | this browser already carries the cookie |
+
+### locked
+
+The lock of a public listener, for a browser session only; a request with the bearer token never locks. Four routes
+beside `/login` and `/logout`, outside the catalog: `POST /lock` locks the session now (303 to `/locked`; 409 when the
+lock is off), `GET /locked` is the page with the PIN field (`next` is a path of this origin, else dropped), `POST /unlock`
+with `pin` and `next` opens the session (a wrong PIN goes back to `/locked?failed=1`; the fifth wrong PIN in a row ends
+the session and goes to `/login`), and `POST /awake` says that the owner is active (204). A locked session gets a 303 to
+`/locked?next=` for an HTML `GET`, and 401 `locked` for any other request.
+
+| property | type | meaning |
+|---|---|---|
+| `failed` | boolean | the last PIN was refused |
+| `next` | string | the page to go to after the unlock; `""` when none |
 
 ### settings
 
@@ -880,6 +895,7 @@ no settings file path refuses both routes (500, the message says so).
 | `model_key` | string | a bearer credential for the server; absent when not set |
 | `owner_number` | string | the digits of the owner's phone number with the country code, the one number the agent on the phone answers; absent when not set. A value that is not digits is 422 `owner_number: digits with the country code, such as 40712345678` |
 | `ground` | string | the floor under the pages of the browser: `boards`, `oak`, `firelight` or `embers`; `""` when not set, which is `boards`. Another value is 422 |
+| `lock_after` | string | the idle minutes after which a public listener locks a browser: `off`, `5`, `10`, `15`, `30` or `60`; `off` when not set. The field `lock_pin` (4 to 8 digits, else 422) is write-only: no read shows the PIN or its hash, and an empty `lock_pin` keeps the stored one. `lock_after` other than `off` with no stored PIN and no new one is 422 |
 
 ### conversation
 

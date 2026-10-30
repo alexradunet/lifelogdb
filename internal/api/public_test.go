@@ -62,8 +62,8 @@ func TestPublicRequiresTheToken(t *testing.T) {
 		{"basic scheme", map[string]string{"Authorization": "Basic " + testToken}, 401},
 		{"bearer", bearer, 200},
 		{"bearer case", map[string]string{"Authorization": "bearer " + testToken}, 200},
-		{"cookie", map[string]string{"Cookie": api.CookieName + "=" + testToken}, 200},
-		{"wrong cookie", map[string]string{"Cookie": api.CookieName + "=" + strings.Repeat("x", 36)}, 401},
+		{"the token as the old cookie", map[string]string{"Cookie": "lifelog_token=" + testToken}, 401},
+		{"the token as a session cookie", map[string]string{"Cookie": api.SessionCookie + "=" + testToken}, 401},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := request(h, "GET", "/days/2031-01-01", "", tc.headers)
@@ -126,15 +126,15 @@ func TestPublicLoginCookie(t *testing.T) {
 		}
 		var cookie *http.Cookie
 		for _, c := range rec.Result().Cookies() {
-			if c.Name == api.CookieName {
+			if c.Name == api.SessionCookie {
 				cookie = c
 			}
 		}
-		if cookie == nil || cookie.Value != testToken || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Secure != tls || cookie.MaxAge != 365*24*60*60 { // one year: an installed app keeps the login
+		if cookie == nil || strings.Contains(cookie.Value, testToken) || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Secure != tls || cookie.MaxAge != 365*24*60*60 { // one year: an installed app keeps the login
 			t.Fatalf("tls=%v cookie=%+v", tls, cookie)
 		}
 		// The cookie opens the HTML face; a same-origin form writes; a cross-site form with the cookie is refused.
-		with := map[string]string{"Accept": "text/html", "Cookie": api.CookieName + "=" + cookie.Value}
+		with := map[string]string{"Accept": "text/html", "Cookie": api.SessionCookie + "=" + cookie.Value}
 		if home := request(h, "GET", "/", "", with); home.Code != 200 || !strings.Contains(home.Body.String(), "Capture") { // Home is the page of today
 			t.Fatalf("home with the cookie: %d", home.Code)
 		}
@@ -156,7 +156,7 @@ func TestPublicLoginCookie(t *testing.T) {
 		rec = request(h, "POST", "/logout", "", map[string]string{"Cookie": with["Cookie"], "Sec-Fetch-Site": "same-origin"})
 		cleared := false
 		for _, c := range rec.Result().Cookies() {
-			cleared = cleared || (c.Name == api.CookieName && c.MaxAge < 0)
+			cleared = cleared || (c.Name == api.SessionCookie && c.MaxAge < 0)
 		}
 		if rec.Code != 303 || !cleared {
 			t.Fatalf("logout: %d cleared=%v", rec.Code, cleared)

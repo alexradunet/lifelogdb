@@ -349,7 +349,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   application, not to the contract. Now they are `model_url` (the base URL of a server that speaks the
   chat-completions protocol, ending in `/v1`), `model` (the model id), `model_key` (a bearer credential, optional), `owner_number` (the digits of the owner's phone number with the
   country code: the one number that the agent on the phone answers; a value that is not digits is 422) and `ground` (the floor under the
-  pages of the browser: `boards`, `oak`, `firelight` or `embers`; empty is `boards`; another value is 422); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
+  pages of the browser: `boards`, `oak`, `firelight` or `embers`; empty is `boards`; another value is 422), `lock_after` (the idle minutes of the lock: `off`, `5`, `10`, `15`, `30` or `60`; empty is `off`) and `lock_pin` (4 to 8 digits, else 422; the file keeps only the salted PBKDF2 hash, `lock_pin_hash`; no read shows the PIN or the hash, and an empty `lock_pin` keeps the stored one; `lock_after` other than `off` with no PIN is 422; the lock is read from the file at each request); a setting is added when a feature needs it. The action `settings` (`POST /settings`) and the resource
   `GET /settings` are the owner's: refused to an `agent:*` or `import:*` writer, and the action is never an MCP tool.
   `GET /actions` offers `settings` with no value, because any writer reads the catalog; only `GET /settings` fills
   the values, the key too, so the owner's form sends the key back as it is. A field of the type `password` is drawn
@@ -503,10 +503,22 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   serve HTTPS with the standard library; without them the token travels in clear, which is acceptable only on a
   private network (a VPN, a mesh such as Tailscale), and the startup line says so. A reverse proxy that terminates
   TLS works only because it forwards the bearer header unchanged. **The browser:** `GET /login` is the one page served
-  without a credential; `POST /login` with the token sets `lifelog_token` (HttpOnly, SameSite=Strict, Secure over
+  without a credential; `POST /login` with the token sets `lifelog_session` (HttpOnly, SameSite=Strict, Secure over
   TLS, valid for one year so that an installed app stays logged in; a new token file ends it) and `POST /logout`
-  clears it; cross-site forms with the cookie are what the origin guard refuses. The CLI and the MCP server with
-  `--url` send `LIFELOG_TOKEN`.
+  ends the session and clears the cookie; cross-site forms with the cookie are what the origin guard refuses. The
+  cookie holds a random id and its HMAC, not the token. The older cookie `lifelog_token` is not a credential
+  any more: a browser that has only it logs in again. Pages of a session carry `Cache-Control: no-store`. The CLI and
+  the MCP server with `--url` send `LIFELOG_TOKEN` as a bearer header, and a bearer request never locks.
+  **The lock** ([plan 160](docs/plans/160-the-lock.md)): when the settings `lock_after` and `lock_pin` are set, the
+  listener locks a browser session that is idle for `lock_after` minutes plus one, and one that the owner locked with
+  `POST /lock`. A locked session gets nothing of the database: an HTML `GET` goes to `/locked?next=PATH`, which asks
+  for the PIN, and any other request is 401 `locked`. `POST /unlock` with the right PIN opens the session; the fifth
+  wrong PIN in a row ends it, and the browser logs in with the token again. A restart of the server locks every
+  session, because the state of the sessions is in memory. The server counts as activity a navigation (not a
+  prefetch or a prerender), a form post and `POST /awake`; the poll of the chat column does not count. `/lock`,
+  `/unlock`, `/locked` and `/awake` are routes of the listener beside `/login` and `/logout`, not actions of the
+  catalog: they are about one browser, not about the data. `/lock` with the lock off is 409. The server cannot
+  clear a screen by itself: a page without the script stays on the screen until its next request.
 
 ## Every action on every surface
 

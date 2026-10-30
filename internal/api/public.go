@@ -22,9 +22,6 @@ import (
 // tokenMinLength is the shortest token a public listener accepts.
 const tokenMinLength = 32
 
-// CookieName is the browser's credential on a public listener, set by POST /login.
-const CookieName = "lifelog_token"
-
 // PublicOptions configures Public.
 type PublicOptions struct {
 	Token   string   // the owner's token, at least tokenMinLength characters, one line
@@ -81,6 +78,10 @@ type public struct {
 	origins map[string]bool
 	tls     bool
 	guard   *http.CrossOriginProtection // the guard of next; the login forms run before next, so they check it too
+	// store gives the clock and the settings file of the lock (lock.go).
+	store      *core.Store
+	sessionKey []byte // derived from the token: the HMAC key of the session cookie
+	sessions   *sessions
 }
 
 // Public is the handler of a public listener: the API on s, behind the token, CORS and the login pages. The allowed
@@ -91,7 +92,8 @@ func Public(s *core.Store, o PublicOptions) (http.Handler, error) {
 	if err := CheckToken(o.Token); err != nil {
 		return nil, err
 	}
-	p := &public{token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection()}
+	p := &public{token: []byte(o.Token), origins: map[string]bool{}, tls: o.TLS, guard: http.NewCrossOriginProtection(),
+		store: s, sessionKey: sessionKeyOf([]byte(o.Token)), sessions: newSessions()}
 	for _, origin := range o.Origins {
 		if err := CheckOrigin(origin); err != nil {
 			return nil, err
@@ -163,31 +165,36 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.next.ServeHTTP(w, r)
 		return
 	}
-	if !p.authorized(r) {
-		if r.Method == http.MethodGet && wantsHTML(r) {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-		w.Header().Set("WWW-Authenticate", `Bearer realm="lifelog"`)
-		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: siren.CodeTokenRequired})
+	if p.bearer(r) { // a program: never locked
+		p.next.ServeHTTP(w, r)
 		return
 	}
-	p.next.ServeHTTP(w, r)
+	if id, ok := p.session(r); ok {
+		p.serveSession(w, r, id)
+		return
+	}
+	if r.Method == http.MethodGet && wantsHTML(r) {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	w.Header().Set("WWW-Authenticate", `Bearer realm="lifelog"`)
+	writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "token required", Code: siren.CodeTokenRequired})
 }
 
-// authorized reports a request carrying the token, in the Authorization header or the login cookie.
-func (p *public) authorized(r *http.Request) bool {
-	if scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok && strings.EqualFold(scheme, "Bearer") {
-		return p.matches(strings.TrimSpace(credential))
-	}
-	if c, err := r.Cookie(CookieName); err == nil {
-		return p.matches(c.Value)
-	}
-	return false
+// bearer reports a request that carries the token in the Authorization header.
+func (p *public) bearer(r *http.Request) bool {
+	scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " ")
+	return ok && strings.EqualFold(scheme, "Bearer") && p.matches(strings.TrimSpace(credential))
 }
 
 func (p *public) matches(credential string) bool {
 	return subtle.ConstantTimeCompare([]byte(credential), p.token) == 1
+}
+
+// loggedIn reports a request with the token or with a valid session.
+func (p *public) loggedIn(r *http.Request) bool {
+	_, ok := p.session(r)
+	return ok || p.bearer(r)
 }
 
 // login is the browser's way in: GET shows the form, POST with the token sets the cookie. A program sends the
@@ -195,7 +202,7 @@ func (p *public) matches(credential string) bool {
 func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		e := &siren.Entity{Class: []string{"login"}, Title: "Log in",
-			Properties: map[string]any{"failed": r.URL.Query().Get("failed") == "1", "logged_in": p.authorized(r)}}
+			Properties: map[string]any{"failed": r.URL.Query().Get("failed") == "1", "logged_in": p.loggedIn(r)}}
 		answer(w, r, http.StatusOK, e, frame{pageOnly: true})
 		return
 	}
@@ -210,7 +217,14 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?failed=1", http.StatusSeeOther)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: string(p.token), Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: loginMaxAge})
+	value, id, err := p.newSession()
+	if err != nil {
+		writeError(w, r, fmt.Errorf("make a session: %w", err))
+		return
+	}
+	p.sessions.open(id, p.store.Now())
+	p.setSession(w, value, loginMaxAge)
+	p.clearLegacy(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -219,6 +233,10 @@ func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, crossOriginRefusal())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", HttpOnly: true, Secure: p.tls, SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	if id, ok := p.session(r); ok {
+		p.sessions.end(id, p.store.Now())
+	}
+	p.setSession(w, "", -1)
+	p.clearLegacy(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
