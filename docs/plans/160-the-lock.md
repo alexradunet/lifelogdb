@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-30, `ff0f1c7` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for ring 2:
   the browser's cookie changes, so every browser logs in with the token once more.
-- **Status:** BUILT 2026-10-30, not yet live. Part A `6d43b9e` (the session cookie, the routes, the settings) and its
+- **Status:** LIVE 2026-10-30 23:02 (`c926d91`, the service restarted; the log line: "serving ... on http://127.0.0.1:7777 (public: token required ...)"). Built 2026-10-30. Part A `6d43b9e` (the session cookie, the routes, the settings) and its
   review `107a48e` (a lock kept giving back the wrong-PIN tries; a settings read error counted as a wrong PIN; tests
   held both faults first); Part B `6f665f3` (the Lock button in the foot of the rail, access key l; `lock.js`; the
   lock page; `new-password` on the form's password fields). Checks on the merge with master: `go vet ./... && go
