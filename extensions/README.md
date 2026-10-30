@@ -291,6 +291,9 @@ All answers are Siren JSON. Data is in `properties`. An error is the error entit
 | `POST /tasks/{id}/complete`, `/reopen`, `/delete` | Answer: the task (delete: the task as it was). |
 | `POST /sync` | Read the done tasks and write a Done entry for each, once. Answer: `properties.written`. |
 
+A list id must be unique: the server refuses a service with two lists of one id. A later list whose name is taken gets
+the suffix ` (2)`, ` (3)`, and so on, because `add-task` names a list by its name.
+
 A task is `{id, title, list, notes?, due?, done, done_day?, done_at?}`:
 
 - `list` is the list id, or `""` for the default list.

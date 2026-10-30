@@ -1,11 +1,16 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"lifelog/internal/core"
+	"lifelog/internal/db/dbtest"
 	"lifelog/siren"
 )
 
@@ -185,5 +190,128 @@ func TestCheckValuesMapsTheListAndRefusesWhatTheProtocolCannotTake(t *testing.T)
 	}
 	if err := svc.checkValues(map[string]string{"due": "", "notes": ""}); err != nil {
 		t.Errorf("an empty due and notes clear a field: %v", err)
+	}
+}
+
+func listsEntity(lists ...map[string]any) *siren.Entity {
+	return &siren.Entity{Class: []string{"lists"}, Properties: map[string]any{"lists": lists}}
+}
+
+// Two lists with one id are refused. A later list with a name that is taken gets the suffix " (2)", " (3)" ...
+// so the owner sees, and add-task takes, one name for one list.
+func TestListsWithTheSameNameGetUniqueNames(t *testing.T) {
+	got, err := TaskListsOf(listsEntity(
+		map[string]any{"id": "a", "name": "Work"}, map[string]any{"id": "b", "name": "Home"},
+		map[string]any{"id": "c", "name": "Work"}, map[string]any{"id": "d", "name": "Work"},
+		map[string]any{"id": "e", "name": "Work (2)"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []TaskList{{"a", "Work"}, {"b", "Home"}, {"c", "Work (2)"}, {"d", "Work (3)"}, {"e", "Work (2) (2)"}}
+	if !slices.Equal(got, want) {
+		t.Errorf("lists = %v, want %v", got, want)
+	}
+	if _, err := TaskListsOf(listsEntity(map[string]any{"id": "a", "name": "One"}, map[string]any{"id": "a", "name": "Two"})); err == nil {
+		t.Error("a duplicate id was taken")
+	}
+	svc := taskService{lists: got}
+	v := map[string]string{"list": "Work (2)"}
+	if err := svc.checkValues(v); err != nil || v["list"] != "c" {
+		t.Errorf("the second Work: err %v, list %q, want the id c", err, v["list"])
+	}
+}
+
+// tasksOver is the API over a fresh file with a task service that answers 500 to every request and counts them. A test
+// that sees the count stay at zero knows that the server refused the request before it called the service.
+func tasksOver(t *testing.T) (h http.Handler, apps *Apps, requests *atomic.Int32) {
+	t.Helper()
+	requests = new(atomic.Int32)
+	stand := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "the service must not be called", http.StatusInternalServerError)
+	}))
+	t.Cleanup(stand.Close)
+	apps = NewApps()
+	apps.Expect("svc")
+	lists := []TaskList{{ID: "home", Name: "Home"}, {ID: "work", Name: "Work"}}
+	if err := apps.SetTasks("svc", stand.URL, actionsOfWrites(), lists); err != nil {
+		t.Fatal(err)
+	}
+	return NewWith(&core.Store{DB: dbtest.New(t)}, apps), apps, requests
+}
+
+func send(h http.Handler, method, target, body string, header map[string]string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	for k, v := range header {
+		req.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// The server refuses a write that the protocol cannot take, or that the action does not list, or that the writer may
+// not do, and it does not call the service (API.md, "Tasks").
+func TestARefusedTaskWriteDoesNotCallTheService(t *testing.T) {
+	h, _, requests := tasksOver(t)
+	for _, c := range []struct {
+		name, target, body, source string
+		status                     int
+		code                       string
+	}{
+		{"a blank title", "/tasks", "title=+++", "", 422, siren.CodeInvalid},
+		{"a blank title in an edit", "/tasks/items/t1", "title=+", "", 422, siren.CodeInvalid},
+		{"a bad due day", "/tasks", "title=x&due=soon", "", 422, siren.CodeInvalid},
+		{"a day that does not exist", "/tasks/items/t1", "due=2031-02-30", "", 422, siren.CodeInvalid},
+		{"an unknown list", "/tasks", "title=x&list=Nowhere", "", 422, siren.CodeInvalid},
+		{"a field the action does not list", "/tasks", "title=x&bogus=1", "", 422, siren.CodeInvalid},
+		{"a field of another action", "/tasks/items/t1/complete", "title=x", "", 422, siren.CodeInvalid},
+		{"delete as an agent", "/tasks/items/t1/delete", "", "agent:x", 403, siren.CodeForbidden},
+	} {
+		header := map[string]string{}
+		if c.source != "" {
+			header[siren.SourceHeader] = c.source
+		}
+		rec := send(h, "POST", c.target, c.body, header)
+		if rec.Code != c.status || !strings.Contains(rec.Body.String(), `"`+c.code+`"`) {
+			t.Errorf("%s: %d %s, want %d %s", c.name, rec.Code, rec.Body, c.status, c.code)
+		}
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("the service got %d requests, want none", n)
+	}
+	// The stand-in is reachable: a good write does call it. Without this the count above proves nothing.
+	if rec := send(h, "POST", "/tasks", "title=x", nil); rec.Code == 200 || requests.Load() != 1 {
+		t.Errorf("a good write: %d, %d requests, want one request to the service", rec.Code, requests.Load())
+	}
+}
+
+// When the task service ends, Tasks leaves the rail, the six actions leave GET /actions and every route is 503.
+func TestWhenTheTaskServiceEndsTasksIsGone(t *testing.T) {
+	h, apps, _ := tasksOver(t)
+	html := map[string]string{"Accept": "text/html"}
+	hasRail := func() bool {
+		return strings.Contains(send(h, "GET", "/browse", "", html).Body.String(), `href="/tasks"`)
+	}
+	hasActions := func() bool { return strings.Contains(send(h, "GET", "/actions", "", nil).Body.String(), `"add-task"`) }
+	if !hasRail() || !hasActions() {
+		t.Fatalf("while the service runs: rail %v, actions %v, want both", hasRail(), hasActions())
+	}
+	apps.Remove("svc")
+	if hasRail() {
+		t.Error("the rail still links to /tasks")
+	}
+	body := send(h, "GET", "/actions", "", nil).Body.String()
+	for _, w := range taskWrites {
+		if strings.Contains(body, `"`+w.Name+`"`) {
+			t.Errorf("GET /actions still has %s", w.Name)
+		}
+	}
+	rec := send(h, "GET", "/tasks", "", nil)
+	if rec.Code != 503 || !strings.Contains(rec.Body.String(), `"`+siren.CodeUnavailable+`"`) {
+		t.Errorf("GET /tasks = %d %s, want 503 unavailable", rec.Code, rec.Body)
 	}
 }

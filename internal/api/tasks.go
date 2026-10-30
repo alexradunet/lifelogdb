@@ -35,10 +35,22 @@ func TaskListsOf(e *siren.Entity) ([]TaskList, error) {
 	if err := propertiesOf(e, &p); err != nil {
 		return nil, fmt.Errorf("the lists: %w", err)
 	}
-	for _, l := range p.Lists {
+	ids, names := map[string]bool{}, map[string]bool{}
+	for i, l := range p.Lists {
 		if l.ID == "" || l.Name == "" {
 			return nil, fmt.Errorf("the lists: a list has no id or no name")
 		}
+		if ids[l.ID] {
+			return nil, fmt.Errorf("the lists: the id %q is in two lists", l.ID)
+		}
+		ids[l.ID] = true
+		// add-task names a list by its name, so each list needs its own name.
+		name := l.Name
+		for n := 2; names[name]; n++ {
+			name = fmt.Sprintf("%s (%d)", l.Name, n)
+		}
+		names[name] = true
+		p.Lists[i].Name = name
 	}
 	return p.Lists, nil
 }
