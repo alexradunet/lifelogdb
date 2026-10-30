@@ -54,7 +54,23 @@ type fakeAPI struct {
 	alwaysStale bool
 	// the settings of the model, as GET /settings answers them (an empty value is absent)
 	modelURL, model, modelKey string
-	ownerNumber               string // owner_number of the settings
+	ownerNumber               string         // owner_number of the settings
+	extra                     []siren.Action // actions that a connected app added to the catalog
+	catalogFails              bool           // GET /actions answers 503
+}
+
+// addAction adds an action to the catalog, as a connected app does when it registers.
+func (f *fakeAPI) addAction(a siren.Action) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.extra = append(f.extra, a)
+}
+
+// failCatalog makes GET /actions fail (or work again).
+func (f *fakeAPI) failCatalog(on bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.catalogFails = on
 }
 
 // setOwnerNumber changes the owner's number in the settings, as the owner would in lifelog.
@@ -159,7 +175,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	notOwner := strings.HasPrefix(src, "agent:") || strings.HasPrefix(src, "import:")
 	switch {
 	case r.URL.Path == "/actions":
-		e = siren.Entity{Actions: catalog()}
+		if f.catalogFails {
+			fail(503, "unavailable")
+			break
+		}
+		e = siren.Entity{Actions: append(catalog(), f.extra...)}
 	case r.URL.Path == "/settings" && r.Method == "GET":
 		if notOwner {
 			fail(403, "forbidden")
@@ -275,7 +295,10 @@ func catalog() []siren.Action {
 
 // chatReq is the part of a request to the model that the tests read.
 type chatReq struct {
-	Model    string
+	Model string
+	Tools []struct {
+		Function struct{ Name string }
+	}
 	Messages []struct {
 		Role       string
 		Content    string

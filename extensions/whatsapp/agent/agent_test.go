@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lifelog/siren"
 )
 
 const todayTitle = "Conversation 2031-05-20"
@@ -725,5 +727,57 @@ func TestAPageNewToTheExtensionThatEndsWithTheAgentsTurnIsNotAnswered(t *testing
 	case s := <-r.chat.sent:
 		t.Errorf("an answered page was answered again with %q", s)
 	default:
+	}
+}
+
+// toolNames are the names of the tools of a model request.
+func toolNames(r chatReq) []string {
+	var names []string
+	for _, x := range r.Tools {
+		names = append(names, x.Function.Name)
+	}
+	return names
+}
+
+func TestAnActionAddedToTheCatalogBetweenTwoTurnsIsAToolOfTheSecondTurn(t *testing.T) {
+	r := start(t, func(n int, req chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.chat.say(t, "first")
+	r.chat.reply(t) // the first turn is done: the catalog change comes after it
+	r.api.addAction(siren.Action{Name: "app-note", Method: "POST", Href: "/with/app/note"})
+	r.chat.say(t, "second")
+	r.chat.reply(t)
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	reqs := r.mod.requests()
+	if len(reqs) != 2 {
+		t.Fatalf("%d model requests, want 2", len(reqs))
+	}
+	if slices.Contains(toolNames(reqs[0]), "app_note") {
+		t.Error("the first turn has the tool of the later action")
+	}
+	if !slices.Contains(toolNames(reqs[1]), "app_note") {
+		t.Errorf("the second turn has the tools %v, want app_note too", toolNames(reqs[1]))
+	}
+}
+
+func TestACatalogReadThatFailsAtATurnKeepsTheToolsOfTheLastReadAndTheTurnGoesOn(t *testing.T) {
+	r := start(t, func(n int, req chatReq) (int, string) { return text(fmt.Sprintf("answer %d", n)) })
+	r.chat.say(t, "first")
+	r.chat.reply(t)
+	r.api.failCatalog(true)
+	r.chat.say(t, "second")
+	if got := r.chat.reply(t); got != "answer 2" {
+		t.Errorf("reply %q, want the answer of the model", got)
+	}
+	if err := r.finish(t); err != nil {
+		t.Fatal(err)
+	}
+	reqs := r.mod.requests()
+	if len(reqs) != 2 {
+		t.Fatalf("%d model requests, want 2", len(reqs))
+	}
+	if a, b := toolNames(reqs[0]), toolNames(reqs[1]); len(a) == 0 || !slices.Equal(a, b) {
+		t.Errorf("tools of turn 1 %v, tools of turn 2 %v: want the same, not empty", a, b)
 	}
 }

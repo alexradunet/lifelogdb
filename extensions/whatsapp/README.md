@@ -25,6 +25,11 @@ flowchart LR
   `GET /days/{day}/conversation` and holds no title and no category. The tool calls and the reply are added with
   `save-body`, as lines and `**lifelog** (HH:MM): text`. The model reads the whole page on each turn. The extension
   keeps nothing else of the conversation.
+- **The tools are the catalog, read at each turn.** The extension reads `GET /actions` at the start of each turn and
+  builds the tools of the model from it. An app that `lifelog serve --with` connects can register after the extension
+  started, and its actions leave the catalog and come back when it restarts. The new tools are there at the next turn.
+  A read that fails keeps the tools of the last read and writes one line in the log. At the start, a catalog with no
+  `say` or no `save-body` stops the extension.
 - **The model is set in lifelog.** The extension reads `GET /settings` at the start of each turn, and sends `say`, with the owner's
   token and no `Lifelog-Source`, through a second client that only these two use. Every other request, the tools of
   the model too, carries `Lifelog-Source: agent:whatsapp`, so the model's own `get /settings` is refused (403): the key

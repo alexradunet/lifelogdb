@@ -56,7 +56,9 @@ type Agent struct {
 	// Tick gives the moments when the worker looks at today's page. nil: every three seconds.
 	Tick <-chan time.Time
 
-	logger   *log.Logger
+	logger *log.Logger
+	// tools and actions come from one read of the catalog. Only Run (before the worker starts) and the worker
+	// read and write them, so they need no lock.
 	tools    []tools.Tool
 	actions  map[string]siren.Action
 	conv     *convo // only the worker uses it
@@ -74,22 +76,10 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.Now == nil {
 		a.Now = time.Now
 	}
-	list, err := a.Client.Catalog(ctx)
-	if err != nil {
-		return fmt.Errorf("catalog: %w", err)
-	}
-	if a.tools, err = toolsOf(list); err != nil {
+	if err := a.readCatalog(ctx); err != nil {
 		return err
 	}
-	a.actions = map[string]siren.Action{}
-	for _, x := range list {
-		a.actions[x.Name] = x
-	}
-	for _, name := range []string{"say", "save-body"} {
-		if _, ok := a.actions[name]; !ok {
-			return fmt.Errorf("the catalog has no action %q", name)
-		}
-	}
+	var err error
 	if a.conv, err = loadState(a.State); err != nil {
 		return err
 	}
@@ -134,6 +124,31 @@ loop:
 	close(queue) // the worker answers what is queued, unless ctx ended
 	wg.Wait()
 	return ctx.Err()
+}
+
+// readCatalog reads the catalog and replaces the tools and the actions with it. The tools and the actions come from
+// the same read, so a tool and its action agree. A catalog with no say or no save-body is an error. On an error the
+// tools and the actions stay as they were.
+func (a *Agent) readCatalog(ctx context.Context) error {
+	list, err := a.Client.Catalog(ctx)
+	if err != nil {
+		return fmt.Errorf("catalog: %w", err)
+	}
+	actions := map[string]siren.Action{}
+	for _, x := range list {
+		actions[x.Name] = x
+	}
+	for _, name := range []string{"say", "save-body"} {
+		if _, ok := actions[name]; !ok {
+			return fmt.Errorf("the catalog has no action %q", name)
+		}
+	}
+	list2, err := toolsOf(list)
+	if err != nil {
+		return err
+	}
+	a.tools, a.actions = list2, actions
+	return nil
 }
 
 // accept applies the rules of who may talk: another sender is ignored and logged, a message of the owner that is
@@ -270,6 +285,11 @@ func WaitOwner(ctx context.Context, c *client.Client, logger *log.Logger, tick <
 
 // reply makes the reply of a turn on the body of the page. The error is the error of ctx.
 func (a *Agent) reply(ctx context.Context, body string, at time.Time) (string, []string, error) {
+	// An app that serve --with registers can join the catalog after the start, and leave it when it restarts. A
+	// failed read keeps the last good tools: the turn goes on.
+	if err := a.readCatalog(ctx); err != nil && ctx.Err() == nil {
+		a.logger.Printf("%v: the turn keeps the tools of the last read", err)
+	}
 	m, err := a.model(ctx)
 	switch {
 	case ctx.Err() != nil:
