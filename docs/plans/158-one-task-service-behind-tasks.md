@@ -30,6 +30,9 @@
   -shuffle=on ./...` passed, `staticcheck ./...` clean, `govulncheck ./...` no vulnerabilities, `CGO_ENABLED=1 go test
   -race -count=1 ./cmd/lifelog -run 'Task|With'` passed; in `extensions/ticktick`, `extensions/whatsapp` and
   `extensions/mcp`: `go vet`, `go test -count=1 -shuffle=on ./...`, `go mod tidy -diff` and `staticcheck` clean.
+  Live 2026-10-30: the owner rebuilt `~/.local/bin/lifelog` and `lifelog-ticktick` from master `fcd2ebe` (with plan
+  159 Part A) and restarted the service at 16:50:26; the log says `with ticktick: the task service, 3 lists, on
+  127.0.0.1:41107`, and the first poll wrote 0 entries. Reopen and a cleared due day wait for the owner's first try.
 
 ## Context
 
