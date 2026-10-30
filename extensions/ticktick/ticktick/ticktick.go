@@ -52,20 +52,6 @@ type Task struct {
 	StartDate     string `json:"startDate,omitempty"`
 	TimeZone      string `json:"timeZone,omitempty"`
 	IsAllDay      bool   `json:"isAllDay,omitempty"`
-	Priority      int    `json:"priority,omitempty"` // 0 none, 1 low, 3 medium, 5 high
-}
-
-// PriorityWord is the priority as a word: high, medium or low. It is "" for none.
-func (t Task) PriorityWord() string {
-	switch {
-	case t.Priority >= 5:
-		return "high"
-	case t.Priority >= 3:
-		return "medium"
-	case t.Priority >= 1:
-		return "low"
-	}
-	return ""
 }
 
 // Done is the instant of completion, in the zone of the task (else in the local zone). It is false when the task has
@@ -179,6 +165,31 @@ func (c *Client) Create(ctx context.Context, t Task) (Task, error) {
 	var out Task
 	err := c.call(ctx, http.MethodPost, "/task", t, &out)
 	return out, err
+}
+
+// Update writes a task as it is: id and projectId are in the body. Unlike Create, it sends every field, empty ones
+// too, so an empty DueDate or Content clears the field and Status 0 reopens a done task. The live behaviour of
+// reopen and clear is not tested against the real API: the owner checks it live.
+func (c *Client) Update(ctx context.Context, t Task) (Task, error) {
+	body := struct {
+		ID        string `json:"id"`
+		ProjectID string `json:"projectId"`
+		Title     string `json:"title"`
+		Content   string `json:"content"`
+		Status    int    `json:"status"`
+		DueDate   string `json:"dueDate"`
+		StartDate string `json:"startDate"`
+		TimeZone  string `json:"timeZone,omitempty"`
+		IsAllDay  bool   `json:"isAllDay"`
+	}{t.ID, t.ProjectID, t.Title, t.Content, t.Status, t.DueDate, t.StartDate, t.TimeZone, t.IsAllDay}
+	var out Task
+	err := c.call(ctx, http.MethodPost, "/task/"+url.PathEscape(t.ID), body, &out)
+	return out, err
+}
+
+// Delete removes a task from its list.
+func (c *Client) Delete(ctx context.Context, project, id string) error {
+	return c.call(ctx, http.MethodDelete, "/project/"+url.PathEscape(project)+"/task/"+url.PathEscape(id), nil, nil)
 }
 
 // Complete marks a task done.

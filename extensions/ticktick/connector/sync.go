@@ -30,11 +30,22 @@ type entry struct {
 	at                 time.Time
 }
 
+// doneDay is the day of the completion of a task, YYYY-MM-DD, and the instant. The day is the day of completedTime in
+// the zone of the task. It is false when the task has no completion time. The task service and the entries share this
+// one rule.
+func doneDay(t ticktick.Task) (string, time.Time, bool) {
+	at, ok := t.Done()
+	if !ok {
+		return "", time.Time{}, false
+	}
+	return at.Format(dayFmt), at, true
+}
+
 // entryOf maps a done task to its capture. The day is the day of completedTime in the zone of the task. The key is the
 // id and the completedTime as TickTick gives it, so a repeat task done twice is two entries and a resend is one.
 // names holds the lists that TickTick reported: a task in the Inbox, or in a list that is not there, has no list name.
 func entryOf(t ticktick.Task, names map[string]string) (entry, bool) {
-	at, ok := t.Done()
+	day, at, ok := doneDay(t)
 	if !ok {
 		return entry{}, false
 	}
@@ -42,7 +53,7 @@ func entryOf(t ticktick.Task, names map[string]string) (entry, bool) {
 	if name, known := names[t.ProjectID]; known && !strings.HasPrefix(t.ProjectID, "inbox") {
 		text += " · " + name
 	}
-	return entry{id: t.ID, day: at.Format(dayFmt), text: text, key: t.ID + ":" + t.CompletedTime, at: at}, true
+	return entry{id: t.ID, day: day, text: text, key: t.ID + ":" + t.CompletedTime, at: at}, true
 }
 
 // Sync does one poll. It asks TickTick for the tasks done since the cursor and writes each as a capture on its day.

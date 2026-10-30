@@ -99,6 +99,25 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
+	case r.Method == "POST" && len(parts) == 2 && parts[0] == "task" && parts[1] != "completed":
+		var in ticktick.Task
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		t, ok := f.tasks[parts[1]]
+		if !ok || t.ProjectID != in.ProjectID {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		t.Title, t.Content, t.Status, t.DueDate = in.Title, in.Content, in.Status, in.DueDate
+		if t.Status == 0 {
+			t.CompletedTime = ""
+		}
+		_ = json.NewEncoder(w).Encode(t)
+	case r.Method == "DELETE" && len(parts) == 4 && parts[2] == "task":
+		if t, ok := f.tasks[parts[3]]; !ok || t.ProjectID != parts[1] {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		delete(f.tasks, parts[3])
 	case r.Method == "POST" && path == "/task/completed":
 		if f.noCompleted {
 			w.WriteHeader(http.StatusNotFound)
@@ -289,13 +308,13 @@ func (s *server) act(name string, values map[string]string) *siren.Entity {
 	return nil
 }
 
-// written is the count that ticktick-sync answered.
+// written is the count that sync-tasks answered.
 func (s *server) written(e *siren.Entity) string {
 	s.t.Helper()
 	p, _ := e.Properties.(map[string]any)
 	n, ok := p["written"].(json.Number)
 	if !ok {
-		s.t.Fatalf("the answer of ticktick-sync has no written count: %+v", e)
+		s.t.Fatalf("the answer of sync-tasks has no written count: %+v", e)
 	}
 	return n.String()
 }
@@ -363,13 +382,13 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 	defer srv.Close()
 
 	s := startServer(t, b, srv)
-	s.waitFor("with ticktick: a catalog of 3 actions")
+	s.waitFor("with ticktick: the task service, 2 lists")
 	s.waitFor(wantFirst)
 	if noCompleted {
 		s.waitFor("the server has no /task/completed")
 	}
 
-	t.Run("the catalog of the app is in the catalog of the server", func(t *testing.T) {
+	t.Run("the catalog has the actions of Tasks and none with the name of the service", func(t *testing.T) {
 		actions, err := s.client().Catalog(t.Context())
 		if err != nil {
 			t.Fatal(err)
@@ -377,9 +396,13 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		got := map[string]string{}
 		for _, a := range actions {
 			got[a.Name] = a.Href
+			if strings.HasPrefix(a.Name, "ticktick-") {
+				t.Errorf("the catalog has the action %s: the service has no prefix", a.Name)
+			}
 		}
-		for name, href := range map[string]string{"ticktick-add-task": "/with/ticktick/tasks",
-			"ticktick-complete-task": "/with/ticktick/tasks/{id}/complete", "ticktick-sync": "/with/ticktick/sync"} {
+		for name, href := range map[string]string{"add-task": "/tasks", "edit-task": "/tasks/items/{id}",
+			"complete-task": "/tasks/items/{id}/complete", "reopen-task": "/tasks/items/{id}/reopen",
+			"delete-task": "/tasks/items/{id}/delete", "sync-tasks": "/tasks/sync"} {
 			if got[name] != href {
 				t.Errorf("%s = %q, want %q", name, got[name], href)
 			}
@@ -401,7 +424,7 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 	entry := regexp.MustCompile(`\(\d\d:\d\d, via ticktick\) Done: Pay rent · Home`)
 	var afterFirst string
 	t.Run("a task done in TickTick is an entry of its day, once", func(t *testing.T) {
-		if n := s.written(s.act("ticktick-sync", nil)); n != "1" {
+		if n := s.written(s.act("sync-tasks", nil)); n != "1" {
 			t.Errorf("the sync wrote %s entries, want 1", n)
 		}
 		afterFirst = s.body(day)
@@ -414,7 +437,7 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 	})
 
 	t.Run("a second sync writes nothing", func(t *testing.T) {
-		if n := s.written(s.act("ticktick-sync", nil)); n != "0" {
+		if n := s.written(s.act("sync-tasks", nil)); n != "0" {
 			t.Errorf("the second sync wrote %s entries, want 0", n)
 		}
 		if got := s.body(day); got != afterFirst {
@@ -422,22 +445,22 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		}
 	})
 
-	t.Run("lifelog do ticktick-add-task makes the task in the list", func(t *testing.T) {
-		s.do("ticktick-add-task", "title=Milk", "list=Home")
+	t.Run("lifelog do add-task makes the task in the list", func(t *testing.T) {
+		s.do("add-task", "title=Milk", "list=Home")
 		milk, ok := fake.byTitle("Milk")
 		if !ok || milk.ProjectID != "p-home" {
 			t.Fatalf("task in TickTick = %+v, %v, want Milk in p-home", milk, ok)
 		}
 	})
 
-	t.Run("ticktick-complete-task completes it and the next sync writes its entry", func(t *testing.T) {
-		s.act("ticktick-sync", nil) // the way that has no /task/completed sees a task open before it sees it done
+	t.Run("complete-task completes it and the next sync writes its entry", func(t *testing.T) {
+		s.act("sync-tasks", nil) // the way that has no /task/completed sees a task open before it sees it done
 		milk, _ := fake.byTitle("Milk")
-		s.act("ticktick-complete-task", map[string]string{"id": milk.ID})
+		s.act("complete-task", map[string]string{"id": milk.ID})
 		if done, _ := fake.byTitle("Milk"); done.Status != 2 {
 			t.Fatalf("Milk in TickTick has status %d, want 2", done.Status)
 		}
-		if n := s.written(s.act("ticktick-sync", nil)); n != "1" {
+		if n := s.written(s.act("sync-tasks", nil)); n != "1" {
 			t.Errorf("the sync wrote %s entries, want 1", n)
 		}
 		completed, _ := time.Parse(ticktick.TimeLayout, func() string { m, _ := fake.byTitle("Milk"); return m.CompletedTime }())
@@ -446,92 +469,34 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		}
 	})
 
-	t.Run("the home of the app shows TickTick and the open tasks as a browser sees it", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+"/with/ticktick/", nil)
-		if err != nil {
-			t.Fatal(err)
+	t.Run("Today is a page of the browser with the task due today, and it does not name the service", func(t *testing.T) {
+		res, page := get(t, s, "/tasks")
+		if res.StatusCode != 200 || !strings.Contains(page, "Write report") {
+			t.Errorf("status %d; the page holds Write report: %v", res.StatusCode, strings.Contains(page, "Write report"))
 		}
-		req.Header.Set("Accept", "text/html")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer res.Body.Close()
-		page, _ := io.ReadAll(res.Body)
-		if res.StatusCode != 200 || !strings.Contains(string(page), "TickTick") || !strings.Contains(string(page), "Write report") {
-			t.Errorf("status %d; the page holds TickTick: %v, Write report: %v", res.StatusCode,
-				strings.Contains(string(page), "TickTick"), strings.Contains(string(page), "Write report"))
-		}
-		home, err := s.client().Get(t.Context(), "/with/ticktick/")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if p, _ := home.Properties.(map[string]any); p["open"] == nil || p["lists"] == nil {
-			t.Errorf("the home has no open and lists: %+v", home.Properties)
+		if strings.Contains(strings.ToLower(page), "ticktick") {
+			t.Errorf("the page names the service:\n%s", page)
 		}
 	})
 
-	t.Run("a list is a page of the browser, with its tasks as links and its add form filled", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+"/with/ticktick/lists/p-home", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Accept", "text/html")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer res.Body.Close()
-		raw, _ := io.ReadAll(res.Body)
-		page := string(raw)
+	t.Run("a list page has its tasks as links and the round Complete form, and it does not name the service", func(t *testing.T) {
+		res, page := get(t, s, "/tasks/lists/p-home")
 		if res.StatusCode != 200 {
 			t.Fatalf("status %d, want 200", res.StatusCode)
 		}
-		if !regexp.MustCompile(`<a [^>]*href="/with/ticktick/tasks/t-mom"[^>]*>[^<]*Call mom`).MatchString(page) {
-			t.Errorf("the page has no link to /with/ticktick/tasks/t-mom with the title Call mom:\n%s", page)
+		if !regexp.MustCompile(`<a [^>]*href="/tasks/items/t-mom"[^>]*>[^<]*Call mom`).MatchString(page) {
+			t.Errorf("the page has no link to /tasks/items/t-mom with the title Call mom:\n%s", page)
 		}
-		form := regexp.MustCompile(`(?s)<form[^>]*action="/with/ticktick/tasks"[^>]*>.*?</form>`).FindString(page)
-		if form == "" {
-			t.Fatalf("the page has no form that posts to /with/ticktick/tasks:\n%s", page)
-		}
-		// The list has options, so the view draws a select, with the list of the page selected.
-		if !regexp.MustCompile(`<select[^>]*name="list"[^>]*>.*<option selected>Home</option>`).MatchString(form) {
-			t.Errorf("the form has no list with Home selected:\n%s", form)
-		}
-	})
-
-	t.Run("a row of a list has the round Complete button, and the page has the quick-add and the side column", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+"/with/ticktick/lists/p-home", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Accept", "text/html")
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer res.Body.Close()
-		raw, _ := io.ReadAll(res.Body)
-		page := string(raw)
-		round := `<form method="POST" action="/with/ticktick/tasks/t-mom/complete" class="round">`
+		round := `<form method="POST" action="/tasks/items/t-mom/complete" class="round">`
 		if !strings.Contains(page, round) {
 			t.Fatalf("the page has no round form %s:\n%s", round, page)
 		}
-		quick := regexp.MustCompile(`(?s)<form[^>]*action="/with/ticktick/tasks"[^>]*class="quick-add"|<form[^>]*class="quick-add"[^>]*action="/with/ticktick/tasks"`)
-		at := quick.FindStringIndex(page)
-		if at == nil {
-			t.Fatalf("the page has no quick-add form that posts to /with/ticktick/tasks:\n%s", page)
-		}
-		if at[0] > strings.Index(page, round) {
-			t.Error("the quick-add is not before the rows")
-		}
-		nav := regexp.MustCompile(`(?s)<nav class="side"[^>]*>.*?</nav>`).FindString(page)
-		if !strings.Contains(nav, `href="/with/ticktick/next7"`) {
-			t.Errorf("the side column has no link to /with/ticktick/next7:\n%s", nav)
+		if strings.Contains(strings.ToLower(page), "ticktick") {
+			t.Errorf("the page names the service:\n%s", page)
 		}
 
 		// The owner posts the form of the row: a browser POST is answered with a redirect, and TickTick has the task done.
-		post, err := http.NewRequestWithContext(t.Context(), "POST", s.base+"/with/ticktick/tasks/t-mom/complete", nil)
+		post, err := http.NewRequestWithContext(t.Context(), "POST", s.base+"/tasks/items/t-mom/complete", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -550,10 +515,31 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		}
 	})
 
+	t.Run("the service has no page of its own", func(t *testing.T) {
+		if res, _ := get(t, s, "/with/ticktick/"); res.StatusCode != http.StatusNotFound {
+			t.Errorf("GET /with/ticktick/ = %d, want 404", res.StatusCode)
+		}
+	})
+
+	t.Run("edit, reopen and delete reach TickTick", func(t *testing.T) {
+		s.act("edit-task", map[string]string{"id": "t-report", "title": "Write the report"})
+		if r, ok := fake.byTitle("Write the report"); !ok || r.DueDate != today+"T00:00:00.000+0000" {
+			t.Errorf("task in TickTick = %+v, %v, want the new title and the old due day", r, ok)
+		}
+		s.act("reopen-task", map[string]string{"id": "t-mom"})
+		if mom, _ := fake.byTitle("Call mom"); mom.Status != 0 || mom.CompletedTime != "" {
+			t.Errorf("Call mom in TickTick = %+v, want it open", mom)
+		}
+		s.act("delete-task", map[string]string{"id": "t-report"})
+		if _, ok := fake.byTitle("Write the report"); ok {
+			t.Error("the task is still in TickTick")
+		}
+	})
+
 	t.Run("a task that TickTick does not know is not found", func(t *testing.T) {
 		actions, _ := s.client().Catalog(t.Context())
 		for _, a := range actions {
-			if a.Name != "ticktick-complete-task" {
+			if a.Name != "complete-task" {
 				continue
 			}
 			_, err := s.client().Do(t.Context(), a, map[string]string{"id": "nope"})
@@ -562,4 +548,21 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 			}
 		}
 	})
+}
+
+// get reads a page as a browser does and returns the response and its body.
+func get(t *testing.T, s *server, path string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept", "text/html")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	return res, string(raw)
 }

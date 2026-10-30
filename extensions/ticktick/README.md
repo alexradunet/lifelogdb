@@ -1,22 +1,22 @@
-# lifelog-ticktick: TickTick, the first connected app
+# lifelog-ticktick: TickTick, the task service
 
 `lifelog-ticktick` links TickTick to your life log in two ways. What you finish in TickTick comes back as an entry of
-its day: `Done: Pay rent · Home`. And `lifelog` gets three actions, so that you, an agent or the browser can add a task,
-complete a task and sync now.
+its day: `Done: Pay rent · Home`. And it is the **task service** of `lifelog`: `lifelog` draws your TickTick tasks as
+the section Tasks, and it adds, edits, completes, reopens and deletes them through this program.
 
-It is a connected app: an extension that `lifelog serve --with ticktick` runs, and that serves a catalog of its own
-([a catalog of its own](../README.md#a-catalog-of-its-own)). It is the worked example of that contract. It is a separate
-Go module, `lifelog-ticktick`. It imports `lifelog/siren`, `lifelog/client` and `lifelog/app` of the root module (a
-`replace` directive), and uses the standard library for TickTick and for OAuth2. `lifelog` does not change.
+It is an extension that `lifelog serve --with ticktick` runs. It serves the task protocol of
+[a task service](../README.md#a-task-service) and no page: `lifelog` builds the pages. It is a separate Go module,
+`lifelog-ticktick`. It imports `lifelog/siren`, `lifelog/client` and `lifelog/app` of the root module (a `replace`
+directive), and uses the standard library for TickTick and for OAuth2. `lifelog` does not change.
 
 ```mermaid
 flowchart LR
   O["the owner: TickTick on the phone"] --> T["TickTick"]
   T -->|"POST /task/completed, else vanish-and-fetch, every 15 min"| C["lifelog-ticktick (serve --with ticktick)"]
   C -->|"capture, import_key id:completedTime, as import:ticktick"| L["lifelog: the day page"]
-  B["the browser, lifelog do, the agent"] -->|"ticktick-add-task, ticktick-complete-task, ticktick-sync"| L
-  L -->|"/with/ticktick"| C
-  C -->|"POST /task, POST .../complete"| T
+  B["the browser, lifelog do, the agent"] -->|"Tasks, add-task, complete-task, ..."| L
+  L -->|"the task protocol"| C
+  C -->|"the Open API of TickTick"| T
 ```
 
 ## Set up TickTick, once
@@ -67,14 +67,14 @@ From the root of the repository, beside `lifelog`:
 ```
 go build -C extensions/ticktick -o ../../lifelog-ticktick ./cmd/lifelog-ticktick
 lifelog ticktick sync --url http://127.0.0.1:7777     # one poll now: prints "wrote N entries"
-lifelog serve --with ticktick                          # the app beside the server: the catalog and a poll every 15 minutes
+lifelog serve --with ticktick                          # the task service beside the server, and a poll every 15 minutes
 ```
 
 | command | what it does |
 |---|---|
 | `lifelog ticktick login [--client-id ID] [--client-secret SECRET] [--port N]` | the login above |
 | `lifelog ticktick sync [--url URL]` | one poll. The address is `--url`, else `$LIFELOG_URL`. With neither, it refuses. When `$LIFELOG_TOKEN` is set, it is sent as a bearer token. |
-| `lifelog serve --with ticktick` | the program with no argument and with `LIFELOG_LISTEN` set: it serves the catalog, polls once at the start, then every `poll`. Without `LIFELOG_LISTEN` it prints the usage and exits 2. |
+| `lifelog serve --with ticktick` | the program with no argument and with `LIFELOG_LISTEN` set: it serves the task protocol, polls once at the start, then every `poll`. Without `LIFELOG_LISTEN` it prints the usage and exits 2. |
 
 An unknown argument or flag is refused. Exit status 1 is an error (`serve` starts the program again after 10 seconds).
 Exit status 2 means that you act first: the login is missing or refused, or the usage is wrong.
@@ -113,83 +113,49 @@ flowchart TD
   left its list is read by its id. This way has two limits: a task that you make and finish between two polls is not
   seen, and the tasks of the Inbox are not listed, because the API lists only the lists. The first way has neither.
 
-A failed poll changes nothing. The next poll comes after the interval, and `lifelog do ticktick-sync` is your retry.
+A failed poll changes nothing. The next poll comes after the interval, and `lifelog do sync-tasks --url URL` is your retry.
 
-## The actions
+## The task service
 
-The merged catalog of `lifelog` has three actions. Each is on every surface, none is owner-only, so an agent may use
-them.
+The program serves the protocol of [a task service](../README.md#a-task-service). The contract is there and is not
+restated here. This table says only how TickTick fills it.
 
-| action | what it does | CLI | MCP tool |
-|---|---|---|---|
-| `ticktick-add-task` | makes a task: `title` (required), `list` (a name from the options, else the Inbox), `due` (`YYYY-MM-DD`), `notes` | `lifelog do ticktick-add-task title=Milk list=Home --url URL` | `ticktick_add_task` |
-| `ticktick-complete-task` | completes the task with this `id` | `lifelog do ticktick-complete-task id=ID --url URL` | `ticktick_complete_task` |
-| `ticktick-sync` | does one poll now and answers the home with the count that it wrote | `lifelog do ticktick-sync --url URL` | `ticktick_sync` |
-
-The browser draws the home of the app at `/with/ticktick/`: the lists, the number of open and overdue tasks, the tasks
-due today or before (each is a page with its complete button), and the two forms. The refusals: a `due` that is not
-`YYYY-MM-DD` and a `list` that is not a list are 422; an unknown task is 404; an answer of TickTick that is not 2xx is
-502 `upstream` with the words `TickTick answered STATUS` and never TickTick's body. The home lists the open tasks of the
-lists, not of the Inbox.
-
-A `sync` that comes while a poll runs waits for it. The timer and the action share one lock.
-
-## Browse the tasks
-
-The app serves pages, not only the home. Every page links to the others, and any surface can follow the links,
-because they are plain resources of the catalog. The home is Today.
-
-```mermaid
-flowchart LR
-  H["/ Today: open tasks due today or before"] --> N["/next7: due in the next 7 days"]
-  H --> L["/lists/{id}: the open tasks of one list"]
-  L --> LD["/lists/{id}/done: done in this list"]
-  H --> D["/done: done in the last 30 days"]
-  L --> T["/tasks/{id}: one task"]
-  H -->|"round button of a row"| C["complete-task"]
-  L -->|"round button of a row"| C
-  N -->|"round button of a row"| C
-```
-
-| route | what it answers |
+| part of the protocol | in TickTick |
 |---|---|
-| `GET /` | Today: the counts `open` and `overdue`, the open tasks due today or before from every list, and the actions `add-task` (with `due` set to today) and `sync`. |
-| `GET /next7` | the open tasks with a due day from today to six days later, from every list, and `add-task`. |
-| `GET /lists/{id}` | the open tasks of one list, `open` and `overdue`, `add-task` with the list filled in, and the link `Done in this list`. An unknown id is 404 `not_found`. |
-| `GET /lists/{id}/done` | the tasks of that list done in the last 30 days, newest first. An unknown id is 404 `not_found`. |
-| `GET /tasks/{id}` | one task: `done`, `due`, `priority`, `notes`, and a link to its list. It has no action. |
-| `GET /done` | the tasks done in the last 30 days, newest first, and their `count`. |
+| `GET /lists` | `GET /project`. The ids are the project ids. The list is read when the program starts, so a new list needs a restart. |
+| `GET /open` | `GET /project/ID/data` for each list. |
+| `GET /done?since=` | `POST /task/completed` with an empty body, filtered here by the day of `completedTime`. `done_day` is the day that the entry of the task uses: one rule, the zone of the task. A server without that call gives an empty list. |
+| `GET /tasks/ID` | the task is looked up in the lists, then in the done tasks. |
+| `POST /tasks` | `POST /task`. `list` is a project id. Without it, the task goes to the Inbox. |
+| `POST /tasks/ID` (edit) | `POST /task/ID` with the whole task. A field that the request does not name keeps its value. |
+| `.../complete`, `.../reopen`, `.../delete` | `POST .../complete`, `POST /task/ID` with status 0, `DELETE /project/P/task/ID`. |
+| `POST /sync` | one poll. It answers the count that it wrote. A `sync` that comes while a poll runs waits for it. |
 
-A server without `/task/completed` answers `/done` and `/lists/{id}/done` with no task and the `note` "the server has no
-list of done tasks".
+The task `list` is the project id, and `""` for the Inbox. `due` is the due day in the zone of the task. A due day that
+you set is a whole day in the zone of the program. TickTick has priorities, but the protocol has none, so they are not
+read. The refusals: a `due` that is not `YYYY-MM-DD` and a `list` that is not a list are 422; an unknown task or list is
+404; an answer of TickTick that is not 2xx is 502 `upstream` with the words `TickTick answered STATUS` and never
+TickTick's body.
 
-Each task is a row with the chips `due` (YYYY-MM-DD), `priority` (`high`, `medium`, `low`) and, where the rows of many
-lists are mixed, `list`. A done row has the chip `done` (the day). The open rows are in the order of the due day (no due
-day last), then the priority (high first). TickTick's order breaks a tie.
+How you reach it:
 
-Every page has the same links after `self`: `Today` (it is also the `index`), `Next 7 days`, one link to each list
-and `Done`. On the home, each list shows its open count (`NAME · N`). On the page of a task, the link of its list is
-also its `list` link. No page links one address twice, so the side column draws each link once.
+- In the browser: the rail entry Tasks. Today, Next 7 days, a page for each list, Done and one page for each task.
+- On the command line: `lifelog do add-task title=Milk list=Home --url URL`, and `complete-task`, `edit-task`,
+  `reopen-task`, `delete-task` and `sync-tasks` the same way. The MCP tools have the same names with `_`.
 
-The browser draws these pages with the generic view of an app. The rules are in
-[how the browser draws a page of an app](../README.md#how-the-browser-draws-a-page-of-an-app). The app does not
-restate them. In short, the action `add-task` is the quick-add line, the links are the side column, and the tasks are
-rows.
+The names `ticktick-*` and the address `/with/ticktick` do not exist. `lifelog` does not know which task manager it
+serves.
 
-Complete is the round button of an open row. It is the action `complete-task` of the row, and it returns to the page.
-The catalog action `complete-task` stays for the CLI, the MCP and WhatsApp. The page of a task has no button.
+**The Inbox has a limit.** The `/project` call of TickTick does not list the Inbox, so its open tasks are not browsable.
+A task made without a list goes to the Inbox. You reach it by its own address, in the run that made it. After a restart
+the program does not know where the task is, and the task is not found.
 
-How to reach them:
+**Reopen and clear are not tested live.** Reopen is `POST /task/ID` with `status` 0. Clearing a due day or the notes
+sends the field empty. The Open API is used as its reference describes it, but no test reaches it. A fake stands for
+TickTick. Check both once on your own account: reopen a done task, and clear the due day of a task. The first live
+reopen and edit are yours to check.
 
-- In the browser: the rail link "TickTick" opens `/with/ticktick/`. Follow the links from there.
-- On the command line: `lifelog get /with/ticktick/ --url http://127.0.0.1:7777`, then `lifelog get /with/ticktick/lists/ID --url ...`.
-- With the MCP: it reads the same server, so the same addresses.
-
-The Inbox has a limit. The `/project` call of TickTick does not list the Inbox, so the app does not read its open
-tasks. A task made here without a list goes to the Inbox. You reach it by its own address only, and its page has no
-link to a list.
-
-## The service
+## Run it
 
 Run it beside the server:
 
@@ -200,9 +166,9 @@ lifelog serve --with ticktick
 A unit with `ProtectHome=read-only` must let the program write its state folder:
 `ReadWritePaths=/home/OWNER/.config/lifelog-ticktick`. Without it the program fails at its start and `serve` starts it
 again every 10 seconds ([deploy/lifelog.service](../../deploy/lifelog.service)). `serve` logs the line
-`with ticktick: a catalog of 3 actions on ...` when the app is up.
+`with ticktick: the task service, N lists, on ...` when the service is up.
 
-With no `token.json`, the app serves no catalog: it logs the login line and ends with status 2.
+With no `token.json`, the program serves no catalog: it logs the login line and ends with status 2.
 
 ## Tests
 
@@ -217,10 +183,12 @@ staticcheck ./...
 - `ticktick`: every call against an `httptest` fake, the 404 of `Completed`, a 401, the instant in a zone, the OAuth2
   exchange.
 - `connector`: the mapping of a task to its day, text and key (a zone that crosses midnight), both ways to find the done
-  tasks, the cursor, the lock, the catalog and its refusals.
+  tasks, the cursor, the lock, the task protocol (each route and write, the edit rule, the Inbox, `since`, the marker
+  class) and its refusals.
 - `cmd/lifelog-ticktick`: the usage, the refusals and the login against a fake token endpoint.
 - `e2e_test.go` builds the real `lifelog` and `lifelog-ticktick`, runs `lifelog serve --with ticktick` on a new
   `life.db` in a temporary folder (with `XDG_CONFIG_HOME` there too) and a fake TickTick, once with `/task/completed` and
-  once without it. It also checks that a refused token ends the app with status 2. `go test -short` skips it.
+  once without it. It reads the pages Tasks and a list as HTML (no word TickTick), posts the round Complete form, and checks that
+  `/with/ticktick/` is 404. It also checks that a refused token ends the app with status 2. `go test -short` skips it.
 
 No test calls TickTick, and none opens your `life.db`.

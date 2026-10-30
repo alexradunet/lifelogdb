@@ -59,6 +59,12 @@ func TestEveryCallUsesItsRouteAndTheToken(t *testing.T) {
 		{"create", `{"id":"t2","title":"Milk","projectId":"p1"}`,
 			func() (any, error) { return c.Create(ctx, Task{Title: "Milk", ProjectID: "p1"}) },
 			"POST", "/open/v1/task", Task{ID: "t2", ProjectID: "p1", Title: "Milk"}, `"title":"Milk"`},
+		{"update", `{"id":"t1","title":"B","projectId":"p1"}`,
+			func() (any, error) { return c.Update(ctx, Task{ID: "t1", ProjectID: "p1", Title: "B"}) },
+			"POST", "/open/v1/task/t1", Task{ID: "t1", ProjectID: "p1", Title: "B"},
+			`"id":"t1","projectId":"p1","title":"B","content":"","status":0,"dueDate":"",`},
+		{"delete", ``, func() (any, error) { return nil, c.Delete(ctx, "p1", "t1") },
+			"DELETE", "/open/v1/project/p1/task/t1", nil, ""},
 		{"complete", ``, func() (any, error) { return nil, c.Complete(ctx, "p1", "t1") },
 			"POST", "/open/v1/project/p1/task/t1/complete", nil, ""},
 		{"completed", `[{"id":"t1","status":2}]`,
@@ -226,13 +232,5 @@ func TestExchangeRefusals(t *testing.T) {
 	status, answer = 200, `{}`
 	if _, err := o.Exchange(context.Background(), "c"); err == nil {
 		t.Error("an answer with no access_token must be an error")
-	}
-}
-
-func TestThePriorityIsAWord(t *testing.T) {
-	for priority, want := range map[int]string{0: "", 1: "low", 3: "medium", 5: "high"} {
-		if got := (Task{Priority: priority}).PriorityWord(); got != want {
-			t.Errorf("priority %d = %q, want %q", priority, got, want)
-		}
 	}
 }

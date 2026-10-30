@@ -28,7 +28,8 @@ type fakeTick struct {
 	entered       chan struct{} // when set, GET /project signals here before it waits
 	inFlight      int           // requests in progress now, and the most there were at once
 	maxInFlight   int
-	completedBody string // the body of the last POST /task/completed
+	updates       []ticktick.Task // the bodies of POST /task/{id}, as TickTick decoded them
+	completedBody string          // the body of the last POST /task/completed
 }
 
 func newFakeTick(t *testing.T) (*fakeTick, *ticktick.Client) {
@@ -140,6 +141,26 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		_ = json.NewEncoder(w).Encode(done)
+	case r.Method == "POST" && len(parts) == 2 && parts[0] == "task":
+		var in ticktick.Task
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		t, ok := f.tasks[parts[1]]
+		if !ok || t.ProjectID != in.ProjectID {
+			w.WriteHeader(404)
+			return
+		}
+		f.updates = append(f.updates, in)
+		t.Title, t.Content, t.Status, t.DueDate, t.StartDate, t.IsAllDay = in.Title, in.Content, in.Status, in.DueDate, in.StartDate, in.IsAllDay
+		if t.Status == 0 {
+			t.CompletedTime = ""
+		}
+		_ = json.NewEncoder(w).Encode(t)
+	case r.Method == "DELETE" && len(parts) == 4 && parts[2] == "task":
+		if t, ok := f.tasks[parts[3]]; !ok || t.ProjectID != parts[1] {
+			w.WriteHeader(404)
+			return
+		}
+		delete(f.tasks, parts[3])
 	default:
 		w.WriteHeader(404)
 	}

@@ -11,7 +11,7 @@ import (
 	"lifelog/app"
 )
 
-// Serve runs the app under `lifelog serve --with ticktick`. It serves the catalog on LIFELOG_LISTEN, polls once at the
+// Serve runs the app under `lifelog serve --with ticktick`. It serves the task service on LIFELOG_LISTEN, polls once at the
 // start and then every interval, and returns when ctx ends. When TickTick refuses the token, in the timer or in a
 // handler, it stops and returns ErrLoginAgain: the owner acts first.
 func Serve(ctx context.Context, p *Poller, lists []ticktick.Project, every time.Duration) error {
@@ -43,7 +43,7 @@ func Serve(ctx context.Context, p *Poller, lists []ticktick.Project, every time.
 		}
 	}()
 
-	err := app.Listen(ctx, Catalog(p, lists))
+	err := app.Listen(ctx, Service(p, lists))
 	cancel(nil) // a clean end of Listen must stop the loop too
 	loop.Wait()
 	if errors.Is(context.Cause(ctx), ErrLoginAgain) {
