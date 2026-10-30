@@ -8,6 +8,7 @@
 {{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous week, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
 {{- with .Link "next"}}
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next week, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
+{{template "menu" .}}
 </div></header>
 
 <div class="sheet">

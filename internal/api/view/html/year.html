@@ -9,6 +9,7 @@
 {{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous year, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
 {{- with .Link "next"}}
 {{template "step" (dict "href" . "rel" "next" "label" (printf "Next year, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
+{{template "menu" .}}
 </div></header>
 {{template "period-page" (dict "v" . "name" "year")}}
 <div class="year">{{range $y.months}}{{template "monthbox" (dict "href" (printf "/months/%s" .month) "name" (monthName .month) "written" .written "days" .days "today" $.Today)}}{{end}}</div>

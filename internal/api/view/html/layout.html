@@ -158,16 +158,16 @@
 {{/* pager draws a list's prev and next links, when it has them */}}
 {{define "pager"}}{{$prev := .Link "prev"}}{{$next := .Link "next"}}{{if or $prev $next}}<nav class="pager" aria-label="Pages">{{with $prev}}<a href="{{.}}" rel="prev">← Previous</a>{{else}}<span></span>{{end}}{{with $next}}<a href="{{.}}" rel="next">Next →</a>{{end}}</nav>{{end}}{{end}}
 
-{{/* form draws one action of the entity (see formOf); nothing when the action is not offered. A label wraps its
+{{/* form draws one action of the entity (see formOf); nothing when the action is not offered. Its data-action is the action's name, so a test counts the forms of an action on a page (the x of a badge has none: it repeats the Add form). A label wraps its
      field, so a form needs no layout of its own; the catalog says how tall an area is and which action is a danger.
      The optional fields a view folds are under "More fields": still in the form, so they are sent with no script
      (docs/plans/095-the-leaf-and-its-margin.md). A second action of the form (formView.Or) is a button after its own, which
      sends the form to that action's address. */}}
-{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{with .Autocomplete}} autocomplete="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}>
+{{define "form"}}{{with .}}<form{{with .ID}} id="{{.}}"{{end}} method="{{.Method}}" action="{{.Href}}"{{with .Class}} class="{{.}}"{{end}}{{with .Autocomplete}} autocomplete="{{.}}"{{end}}{{if .Multipart}} enctype="multipart/form-data"{{end}}{{if not .Aria}} data-action="{{.Name}}"{{end}}>
 {{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{num .Value}}">{{end}}{{with .Back}}<input type="hidden" name="back" value="{{.}}">{{end}}
 {{range .Fields false}}{{template "field" .}}{{end}}{{with .Fields true}}<details class="more-fields"{{if $.MoreOpen}} open{{end}}><summary>{{count (len .) "more field" "more fields"}}</summary>
 {{range .}}{{template "field" .}}{{end}}</details>
-{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Aria}} class="remove" aria-label="{{.Aria}}"{{else if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate>{{.Button}}</button>{{end}}</form>{{end}}{{end}}
+{{end}}{{if .Preview}}<button type="submit" class="quiet" formaction="/render" formmethod="POST" formenctype="application/x-www-form-urlencoded" formtarget="_blank">Preview</button>{{end}}<button{{if .Aria}} class="remove" aria-label="{{.Aria}}"{{else if .Danger}} class="danger"{{else if .Primary}} class="primary"{{end}}>{{if .Opens}}Open{{else}}{{.Button}}{{end}}</button>{{with .Also}}<button{{if .Danger}} class="danger"{{end}} formaction="{{.Href}}" formnovalidate data-action="{{.Name}}">{{.Button}}</button>{{end}}</form>{{end}}{{end}}
 
 {{/* field draws one field of a form: a flag (the options 0 and 1) as one checkbox before its title, a few short
      options as a row of radio buttons (the options of the field mood also carry their words; a flag that the action requires, as the value of a daily metric, is the words Done and Not done in place of 0 and 1: a small word in the slab, which the sheet shows on the chosen slab), other options as a
@@ -203,19 +203,61 @@
 {{template "boxed" (form . "hide" "title,category" "more" "*" "button" (printf "Make the %s page" $name) "back" ($v.Link "self"))}}
 </section>{{end}}{{end}}{{end}}
 
-{{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
-     An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). It reads the
-     shape of the entity only, never a class or the name of an app. The three rules (the quick-add, the rows, the two
-     panes) are in extensions/README.md, "How the browser draws a page of an app". */}}
+{{/* menu is the ⋯ menu of a page (docs/plans/159-the-class-of-an-action.md): the actions of the entity that no template
+     places by name and that are not `create`, in three groups: the ones that edit it, the others, and the danger
+     actions, last and apart. The button opens a popover anchored to it (a sheet from the bottom on a phone). Each item
+     is a button that opens a modal dialog with the action's form in it (the command show-modal): no script. A page
+     whose menu is empty draws no button. menu-list and menu-dialogs are its two parts: the chat screen draws them in
+     the popover of its own. */}}
+{{define "menu"}}{{$m := .Menu}}{{if not $m.Empty}}<div class="menu">
+<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions" aria-haspopup="menu">⋯</button>
+<div class="menu-list" id="menu" popover><div class="menu-head"><span class="label">More</span><button type="button" class="button small" popovertarget="menu" popovertargetaction="hide">Close</button></div>
+{{template "menu-list" $m}}</div>
+{{template "menu-dialogs" $m}}</div>{{end}}{{end}}
+
+{{/* menu-list is the buttons of the menu, by group. It takes the menu. */}}
+{{define "menu-list"}}{{with .Edit}}<div class="menu-group" role="group" aria-label="Edit"><span class="menu-label">Edit</span>{{template "menu-buttons" .}}</div>{{end}}
+{{with .Other}}<div class="menu-group" role="group" aria-label="Actions">{{template "menu-buttons" .}}</div>{{end}}
+{{with .Danger}}<div class="menu-group danger" role="group" aria-label="Danger">{{template "menu-buttons" .}}</div>{{end}}{{end}}
+
+{{define "menu-buttons"}}{{range .}}<button type="button" class="menu-item" commandfor="{{.ID}}" command="show-modal">{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</button>{{end}}{{end}}
+
+{{/* menu-dialogs are the dialogs of the menu, one for each item: what the action does, its form and Close (Cancel for a
+     danger action: the dialog is its confirm step). A form that the page's link asked for (?new=<action>) is open in the
+     flow of the page, not modal. It takes the menu. */}}
+{{define "menu-dialogs"}}{{range .Items}}<dialog class="menu-dialog" id="{{.ID}}" closedby="any" aria-label="{{.Title}}"{{if .Open}} open{{end}}>
+<h2>{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</h2>{{with .Note}}<p class="desc">{{.}}</p>{{end}}
+{{template "form" .Form}}
+<button type="button" class="button small quiet" commandfor="{{.ID}}" command="close">{{.Close}}</button></dialog>{{end}}{{end}}
+
+{{/* creates are the `create` actions of the entity that no template places, each a button of the head that opens its form.
+     The head calls this one template, so the way a create is drawn changes in one place. */}}
+{{define "creates"}}{{range .Creates}}{{template "boxed" .}}{{end}}{{end}}
+
+{{/* generic is the view of any class without a template of its own: the whole entity. Its actions are drawn by their
+     class, never by name: the quick-add line, the create buttons and the ⋯ menu. It reads the shape of the entity only,
+     never a class or the name of an app. The three rules (the quick-add, the rows, the two panes) are in
+     extensions/README.md, "How the browser draws a page of an app". */}}
 {{define "generic"}}{{template "head" .}}
-<header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1></div></header>
+<header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1></div>
+<div class="tools">{{template "creates" .}}{{template "menu" .}}</div></header>
 <div class="panes">
 {{with .SideLinks}}<nav class="side" aria-label="Links"><ul>{{range .}}<li><a href="{{.Href}}" rel="{{rel .Rel}}"{{if $.IsHere .Href}} aria-current="page"{{end}}>{{or .Title .Href}}</a></li>{{end}}</ul></nav>{{end}}
 <div class="pane-main">
 {{with .QuickAdd}}{{template "form" (form ($.Action .Name) "more" "*" "class" "quick-add" "back" $.ReturnHere)}}{{end}}
 {{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
 {{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}{{template "row" (dict "v" $ "l" .)}}{{end}}</ul></section>{{end}}
-{{with .OtherActions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form ($.Action .Name))}}{{end}}</div></section>{{end}}
+</div></div>
+{{template "foot" .}}{{end}}
+
+{{/* catalog is /actions: every action of the server, each boxed, so a link with ?new=<action> opens its form (the rail's
+     Snapshot). It is the one page that draws the actions by their names and not by their class. */}}
+{{define "catalog"}}{{template "head" .}}
+<header class="page-head"><div class="what"><h1>{{.Title}}</h1></div></header>
+<div class="panes">
+{{with .SideLinks}}<nav class="side" aria-label="Links"><ul>{{range .}}<li><a href="{{.Href}}" rel="{{rel .Rel}}"{{if $.IsHere .Href}} aria-current="page"{{end}}>{{or .Title .Href}}</a></li>{{end}}</ul></nav>{{end}}
+<div class="pane-main">
+{{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form ($.Action .Name))}}{{end}}</div></section>{{end}}
 </div></div>
 {{template "foot" .}}{{end}}
 

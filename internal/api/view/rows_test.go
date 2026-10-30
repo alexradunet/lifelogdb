@@ -23,7 +23,7 @@ func textField(name string, required bool) siren.Field {
 }
 
 // TestTheQuickAddIsTheFirstCreateAction: the first action of the class create, with exactly one required text field, is
-// one line at the top, and it is not drawn again under Actions.
+// one line at the top, and it is not drawn again: the other action is in the menu.
 func TestTheQuickAddIsTheFirstCreateAction(t *testing.T) {
 	add := siren.Action{Name: "app-add", Method: "POST", Href: "/with/app/items", Title: "Add it", Class: []string{"create"},
 		Fields: []siren.Field{textField("text", true), {Name: "due", Type: "date"}}}
@@ -33,14 +33,14 @@ func TestTheQuickAddIsTheFirstCreateAction(t *testing.T) {
 		t.Errorf("the add form is drawn %d times, want 1", n)
 	}
 	form := page[strings.Index(page, `<form`):]
-	if !strings.Contains(page, `class="quick-add"`) || strings.Contains(page[:strings.Index(page, `class="quick-add"`)], `aria-label="Actions"`) {
+	if !strings.Contains(page, `class="quick-add"`) || strings.Index(page, `class="quick-add"`) < strings.Index(page, `<div class="pane-main">`) {
 		t.Errorf("the quick-add is not first:\n%s", form)
 	}
 	if !strings.Contains(page, `<details class="more-fields">`) || !strings.Contains(page, ">Add it</button>") {
 		t.Errorf("the quick-add has no folded fields or no button:\n%s", form)
 	}
-	if !strings.Contains(page, `aria-label="Actions"`) || !strings.Contains(page, "Clear") {
-		t.Errorf("the other action is not under Actions")
+	if !strings.Contains(page, `aria-label="More actions"`) || !strings.Contains(page, `<dialog class="menu-dialog" id="do-app-clear"`) || strings.Count(page, `data-action="app-add"`) != 1 {
+		t.Errorf("the other action is not in the menu, or the quick-add is not drawn once:\n%s", form)
 	}
 }
 
@@ -59,8 +59,8 @@ func TestTheQuickAddNeedsTheClassCreateAndExactlyOneRequiredTextField(t *testing
 		if strings.Contains(page, `class="quick-add"`) {
 			t.Errorf("%s: drawn as a quick-add", a.Name)
 		}
-		if !strings.Contains(page, `aria-label="Actions"`) {
-			t.Errorf("%s: not under Actions", a.Name)
+		if !strings.Contains(page, `commandfor="do-`+a.Name+`"`) && !strings.Contains(page, `<details class="action"`) {
+			t.Errorf("%s: drawn neither in the menu nor as a create button", a.Name)
 		}
 	}
 }

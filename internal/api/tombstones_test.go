@@ -112,9 +112,9 @@ func TestTheListsDeleteWhatIsChecked(t *testing.T) {
 	}
 
 	list := browse(t, h, "/browse?kind=media")
-	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file" class="inline">`,
+	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file" class="inline" data-action="file-pages">`,
 		`<input type="hidden" name="back" value="/browse?kind=media">`, `<span class="desc">Check the rows, then type a category or delete them. A new name makes a new category.</span>`,
-		`<button class="danger" formaction="/pages/tombstone" formnovalidate>Delete</button></form></div></div>`,
+		`<button class="danger" formaction="/pages/tombstone" formnovalidate data-action="tombstone-pages">Delete</button></form></div></div>`,
 		`<input type="checkbox" name="ids" value="` + files[0] + `" form="pick" aria-label="Select Scan 1.jpg">`, `name="ids" value="` + files[1] + `"`} {
 		if !strings.Contains(list, want) {
 			t.Errorf("the media list lacks %s", want)

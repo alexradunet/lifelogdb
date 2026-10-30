@@ -16,7 +16,8 @@
 {{if $p.is_day_page}}<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
 {{with .Link "series"}}<p class="sub"><a href="{{.}}">Its readings</a></p>{{end}}
 {{with $.PeriodViews}}<p class="sub">{{range .}}<a href="{{.Href}}">{{.Title}}</a> {{end}}</p>{{end}}
-</div></header>
+</div>
+<div class="tools">{{template "menu" .}}</div></header>
 
 {{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: restore it to bring it back.</p>
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
@@ -46,7 +47,7 @@
 </section>{{end}}
 {{end}}
 
-{{/* page-margin is the margin of a page: the cover, the facts, the typed links, the backlinks and More. On the view of a metric (a series) its mark is the form "Ask for it every day" of the sheet, so More does not draw it again. */}}
+{{/* page-margin is the margin of a page: the cover, the facts, the typed links and the backlinks. The other actions of the page are in its ⋯ menu. */}}
 {{define "page-margin"}}{{$p := .Props}}
 {{template "cover" .}}
 <section class="group" aria-label="Facts"><h2>Facts</h2>
@@ -58,14 +59,7 @@
 
 {{template "links" .}}
 {{template "backlinks" .}}
-
-{{if or (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
-{{template "boxed" (form (.Action "rename") "group" "more")}}
-{{template "boxed" (form (.Action "edit-person") "group" "more")}}
-{{if not .IsSeries}}{{template "boxed" (form (.Action "edit-metric") "group" "more" "button" "Save")}}{{end}}
-{{template "boxed" (form (.Action "promote") "group" "more" "button" "Make it a person")}}
-{{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}
-{{$back := $.Here}}{{if .IsSeries}}{{$back = printf "/pages/%s" (num $p.id)}}{{end}}{{template "boxed" (form (.Action "tombstone-pages") "group" "more" "hide" "ids" "back" $back)}}</div></section>{{end}}
+{{with .Link "make-metric"}}<div class="actions quiet"><a class="button" href="{{.}}">Make it a metric</a></div>{{end}}
 {{end}}
 
 {{/* links and backlinks are two groups of the margin of a page: the typed links of the page and the pages that link to it. The chat screen's menu draws them too. */}}
@@ -103,7 +97,8 @@
 {{define "measurement"}}{{template "head" .}}
 {{$m := .Props}}
 <header class="page-head"><div class="what"><span class="kind">{{$m.metric}}, {{$.Date $m.day}}</span>
-<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div></header>
+<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div>
+<div class="tools">{{template "menu" .}}</div></header>
 <div class="sheet list"><dl class="facts">
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>
 <dt>day</dt><dd><a href="{{.Link "day"}}">{{$.Date $m.day}}</a></dd>
@@ -116,9 +111,6 @@
 {{with .Link "captured-with"}}<li><a href="{{.}}">Captured with its day page</a></li>{{end}}
 </ul>{{end}}
 {{with .Action "correct"}}<section class="panel" aria-label="Correct"><h2>Correct</h2>{{template "form" (form . "class" "inline")}}</section>{{end}}
-<div class="actions">
-{{template "boxed" (form (.Action "retract"))}}
-</div>
 {{with .Link "record"}}<p class="desc">Wrong day or wrong metric? Retract it, then <a href="{{.}}">add it again</a>.</p>{{end}}
 {{template "foot" .}}{{end}}
 

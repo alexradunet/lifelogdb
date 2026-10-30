@@ -54,18 +54,6 @@ func quickAdd(a siren.Action) bool {
 	return required == 1
 }
 
-// OtherActions are the actions of the entity that the Actions section draws: all but the quick-add.
-func (v *view) OtherActions() []siren.Action {
-	q := v.QuickAdd()
-	var out []siren.Action
-	for i := range v.Actions {
-		if q == nil || &v.Actions[i] != q {
-			out = append(out, v.Actions[i])
-		}
-	}
-	return out
-}
-
 // SideLinks are the links of the entity that a wide screen draws as a side column: all but self.
 func (v *view) SideLinks() []siren.Link {
 	var out []siren.Link

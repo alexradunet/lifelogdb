@@ -32,7 +32,7 @@ func withoutChat(page string) string { return chatColumn.ReplaceAllString(page, 
 func TestTheSettingsPageDrawsTheThreeFieldsInOneForm(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	page := browse(t, h, "/settings")
-	form := regexp.MustCompile(`(?s)<form method="POST" action="/settings" autocomplete="off">.*?</form>`).FindString(page)
+	form := regexp.MustCompile(`(?s)<form method="POST" action="/settings" autocomplete="off" data-action="settings">.*?</form>`).FindString(page)
 	for _, want := range []string{`<input type="text" name="model_url" value="">`, `<input type="text" name="model" value="">`, `<input type="text" name="owner_number" value="">`,
 		`<input type="password" name="model_key" value="" autocomplete="off">`, `<button class="primary">Save</button>`} {
 		if !strings.Contains(form, want) {
@@ -158,7 +158,7 @@ func TestTheConversationViewIsTheChatScreen(t *testing.T) {
 	}
 	// The composer is the plain chat-form: no Preview in it (the body editor's form in the menu keeps its own), and it
 	// returns to the screen.
-	composer := `<form method="POST" action="/days/` + fixedToday + `/say" class="chat-form">`
+	composer := `<form method="POST" action="/days/` + fixedToday + `/say" class="chat-form" data-action="say">`
 	if i := strings.Index(view, composer); i < 0 {
 		t.Errorf("the chat screen lacks the composer %s", composer)
 	} else if form := view[i:]; strings.Contains(form[:strings.Index(form, "</form>")], "Preview") ||
@@ -230,7 +230,7 @@ func TestEveryPageOfTheShellDrawsTheChatColumn(t *testing.T) {
 	day := "/days/" + fixedToday
 	empty := browse(t, h, day)
 	for _, want := range []string{`<div class="chat compact" id="chat" popover role="complementary" data-day="today" data-version="" aria-label="Chat">`, "Nothing is said today yet",
-		`<form method="POST" action="/days/today/say" class="chat-form">`, `<input type="hidden" name="back" value="` + day + `">`,
+		`<form method="POST" action="/days/today/say" class="chat-form" data-action="say">`, `<input type="hidden" name="back" value="` + day + `">`,
 		`popovertarget="chat"`, chatScript} {
 		if !strings.Contains(empty, want) {
 			t.Errorf("the page of a day with no talk lacks %s", want)
@@ -439,7 +439,7 @@ func TestACardAsksForWhatThePageMayRead(t *testing.T) {
 
 // composerForm is the first chat-form of page, up to its end.
 func composerForm(page string) string {
-	i := strings.Index(page, `class="chat-form">`)
+	i := strings.Index(page, `class="chat-form" data-action="say">`)
 	if i < 0 {
 		return ""
 	}

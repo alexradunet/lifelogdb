@@ -18,8 +18,10 @@
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit")}}
 {{template "links" .}}
 {{template "backlinks" .}}
-{{template "boxed" (form (.Action "tombstone-pages") "hide" "ids" "back" $.Here)}}{{end}}
+{{end}}
+{{$menu := .Menu}}{{if not $menu.Empty}}{{template "menu-list" $menu}}{{end}}
 </div>
+{{template "menu-dialogs" $menu}}
 </header>
 <section class="thread" aria-label="Conversation of {{$.Date $p.day}}">
 {{if $turns}}{{template "thread" (dict "v" $ "turns" $turns "day" $p.day)}}{{else if .Action "say"}}<div class="turns"><p class="empty">Nothing is said on this day yet. Write to the agent below. It answers here when it runs: start it with <code>lifelog whatsapp</code>.</p></div>{{else}}<div class="turns"><p class="empty">Nothing was said on this day.</p></div>{{end}}

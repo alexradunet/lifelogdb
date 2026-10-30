@@ -223,8 +223,8 @@ func TestOrSendsTheFormToASecondAction(t *testing.T) {
 	del := &shownAction{Action: tombstonePages()}
 
 	got := draw(form(file, "id", "pick", "outside", "ids", "back", "/browse").Or(form(del)))
-	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file">`, `<input type="hidden" name="back" value="/browse">`,
-		`<button class="primary">Put in a category</button><button class="danger" formaction="/pages/tombstone" formnovalidate>Delete pages</button></form>`} {
+	for _, want := range []string{`<form id="pick" method="POST" action="/pages/file" data-action="file-pages">`, `<input type="hidden" name="back" value="/browse">`,
+		`<button class="primary">Put in a category</button><button class="danger" formaction="/pages/tombstone" formnovalidate data-action="tombstone-pages">Delete pages</button></form>`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the form lacks %s:\n%s", want, got)
 		}

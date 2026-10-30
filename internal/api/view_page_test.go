@@ -91,7 +91,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{"/actions?new=snapshot", http.StatusOK, []string{`<details class="action" open><summary class="button">Take a snapshot`}}, // the rail's Snapshot link
 		{"/days", http.StatusOK, []string{`<article class="day-card" aria-label="`, `<article class="day-card slim" aria-label="2026-09-28">`,
 			`<a href="/days" aria-current="page">Days</a>`, `</span>Ana</a>`,
-			`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
+			`<form class="tiny" method="GET" action="/pages/random" data-action="random-page"><input type="hidden" name="kind" value="day"><button class="quiet">A random day</button></form>`}},
 		{apitest.Href(day, "self"), http.StatusOK, nil},
 		{"/weeks/2026-W40", http.StatusOK, nil}, // a week draws its days and the form that makes its page: no id repeats
 		{dayPage, http.StatusOK, []string{`name="version" value="`, `<a href="/pages?title=Sam" class="wikilink">Sam</a>`,
@@ -99,7 +99,7 @@ func TestEveryViewRenders(t *testing.T) {
 		{apitest.Href(sam, "self"), http.StatusOK, nil},
 		{opens(t, h, "Ana"), http.StatusOK, []string{"Ana Popescu", "Backlinks", "mentioned in", `<div class="snippet">Ran with Sam and Ana #running</div>`}},
 		{"/browse", http.StatusOK, []string{`placeholder="A page's title, or words of a body">`, `<span class="first">Essay</span>`}},
-		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random"><input type="hidden" name="kind" value="person"><button class="quiet">A random one</button></form>`}},
+		{"/browse?kind=person", http.StatusOK, []string{`<form class="tiny" method="GET" action="/pages/random" data-action="random-page"><input type="hidden" name="kind" value="person"><button class="quiet">A random one</button></form>`}},
 		{"/browse?deleted=1", http.StatusOK, []string{`<span class="first">Scratch</span>`}},
 		{"/browse?ghosts=1", http.StatusOK, nil},
 		{"/metrics", http.StatusOK, nil},
@@ -366,22 +366,5 @@ func TestARefusalWithoutAPageToReturnToIsTheErrorView(t *testing.T) {
 	if rec.Code != http.StatusConflict || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/vnd.siren+json") ||
 		!strings.Contains(rec.Body.String(), `"stale_version"`) || strings.Contains(rec.Body.String(), "refused") {
 		t.Errorf("a JSON client's refusal: %d %s %.300s", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
-	}
-}
-
-// TestTheMoreRowOfAPageOpensOneFormAtATime: the forms of the More row share one group name, so opening Rename closes
-// Link. The row of a page has no other details with a name.
-func TestTheMoreRowOfAPageOpensOneFormAtATime(t *testing.T) {
-	c, h, _ := apitest.Fresh(t, "cli")
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	essay := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Essay"}))
-	body := browse(t, h, apitest.Href(essay, "self"))
-	if n := strings.Count(body, `<details class="action" name="more">`); n < 3 {
-		t.Errorf("the More row has %d forms with the group more, want at least link, rename and delete", n)
-	}
-	for _, m := range regexp.MustCompile(`<details class="action"[^>]*>`).FindAllString(body, -1) {
-		if strings.Contains(m, "name=") && m != `<details class="action" name="more">` {
-			t.Errorf("a form of the page has another group: %s", m)
-		}
 	}
 }

@@ -132,14 +132,53 @@ func Num(v any) string {
 	return fmt.Sprint(v)
 }
 
-// viewOf names the template that shows an entity of a class; a class without one is shown by "generic".
-var viewOf = map[string]string{
-	"day": "day", "page": "page", "person": "page", "file": "page",
-	"days": "stream", "search": "search", "browse": "browse",
+// placing says how a class of entity is drawn: the template, and the names of the actions that this template draws
+// itself, each in its place in the domain (the editor of a body, the capture box, a tile, the pick bar). The ⋯ menu
+// draws the other actions of the entity (docs/plans/159-the-class-of-an-action.md). The test
+// TestEveryActionOfAnEntityIsDrawnOnce holds each list equal to what its template draws.
+type placing struct {
+	template string
+	places   []string
+}
 
-	"metrics": "metrics", "series": "metric", "conversation": "conversation", "settings": "settings", "metric": "page", "measurement": "measurement", "error": "error", "login": "login",
-	"month": "month", "year": "year", "week": "week",
-	"preview": "preview", "cover-choice": "cover-choice",
+// pagePlaces are the actions that the template page (and the sheet and margin of a series) draws in their own places:
+// the editor of the body, Restore in the alert of a deleted page, the category badges, New page here in Filed here,
+// and the link to the picker of the cover.
+var pagePlaces = []string{"save-body", "revive", "file-pages", "create-page", "set-cover"}
+
+// viewOf names, for each class of entity, the template that shows it and the actions that template places; a class
+// without one is shown by "generic", which places none.
+var viewOf = map[string]placing{
+	"day":    {"day", []string{"capture", "save-body", "record", "set-cover"}},
+	"page":   {"page", pagePlaces},
+	"person": {"page", pagePlaces},
+	"file":   {"page", pagePlaces},
+	"metric": {"page", pagePlaces},
+	"series": {"metric", append(slices.Clone(pagePlaces), "record", "edit-metric")},
+
+	"days":         {"stream", []string{"open-day", "random-page"}},
+	"search":       {"search", []string{"search"}},
+	"browse":       {"browse", []string{"file-pages", "tombstone-pages", "random-page"}},
+	"metrics":      {"metrics", []string{"file-pages"}},
+	"conversation": {"conversation", []string{"save-body", "say", "file-pages"}},
+	"settings":     {"settings", []string{"settings"}},
+	"measurement":  {"measurement", []string{"correct"}},
+	"month":        {"month", []string{"create-page", "save-body"}},
+	"year":         {"year", []string{"create-page", "save-body"}},
+	"week":         {"week", []string{"create-page", "save-body"}},
+	"cover-choice": {"cover-choice", []string{"set-cover"}},
+	"actions":      {"catalog", nil}, // the catalog page draws every action boxed: nothing is placed, and it has no menu
+	"error":        {"error", nil}, "login": {"login", nil}, "preview": {"preview", nil},
+}
+
+// placingOf is the way an entity is drawn: that of the first of its classes that has one, else the generic view.
+func placingOf(e *siren.Entity) placing {
+	for _, c := range e.Class {
+		if p, ok := viewOf[c]; ok {
+			return p
+		}
+	}
+	return placing{template: "generic"}
 }
 
 // view is what a template gets: the entity, its properties as the JSON client reads them, the path the browser
@@ -236,25 +275,14 @@ func Draw(e *siren.Entity, f Facts) ([]byte, error) {
 }
 
 // TemplateOf names the template that draws an entity: the first of its classes that has one, else "generic".
-func TemplateOf(e *siren.Entity) string {
-	for _, c := range e.Class {
-		if n, ok := viewOf[c]; ok {
-			return n
-		}
-	}
-	return "generic"
-}
+func TemplateOf(e *siren.Entity) string { return placingOf(e).template }
 
 // htmlOf is the page of a view, drawn by the template of its entity's class. A page of a connected app or of the task
 // service (drawnByShape) is always drawn by generic: the class is the app's word, and it may be the name of a class of this
 // server.
 func htmlOf(v *view) ([]byte, error) {
-	name := TemplateOf(v.Entity)
-	if drawnByShape(v.Path) {
-		name = "generic"
-	}
 	var b bytes.Buffer
-	if err := templates.ExecuteTemplate(&b, name, v); err != nil {
+	if err := templates.ExecuteTemplate(&b, v.placing().template, v); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil

@@ -435,6 +435,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   when the day has no page, `links_endpoint_types` when it has one). Browse in a category fills it in its New page,
   and a category page offers New page here.
   Rejected by the owner: exclusive membership, a manual order and a syntax in the body that files a page.
+- **The ⋯ menu** ([plan 159](docs/plans/159-the-class-of-an-action.md)). A page draws the actions that no template
+  places by name in one ⋯ menu in its head, by the `class` of the action: the `edit` actions first, then the others,
+  then the `danger` actions last and apart. Each item opens a dialog with the action's form, with no script; a page
+  with no such action draws no button. A `create` action stays a button of the head. `?new=NAME` opens the form as an
+  open dialog.
 - **Fold and find** ([plan 118](docs/plans/118-fold-and-find.md); the owner's choice, 2026-10-15). In the browser
   only, and with no script, Browse and the Metrics board fold; the JSON and the catalog do not change. The tree folds
   each category that has categories under it, open on the path to the current branch. A category is a row of the
@@ -518,16 +523,16 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
 | `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
-| `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | a page, More: Make it a person |
-| `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | a person, More: Edit name and dates |
-| `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric: Ask for it every day |
+| `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | the ⋯ menu of a page: Make it a person |
+| `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | the ⋯ menu of a person: Edit name and dates |
+| `edit-metric` | `POST /pages/{id}/metric` | `do edit-metric` | `edit_metric` | a metric: Ask for it every day (the sheet of its view); the ⋯ menu of its page |
 | `revive` | `POST /pages/{id}/revive` | `do revive` | `revive` | a deleted page (Browse, Deleted): Restore |
-| `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | a page, More: Delete; the pick bar of a Browse list |
+| `tombstone-pages` | `POST /pages/tombstone` | `do tombstone-pages` | `tombstone_pages` | the ⋯ menu of a page: Delete; the pick bar of a Browse list |
 | `file-pages` | `POST /pages/file` | `do file-pages` | `file_pages` | a page: + Add and the x of a category badge; a Browse list: Move on a row, and the pick bar (Move to, Add to, Remove from here); the Metrics board: the pick bar |
 | `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
 | `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |
-| `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | a reading: Retract |
-| `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | a page, More: Rename |
+| `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | the ⋯ menu of a reading: Retract |
+| `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | the ⋯ menu of a page: Rename |
 | `register-metric` | `POST /metrics` | `do register-metric` | none, the owner's | Metrics: New metric |
 | `settings` | `POST /settings` | `do settings` | none, the owner's | Settings |
 | `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
@@ -537,8 +542,8 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `open-day` | `GET /days/go` | `do open-day`, `day` | `open_day` | Calendar: Go to a day |
 | `random-page` | `GET /pages/random` | `do random-page` | `random_page` | Calendar: A random day; a Browse list: A random one |
 | `snapshot` | `POST /snapshots` | `do snapshot`, `snapshot` | none, the owner's | the sidebar: Snapshot |
-| `rebuild-search` | `POST /search/rebuild` | `do rebuild-search` | none, the owner's | Integrity checks: Rebuild search |
-| `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks: Resync links |
+| `rebuild-search` | `POST /search/rebuild` | `do rebuild-search` | none, the owner's | Integrity checks, the ⋯ menu: Rebuild search |
+| `resync-links` | `POST /links/resync` | `do resync-links` | none, the owner's | Integrity checks, the ⋯ menu: Resync links |
 
 This table lists the core alone. The actions of a connected app ([plan 154](docs/plans/154-connected-apps-through-the-catalog.md))
 are in the catalog while the app runs, and each is on every surface by its name `NAME-action`:

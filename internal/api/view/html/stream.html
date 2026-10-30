@@ -7,6 +7,7 @@
 <div class="tools">
 {{template "random" (dict "a" (.Action "random-page") "label" "A random day")}}
 {{template "boxed" (form (.Action "open-day") "button" "Go to a day")}}
+{{template "menu" .}}
 </div></header>
 <div class="stream">
 {{range $s.cards}}{{template "day-card" (dict "v" $ "c" .)}}
@@ -41,4 +42,4 @@
 {{/* random is a quiet button that opens a thing picked at random (docs/plans/130-the-explore-pass.md, part 5): a GET
      form of the action random-page, with its prefilled kind hidden. It takes a (the action) and label. Nothing is
      drawn without the action. The rail's New stays the one loud button. */}}
-{{define "random"}}{{$label := .label}}{{with .a}}<form class="tiny" method="GET" action="{{.Href}}">{{range .Fields}}{{$f := .}}{{with .Value}}<input type="hidden" name="{{$f.Name}}" value="{{num .}}">{{end}}{{end}}<button class="quiet">{{$label}}</button></form>{{end}}{{end}}
+{{define "random"}}{{$label := .label}}{{with .a}}<form class="tiny" method="GET" action="{{.Href}}" data-action="{{.Name}}">{{range .Fields}}{{$f := .}}{{with .Value}}<input type="hidden" name="{{$f.Name}}" value="{{num .}}">{{end}}{{end}}<button class="quiet">{{$label}}</button></form>{{end}}{{end}}

@@ -4,7 +4,7 @@
      docs/plans/119-the-finish.md, rule 3). */}}
 {{define "metrics"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Metrics</h1></div>
-<div class="tools">{{with .Action "register-metric"}}{{template "boxed" (form . "lead" "1")}}{{end}}</div></header>
+<div class="tools">{{template "creates" .}}{{template "menu" .}}</div></header>
 {{$file := .Action "file-pages"}}{{$sections := .MetricSections}}
 <div class="pick-list board">
 {{if gt (len $sections) 1}}<div class="board-nav"><nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
@@ -31,8 +31,8 @@
 <header class="page-head"><div class="what"><span class="kind">metric</span><h1>{{.Title}}</h1>
 {{template "categories" (dict "v" $ "back" $.Here)}}
 <p class="sub">{{with .Link "all-readings"}}<a href="{{.}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
-{{with $r.Latest}}<div class="tools"><div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
-{{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div></div>{{end}}
+<div class="tools">{{with $r.Latest}}<div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
+{{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div>{{end}}{{template "menu" .}}</div>
 </header>
 
 <div class="sheet-margin">

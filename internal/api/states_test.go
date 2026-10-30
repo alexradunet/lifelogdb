@@ -86,21 +86,6 @@ func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	}
 }
 
-// TestTheMoreOfAPageAndOfAMetricIsAQuietRow: the row of actions that ends a page (the More of a page and of a metric's
-// page) is a quiet row, drawn without the slab (docs/plans/129-the-ux-pass.md, part 5).
-func TestTheMoreOfAPageAndOfAMetricIsAQuietRow(t *testing.T) {
-	c, h, _ := apitest.FreshOn(t, "cli", fixedToday)
-	root := apitest.Must(t)(c.Get(t.Context(), "/"))
-	p := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Garden project", "body": "Seeds."}))
-	apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "register-metric"), map[string]string{"name": "weight", "unit": "kg"}))
-	more := regexp.MustCompile(`<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">`)
-	for _, path := range []string{apitest.Href(p, "self"), "/metrics/weight"} {
-		if body := browse(t, h, path); !more.MatchString(body) {
-			t.Errorf("%s does not draw its More as a quiet row", path)
-		}
-	}
-}
-
 // TestNoPageShowsARawInstant: a page and a reading say their times in words; the
 // exact instant stays only in an attribute (the <time> element's, or a form's value).
 func TestNoPageShowsARawInstant(t *testing.T) {

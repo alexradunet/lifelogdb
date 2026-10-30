@@ -328,7 +328,7 @@ func TestAPagesCategoriesAreBadges(t *testing.T) {
 
 	before := browse(t, h, self)
 	for _, want := range []string{`<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>`, `<span class="meta">none</span>`,
-		`<form method="POST" action="/pages/file" class="inline">` + "\n" + `<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="move" value="0">`,
+		`<form method="POST" action="/pages/file" class="inline" data-action="file-pages">` + "\n" + `<input type="hidden" name="ids" value="` + id + `"><input type="hidden" name="move" value="0">`,
 		`<input type="text" name="category" value="" required list="file-pages-category" placeholder="Bloodwork, Sport, Financial"><datalist id="file-pages-category"><option value="Projects"></datalist>`} {
 		if !strings.Contains(before, want) {
 			t.Errorf("the page lacks %s", want)
@@ -394,9 +394,9 @@ func TestEveryListSelectsTheSameWay(t *testing.T) {
 		if bar, last := strings.Index(body, `id="pick"`), strings.LastIndex(body, `form="pick"`); last < 0 || bar < last {
 			t.Errorf("%s: the bar is not after its boxes", list.path)
 		}
-		put := strings.Contains(body, `<form id="pick" method="POST" action="`+list.put+`" class="inline">`) &&
+		put := strings.Contains(body, `<form id="pick" method="POST" action="`+list.put+`" class="inline" data-action="file-pages">`) &&
 			strings.Contains(body, `<button class="primary">Add to</button>`)
-		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate>Delete</button></form>`)
+		del := strings.Contains(body, `<button class="danger" formaction="`+list.del+`" formnovalidate data-action="tombstone-pages">Delete</button></form>`)
 		if put != (list.put != "") || del != (list.del != "") {
 			t.Errorf("%s: Add to %v, Delete %v; want %v, %v", list.path, put, del, list.put != "", list.del != "")
 		}
