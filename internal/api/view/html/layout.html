@@ -189,7 +189,7 @@
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a
      closed <details>. An owner-only action carries the owner mark. A form with a group (the option "group") shares
      its name with the others of the group, so the browser keeps one of them open. */}}
-{{define "boxed"}}{{with .}}<details class="action"{{with .Group}} name="{{.}}"{{end}}{{if .Asked}} open{{end}}><summary class="button{{if .Lead}} primary{{end}}">{{if .Lead}}{{icon "new"}}{{end}}{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with or .Hint .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
+{{define "boxed"}}{{with .}}<details class="action"{{with .Group}} name="{{.}}"{{end}}{{if .Asked}} open{{end}}><summary class="button">{{.Button}}{{if .Owner}} <span class="owner">owner</span>{{end}}</summary><div class="action-form">{{with or .Hint .Description}}<p class="desc">{{.}}</p>{{end}}{{template "form" .}}</div></details>{{end}}{{end}}
 
 {{/* period-page is the page of a period (a week, a month, a year) in its view: the prose above, and the fold that edits
      it. A period with no page shows the form that makes it (create-page, with the key as the title). It takes v (the
@@ -225,27 +225,54 @@
 {{/* menu-dialogs are the dialogs of the menu, one for each item: what the action does, its form and Close (Cancel for a
      danger action: the dialog is its confirm step). A form that the page's link asked for (?new=<action>) is open in the
      flow of the page, not modal. It takes the menu. */}}
-{{define "menu-dialogs"}}{{range .Items}}<dialog class="menu-dialog" id="{{.ID}}" closedby="any" aria-label="{{.Title}}"{{if .Open}} open{{end}}>
+{{define "menu-dialogs"}}{{range .Items}}{{template "item-dialog" .}}{{end}}{{end}}
+
+{{/* item-dialog is the dialog of one item (a formItem): a modal one that its button opens, or, when the page's link
+     asked for the form, an open one that is not modal. */}}
+{{define "item-dialog"}}<dialog class="menu-dialog" id="{{.ID}}" closedby="any" aria-label="{{.Title}}"{{if .Open}} open{{end}}>
 <h2>{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</h2>{{with .Note}}<p class="desc">{{.}}</p>{{end}}
 {{template "form" .Form}}
-<button type="button" class="button small quiet" commandfor="{{.ID}}" command="close">{{.Close}}</button></dialog>{{end}}{{end}}
+<button type="button" class="button small quiet" commandfor="{{.ID}}" command="close">{{.Close}}</button></dialog>{{end}}
 
-{{/* creates are the `create` actions of the entity that no template places, each a button of the head that opens its form.
-     The head calls this one template, so the way a create is drawn changes in one place. */}}
-{{define "creates"}}{{range .Creates}}{{template "boxed" .}}{{end}}{{end}}
+{{/* page-head is the head of every view but the day (docs/plans/159-the-class-of-an-action.md): the kind, the title with
+     the pencil of a title edit, the meta line, the categories, the create buttons and the ⋯ menu. It takes v (the view),
+     title, and optionally kind, categories (draw the categories of the page) and the names of the templates that a
+     view adds: above (before the kind), sub (under the categories) and tools (among the tools, after the create
+     buttons). A template of those names gets the arguments of this call, so it reads v and any more that the caller
+     gave. The pencil and the create buttons open a popover; a form that the page's link asked for (?new=<name>) is an
+     open dialog under the head, in the place of its popover. */}}
+{{define "page-head"}}{{$v := .v}}{{$pencil := $v.Pencil}}{{$creates := $v.Creates}}{{$meta := $v.Meta}}
+<header class="page-head"><div class="what">
+{{with .above}}{{slot . $}}{{end}}
+{{with .kind}}<span class="kind">{{.}}</span>{{end}}
+<div class="title-line"><h1>{{.title}}</h1>{{with $pencil}}<span class="pop"><button type="button" class="button pencil" aria-label="{{.Title}}" title="{{.Title}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M11 1.5l3.5 3.5-8.5 8.5-4.5 1 1-4.5z"/></svg></button>{{template "head-popover" .}}</span>{{end}}</div>
+{{with $meta}}<p class="meta-line">{{range $i, $m := .}}{{if $i}} · {{end}}{{$m}}{{end}}</p>{{end}}
+{{if .categories}}{{template "categories" (dict "v" $v "back" $v.Here)}}{{end}}
+{{with .sub}}{{slot . $}}{{end}}
+</div>
+<div class="tools">{{range $creates}}<span class="pop"><button type="button" class="button{{if .Primary}} primary{{end}}" {{if .Open}}commandfor="{{.ID}}" command="close"{{else}}popovertarget="{{.ID}}"{{end}}>{{if .Primary}}{{icon "new"}}{{end}}{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</button>{{template "head-popover" .}}</span>{{end}}
+{{with .tools}}{{slot . $}}{{end}}{{template "menu" $v}}</div></header>
+{{with $pencil}}{{if .Open}}{{template "item-dialog" .}}{{end}}{{end}}{{range $creates}}{{if .Open}}{{template "item-dialog" .}}{{end}}{{end}}{{end}}
 
-{{/* generic is the view of any class without a template of its own: the whole entity. Its actions are drawn by their
-     class, never by name: the quick-add line, the create buttons and the ⋯ menu. It reads the shape of the entity only,
+{{/* head-popover is the popover of the pencil or of a create button, anchored under its button: what the action does,
+     its form and Close. Nothing when the form is open as a dialog. It takes the item. */}}
+{{define "head-popover"}}{{if not .Open}}<div class="head-pop" id="{{.ID}}" popover aria-label="{{.Title}}">
+<h2>{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</h2>{{with .Note}}<p class="desc">{{.}}</p>{{end}}
+{{template "form" .Form}}
+<button type="button" class="button small quiet" popovertarget="{{.ID}}" popovertargetaction="hide">{{.Close}}</button></div>{{end}}{{end}}
+
+{{/* generic is the view of any class without a template of its own: the whole entity. Its scalar properties are the meta
+     line of its head; the objects and lists are a panel. Its actions are drawn by their class, never by name: the
+     quick-add line, the create buttons, the pencil and the ⋯ menu. It reads the shape of the entity only,
      never a class or the name of an app. The three rules (the quick-add, the rows, the two panes) are in
      extensions/README.md, "How the browser draws a page of an app". */}}
 {{define "generic"}}{{template "head" .}}
-<header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1></div>
-<div class="tools">{{template "creates" .}}{{template "menu" .}}</div></header>
+{{template "page-head" (dict "v" . "kind" (rel .Class) "title" .Title)}}
 <div class="panes">
 {{with .SideLinks}}<nav class="side" aria-label="Links"><ul>{{range .}}<li><a href="{{.Href}}" rel="{{rel .Rel}}"{{if $.IsHere .Href}} aria-current="page"{{end}}>{{or .Title .Href}}</a></li>{{end}}</ul></nav>{{end}}
 <div class="pane-main">
 {{with .QuickAdd}}{{template "form" (form ($.Action .Name) "more" "*" "class" "quick-add" "back" $.ReturnHere)}}{{end}}
-{{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
+{{with .Structured}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
 {{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}{{template "row" (dict "v" $ "l" .)}}{{end}}</ul></section>{{end}}
 </div></div>
 {{template "foot" .}}{{end}}

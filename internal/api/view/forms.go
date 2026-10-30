@@ -54,7 +54,7 @@ func (v *view) shown(a siren.Action) *shownAction {
 // value but not shown, "outside" lists fields that controls outside the form send (the boxes of a list join the form
 // by its id) and that the form does not draw, "autofocus" names the field the browser starts in ("" for none),
 // "more" lists optional fields folded under "More fields" (docs/plans/095-the-leaf-and-its-margin.md; "*" folds every
-// field that the action does not require), "group" names the exclusive group of a boxed form (the browser keeps one form of a name open), "send" (any word) marks the text areas as the ones whose Enter key sends (enterkeyhint), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
+// field that the action does not require), "group" names the exclusive group of a boxed form (the browser keeps one form of a name open), "send" (any word) marks the text areas as the ones whose Enter key sends (enterkeyhint), "back" is the
 // page the browser returns to after the write (no field of the action: the server reads it, see backOf), "label"
 // ("field=words") gives a field a title in this form only (the score form calls its unit Range), "key"
 // ("field=letter") gives a field its access key (the words of an empty field are its Placeholder in the catalog; Prompt
@@ -75,7 +75,6 @@ type formView struct {
 	Opens         bool          // the form names the path fields of a templated action, and opens its form (opener)
 	Group         string        // boxed gives its <details> this name: of the forms with one name, one is open
 	Send          bool          // the Enter key of a text area sends the form (the chat)
-	Lead          bool          // boxed draws the button as the primary one with the new icon
 	Primary       bool          // the button is the primary one: a form with fields to fill
 	Aria          string        // the aria-label of the button, for a button that is a glyph (the ×)
 	Also          *formView     // a second action that the form sends to, by a button of its own (Or)
@@ -212,7 +211,6 @@ type formOptions struct {
 	plain                   bool // "plain" was given: the form offers no Preview
 	group                   string
 	send                    bool // "send" was given
-	lead                    bool // "lead" was given: boxed draws the button as the first action of the page
 	hasButton               bool // "button" was given, also as ""
 	autofocus               string
 	hasAutofocus            bool // "autofocus" was given, also as "": the options name the field of the focus, or none
@@ -251,8 +249,6 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			o.autocomplete = v
 		case "aria":
 			o.aria = v
-		case "lead":
-			o.lead = v != ""
 		case "group":
 			o.group = v
 		case "send":
@@ -273,6 +269,8 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 			if field, words, ok := strings.Cut(v, "="); ok {
 				perField[name][field] = words
 			}
+		case "lead":
+			return formOptions{}, fmt.Errorf("lead is no option: the first create action of a head is its primary button")
 		case "placeholder":
 			return formOptions{}, fmt.Errorf("placeholder is no option: the words of an empty field are its Placeholder in the catalog, or Prompt for one form")
 		case "options":
@@ -308,7 +306,7 @@ func formOf(x any, opts ...string) (*formView, error) {
 	if err != nil {
 		return nil, fmt.Errorf("form %s: %w", a.Name, err)
 	}
-	f := &formView{Action: a, Button: a.Title, Class: o.class, Autocomplete: o.autocomplete, Aria: o.aria, ID: o.id, Back: o.back, NoPreview: o.plain, Group: o.group, Send: o.send, Lead: o.lead, Focus: o.autofocus,
+	f := &formView{Action: a, Button: a.Title, Class: o.class, Autocomplete: o.autocomplete, Aria: o.aria, ID: o.id, Back: o.back, NoPreview: o.plain, Group: o.group, Send: o.send, Focus: o.autofocus,
 		keys: o.keys, patterns: o.patterns}
 	if o.hasButton {
 		f.Button = o.button

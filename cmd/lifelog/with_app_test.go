@@ -265,7 +265,7 @@ func TestTheBrowserDrawsTheRowsOfAnApp(t *testing.T) {
 	if n := strings.Count(page, `action="/with/testapp/items"`); n != 1 {
 		t.Errorf("add-item is drawn %d times, want once (the quick-add, not Actions again)", n)
 	}
-	if strings.Index(page, `class="quick-add"`) > strings.Index(page, `aria-label="Properties"`) {
+	if strings.Index(page, `class="quick-add"`) > strings.Index(page, `<li class="row">`) {
 		t.Error("the quick-add is not at the top of the main column")
 	}
 

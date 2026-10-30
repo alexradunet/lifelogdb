@@ -38,7 +38,7 @@ func TestAPageOfAnAppDrawsEachActionOnceByItsClass(t *testing.T) {
 	if !(strings.Index(list, "tweak") < strings.Index(list, "plain") && strings.Index(list, "plain") < strings.Index(list, "flip") && strings.Index(list, "flip") < strings.Index(list, ">drop<")) {
 		t.Errorf("the menu is not edit, the others, danger:\n%.600s", list)
 	}
-	if strings.Contains(page, `commandfor="do-quick"`) || strings.Contains(page, `commandfor="do-bulk"`) || !strings.Contains(page, `<details class="action"`) {
+	if strings.Contains(page, `commandfor="do-quick"`) || strings.Contains(page, `commandfor="do-bulk"`) || !strings.Contains(page, `popovertarget="new-bulk"`) || !strings.Contains(page, `id="new-bulk" popover`) {
 		t.Error("a create action is in the menu, or the second create has no button")
 	}
 }

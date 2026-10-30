@@ -59,7 +59,7 @@ func TestTheQuickAddNeedsTheClassCreateAndExactlyOneRequiredTextField(t *testing
 		if strings.Contains(page, `class="quick-add"`) {
 			t.Errorf("%s: drawn as a quick-add", a.Name)
 		}
-		if !strings.Contains(page, `commandfor="do-`+a.Name+`"`) && !strings.Contains(page, `<details class="action"`) {
+		if !strings.Contains(page, `commandfor="do-`+a.Name+`"`) && !strings.Contains(page, `id="new-`+a.Name+`" popover`) {
 			t.Errorf("%s: drawn neither in the menu nor as a create button", a.Name)
 		}
 	}

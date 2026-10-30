@@ -190,6 +190,10 @@ flowchart LR
 3. **Two panes.** On a wide screen the links of the entity, except `self`, are a side column beside the main column.
    The link whose path is the path of the page is marked current. On a narrow screen they are a row under the title.
 
+The scalar properties of the entity itself are one quiet line under its title, each as `name: value`; an object or a
+list stays a panel. A `create` action that is not the quick-add is a button of the head, an `edit` action whose one
+field is `title` is a pencil beside the title, and any other action is in the ⋯ menu.
+
 ### What the server does with a request
 
 The route is `/with/NAME` and everything under it, for every method. The path after `/with/NAME` is the `href` of the

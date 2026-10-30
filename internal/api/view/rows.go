@@ -77,14 +77,20 @@ func roundAction(a siren.Action) bool {
 	return slices.Contains(a.Class, "toggle") && len(a.Fields) == 0
 }
 
-// rowChips are the scalar properties of an embedded link as "name: value", in the order of the names: a string that
-// is not empty, a number, a true boolean. A list, an object, a null, an empty string and false make no chip.
+// rowChips are the scalar properties of an embedded link as "name: value" (scalarItems).
 func rowChips(l siren.Link) []string {
 	shape, err := jsonShape(l.Properties)
 	props, _ := shape.(map[string]any)
-	if err != nil || len(props) == 0 {
+	if err != nil {
 		return nil
 	}
+	return scalarItems(props)
+}
+
+// scalarItems are the scalar properties as "name: value", in the order of the names: a string that is not empty, a
+// number, a true boolean. A list, an object, a null, an empty string and false make no item. A row draws them as chips
+// and the head of a page as its meta line.
+func scalarItems(props map[string]any) []string {
 	names := make([]string, 0, len(props))
 	for name := range props {
 		names = append(names, name)

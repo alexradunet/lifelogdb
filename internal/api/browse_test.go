@@ -511,7 +511,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 	ids := browseFixture(t, s)
 	family := browse(t, h, "/browse?in=Family")
 	for _, want := range []string{
-		`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Family</span></nav><h1>Family</h1><p class="sub"><a href="/pages/` + fmt.Sprint(ids["Family"]) + `">Open its page</a>`,
+		`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Family</span></nav>`, `<h1>Family</h1>`, `<p class="sub"><a href="/pages/` + fmt.Sprint(ids["Family"]) + `">Open its page</a>`,
 		`<details class="browse-tree panel"><summary>Categories <span class="meta">Family</span></summary><nav aria-label="Categories">`,
 		`<a class="entry" href="/browse"><span class="first">Everything</span>`,
 		// The tree folds (docs/plans/118-fold-and-find.md, rule 1): Cousins is in the fold of Family, open, since the
@@ -534,7 +534,7 @@ func TestTheBrowsePageDrawsTheTreeTheChipsAndTheRows(t *testing.T) {
 		!strings.Contains(family, `<button form="pick" name="from" value="Family" formnovalidate>Remove from Family</button>`) || strings.Contains(family, `>Delete<`) {
 		t.Error("All in a category does not draw the pick bar with Move to and Remove from Family, and no Delete")
 	}
-	if cousins := browse(t, h, "/browse?in=Cousins&kind=page"); !strings.Contains(cousins, `<nav class="crumbs" aria-label="Where"><a href="/browse?kind=page">Browse</a><a href="/browse?in=Family&amp;kind=page">Family</a><span aria-current="page">Cousins</span></nav><h1>Cousins</h1>`) ||
+	if cousins := browse(t, h, "/browse?in=Cousins&kind=page"); !strings.Contains(cousins, `<nav class="crumbs" aria-label="Where"><a href="/browse?kind=page">Browse</a><a href="/browse?in=Family&amp;kind=page">Family</a><span aria-current="page">Cousins</span></nav>`) || !strings.Contains(cousins, `<h1>Cousins</h1>`) ||
 		!strings.Contains(cousins, `<a href="/browse?in=Cousins&amp;kind=page" aria-current="page">Pages <small>1</small></a>`) {
 		t.Errorf("/browse?in=Cousins&kind=page lacks its path or its chip")
 	} else if !strings.Contains(cousins, `<details open><summary><span class="sr">Categories in Family</span>`) {
@@ -701,7 +701,7 @@ func TestBrowseWithNoCategory(t *testing.T) {
 func TestTheGhostPagesSayWhatTheyAre(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	body := browse(t, h, "/browse?ghosts=1")
-	for _, want := range []string{`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Ghost pages</span></nav><h1>Ghost pages</h1><p class="sub"><span>Empty pages, older than 30 days, that nothing links to or from.</span></p>`,
+	for _, want := range []string{`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Ghost pages</span></nav>`, `<h1>Ghost pages</h1>`, `<p class="sub"><span>Empty pages, older than 30 days, that nothing links to or from.</span></p>`,
 		`<p class="empty">No ghost page: every page has text or a link.</p>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the ghost pages lack %s", want)
@@ -806,7 +806,7 @@ func TestBrowseMovesAndFilesFromTheList(t *testing.T) {
 		}
 	}
 	unfiled := browse(t, h, "/browse?unfiled=1")
-	for _, want := range []string{`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Not filed</span></nav><h1>Not filed</h1>`,
+	for _, want := range []string{`<nav class="crumbs" aria-label="Where"><a href="/browse">Browse</a><span aria-current="page">Not filed</span></nav>`, `<h1>Not filed</h1>`,
 		`<li class="tree-foot"><a href="/browse?kind=page&amp;new=file-pages">New category</a></li>`} {
 		if !strings.Contains(unfiled, want) {
 			t.Errorf("/browse?unfiled=1 lacks %s", want)

@@ -20,10 +20,10 @@ func TestTheMenuHoldsTheActionsNoTemplatePlaces(t *testing.T) {
 	for _, want := range []string{
 		`<button type="button" class="button menu-button" popovertarget="menu" aria-label="More actions" aria-haspopup="menu">`,
 		`<div class="menu-group" role="group" aria-label="Edit"><span class="menu-label">Edit</span>`,
-		`<button type="button" class="menu-item" commandfor="do-rename" command="show-modal">Rename</button>`,
-		`<dialog class="menu-dialog" id="do-rename" closedby="any" aria-label="Rename">`,
+		`<button type="button" class="menu-item" commandfor="do-promote" command="show-modal">Make it a person</button>`,
+		`<dialog class="menu-dialog" id="do-promote" closedby="any" aria-label="Make it a person">`,
 		`<button type="button" class="menu-item" commandfor="do-tombstone-pages" command="show-modal">Delete</button>`,
-		`commandfor="do-rename" command="close">Close</button>`,
+		`commandfor="do-promote" command="close">Close</button>`,
 		`commandfor="do-tombstone-pages" command="close">Cancel</button>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -37,7 +37,7 @@ func TestTheMenuHoldsTheActionsNoTemplatePlaces(t *testing.T) {
 	list := body[strings.Index(body, `<div class="menu-list"`):]
 	list = list[:strings.Index(list, `<dialog`)]
 	if danger := strings.Index(list, `class="menu-group danger"`); danger < strings.Index(list, `aria-label="Edit"`) ||
-		strings.Count(list, `class="menu-group`) != 2 || strings.Index(list, "Rename") > danger || strings.Index(list, ">Delete<") < danger {
+		strings.Count(list, `class="menu-group`) != 2 || strings.Index(list, "Make it a person") > danger || strings.Index(list, ">Delete<") < danger {
 		t.Errorf("Delete is not alone in the last group of the menu:\n%s", list)
 	}
 	// The delete dialog is the confirm step: its button is the danger one, and the page returns to itself.
@@ -81,12 +81,12 @@ func TestAnAskedFormOfTheMenuIsAnOpenDialog(t *testing.T) {
 	essay := apitest.Must(t)(c.Do(t.Context(), apitest.Action(t, root, "create-page"), map[string]string{"title": "Essay"}))
 	self := apitest.Href(essay, "self")
 	body := browse(t, h, self+"?new=rename&title="+url.QueryEscape("A better title"))
-	dialog := regexp.MustCompile(`(?s)<dialog class="menu-dialog" id="do-rename"[^>]*>.*?</dialog>`).FindString(body)
+	dialog := regexp.MustCompile(`(?s)<dialog class="menu-dialog" id="pencil"[^>]*>.*?</dialog>`).FindString(body)
 	if !strings.Contains(dialog, ` aria-label="Rename" open>`) || !strings.Contains(dialog, `name="title" value="A better title"`) ||
 		!strings.Contains(dialog, `command="close">Close</button>`) {
 		t.Errorf("the asked dialog is not open and filled:\n%s", dialog)
 	}
-	if other := browse(t, h, self); strings.Contains(other, `id="do-rename" closedby="any" aria-label="Rename" open`) {
+	if other := browse(t, h, self); strings.Contains(other, `id="pencil" closedby="any" aria-label="Rename" open`) {
 		t.Error("the dialog of Rename is open without a link that asked for it")
 	}
 }

@@ -78,8 +78,8 @@ func TestAnOwnerActionCarriesTheOwnerMark(t *testing.T) {
 	if want := `<summary class="button">Take a snapshot <span class="owner">owner</span></summary>`; !strings.Contains(body, want) {
 		t.Errorf("/actions lacks %s", want)
 	}
-	if m := browse(t, h, "/metrics"); !strings.Contains(m, `<summary class="button primary">`) || !strings.Contains(m, `New metric <span class="owner">owner</span></summary>`) {
-		t.Errorf("/metrics lacks the New metric summary with the owner mark")
+	if m := browse(t, h, "/metrics"); !regexp.MustCompile(`class="button primary" popovertarget="new-register-metric">[^/]*</span>New metric <span class="owner">owner</span></button>`).MatchString(m) {
+		t.Errorf("/metrics lacks the New metric button with the owner mark")
 	}
 	if strings.Contains(body, `New page <span class="owner">`) {
 		t.Error("an action that is not the owner's alone carries the owner mark")

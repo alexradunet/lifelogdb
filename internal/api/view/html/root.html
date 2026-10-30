@@ -3,8 +3,7 @@
      Files), each heading with a link to its chip; with a kind, one list, paged. Each hit has its cover, or the
      icon of its kind. */}}
 {{define "search"}}{{template "head" .}}
-<header class="page-head"><div class="what"><h1>Search</h1></div>
-<div class="tools">{{template "menu" .}}</div></header>
+{{template "page-head" (dict "v" . "title" "Search")}}
 <search>{{template "form" (form (.Action "search") "class" "inline" "autofocus" "q" "label" "q=Words" "outside" "order" "hide" "kind" "more" "limit,offset")}}</search>
 <details class="more-fields"><summary>How to search</summary>
 <ul class="plain"><li>Words find the pages that have all of them.</li><li>"A phrase" finds the words in that order.</li><li><code>word*</code> finds the words that start with it.</li><li><code>a OR b</code> finds either.</li></ul>

@@ -101,8 +101,9 @@ func (h *server) metrics(r *http.Request) (*siren.Entity, error) {
 	e := &siren.Entity{Class: []string{"metrics"}, Title: "Metrics",
 		Properties: map[string]any{"metrics": rows, "groups": groupMetrics(ms, cs), "categories": cs, "today": today},
 		Links:      []siren.Link{link("self", "/metrics", "Metrics"), link("index", "/", "Home")},
-		Actions: []siren.Action{withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
-			withOptions(action("file-pages", nil, nil), "category", titles), action("register-metric", nil, nil)}}
+		Actions: []siren.Action{action("register-metric", nil, nil), // first: the head draws the first create action as its primary button
+			withOptions(action("record", nil, map[string]any{"day": today}), "metric", names),
+			withOptions(action("file-pages", nil, nil), "category", titles)}}
 	for _, m := range ms {
 		e.Entities = append(e.Entities, link("item", siren.MetricHref(m.Name), m.Name))
 	}

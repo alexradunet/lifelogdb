@@ -14,7 +14,7 @@ func TestAPageUnderWithIsDrawnByGeneric(t *testing.T) {
 	e := &siren.Entity{Class: []string{"day"}, Title: "Their day", Properties: map[string]any{"count": 3}}
 	for path, wantGeneric := range map[string]bool{"/with/app/": true, "/with/app/x/1": true, "/days/2026-09-01": false} {
 		b, err := Draw(e, Facts{URL: &url.URL{Path: path}})
-		generic := err == nil && strings.Contains(string(b), `aria-label="Properties"`)
+		generic := err == nil && strings.Contains(string(b), `<p class="meta-line">count: 3</p>`) // the scalar properties of the generic view
 		if wantGeneric && !generic {
 			t.Errorf("%s: not drawn by generic (err %v)", path, err)
 		}

@@ -2,15 +2,7 @@
      with its first line, its cover and its mood; today is framed; each day opens its day view, which holds the rest. */}}
 {{define "month"}}{{template "head" .}}
 {{$m := .Props}}
-<header class="page-head"><div class="what"><h1>{{.Title}}</h1>
-{{template "zoom" (dict "v" . "current" "month")}}</div>
-<div class="tools">
-{{- with .Link "prev"}}
-{{template "step" (dict "href" . "rel" "prev" "label" (printf "Previous month, %s" ($.LinkTitle "prev")) "text" ($.LinkTitle "prev"))}}{{end}}
-{{- with .Link "next"}}
-{{template "step" (dict "href" . "rel" "next" "label" (printf "Next month, %s" ($.LinkTitle "next")) "text" ($.LinkTitle "next"))}}{{end}}
-{{template "menu" .}}
-</div></header>
+{{template "page-head" (dict "v" . "title" .Title "sub" "zoom" "current" "month" "tools" "period-steps" "name" "month")}}
 {{template "period-page" (dict "v" . "name" "month")}}
 <div class="scroll"><table class="calendar">
 {{template "weekdays" false}}

@@ -17,7 +17,7 @@
    These two lists stay flat: a rule nested under a list takes the whole list's specificity. */
 .rail,.rail>nav,.rail-more:popover-open,.new-menu:popover-open,.chat:popover-open,.scroll:has(>table.calendar){--text:var(--rail-ink); --text-strong:var(--rail-accent); --text-muted:var(--rail-ink); --text-link:var(--rail-accent); --rule:var(--outline);
   color:var(--text); background-color:var(--rail); background-image:url(/assets/wood.png),var(--grain-ground); background-size:252px 480px,4px 4px; image-rendering:pixelated}
-.sheet,.panel,.leaf,.month-box,.turn-card,.thinking,.more-body,.menu-list,dialog.menu-dialog,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,.day-card,
+.sheet,.panel,.leaf,.month-box,.turn-card,.thinking,.more-body,.menu-list,.head-pop,dialog.menu-dialog,.reading-tile,.alert,.toast,.action-form,dialog.palette,table.calendar td,.margin ul.plain,.margin .about,.day-card,
 main>.scroll:not(:has(>table.calendar)),.group>.scroll{--text:var(--ink); --text-strong:var(--ink); --text-muted:var(--muted); --text-link:var(--link); --rule:var(--edge);
   color:var(--text); background-color:var(--surface); background-image:var(--grain-ink); background-size:4px 4px; border:2px solid var(--edge)}
 
@@ -278,10 +278,10 @@ dialog.menu-dialog{inline-size:min(34rem, calc(100vw - 2rem)); margin:12vh auto 
   & .desc{margin:0}
   &[open]:not(:modal){position:absolute; z-index:10; inset-block-start:100%; inset-inline-end:0; margin:var(--space-2) 0 0}}
 @media (max-width:899px){
-  .menu-list:popover-open{position-area:none; inset:auto 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; max-block-size:70dvh; margin:0; padding-block-end:var(--space-4)}
+  :is(.menu-list,.head-pop):popover-open{position-area:none; inset:auto 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; max-block-size:70dvh; margin:0; padding-block-end:var(--space-4)}
   dialog.menu-dialog{margin:var(--space-2) auto auto}}
 @media (max-width:899px) and (prefers-reduced-motion:no-preference){
-  .menu-list{transition:opacity .16s, translate .16s, overlay .16s allow-discrete, display .16s allow-discrete;
+  :is(.menu-list,.head-pop){transition:opacity .16s, translate .16s, overlay .16s allow-discrete, display .16s allow-discrete;
     &:popover-open{translate:0 0; @starting-style{opacity:0; translate:0 100%}}}}
 .thread{display:flex; flex-direction:column-reverse; min-block-size:0; overflow-y:auto; padding:var(--space-4) calc(var(--space-4) + env(safe-area-inset-right, 0px)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-left, 0px))}
 .composer{padding:var(--space-3) calc(var(--space-4) + env(safe-area-inset-right, 0px)) max(var(--space-3), env(safe-area-inset-bottom, 0px)) calc(var(--space-6) + env(safe-area-inset-left, 0px)); border-block-start:2px solid var(--line);
@@ -380,6 +380,7 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
 /* The page header: the date line, the title, and the tools on the right. */
 .page-head{display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px;
   & .what{display:flex; flex-direction:column; gap:2px; min-inline-size:0}
+  & .title-line{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); min-inline-size:0}
   & h1{overflow-wrap:anywhere}
   & .what h1{padding-block-end:6px; background:linear-gradient(var(--primary),var(--primary)) 0 100%/56px 4px no-repeat} /* a short ember underline */
   & .tools{display:flex; flex-wrap:wrap; align-items:flex-start; gap:var(--space-2)}
@@ -387,6 +388,26 @@ table.month{border-collapse:separate; border-spacing:2px; table-layout:fixed; fo
 .mood{display:inline-block; font:500 15px/1 var(--mono); padding:5px 10px; border:1px solid var(--edge); background:var(--surface-deep); color:var(--ink);
   vertical-align:middle; white-space:nowrap}
 small .mood{font-size:12px; padding:2px 8px}
+
+/* The meta line of the head (docs/plans/159-the-class-of-an-action.md): the facts of the page, quiet, under its title. */
+.meta-line{margin:0; font:400 13px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--text-muted); overflow-wrap:anywhere}
+
+/* The pencil beside the title and the create buttons of the head: each opens a popover that hangs from its button, as the
+   menu does. A button and its popover are one .pop, the popover after the button, so the one name --pop is the anchor
+   of each popover (the last one before it in the tree). An engine without anchor positioning keeps the fixed box. On a
+   phone the popover is a sheet from the bottom, as the menu is (above). */
+.pop{position:relative; display:inline-flex}
+.pop>.button{anchor-name:--pop}
+.button.pencil{inline-size:var(--control-small); padding:0; color:var(--text-link)}
+.head-pop:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-4);
+  inline-size:min(28rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; overscroll-behavior:contain; box-shadow:var(--parch-bevel),var(--shadow-float);
+  & h2{font-size:18px; line-height:24px}
+  & .desc{margin:0}}
+@supports (position-area: block-end){
+  .head-pop:popover-open{position-anchor:--pop; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline; inset:auto; margin:var(--space-1) 0 0}
+  .tools .head-pop:popover-open{position-area:block-end span-inline-start}}
+/* A form that the page's link asked for is an open dialog under the head, in the flow of the page. */
+.page-head~dialog.menu-dialog[open]:not(:modal){position:static; margin:var(--space-3) 0 0}
 
 /* A line of the facts about the page under its title. */
 .sub{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; font-size:14px; line-height:20px; color:var(--text-muted)}
@@ -1047,7 +1068,7 @@ details.metric-sub>summary>h3::after{content:none} /* a small group has no stitc
 
 /* The tools of a head in a narrow column are the small buttons, so a row of three fits on a phone's line
    (docs/plans/119-the-finish.md, rule 6). */
-@container column (max-width:607px){.page-head .tools :is(a.button,details.action>summary.button):not(.step){block-size:var(--control-small); min-block-size:0; padding:0 var(--space-3); font-size:13px}}
+@container column (max-width:607px){.page-head .tools :is(a.button,details.action>summary.button,.pop>.button):not(.step){block-size:var(--control-small); min-block-size:0; padding:0 var(--space-3); font-size:13px}}
 
 /* The generic view of an entity (extensions/README.md, "How the browser draws a page of an app"). Two panes: the links
    of the entity are a row under the title, and on a wide column a side column beside the main one. */

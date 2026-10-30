@@ -231,7 +231,7 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 	for _, kind := range []struct{ title, href, action, post string }{ // post: the address the action's form posts to
 		{"Page", "/browse?kind=page&new=create-page", "create-page", "/pages"},
 		{"Person", "/browse?kind=person&new=create-person", "create-person", "/people"},
-		{"Metric", "/metrics?new=register-metric", "", ""},
+		{"Metric", "/metrics?new=register-metric", "register-metric", "/metrics"},
 		{"Reading", "/?new=record#record", "record", "/measurements"},
 		{"File", "/browse?kind=media&new=add-file", "add-file", "/files"},
 	} {
@@ -244,13 +244,14 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 		page := browse(t, h, href)
 		switch {
 		case kind.action != "":
-			open := regexp.MustCompile(`<details class="action" open><summary class="button">[^<]*(<span class="owner">owner</span>)?</summary><div class="action-form">(<p class="desc">[^<]*</p>)?<form method="POST" action="` + kind.post + `"`)
+			// An asked form of a head is an open dialog, not a modal one, in the place of its popover. The day draws a
+			// reading in a place of its own: a form that is open.
+			open := regexp.MustCompile(`(?s)<dialog class="menu-dialog" id="new-` + kind.action + `" closedby="any" aria-label="[^"]*" open>.*?<form method="POST" action="` + kind.post + `"`)
+			if kind.action == "record" {
+				open = regexp.MustCompile(`<details class="action" open><summary class="button">[^<]*(<span class="owner">owner</span>)?</summary><div class="action-form">(<p class="desc">[^<]*</p>)?<form method="POST" action="` + kind.post + `"`)
+			}
 			if !open.MatchString(page) {
 				t.Errorf("%s does not open the form of %s", kind.href, kind.action)
-			}
-		case kind.title == "Metric":
-			if !strings.Contains(page, `<details class="action" open><summary class="button primary">`) || !strings.Contains(page, `New metric <span class="owner">owner</span></summary>`) {
-				t.Errorf("%s does not open New metric", kind.href)
 			}
 		}
 	}
@@ -262,14 +263,14 @@ func TestEveryKindOfTheNewMenuOpensItsForm(t *testing.T) {
 func TestALinkOpensAFormAndFillsItsFields(t *testing.T) {
 	_, h, _ := apitest.FreshOn(t, "cli", fixedToday)
 	people := browse(t, h, "/browse?kind=person&new=create-person&title=Ana+Popescu&name=Ana")
-	form := people[strings.Index(people, `<details class="action" open>`):]
-	form = form[:strings.Index(form, "</details>")]
+	form := people[strings.Index(people, `<dialog class="menu-dialog" id="new-create-person"`):]
+	form = form[:strings.Index(form, "</dialog>")]
 	for _, want := range []string{`<form method="POST" action="/people"`, `name="title" value="Ana Popescu"`, `name="name" value="Ana"`, `autofocus`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the asked form lacks %s:\n%s", want, form)
 		}
 	}
-	if strings.Count(people, "<details class=\"action\" open>") != 1 {
+	if strings.Count(people, `" open>`) != 1 {
 		t.Error("more than the asked form is open")
 	}
 

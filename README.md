@@ -438,8 +438,11 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
 - **The ⋯ menu** ([plan 159](docs/plans/159-the-class-of-an-action.md)). A page draws the actions that no template
   places by name in one ⋯ menu in its head, by the `class` of the action: the `edit` actions first, then the others,
   then the `danger` actions last and apart. Each item opens a dialog with the action's form, with no script; a page
-  with no such action draws no button. A `create` action stays a button of the head. `?new=NAME` opens the form as an
-  open dialog.
+  with no such action draws no button. The head is one template for every view but the day. Under the title it has one
+  quiet line, the meta line: a person's name and dates, a file's type and short SHA-256, then when the page was
+  created; on a page of an app, its scalar properties. A title edit (`rename`) is the pencil beside the title, and each
+  `create` action is a button of the head (the first is the primary one); the pencil and each button open a popover
+  anchored under them, with the form in it. `?new=NAME` opens any of these forms as an open dialog.
 - **Fold and find** ([plan 118](docs/plans/118-fold-and-find.md); the owner's choice, 2026-10-15). In the browser
   only, and with no script, Browse and the Metrics board fold; the JSON and the catalog do not change. The tree folds
   each category that has categories under it, open on the path to the current branch. A category is a row of the
@@ -518,10 +521,10 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 |---|---|---|---|---|
 | `capture` | `POST /days/{day}/capture` | `do capture`, `capture` | `capture` | a day: Add to the day |
 | `say` | `POST /days/{day}/say` | `do say` | none, the owner's | every page: the chat column; the rail: Chat |
-| `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page (a category page: New page here) |
+| `create-page` | `POST /pages` | `do create-page` | `create_page` | Browse, Pages: New page, a button in the head of the list (a category page: New page here) |
 | `save-body` | `POST /pages/{id}/body` | `do save-body` | `save_body` | a day or a page: Edit |
-| `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person |
-| `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file |
+| `create-person` | `POST /people` | `do create-person` | `create_person` | Browse, People: New person, a button in the head of the list |
+| `add-file` | `POST /files` | `do add-file`, `file` | `add_file` | Browse, Media: New file, a button in the head of the list |
 | `set-cover` | `POST /pages/{id}/cover` | `do set-cover`, `cover` | `set_cover` | the picker of a day or a page (`/pages/{id}/cover`) |
 | `promote` | `POST /pages/{id}/promote` | `do promote` | `promote` | the ⋯ menu of a page: Make it a person |
 | `edit-person` | `POST /pages/{id}/person` | `do edit-person` | `edit_person` | the ⋯ menu of a person: Edit name and dates |
@@ -532,8 +535,8 @@ table equal to the catalog; `TestParityOfTheSurfaces` runs the actions on each s
 | `record` | `POST /measurements` | `do record` | `record` | a day: Add a reading; a metric's readings: Add a reading |
 | `correct` | `POST /measurements/{id}/correct` | `do correct` | `correct` | a reading: Correct |
 | `retract` | `POST /measurements/{id}/retract` | `do retract` | `retract` | the ⋯ menu of a reading: Retract |
-| `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | the ⋯ menu of a page: Rename |
-| `register-metric` | `POST /metrics` | `do register-metric` | none, the owner's | Metrics: New metric |
+| `rename` | `POST /pages/{id}/rename` | `do rename`, `rename` | `rename` | the pencil beside the title of a page |
+| `register-metric` | `POST /metrics` | `do register-metric` | none, the owner's | Metrics: New metric, a button in the head of the board |
 | `settings` | `POST /settings` | `do settings` | none, the owner's | Settings |
 | `integrity-check` | `GET /integrity` | `do integrity-check` | none, the owner's | the sidebar: Integrity checks |
 | `search` | `GET /search` | `do search`, `search` | `search` | the sidebar: Search (the search dialog) |

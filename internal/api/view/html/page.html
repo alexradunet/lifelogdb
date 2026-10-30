@@ -9,15 +9,9 @@
      (docs/plans/144-one-view-for-a-metric.md). */}}
 {{define "page"}}{{template "head" .}}
 {{$p := .Props}}
-<header class="page-head"><div class="what">
-<span class="kind">{{if $p.is_day_page}}day page{{else if $p.period}}{{periodWords $p.period}}{{else}}{{$p.entity_type}}{{end}}{{if $p.deleted_at}}, deleted{{end}}</span>
-<h1>{{if $p.is_day_page}}{{$.Date .Title}}{{else}}{{.Title}}{{end}}</h1>
-{{if not $p.deleted_at}}{{template "categories" (dict "v" $ "back" $.Here)}}{{end}}
-{{if $p.is_day_page}}<p class="sub"><a href="{{.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
-{{with .Link "series"}}<p class="sub"><a href="{{.}}">Its readings</a></p>{{end}}
-{{with $.PeriodViews}}<p class="sub">{{range .}}<a href="{{.Href}}">{{.Title}}</a> {{end}}</p>{{end}}
-</div>
-<div class="tools">{{template "menu" .}}</div></header>
+{{$kind := $p.entity_type}}{{if $p.is_day_page}}{{$kind = "day page"}}{{else if $p.period}}{{$kind = periodWords $p.period}}{{end}}{{if $p.deleted_at}}{{$kind = print $kind ", deleted"}}{{end}}
+{{$title := .Title}}{{if $p.is_day_page}}{{$title = $.Date .Title}}{{end}}
+{{template "page-head" (dict "v" . "kind" $kind "title" $title "categories" (not $p.deleted_at) "sub" "page-sub")}}
 
 {{if $p.deleted_at}}<div class="alert" role="alert"><p><strong>Deleted {{$.When $p.deleted_at}}.</strong> Nothing is ever removed: restore it to bring it back.</p>
 {{template "form" (form (.Action "revive") "class" "tiny")}}</div>{{end}}
@@ -31,6 +25,12 @@
 </div>
 </div>
 {{template "foot" .}}{{end}}
+
+{{/* page-sub is the links under the head of a page: the day view of a day page, the readings of a metric's page, and the
+     views of a period's page. */}}
+{{define "page-sub"}}{{$v := .v}}{{$p := $v.Props}}{{if $p.is_day_page}}<p class="sub"><a href="{{$v.Link "day"}}">{{weekday $p.day}}: the day view</a></p>{{end}}
+{{with $v.Link "series"}}<p class="sub"><a href="{{.}}">Its readings</a></p>{{end}}
+{{with $v.PeriodViews}}<p class="sub">{{range .}}<a href="{{.Href}}">{{.Title}}</a> {{end}}</p>{{end}}{{end}}
 
 {{/* page-sheet is the sheet of a page: the picture of a file, the empty state, the editor, the body and Filed here. */}}
 {{define "page-sheet"}}{{$p := .Props}}
@@ -47,15 +47,9 @@
 </section>{{end}}
 {{end}}
 
-{{/* page-margin is the margin of a page: the cover, the facts, the typed links and the backlinks. The other actions of the page are in its ⋯ menu. */}}
-{{define "page-margin"}}{{$p := .Props}}
+{{/* page-margin is the margin of a page: the cover, the typed links and the backlinks. Its facts are the meta line of the head. The other actions of the page are in its ⋯ menu. */}}
+{{define "page-margin"}}
 {{template "cover" .}}
-<section class="group" aria-label="Facts"><h2>Facts</h2>
-<dl class="facts">
-{{with $p.person}}{{with .name}}<dt>name</dt><dd class="words">{{.}}</dd>{{end}}{{with .birth_day}}<dt>born</dt><dd>{{$.Date .}}</dd>{{end}}{{with .death_day}}<dt>died</dt><dd>{{$.Date .}}</dd>{{end}}{{end}}
-{{with $p.file}}<dt>type</dt><dd>{{.mime}}</dd><dt>SHA-256</dt><dd title="SHA-256 of the original">{{slice .sha256 0 12}}…</dd>{{end}}
-<dt>created</dt><dd>{{$.When $p.created_at}}</dd>
-</dl></section>
 
 {{template "links" .}}
 {{template "backlinks" .}}
@@ -96,9 +90,7 @@
 
 {{define "measurement"}}{{template "head" .}}
 {{$m := .Props}}
-<header class="page-head"><div class="what"><span class="kind">{{$m.metric}}, {{$.Date $m.day}}</span>
-<h1>{{if $m.retraction}}Retracted{{else}}{{num $m.value}}{{end}}</h1></div>
-<div class="tools">{{template "menu" .}}</div></header>
+{{template "page-head" (dict "v" . "kind" (print $m.metric ", " ($.Date $m.day)) "title" (or (and $m.retraction "Retracted") (num $m.value)))}}
 <div class="sheet list"><dl class="facts">
 <dt>metric</dt><dd><a href="{{.Link "series"}}">{{$m.metric}}</a></dd>
 <dt>day</dt><dd><a href="{{.Link "day"}}">{{$.Date $m.day}}</a></dd>

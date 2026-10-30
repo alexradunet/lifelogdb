@@ -7,13 +7,7 @@
 {{define "browse"}}{{template "head" .}}{{$p := .Props}}{{$c := $p.counts}}
 {{$where := "Everything"}}{{if $p.deleted}}{{$where = "Deleted"}}{{else if $p.ghosts}}{{$where = "Ghost pages"}}{{else if $p.unfiled}}{{$where = "Not filed"}}{{else if $p.in}}{{$where = crumbs $p.in.path}}{{end}}
 {{$heading := $where}}{{if eq $where "Everything"}}{{range .LinksOf "kind"}}{{if eq (index .Class 0) $p.kind}}{{$heading = .Title}}{{end}}{{end}}{{end}}{{with $p.in}}{{$heading = .title}}{{end}}
-<header class="page-head"><div class="what">{{with .Crumbs}}<nav class="crumbs" aria-label="Where"><a href="{{$.Link "everything"}}">Browse</a>{{range .}}{{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}<span aria-current="page">{{.Title}}</span>{{end}}{{end}}</nav>{{end}}<h1>{{$heading}}</h1><p class="sub">{{with $p.in}}<a href="/pages/{{num .id}}">Open its page</a>{{end}}{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if $p.deleted}}<span>Open one to restore it.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
-<div class="tools">
-{{template "creates" .}}
-{{with .Link "new-metric"}}<a class="button" href="{{.}}">New metric</a>{{end}}
-{{template "random" (dict "a" (.Action "random-page") "label" "A random one")}}
-{{template "menu" .}}
-</div></header>
+{{template "page-head" (dict "v" . "title" $heading "above" "browse-above" "sub" "browse-sub" "tools" "browse-tools")}}
 <div class="browse">
 <details class="browse-tree panel"><summary>Categories <span class="meta">{{$where}}</span></summary><nav aria-label="Categories">{{template "browse-tree" .}}</nav></details>
 <div class="browse-main">
@@ -53,6 +47,13 @@
 
 {{/* browse-row is a row of a Browse list that is not tiles: a face and the mentions for a person, a badge for a category or for the kind in All, the words of a document, the unit of a metric. It takes v
      (the view), r (the row) and pick (the pick bar's action, nil without one). */}}
+{{/* browse-above, browse-sub and browse-tools are the parts that Browse adds to its head: the crumbs, the notes under the
+     title, and New metric and A random one among the tools. */}}
+{{define "browse-above"}}{{with .v.Crumbs}}<nav class="crumbs" aria-label="Where"><a href="{{$.v.Link "everything"}}">Browse</a>{{range .}}{{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}<span aria-current="page">{{.Title}}</span>{{end}}{{end}}</nav>{{end}}{{end}}
+{{define "browse-sub"}}{{$v := .v}}{{$p := $v.Props}}<p class="sub">{{with $p.in}}<a href="/pages/{{num .id}}">Open its page</a>{{end}}{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if $p.deleted}}<span>Open one to restore it.</span>{{end}}{{with $p.media_counts}}<span>{{$v.MediaCount .image "picture" "pictures"}}, {{$v.MediaCount .video "video" "videos"}}, {{$v.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{$v.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p>{{end}}
+{{define "browse-tools"}}{{with .v.Link "new-metric"}}<a class="button" href="{{.}}">New metric</a>{{end}}
+{{template "random" (dict "a" (.v.Action "random-page") "label" "A random one")}}{{end}}
+
 {{define "browse-row"}}{{$v := .v}}{{$p := $v.Props}}{{$pick := .pick}}{{$file := .file}}{{with .r}}<li{{if $pick}} class="pick"{{end}}>{{if $pick}}{{template "pick-box" (dict "v" $v "id" .id "title" .title)}}{{end}}{{if eq .kind "person"}}{{if eq $p.kind "all"}}<a class="entry named{{if .picture}} covered{{end}}" href="/pages/{{num .id}}">{{template "cover-picture" .}}<span class="first">{{.title}}</span><span class="meta"><span class="badge">{{.kind}}</span>{{template "other-categories" (dict "v" $v "categories" .categories)}}</span></a>{{else}}<a class="entry named face" href="/pages/{{num .id}}">{{with .picture}}<img class="face-picture" src="{{.}}" alt="" loading="lazy">{{else}}<span class="face-picture" aria-hidden="true">{{icon "people"}}</span>{{end}}<span class="first">{{.title}}</span><span class="meta">{{$v.Mentions .mentions .last_day}}{{template "other-categories" (dict "v" $v "categories" .categories)}}</span></a>{{end}}
 {{else}}<a class="entry named{{if .picture}} covered{{end}}" href="/pages/{{num .id}}">{{template "cover-picture" .}}<span class="first">{{.title}}</span><span class="meta">{{if .category}}<span class="badge category">category</span>{{else if eq $p.kind "all"}}<span class="badge">{{.kind}}</span>{{else if eq .kind "document"}}{{$v.FileWords .file_kind .mime .day}}{{else if eq .kind "metric"}}{{with .unit}}{{unitWords .}}{{else}}a count{{end}}{{end}}{{template "other-categories" (dict "v" $v "categories" .categories)}}</span></a>{{end}}{{if $file}}<a class="row-move" href="{{$v.MoveHref .id}}">Move</a>{{end}}</li>{{end}}{{end}}
 

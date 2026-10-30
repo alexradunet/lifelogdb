@@ -434,13 +434,13 @@ func TestTheMetricsPageMakesAMetric(t *testing.T) {
 	if !strings.Contains(page, `<form method="POST" action="/metrics"`) || strings.Contains(page, "new-kind") || strings.Contains(page, "New category") {
 		t.Errorf("/metrics does not draw one New metric form, or draws the kinds or New category")
 	}
-	if !strings.Contains(page, `<summary class="button primary">`) || !strings.Contains(page, `New metric <span class="owner">owner</span></summary>`) {
-		t.Error("/metrics does not draw New metric as the primary button")
+	if !regexp.MustCompile(`class="button primary" popovertarget="new-register-metric">[^/]*</span>New metric <span class="owner">owner</span></button>`).MatchString(page) || !strings.Contains(page, `id="new-register-metric" popover`) {
+		t.Error("/metrics does not draw New metric as the primary button with its popover")
 	}
 	if home := browse(t, h, "/days/"+fixedToday); strings.Contains(home, `method="POST" action="/metrics"`) {
 		t.Error("Home, the page of today, draws the New metric form")
 	}
-	if p := browse(t, h, "/metrics?new=register-metric"); !strings.Contains(p, `<details class="action" open>`) ||
+	if p := browse(t, h, "/metrics?new=register-metric"); !strings.Contains(p, `<dialog class="menu-dialog" id="new-register-metric"`) ||
 		!regexp.MustCompile(`<input type="text" name="name" value="" required placeholder="[^"]*" autofocus>`).MatchString(p) {
 		t.Error("?new=register-metric does not open New metric with the focus in its name")
 	}

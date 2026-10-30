@@ -3,8 +3,7 @@
      The link to the category's page is the foot of the open fold (docs/plans/118-fold-and-find.md, rules 4 and 5;
      docs/plans/119-the-finish.md, rule 3). */}}
 {{define "metrics"}}{{template "head" .}}
-<header class="page-head"><div class="what"><h1>Metrics</h1></div>
-<div class="tools">{{template "creates" .}}{{template "menu" .}}</div></header>
+{{template "page-head" (dict "v" . "title" "Metrics")}}
 {{$file := .Action "file-pages"}}{{$sections := .MetricSections}}
 <div class="pick-list board">
 {{if gt (len $sections) 1}}<div class="board-nav"><nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
@@ -28,12 +27,7 @@
 {{define "metric"}}{{template "head" .}}
 {{$s := .Props}}{{$r := .MetricReadings}}
 {{$unit := ""}}{{with $s.unit}}{{$unit = .}}{{end}}
-<header class="page-head"><div class="what"><span class="kind">metric</span><h1>{{.Title}}</h1>
-{{template "categories" (dict "v" $ "back" $.Here)}}
-<p class="sub">{{with .Link "all-readings"}}<a href="{{.}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p></div>
-<div class="tools">{{with $r.Latest}}<div class="reading-tile"><span class="name">Latest, {{$.Date .day}}</span>
-{{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div>{{end}}{{template "menu" .}}</div>
-</header>
+{{template "page-head" (dict "v" . "kind" "metric" "title" .Title "categories" true "sub" "metric-sub" "tools" "metric-tools")}}
 
 <div class="sheet-margin">
 <div class="sheet">
@@ -59,6 +53,11 @@
 </div>{{end}}
 </div>
 {{template "foot" .}}{{end}}
+
+{{/* metric-sub and metric-tools are the links under the head of a metric, and its latest reading among the tools. */}}
+{{define "metric-sub"}}<p class="sub">{{with .v.Link "all-readings"}}<a href="{{.}}">All readings</a>{{end}}<a href="/metrics">Every metric</a></p>{{end}}
+{{define "metric-tools"}}{{$v := .v}}{{$unit := ""}}{{with $v.Props.unit}}{{$unit = .}}{{end}}{{with $v.MetricReadings.Latest}}<div class="reading-tile"><span class="name">Latest, {{$v.Date .day}}</span>
+{{template "reading-link" (dict "id" .id "value" .value "unit" (unitWords $unit))}}</div>{{end}}{{end}}
 
 {{/* readings is a table of a metric's readings, newest first: a year's newest ones, or the rest of that year. It takes
      v (the view), r (MetricReadings) and rows. */}}
