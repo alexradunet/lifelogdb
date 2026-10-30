@@ -106,7 +106,7 @@ var taskCatalog = []spec{
 		Description: "Ask the task service to write the tasks that are done as entries of their days, once each."},
 }
 
-// taskService is the task service that runs: its name (for the log and the errors), the client of its loopback
+// taskService is the task service that runs: its name (for the registry and the log; a client never sees it), the client of its loopback
 // address and the lists it reported when it registered. A new list needs a restart of the service.
 type taskService struct {
 	name  string
@@ -236,7 +236,7 @@ func (s taskService) page(t svcTask) *siren.Entity {
 func (s taskService) get(ctx context.Context, r *http.Request, href string) (*siren.Entity, error) {
 	e, err := s.c.As(source(r)).Get(ctx, href)
 	if err != nil {
-		return nil, forwardError(r, s.name, err)
+		return nil, forwardError(r, "the task service", err)
 	}
 	return e, nil
 }
@@ -251,7 +251,7 @@ func (s taskService) tasks(ctx context.Context, r *http.Request, href string) ([
 		Tasks []svcTask `json:"tasks"`
 	}
 	if err := propertiesOf(e, &p); err != nil {
-		return nil, forwardError(r, s.name, err)
+		return nil, forwardError(r, "the task service", err)
 	}
 	return p.Tasks, nil
 }
@@ -283,7 +283,7 @@ func (s taskService) done(ctx context.Context, r *http.Request, since, listID st
 func (s taskService) post(ctx context.Context, r *http.Request, href string, values map[string]string) (*siren.Entity, error) {
 	e, err := s.c.As(source(r)).Do(ctx, siren.Action{Method: "POST", Href: href}, values)
 	if err != nil {
-		return nil, forwardError(r, s.name, err)
+		return nil, forwardError(r, "the task service", err)
 	}
 	return e, nil
 }
@@ -508,7 +508,7 @@ func (s taskService) taskAt(ctx context.Context, r *http.Request, href string, v
 	}
 	var t svcTask
 	if err := propertiesOf(e, &t); err != nil || t.ID == "" {
-		return nil, forwardError(r, s.name, fmt.Errorf("the answer is not a task: %v", err))
+		return nil, forwardError(r, "the task service", fmt.Errorf("the answer is not a task: %v", err))
 	}
 	return s.page(t), nil
 }
@@ -564,7 +564,7 @@ func (s taskService) checkValues(values map[string]string) error {
 	}
 	if name, ok := values["list"]; ok && name != "" {
 		i := slices.IndexFunc(s.lists, func(l TaskList) bool { return l.Name == name })
-		if i < 0 {
+		if i < 0 { // fieldsOf checks the options, but a service with no list gives no options
 			return core.Invalid("list must be one of %s", strings.Join(listNames(s.lists), ", "))
 		}
 		values["list"] = s.lists[i].ID
@@ -593,7 +593,7 @@ func (s taskService) synced(ctx context.Context, r *http.Request, href string) (
 		Written int `json:"written"`
 	}
 	if err := propertiesOf(e, &p); err != nil {
-		return nil, forwardError(r, s.name, err)
+		return nil, forwardError(r, "the task service", err)
 	}
 	return &siren.Entity{Class: []string{"tasks"}, Title: "Today", Properties: map[string]any{"written": p.Written},
 		Links: []siren.Link{{Rel: []string{"self"}, Href: "/tasks", Title: "Today"}}}, nil
@@ -608,7 +608,7 @@ func (s taskService) deleted(ctx context.Context, r *http.Request, href string) 
 	}
 	var t svcTask
 	if err := propertiesOf(e, &t); err != nil {
-		return nil, forwardError(r, s.name, err)
+		return nil, forwardError(r, "the task service", err)
 	}
 	return &siren.Entity{Class: []string{"task"}, Title: t.Title, Properties: map[string]any{"id": t.ID, "title": t.Title, "deleted": true},
 		Links: []siren.Link{{Rel: []string{"self"}, Href: "/tasks", Title: "Today"}}}, nil

@@ -230,7 +230,7 @@ func (h *server) withApp(r *http.Request) (*siren.Entity, error) {
 	case !known:
 		return nil, core.NotFound("no such app %s", name)
 	case app.c == nil:
-		return nil, notRunning(name)
+		return nil, notRunning("the app " + name)
 	}
 	rest := strings.TrimPrefix(r.URL.EscapedPath(), "/with/"+name) // escaped: the app decodes it, not this server
 	if rest == "" {
@@ -248,7 +248,7 @@ func (h *server) withApp(r *http.Request) (*siren.Entity, error) {
 		concrete := siren.Action{Name: act.Name, Method: act.Method, Href: rest} // nothing is left to fill in the path
 		e, err = app.c.As(source(r)).Do(ctx, concrete, values)
 		if err != nil {
-			return nil, forwardError(r, name, err)
+			return nil, forwardError(r, "the app "+name, err)
 		}
 		return inNamespace(name, e), nil
 	} else if r.Method == http.MethodGet {
@@ -265,7 +265,7 @@ func (h *server) withApp(r *http.Request) (*siren.Entity, error) {
 		return nil, core.NotFound("the app %s has no action %s %s", name, r.Method, rest)
 	}
 	if err != nil {
-		return nil, forwardError(r, name, err)
+		return nil, forwardError(r, "the app "+name, err)
 	}
 	return inNamespace(name, e), nil
 }
@@ -321,14 +321,16 @@ func isPlaceholder(segment string) bool {
 	return len(segment) > 2 && segment[0] == '{' && segment[len(segment)-1] == '}'
 }
 
-func notRunning(name string) error {
-	return &core.Error{Status: http.StatusServiceUnavailable, Code: siren.CodeUnavailable, Msg: "the app " + name + " is not running"}
+// notRunning is the 503 of a child that does not run. who names it for the client: "the app NAME", or "the task
+// service", whose name the client never sees.
+func notRunning(who string) error {
+	return &core.Error{Status: http.StatusServiceUnavailable, Code: siren.CodeUnavailable, Msg: who + " is not running"}
 }
 
 // forwardError is the error of this server for a failed call of an app. The refusal of the app passes with its status
 // and its code. An app that is not there is 503, a timeout stays a timeout (504), and an answer that is not an entity
-// is 502. The cause of a 502 goes to the log and not to the client.
-func forwardError(r *http.Request, name string, err error) error {
+// is 502. The cause of a 502 goes to the log and not to the client. who names the child, as for notRunning.
+func forwardError(r *http.Request, who string, err error) error {
 	var ce *client.Error
 	var op *net.OpError
 	switch {
@@ -347,10 +349,10 @@ func forwardError(r *http.Request, name string, err error) error {
 		}
 		return &core.Error{Status: ce.Status, Code: code, Msg: msg}
 	case errors.As(err, &op) && op.Op == "dial":
-		return notRunning(name)
+		return notRunning(who)
 	}
-	logFault(r, "the app "+name+" gave no entity", err)
-	return &core.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: "the app " + name + " answered something that is not an entity"}
+	logFault(r, who+" gave no entity", err)
+	return &core.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: who + " answered something that is not an entity"}
 }
 
 // inNamespace changes the answer of an app to the namespace of this server: each address that starts with a slash
