@@ -211,8 +211,11 @@ TickTick list. The owner picked all four elements (2026-10-30).
 
 ## Part C: the placeholder of a field in the catalog (ring 2, beside B1)
 
-- `siren.Field` gets `Placeholder string` with `json:"placeholder,omitempty"`: an example of a value, which a client may
-  show in an empty field and may ignore. It is an extension of Siren, named as in HAL-FORMS and Ion.
+- `siren.Field` gets `Placeholder string` with `json:"placeholder,omitempty"`: the words that a client may show in an
+  empty field, an example of a value or a short prompt; a client may ignore it. It is an extension of Siren, named as
+  in HAL-FORMS and Ion. Done: `5f76120` (a Sonnet sub-agent) and `57016f9` (the review: "Pick a metric" is a prompt,
+  not an example, so the MCP tool says Placeholder; `promote` `name` has none). The two forms that know a metric's
+  unit set its words with `Prompt`.
 - The nine texts of the templates move to their fields in the catalog: `create-person` `name` and `title`, `capture`
   `text`, `record` `metric`, `file-pages` `category` (two copies in `layout.html` today, one field in the catalog),
   `register-metric` `name`, `note` and `unit`, `edit-person` `name`. The `placeholder` option of the form helper goes.
