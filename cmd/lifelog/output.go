@@ -27,6 +27,9 @@ func listActions(ctx context.Context, e env) error {
 			if !f.Required {
 				s = "[" + s + "]"
 			}
+			if f.Placeholder != "" {
+				s += " (e.g. " + f.Placeholder + ")"
+			}
 			fs = append(fs, s)
 		}
 		fmt.Fprintf(out, "%-14s %s %s\n  %s\n  fields: %s\n", a.Name, a.Method, a.Href, a.Description, strings.Join(fs, " "))

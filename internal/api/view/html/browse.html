@@ -10,7 +10,7 @@
 <header class="page-head"><div class="what">{{with .Crumbs}}<nav class="crumbs" aria-label="Where"><a href="{{$.Link "everything"}}">Browse</a>{{range .}}{{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}<span aria-current="page">{{.Title}}</span>{{end}}{{end}}</nav>{{end}}<h1>{{$heading}}</h1><p class="sub">{{with $p.in}}<a href="/pages/{{num .id}}">Open its page</a>{{end}}{{if $p.ghosts}}<span>Empty pages, older than 30 days, that nothing links to or from.</span>{{end}}{{if $p.deleted}}<span>Open one to restore it.</span>{{end}}{{with $p.media_counts}}<span>{{$.MediaCount .image "picture" "pictures"}}, {{$.MediaCount .video "video" "videos"}}, {{$.MediaCount .audio "recording" "recordings"}}</span>{{end}}{{if eq $p.kind "metric"}}<a href="{{.Link "metrics"}}">The values are on the Metrics board</a>{{end}}</p></div>
 <div class="tools">
 {{with .Action "create-page"}}{{template "boxed" (form .)}}{{end}}
-{{with .Action "create-person"}}{{template "boxed" (form . "placeholder" "title=Sam (barber)" "placeholder" "name=Samuel Ortiz")}}{{end}}
+{{with .Action "create-person"}}{{template "boxed" (form .)}}{{end}}
 {{with .Action "add-file"}}{{template "boxed" (form . "hide" "sha256,mime" "more" "preview,dry_run")}}{{end}}
 {{with .Link "new-metric"}}<a class="button" href="{{.}}">New metric</a>{{end}}
 {{template "random" (dict "a" (.Action "random-page") "label" "A random one")}}

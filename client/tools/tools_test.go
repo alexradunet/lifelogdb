@@ -114,3 +114,21 @@ func TestAFileFieldIsThePathOfALocalFile(t *testing.T) {
 		t.Errorf("the tool's properties: %v", props)
 	}
 }
+
+// TestAPlaceholderIsAnExampleInTheDescription: the schema has no field for a hint, so the example of a field is the
+// end of its description. It is words, not a value of the type ("Pick a metric"), so it is not a JSON Schema example.
+func TestAPlaceholderIsAnExampleInTheDescription(t *testing.T) {
+	list, err := Of([]siren.Action{{Name: "register-metric", Method: "POST", Href: "/metrics", Fields: []siren.Field{
+		{Name: "name", Type: "text", Title: "Name", Placeholder: "Weight, Mood, Walk"}, {Name: "note", Type: "text"}}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	props, _ := list[0].Schema["properties"].(map[string]any)
+	name, _ := props["name"].(map[string]any)
+	if name["description"] != "Name Example: Weight, Mood, Walk." {
+		t.Errorf("the description of name: %v", name["description"])
+	}
+	if note, _ := props["note"].(map[string]any); note["description"] != nil || note["examples"] != nil {
+		t.Errorf("a field with no placeholder has a description: %v", note)
+	}
+}

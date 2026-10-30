@@ -128,7 +128,7 @@
      with x, which removes that part-of link (file-pages with from), and + Add, which puts the page in a category: the form of
      file-pages, whose ids and move the page fills in (this page's id, 0), and whose category offers the titles of the
      categories (a new name makes a new category). It takes v (the view) and back. */}}
-{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "outside" "from" "required" "category" "back" $back "placeholder" "category=Bloodwork, Sport, Financial"}}
+{{define "categories"}}{{$v := .v}}{{$back := .back}}{{$file := form ($v.Action "file-pages") "class" "inline" "button" "Add" "hide" "ids,move" "outside" "from" "required" "category" "back" $back}}
 {{$cats := $v.Categories}}
 {{if or $file $cats}}<div class="categories" role="group" aria-label="Categories"><span class="label">Categories</span>
 {{range $cats}}{{$t := .title}}<span class="badge category"><a href="/pages/{{num .id}}">{{$t}}</a>{{if $file}}{{template "form" (form ($v.Action "file-pages") "ids" ($file.Field "ids").Value "from" $t "outside" "category,move" "class" "tiny" "button" "×" "aria" (print "Remove from " $t) "back" $back)}}{{end}}</span>{{end}}
@@ -145,7 +145,7 @@
      list is in, or ""; it adds a button that removes the checked rows from it), paths (the title of each
      category with its path, for the choices of the category field), and the actions: file (file-pages) and del (a
      delete of several). */}}
-{{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids,from" "required" "category" "button" .button "back" .back "placeholder" "category=Bloodwork, Sport, Financial"}}{{if .paths}}{{$f = $f.Labels "category" .paths}}{{end}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
+{{define "pick-bar"}}{{$f := form (or .file .del) "id" "pick" "class" "inline" "outside" "ids,from" "required" "category" "button" .button "back" .back}}{{if .paths}}{{$f = $f.Labels "category" .paths}}{{end}}{{if .file}}{{$f = $f.Or (form .del)}}{{end}}
 <div class="pick-bar">
 <label class="pick-toggle button small"><input type="checkbox" class="pick-on"{{if $f.Asked}} checked{{end}}>Select</label>
 <div class="pick-tools"><span class="desc">{{.words}}</span><span class="picked" aria-live="polite"></span>

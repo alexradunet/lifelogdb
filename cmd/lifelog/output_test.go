@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lifelog/siren"
@@ -96,6 +97,20 @@ func TestHumanReportsAValueThatJSONCannotWrite(t *testing.T) {
 	} {
 		if err := human(io.Discard, e); err == nil {
 			t.Errorf("%s: no error", e.Title)
+		}
+	}
+}
+
+// TestActionsShowThePlaceholderAfterTheField: the human list of the catalog shows the example of a field after it.
+func TestActionsShowThePlaceholderAfterTheField(t *testing.T) {
+	live := filepath.Join(t.TempDir(), "life.db")
+	for _, argv := range [][]string{{"init", live}, {"actions", "--db", live, "--human"}} {
+		e, stdout, _ := testEnv(t)
+		if err := runArgs(t.Context(), e, argv); err != nil {
+			t.Fatal(err)
+		}
+		if argv[0] == "actions" && !strings.Contains(stdout.String(), "name (e.g. Weight, Mood, Walk)") {
+			t.Errorf("the placeholder of name is not shown:\n%s", stdout.String())
 		}
 	}
 }

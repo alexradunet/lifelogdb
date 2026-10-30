@@ -86,6 +86,9 @@ func inputSchema(fields []siren.Field) map[string]any {
 				desc = strings.TrimSpace(desc + " (YYYY-MM-DD or today)")
 			}
 		}
+		if f.Placeholder != "" { // an example in words: JSON Schema "examples" would have to be a value of the type
+			desc = strings.TrimSpace(desc + " Example: " + strings.TrimRight(f.Placeholder, ".") + ".")
+		}
 		if desc != "" {
 			p["description"] = desc
 		}

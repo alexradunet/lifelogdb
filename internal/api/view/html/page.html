@@ -61,7 +61,7 @@
 
 {{if or (.Action "rename") (.Action "promote") (.Action "edit-person") (.Action "edit-metric") (.Action "tombstone-pages")}}<section class="group" aria-label="More"><h2>More</h2><div class="actions quiet">
 {{template "boxed" (form (.Action "rename") "group" "more")}}
-{{template "boxed" (form (.Action "edit-person") "group" "more" "placeholder" "name=Samuel Ortiz")}}
+{{template "boxed" (form (.Action "edit-person") "group" "more")}}
 {{if not .IsSeries}}{{template "boxed" (form (.Action "edit-metric") "group" "more" "button" "Save")}}{{end}}
 {{template "boxed" (form (.Action "promote") "group" "more" "button" "Make it a person")}}
 {{with .Link "make-metric"}}<a class="button" href="{{.}}">Make it a metric</a>{{end}}

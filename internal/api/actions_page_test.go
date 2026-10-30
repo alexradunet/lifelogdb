@@ -63,3 +63,22 @@ func TestAnOpenedActionWritesFromTheBrowser(t *testing.T) {
 		t.Errorf("the page is titled %q after the rename, want New name", got)
 	}
 }
+
+// TestTheCatalogCarriesThePlaceholderOfAField: GET /actions says the example of a field as the member placeholder,
+// for the CLI, the MCP tools and a browser alike.
+func TestTheCatalogCarriesThePlaceholderOfAField(t *testing.T) {
+	c, _, _ := apitest.Fresh(t, "cli")
+	for _, a := range apitest.Must(t)(c.Get(t.Context(), "/actions")).Actions {
+		if a.Name != "register-metric" {
+			continue
+		}
+		if f := a.Field("name"); f == nil || f.Placeholder != "Weight, Mood, Walk" {
+			t.Errorf("register-metric name: %+v", f)
+		}
+		if f := a.Field("daily"); f == nil || f.Placeholder != "" {
+			t.Errorf("register-metric daily: %+v", f)
+		}
+		return
+	}
+	t.Error("register-metric is not in the catalog")
+}

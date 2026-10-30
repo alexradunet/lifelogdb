@@ -4,7 +4,7 @@
      docs/plans/119-the-finish.md, rule 3). */}}
 {{define "metrics"}}{{template "head" .}}
 <header class="page-head"><div class="what"><h1>Metrics</h1></div>
-<div class="tools">{{with .Action "register-metric"}}{{template "boxed" (form . "lead" "1" "placeholder" "name=Weight, Mood, Walk" "placeholder" "unit=kg, or 1-5 for a score, or empty for done or not done" "placeholder" "note=What it measures, and how")}}{{end}}</div></header>
+<div class="tools">{{with .Action "register-metric"}}{{template "boxed" (form . "lead" "1")}}{{end}}</div></header>
 {{$file := .Action "file-pages"}}{{$sections := .MetricSections}}
 <div class="pick-list board">
 {{if gt (len $sections) 1}}<div class="board-nav"><nav class="kinds jump" aria-label="Groups">{{range $sections}}<a href="#{{.Anchor}}">{{.Title}} <small>{{.Count}}</small></a>{{end}}</nav></div>{{end}}
@@ -39,7 +39,7 @@
 <div class="sheet">
 {{if $s.id}}{{template "page-sheet" .}}{{end}}
 {{with .Action "record"}}<section class="record" id="record" aria-label="Add a reading"><h2>Add a reading</h2>
-{{template "form" (form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "placeholder" (printf "value=%s" (or $unit "a count, or 1 done and 0 not done")) "back" $.Here)}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
+{{template "form" ((form . "metric" $.Title "button" "Add" "more" "taken_at,tz" "import_key" newKey "back" $.Here).Prompt "value" (or $unit "a count, or 1 done and 0 not done"))}}{{if not $unit}}<p class="desc">With no unit, a reading is a count, or 1 for done and 0 for not done.</p>{{end}}</section>{{end}}
 {{with .Action "edit-metric"}}<section class="daily-mark" aria-label="Every day"><h2>Every day</h2>
 {{template "form" (form . "button" "Save" "back" $.Here)}}</section>{{end}}
 

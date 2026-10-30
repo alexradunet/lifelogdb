@@ -118,18 +118,20 @@ type Action struct {
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an
 // extension) is how many lines a browser draws of a textarea; Pages (an extension) says the value is a page's
 // title, so a browser can offer the names of the pages as it does after [[; Accept (an extension) is what a file
-// field takes, as the accept attribute of a browser's file input ("audio/*").
+// field takes, as the accept attribute of a browser's file input ("audio/*");
+// Placeholder (an extension, the name of HAL-FORMS and Ion) is an example of a value, which a client may show in an empty field and may ignore.
 type Field struct {
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Title    string   `json:"title,omitempty"`
-	Value    any      `json:"value,omitempty"`
-	Required bool     `json:"required,omitempty"`
-	Options  []string `json:"options,omitempty"`
-	In       string   `json:"in,omitempty"`
-	Rows     int      `json:"rows,omitempty"`
-	Pages    bool     `json:"pages,omitempty"`
-	Accept   string   `json:"accept,omitempty"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Title       string   `json:"title,omitempty"`
+	Value       any      `json:"value,omitempty"`
+	Required    bool     `json:"required,omitempty"`
+	Options     []string `json:"options,omitempty"`
+	In          string   `json:"in,omitempty"`
+	Rows        int      `json:"rows,omitempty"`
+	Pages       bool     `json:"pages,omitempty"`
+	Accept      string   `json:"accept,omitempty"`
+	Placeholder string   `json:"placeholder,omitempty"`
 }
 
 // LinkByRel is the entity's link with that rel, nil when it has none.

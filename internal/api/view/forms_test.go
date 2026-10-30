@@ -406,3 +406,28 @@ func TestAGroupNamesTheDetailsOfABoxedForm(t *testing.T) {
 		t.Errorf("a form with no group is drawn %.80s, want a details with no name", got)
 	}
 }
+
+// TestAFieldDrawsItsPlaceholderFromTheCatalog: the example text of a field is the Placeholder of the catalog's field.
+// The form helper has no option for it: a template that passes one is refused, so the text has one home. A Prompt
+// replaces it in one form (the unit of a metric, known to the page only).
+func TestAFieldDrawsItsPlaceholderFromTheCatalog(t *testing.T) {
+	a := registerMetric()
+	a.Fields[0].Placeholder = "Weight, Mood, Walk"
+	if got := markup(drawForm(t, a)); !strings.Contains(got, `placeholder="Weight, Mood, Walk"`) {
+		t.Errorf("the catalog's placeholder is not drawn:\n%s", got)
+	}
+	f, err := formOf(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := markup(drawForm(t, a)); strings.Count(got, "placeholder=") != 1 {
+		t.Errorf("a field with no placeholder drew one:\n%s", got)
+	}
+	if _, err := formOf(a, "placeholder", "name=Weight"); err == nil {
+		t.Error("the option placeholder was accepted: it would be a field fixed to a value, in silence")
+	}
+	var b bytes.Buffer
+	if err := templates.ExecuteTemplate(&b, "form", f.Prompt("name", "kg")); err != nil || !strings.Contains(b.String(), `placeholder="kg"`) {
+		t.Errorf("Prompt does not replace the placeholder: %v\n%s", err, b.String())
+	}
+}

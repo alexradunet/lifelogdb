@@ -62,6 +62,12 @@ func areaReq(name, title string, rows int) siren.Field {
 	return f
 }
 
+// eg gives a field an example of a value: a client may show it in an empty field and may ignore it.
+func eg(f siren.Field, example string) siren.Field {
+	f.Placeholder = example
+	return f
+}
+
 // catalog is every action the API has. mount gives each one its route, GET /actions serves it, and the CLI and the MCP
 // server are built from it.
 var catalog = []spec{
@@ -69,7 +75,7 @@ var catalog = []spec{
 		Description: "Append an entry to the journal page of a local day (created on the first capture), with an optional mood 1-5. The entry begins with its time, (HH:MM) in the server's zone, and names the relay when an agent or an import wrote it: (HH:MM, via NAME). [[Title]] and #tag in the text link pages, creating them if new. import_key makes a re-send a no-op: make one key for one capture and send it again unchanged on a retry; the answer is then Already added, with the day.",
 		Hint:        "Add a note to the journal of a day. A mood from 1 to 5 is optional. A name in [[double brackets]] or a #tag links a page, and makes it when it is new.",
 		Method:      "POST", Path: "/days/{day}/capture",
-		Fields: []siren.Field{path("day", "date", "Local day"), area("text", "Entry (CommonMark)", 4),
+		Fields: []siren.Field{path("day", "date", "Local day"), eg(area("text", "Entry (CommonMark)", 4), "What happened? Who was there?"),
 			{Name: "mood", Type: "number", Title: "Mood", Options: []string{"1", "2", "3", "4", "5"}}, opt("import_key", "text", "Key")},
 	},
 	{Name: "say", Title: "Chat",
@@ -94,7 +100,7 @@ var catalog = []spec{
 		Description: "Create a person: title is the permanent handle that [[wikilinks]] use (e.g. 'Sam (barber)'), name the full name.",
 		Hint:        "Make a person. The title is the short name that links use. The name is the full name.",
 		Method:      "POST", Path: "/people",
-		Fields: []siren.Field{req("title", "text", "Name in [[links]]"), opt("name", "text", "Full name"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")},
+		Fields: []siren.Field{eg(req("title", "text", "Name in [[links]]"), "Sam (barber)"), eg(opt("name", "text", "Full name"), "Samuel Ortiz"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")},
 	},
 	{Name: "add-file", Title: "New file", Class: []string{"create"},
 		Description: "Keep a file the owner picked (a recording, a PDF, a scan, a photo) as a page: title is its permanent handle (by default the original's file name; required with a sha256), and ![[title]] in a page shows it; body is its text (a transcript, the text of a PDF, a caption). Send the original, which is read and never stored, or its sha256 and mime. A picture is made from the original when it is a JPEG, PNG or GIF; for any other (HEIC, a video's frame) send preview, a JPEG, PNG or GIF. The file's own day is day, else a photo's EXIF date, read from the original. The page of its own day shows a file that has a picture. A photo with no day of its own gets no day and goes in no day page; any other file without one gets the day it is kept. The same original again finds its page and writes nothing but a missing picture and its embed in the page of its own day.",
@@ -122,7 +128,7 @@ var catalog = []spec{
 		Description: "Change the full name and the dates of a person (the handle, the page's title, changes with rename). A field left out stays as it is, and an edit with no field is 422. An empty birth_day or death_day removes that date; an empty name is 422. A day is YYYY-MM-DD, or the word today. A bad day, or a death before the birth, is 422. A page that is not a person is 409.",
 		Hint:        "Change the name and the dates of this person. Leave a date empty to remove it. Rename changes the title.",
 		Method:      "POST", Path: "/pages/{id}/person",
-		Fields: []siren.Field{path("id", "number", "Page id"), opt("name", "text", "Full name"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")},
+		Fields: []siren.Field{path("id", "number", "Page id"), eg(opt("name", "text", "Full name"), "Samuel Ortiz"), opt("birth_day", "date", "Born"), opt("death_day", "date", "Died")},
 	},
 	{Name: "edit-metric", Title: "Ask for it every day", Class: []string{"edit"},
 		Description: "Set daily of a metric: 1 asks for a reading of it on every day, 0 stops asking. Its readings stay. A page that is not a live metric is 409.",
@@ -146,14 +152,14 @@ var catalog = []spec{
 		Description: "File several pages (metrics among them) in the category page titled `category`, in one write (a part-of link from each), or with `from` take them out of the category page titled `from` (the link from each is removed; nothing else changes): ids are page ids, separated by spaces or commas. One of category or from is required, never both. A missing category is made as an empty page. With move 1, every other part-of link of those pages is removed first (with category only). An id no page has refuses the whole action.",
 		Hint:        "Put the checked pages in a category, or take them out of one. A category that does not exist yet is made.",
 		Method:      "POST", Path: "/pages/file",
-		Fields: []siren.Field{req("ids", "text", "Page ids, separated by spaces or commas"), pageField("category", "Category (title)", false), pageField("from", "Out of the category (title)", false),
+		Fields: []siren.Field{req("ids", "text", "Page ids, separated by spaces or commas"), eg(pageField("category", "Category (title)", false), "Bloodwork, Sport, Financial"), pageField("from", "Out of the category (title)", false),
 			flagField("move", "Move (remove the other categories)")},
 	},
 	{Name: "record", Title: "Add a reading", Class: []string{"create"},
 		Description: "Record a reading of a registered metric for a local day. import_key makes a re-send a no-op. A view offers every live metric by name.",
 		Hint:        "Add a reading of a metric for a day: a number in the unit of the metric. For a habit, 1 is done and 0 is not done.",
 		Method:      "POST", Path: "/measurements",
-		Fields: []siren.Field{req("metric", "text", "Metric"), req("day", "date", "Day"), req("value", "number", "Value"),
+		Fields: []siren.Field{eg(req("metric", "text", "Metric"), "Pick a metric"), req("day", "date", "Day"), req("value", "number", "Value"),
 			opt("taken_at", "text", "Time taken, in UTC (2026-06-09T21:14:03.482Z)"), opt("tz", "text", "Time zone (Europe/Bucharest)"), opt("import_key", "text", "Key")},
 	},
 	{Name: "correct", Title: "Correct", Class: []string{"edit"},
@@ -179,7 +185,7 @@ var catalog = []spec{
 		Description: "Make a new metric: a thing you measure again and again, such as Weight, Sleep or Mood. Each reading is a number. The unit never changes: kg or h; a range such as 1-5 for a score; empty for a count, or for a habit that is done or not done. The note is the text of its page. A plain page with this name becomes the metric and keeps its text. A metric that exists is returned as it is when the unit is the same, or when it is a scale and the unit is empty; sent with a daily that differs from its mark, it is refused (409): edit-metric changes the mark. daily 1 asks for a reading of the metric on every day.",
 		Hint:        "A thing you measure again and again, such as Weight or Mood. The unit never changes: kg, h, a range such as 1-5 for a score, or empty for a count or a habit. A plain page with this name becomes the metric and keeps its text. Tick Ask for it every day to get a box for it on every day page.",
 		Method:      "POST", Path: "/metrics",
-		Fields: []siren.Field{req("name", "text", "Name"), opt("unit", "text", "Unit"), opt("note", "text", "Note"), flagField("daily", "Ask for it every day")},
+		Fields: []siren.Field{eg(req("name", "text", "Name"), "Weight, Mood, Walk"), eg(opt("unit", "text", "Unit"), "kg, or 1-5 for a score, or empty for done or not done"), eg(opt("note", "text", "Note"), "What it measures, and how"), flagField("daily", "Ask for it every day")},
 		Owner:  true,
 	},
 	{Name: "settings", Title: "Settings", Class: []string{"edit"},

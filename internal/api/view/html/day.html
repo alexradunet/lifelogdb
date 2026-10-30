@@ -30,7 +30,7 @@
 
 {{with .Action "capture"}}<section class="capture" id="capture" aria-label="Capture">
 <h2>{{if $today}}Add to today{{else}}Add to {{shortDay $.Title}}{{end}}</h2>
-{{template "form" (form . "button" "Add" "back" $.Here "label" "text=Entry" "placeholder" "text=What happened? Who was there?" "key" "text=c" "import_key" newKey)}}
+{{template "form" (form . "button" "Add" "back" $.Here "label" "text=Entry" "key" "text=c" "import_key" newKey)}}
 </section>{{end}}
 
 {{template "body-editor" (dict "action" (.Action "save-body") "back" (.Link "self") "summary" "Edit the day page")}}
@@ -52,9 +52,9 @@
 {{with $tiles}}<div class="readings">{{range .}}{{$metric := .Metric}}{{$unit := .Unit}}<div class="reading-tile"><a class="name" href="/metrics/{{pathesc .Metric}}">{{.Metric}}</a>
 {{if .ID}}{{template "reading-link" (dict "id" .ID "value" .Value "unit" (unitWords .Unit))}}
 {{with .More}}<a class="meta" href="/metrics/{{pathesc $metric}}">and {{.}} more this day</a>{{end}}
-{{else}}{{with $.Action "record"}}{{if $unit}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "placeholder" (printf "value=%s" $unit))}}{{else}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "options" "value=1,0")}}{{end}}{{end}}{{end}}</div>{{end}}</div>{{end}}
+{{else}}{{with $.Action "record"}}{{if $unit}}{{template "form" ((form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path).Prompt "value" $unit)}}{{else}}{{template "form" (form . "metric" $metric "day" $.Title "button" "Save" "hide" "taken_at,tz" "id" (printf "tile-%s" $metric) "import_key" newKey "back" $.Path "options" "value=1,0")}}{{end}}{{end}}{{end}}</div>{{end}}</div>{{end}}
 {{if not $tiles}}<p class="empty">No readings on this day. <a href="#record">Add one</a> below.</p>{{end}}
-<div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz" "import_key" newKey "back" (or ($.Asked "back") $.Path) "placeholder" "metric=Pick a metric")}}</div>
+<div id="record">{{template "boxed" (form (.Action "record") "more" "taken_at,tz" "import_key" newKey "back" (or ($.Asked "back") $.Path))}}</div>
 </section>{{end}}
 {{- with $d.recent}}
 <section class="group" aria-label="Last entries">
