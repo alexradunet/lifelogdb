@@ -4,10 +4,11 @@ A plan is a dated record ([how a change happens](../process.md)): a change large
 written as a self-contained brief with done criteria. It cites the docs as they were at the commit it names. One file
 per plan, `NNN-short-slug.md`, numbered on from the last.
 
-Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **160**.
+Earlier closed plans live in git history (`git log -- docs/plans`). The next plan number is **161**.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
+| [160](160-the-lock.md) | The lock: a journal left open closes itself | P2 | M | owner word 2026-10-30; `ff0f1c7` | APPROVED |
 | [159](159-the-class-of-an-action.md) | The class of an action: the browser places an action by what it does, not by where Siren lists it | P2 | L | owner word 2026-10-30; plan 157; `5046b38`; A `016adb5`, C `57016f9`, B1 `8c865ad`, B2 `1124bdf` | LIVE 2026-10-30 (`ff0f1c7`; not seen in a browser; nits open) |
 | [155](155-ticktick-the-first-connected-app.md) | TickTick: the first connected app, in this repo | P1 | M | owner word 2026-10-29; plan 154; `054138b`; live 2026-10-29 | IN REVIEW (owner) |
 | [156](156-browse-the-tasks-through-the-catalog.md) | Browse the tasks of TickTick inside lifelog, through the catalog | P2 | S | owner word 2026-10-29; plan 155; `b3d0a89`; built `9f1c584`; live 2026-10-30 | IN REVIEW (owner) |
