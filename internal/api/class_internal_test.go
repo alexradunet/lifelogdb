@@ -62,16 +62,18 @@ func TestTheCatalogUsesOnlyKnownClassesAndOneToAnAction(t *testing.T) {
 	}
 }
 
-// TestTheCatalogGivesEachActionItsClass: the classes of the vocabulary (plan 159), by name.
+// TestTheCatalogGivesEachActionItsClass: the classes of the vocabulary (plan 159), by name, in the catalog and in the
+// rows of the task service.
 func TestTheCatalogGivesEachActionItsClass(t *testing.T) {
 	want := map[string]string{
 		"create-page": "create", "create-person": "create", "add-file": "create", "register-metric": "create",
 		"record": "create", "capture": "create", "snapshot": "create",
 		"rename": "edit", "edit-person": "edit", "edit-metric": "edit", "correct": "edit", "save-body": "edit",
 		"set-cover": "edit", "settings": "edit", "file-pages": "edit", "promote": "edit",
-		"revive": "toggle",
+		"revive":   "toggle",
+		"add-task": "create", "edit-task": "edit", "complete-task": "toggle", "reopen-task": "toggle",
 	}
-	for _, s := range catalog {
+	for _, s := range append(slices.Clone(catalog), taskCatalog...) {
 		var got string
 		if len(s.Class) > 0 {
 			got = s.Class[0]

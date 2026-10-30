@@ -57,7 +57,7 @@ func actions() []siren.Action {
 				{Name: "due", Type: "date", Title: "Due day"},
 				{Name: "notes", Type: "textarea", Title: "Notes", Rows: 4},
 			}},
-		{Name: "edit-task", Method: "POST", Href: "/tasks/{id}", Title: "Edit a task",
+		{Name: "edit-task", Class: []string{"edit"}, Method: "POST", Href: "/tasks/{id}", Title: "Edit a task",
 			Description: "Change the fields that the request names. A field that is not sent stays. An empty due or notes clears it.",
 			Fields: []siren.Field{idField(),
 				{Name: "title", Type: "text", Title: "Title"},

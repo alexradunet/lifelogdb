@@ -97,8 +97,9 @@ type Link struct {
 	Actions    []Action `json:"actions,omitempty"`
 }
 
-// Action is a Siren action. Class (standard Siren) is at most one of ActionClasses: what the action does. Description (what the action does, for an agent), Owner (the owner's alone) and
-// Danger (it hides or retracts what is there) are extensions. Hint is the browser's short text for the form: it
+// Action is a Siren action. Class (standard Siren) is at most one of ActionClasses: what the action does to the
+// resource. Description (what the action does, for an agent), Owner (the owner's alone) and Danger (it hides or
+// retracts what is there) are extensions. Hint is the browser's short text for the form: it
 // is not on the wire, so a client, the CLI and the MCP tools keep reading Description.
 type Action struct {
 	Name        string   `json:"name"`
