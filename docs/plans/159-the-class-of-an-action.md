@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-30, `5046b38` (master), after [plan 157](157-a-task-manager-feel-through-the-catalog.md).
 - **Priority:** P2. **Effort:** L. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the head of every page, the More section and the Facts change, and many view tests pin the old HTML.
-- **Status:** IN PROGRESS. Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
+- **Status:** BUILT, not seen in a browser and not live. B2 is on master (`d1fc733`, `1124bdf`). Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
   of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The owner
   picked the four elements of the mock-up and the order of B1, B2 and C (2026-10-30). Not live: the service runs the binary of
   before.
@@ -215,6 +215,11 @@ TickTick list. The owner picked all four elements (2026-10-30).
   of a person, a file and a generic entity; the Facts section is gone.
 - README: the browser column names the pencil and the head.
 - Screenshots after B2.
+- Done: `d1fc733` (a Sonnet sub-agent) and `1124bdf` (the review: `anchor-scope` keeps the anchor name `--pop` inside
+  each button and its popover; a popover is in the top layer, so with no scope each would hang from the last button of
+  that name). What the build found: a view adds its own parts to the head (crumbs, steps, links) through the template
+  function `slot`; the Metrics board offers `register-metric` first, so New metric is its primary button; the mermaid
+  diagram of `extensions/README.md` still says "the other actions, boxed" (the menu now). Not seen in a browser yet.
 
 ## Part C: the placeholder of a field in the catalog (ring 2, beside B1)
 
