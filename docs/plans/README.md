@@ -9,7 +9,7 @@ Earlier closed plans live in git history (`git log -- docs/plans`). The next pla
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | [155](155-ticktick-the-first-connected-app.md) | TickTick: the first connected app, in this repo | P1 | M | owner word 2026-10-29; plan 154; `054138b`; live 2026-10-29 | IN REVIEW (owner) |
-| [156](156-browse-the-tasks-through-the-catalog.md) | Browse the tasks of TickTick inside lifelog, through the catalog | P2 | S | owner word 2026-10-29; plan 155; `b3d0a89`; built `9f1c584` | IN REVIEW (owner) |
+| [156](156-browse-the-tasks-through-the-catalog.md) | Browse the tasks of TickTick inside lifelog, through the catalog | P2 | S | owner word 2026-10-29; plan 155; `b3d0a89`; built `9f1c584`; live 2026-10-30 | IN REVIEW (owner) |
 | [154](154-connected-apps-through-the-catalog.md) | Connected apps through the catalog: no plan lines, and an extension may serve a catalog the core aggregates | P1 | L | owner word 2026-10-29; issue 0092; RFC 0025; plan 147; `860e9b3`; live 2026-10-29 | IN REVIEW (owner) |
 | [153](153-the-ground-in-settings.md) | The ground in Settings: four floors under the frame, two of them moving | P2 | M | owner word 2026-10-29; plan 152; `983a342`; live 2026-10-29 | IN REVIEW (owner) |
 | [152](152-the-frame.md) | The frame: the app centred in a slab of oak on the floor | P2 | S | owner word 2026-10-29; plan 096; `49d2006`; live 2026-10-29 | IN REVIEW (owner) |

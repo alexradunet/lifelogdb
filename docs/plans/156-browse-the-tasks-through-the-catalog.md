@@ -13,7 +13,8 @@
   clean; `govulncheck ./...` found no vulnerability. In the root: `go test ./cmd/lifelog -run With` passed. Two small
   choices: the helper that answers a GET route is `respond`, because `write` is the name of the capture sender in
   `sync.go`; the task page links its list only when the list is one that TickTick reported (the Inbox has no page).
-  Live: the owner rebuilds `~/.local/bin/lifelog-ticktick` and restarts the service (Part 4).
+  Live 2026-10-30: the owner rebuilt `~/.local/bin/lifelog-ticktick` and restarted the service at 12:55:26; the log says
+  `with ticktick: a catalog of 3 actions on 127.0.0.1:41639`, and the first poll wrote 0 entries.
 
 ## Context
 
