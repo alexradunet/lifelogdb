@@ -65,7 +65,8 @@ A request names only the fields of the action, and a browser's own `back`, `feed
 
 The `class` of an action is the standard Siren member. It says **what the action does** to the resource it is on. It
 never says how to draw the action. The list is `siren.ActionClasses()`, and a test holds it equal to this table. An
-action has at most one class. An action with no class is any other action.
+action has at most one class; the server refuses a [connected app](#connected-apps) that sends two. An action with no
+class is any other action.
 
 | class | what the action does |
 |---|---|
@@ -75,7 +76,7 @@ action has at most one class. An action with no class is any other action.
 
 A client may ignore a class: an action with a class works as an action with none. The placement of an action is the
 choice of each client. The browser draws it by its class ([the browser and a page of an app](extensions/README.md#how-the-browser-draws-a-page-of-an-app)).
-A class that is not in the list is dropped from the action of a [connected app](#connected-apps).
+A class that is not in the list is dropped from the action of a connected app. The task service sends no class: the server holds the class of the [task](#tasks) actions.
 
 ## Errors
 

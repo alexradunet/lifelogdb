@@ -112,7 +112,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 /* The menu hangs from its button, so it needs no veil. An engine without anchor positioning keeps the centred box above;
    the phone resets this in its media block below. */
 .rail-new{anchor-name:--new}
-@supports (position-area: block-end){
+@supports (position-area: block-end) and (anchor-scope: --pop){
   .new-menu:popover-open{position-anchor:--new; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline;
     inset:auto; margin:var(--space-1) 0 0;
     &::backdrop{background:none}}}
@@ -250,7 +250,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 /* The menu hangs from its button; the fixed inset above is the fallback for an engine without anchor positioning.
    The phone resets this in its media block below. */
 .daybar button.more{anchor-name:--more}
-@supports (position-area: block-end){
+@supports (position-area: block-end) and (anchor-scope: --pop){
   .more-body:popover-open{position-anchor:--more; position-area:block-end span-inline-start; position-try-fallbacks:flip-block, flip-inline; inset:auto}}
 .more-head{display:flex; align-items:center; justify-content:space-between}
 /* The ⋯ menu of a page (docs/plans/159-the-class-of-an-action.md): a popover that hangs from its button, as the New menu
@@ -261,7 +261,7 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .menu-button{anchor-name:--menu; inline-size:var(--control); padding:0; font:700 18px/1 var(--sans)}
 .menu-list:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-3);
   inline-size:min(20rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; overscroll-behavior:contain; box-shadow:var(--parch-bevel),var(--shadow-float)}
-@supports (position-area: block-end){
+@supports (position-area: block-end) and (anchor-scope: --pop){
   .menu-list:popover-open{position-anchor:--menu; position-area:block-end span-inline-start; position-try-fallbacks:flip-block, flip-inline; inset:auto; margin:var(--space-1) 0 0}}
 .menu-head{display:flex; align-items:center; justify-content:space-between}
 .menu-group{display:flex; flex-direction:column; gap:2px;
@@ -276,9 +276,9 @@ dialog.menu-dialog{inline-size:min(34rem, calc(100vw - 2rem)); margin:12vh auto 
   &::backdrop{background:var(--backdrop)}
   & h2{font-size:18px; line-height:24px}
   & .desc{margin:0}
-  &[open]:not(:modal){position:absolute; z-index:10; inset-block-start:100%; inset-inline-end:0; margin:var(--space-2) 0 0}}
+  &[open]:not(:modal){position:absolute; z-index:10; inset-block-start:100%; inset-inline-start:auto; inset-inline-end:0; margin:var(--space-2) 0 0}}
 @media (max-width:899px){
-  :is(.menu-list,.head-pop):popover-open{position-area:none; inset:auto 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; max-block-size:70dvh; margin:0; padding-block-end:var(--space-4)}
+  .menu-list:popover-open{position-area:none; inset:auto 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; inline-size:auto; max-block-size:70dvh; margin:0; padding-block-end:var(--space-4)}
   dialog.menu-dialog{margin:var(--space-2) auto auto}}
 @media (max-width:899px) and (prefers-reduced-motion:no-preference){
   :is(.menu-list,.head-pop){transition:opacity .16s, translate .16s, overlay .16s allow-discrete, display .16s allow-discrete;
@@ -404,9 +404,13 @@ small .mood{font-size:12px; padding:2px 8px}
   inline-size:min(28rem, calc(100vw - 2 * var(--space-4))); max-block-size:calc(100dvh - 4rem - var(--space-4)); overflow-y:auto; overscroll-behavior:contain; box-shadow:var(--parch-bevel),var(--shadow-float);
   & h2{font-size:18px; line-height:24px}
   & .desc{margin:0}}
-@supports (position-area: block-end){
+@supports (position-area: block-end) and (anchor-scope: --pop){
   .head-pop:popover-open{position-anchor:--pop; position-area:block-end span-inline-end; position-try-fallbacks:flip-block, flip-inline; inset:auto; margin:var(--space-1) 0 0}
   .tools .head-pop:popover-open{position-area:block-end span-inline-start}}
+/* On a phone the head popover is a sheet from the bottom, as the menu is. It comes after the anchored rules and has a
+   higher specificity, and it resets what they set. */
+@media (max-width:899px){
+  .page-head .pop>.head-pop:popover-open{position:fixed; position-anchor:none; position-area:none; inset:auto 0 calc(58px + env(safe-area-inset-bottom, 0px)) 0; margin:0; inline-size:auto; max-block-size:70dvh; padding-block-end:var(--space-4)}}
 /* A form that the page's link asked for is an open dialog under the head, in the flow of the page. */
 .page-head~dialog.menu-dialog[open]:not(:modal){position:static; margin:var(--space-3) 0 0}
 

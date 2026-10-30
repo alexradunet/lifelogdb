@@ -38,6 +38,10 @@ func TestAPageOfAnAppDrawsEachActionOnceByItsClass(t *testing.T) {
 	if !(strings.Index(list, "tweak") < strings.Index(list, "plain") && strings.Index(list, "plain") < strings.Index(list, "flip") && strings.Index(list, "flip") < strings.Index(list, ">drop<")) {
 		t.Errorf("the menu is not edit, the others, danger:\n%.600s", list)
 	}
+	// The focus of a danger dialog starts on Cancel: showModal() would focus the danger button, and Enter would delete.
+	if n := strings.Count(page, " autofocus>"); n != 1 || !strings.Contains(page, `command="close" autofocus>Cancel<`) {
+		t.Errorf("%d autofocus buttons, want one: the Cancel of the danger dialog", n)
+	}
 	if strings.Contains(page, `commandfor="do-quick"`) || strings.Contains(page, `commandfor="do-bulk"`) || !strings.Contains(page, `popovertarget="new-bulk"`) || !strings.Contains(page, `id="new-bulk" popover`) {
 		t.Error("a create action is in the menu, or the second create has no button")
 	}

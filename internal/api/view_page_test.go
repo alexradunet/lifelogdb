@@ -224,8 +224,9 @@ func TestAnEmptyPageSaysSoWithItsEditorClosed(t *testing.T) {
 	if !strings.Contains(body, `<details class="body-editor"><summary>Edit</summary>`) || strings.Contains(body, `<details class="body-editor" open><summary>Edit</summary>`) {
 		t.Error("an empty page opens its editor")
 	}
-	// The one autofocus is the title field of the pencil's popover, which a browser focuses when the popover opens.
-	if strings.Count(body, "autofocus") != 1 || !strings.Contains(body, `name="title" value="Sam" required autofocus`) {
+	// The autofocus is the title field of the pencil's popover, which a browser focuses when the popover opens, and the
+	// Cancel button of the danger dialog (the other autofocus).
+	if strings.Count(body, "autofocus") != 2 || !strings.Contains(body, `name="title" value="Sam" required autofocus`) {
 		t.Error("an empty page puts the focus in its editor")
 	}
 }

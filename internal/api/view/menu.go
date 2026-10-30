@@ -33,6 +33,7 @@ type formItem struct {
 	Note    string // what the action does, above its form: its hint, else its description
 	Open    bool   // the page's link asked for this form (?new=<name>): its dialog is open
 	Close   string // the words of the button that closes the dialog
+	Danger  bool   // the dialog is the confirm step of a danger action: its Cancel button has the focus, not the danger button
 	Primary bool   // the first create button of a head: the ember one
 	Form    *formView
 }
@@ -78,7 +79,7 @@ func (v *view) Menu() (menu, error) {
 		it := itemOf(a, "do-"+a.Name, f)
 		switch {
 		case a.Danger:
-			it.Close = "Cancel"
+			it.Close, it.Danger = "Cancel", true
 			m.Danger = append(m.Danger, it)
 		case slices.Contains(a.Class, "edit"):
 			m.Edit = append(m.Edit, it)

@@ -24,7 +24,7 @@ func TestTheMenuHoldsTheActionsNoTemplatePlaces(t *testing.T) {
 		`<dialog class="menu-dialog" id="do-promote" closedby="any" aria-label="Make it a person">`,
 		`<button type="button" class="menu-item" commandfor="do-tombstone-pages" command="show-modal">Delete</button>`,
 		`commandfor="do-promote" command="close">Close</button>`,
-		`commandfor="do-tombstone-pages" command="close">Cancel</button>`,
+		`commandfor="do-tombstone-pages" command="close" autofocus>Cancel</button>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the menu of a page lacks %s", want)

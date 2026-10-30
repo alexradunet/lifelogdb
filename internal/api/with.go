@@ -134,6 +134,9 @@ func checkAppAction(act siren.Action) error {
 	if err != nil || !isPath(act.Href) || u.RawQuery != "" || u.Fragment != "" {
 		return fmt.Errorf("the action %s: the href %q is not a path", act.Name, act.Href)
 	}
+	if len(act.Class) > 1 {
+		return fmt.Errorf("the action %s: %d classes %v, an action has at most one", act.Name, len(act.Class), act.Class)
+	}
 	for _, f := range act.Fields {
 		if f.Type == "file" {
 			return fmt.Errorf("the action %s: the field %s is a file, and a file is not forwarded", act.Name, f.Name)

@@ -232,7 +232,7 @@
 {{define "item-dialog"}}<dialog class="menu-dialog" id="{{.ID}}" closedby="any" aria-label="{{.Title}}"{{if .Open}} open{{end}}>
 <h2>{{.Title}}{{if .Owner}} <span class="owner">owner</span>{{end}}</h2>{{with .Note}}<p class="desc">{{.}}</p>{{end}}
 {{template "form" .Form}}
-<button type="button" class="button small quiet" commandfor="{{.ID}}" command="close">{{.Close}}</button></dialog>{{end}}
+<button type="button" class="button small quiet" commandfor="{{.ID}}" command="close"{{if .Danger}} autofocus{{end}}>{{.Close}}</button></dialog>{{end}}
 
 {{/* page-head is the head of every view but the day (docs/plans/159-the-class-of-an-action.md): the kind, the title with
      the pencil of a title edit, the meta line, the categories, the create buttons and the ⋯ menu. It takes v (the view),

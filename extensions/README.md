@@ -167,8 +167,9 @@ of the app (502 `upstream`).
 ### How the browser draws a page of an app
 
 The browser draws the page of an app with its generic view. The view reads the shape of the entity and the `class` of
-its actions ([API.md](../API.md#action-classes)). It reads no name of an app. A server drops a class that
-`siren.ActionClasses()` does not list, so an unknown class is the same as none. An author shapes the page with three rules.
+its actions ([API.md](../API.md#action-classes)). It reads no name of an app. An app action has at most one class.
+The server refuses an app that sends two, and it drops a class that `siren.ActionClasses()` does not list, so an
+unknown class is the same as none. An author shapes the page with three rules.
 
 ```mermaid
 flowchart LR
@@ -278,6 +279,9 @@ own; the server calls the `href`, not the name): `/tasks`, `/tasks/{id}`, `/task
 `/tasks/{id}/reopen`, `/tasks/{id}/delete` and `/sync`. A catalog that lacks one is refused. The lists are read once,
 when the service registers: a new list needs a restart of the service.
 An app whose prefixed action name is one of the six names of [API.md](../API.md#tasks) is refused too.
+The service sends no `class` on its actions. The server draws `/tasks` from its own catalog of the protocol, and that
+catalog holds the class of each write (`create`, `edit`, `toggle`). A connected app under `/with/NAME` still sends its
+own classes.
 
 ### The protocol
 

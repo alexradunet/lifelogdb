@@ -12,6 +12,15 @@
   of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The owner
   picked the four elements of the mock-up and the order of B1, B2 and C (2026-10-30). Not live: the service runs the binary of
   before.
+- **Counter-review:** the review ran on Opus, because the Fable limit was reached. It found six fixes, and they are
+  on master: a non-modal menu dialog was drawn off the screen; the pencil and create popovers were never bottom
+  sheets on a phone; the focus of a danger dialog started on the danger button; the `@supports` guard did not check
+  `anchor-scope`; the classes of the TickTick connector were dead data (the core catalog of the task protocol is the one
+  home); an app action with two classes passed. Open for the owner: the focus return to the ⋯ button after a dialog
+  closes (it needs script), and the nits. The nits are: `railOwns` is always false; `_ = http.StatusOK`; the
+  every-action-once test has no `/with` and no `/tasks`; no test of the `lead` refusal; a `<div popover>` inside a
+  `<span>`; `aria-haspopup="menu"` without `role=menu`; loose fits of some classes, such as `file-pages`; `?new=` is kept
+  in `back`. The CSS was not rendered in a browser.
 - **Resolves:** the owner's words of 2026-10-30 (below). No issue: the API change is additive, and no rule of the data
   changes.
 
@@ -85,7 +94,7 @@ Four pitfalls shape the vocabulary below:
 
 ## The vocabulary
 
-| class | what the action does | the browser draws it | core actions | an app (TickTick) |
+| class | what the action does | the browser draws it | core actions | task actions (core catalog) |
 |---|---|---|---|---|
 | `create` | it makes a new thing, and the answer is that thing or its list | a button in the head of the page, which opens its form in a popover anchored to it. On an app page, the first `create` action with one required text field is the quick-add line instead. | `create-page`, `create-person`, `add-file`, `register-metric`, `record`, `capture`, `snapshot` | `add-task` |
 | `edit` | it changes this resource's own properties | the first group of the ⋯ menu, each in a dialog. An `edit` whose one field is `title` is a ✎ beside the title, with its form in a popover anchored to it. | `rename`, `edit-person`, `edit-metric`, `correct`, `save-body`, `set-cover`, `settings`, `file-pages`, `promote` | — |
@@ -248,8 +257,8 @@ TickTick list. The owner picked all four elements (2026-10-30).
 - Root: `go vet ./... && go test ./...`, `go test -count=1 -shuffle=on ./...`, `staticcheck ./...`, `govulncheck ./...`.
 - In `extensions/mcp`, `extensions/ticktick` and `extensions/whatsapp`: `go vet ./... && go test ./...` and
   `go mod tidy -diff`.
-- Live (the owner, with `!`): rebuild `~/.local/bin/lifelog` and `~/.local/bin/lifelog-ticktick` together (an old
-  connector sends no class, and its rows lose the round button), restart the service, read its log.
+- Live (the owner, with `!`): rebuild `~/.local/bin/lifelog` (the class of a task action comes from its own catalog of
+  the task protocol, so the connector sends none), restart the service, read its log.
 
 ## Not taken
 
