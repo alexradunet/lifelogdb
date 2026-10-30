@@ -8,8 +8,10 @@
 - **Date / baseline:** 2026-10-30, `5046b38` (master), after [plan 157](157-a-task-manager-feel-through-the-catalog.md).
 - **Priority:** P2. **Effort:** L. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the head of every page, the More section and the Facts change, and many view tests pin the old HTML.
-- **Status:** PLANNED. A mock-up comes first (Part 0). The owner picks each element, and only then does the build
-  start.
+- **Status:** IN PROGRESS. Part A is on master (`2474e75`, by a Sonnet sub-agent; `016adb5`, the review: `edit-task`
+  of the task service of plan 158 is `edit`, and `reopen-task` is `toggle` as `complete-task` is). The mock-up of
+  Part 0 is in review by the owner. Parts B and C wait for the owner's picks. Not live: the service runs the binary of
+  before.
 - **Resolves:** the owner's words of 2026-10-30 (below). No issue: the API change is additive, and no rule of the data
   changes.
 
