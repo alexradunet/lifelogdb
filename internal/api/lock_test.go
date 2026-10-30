@@ -357,6 +357,21 @@ func TestUnlock(t *testing.T) {
 	}
 }
 
+// The Lock button does not give the tries back: four wrong PINs, a lock, and the next wrong PIN ends the session.
+func TestALockKeepsTheCountOfWrongPINs(t *testing.T) {
+	f := newLockFixture(t, "15")
+	f.post("/lock", "", nil)
+	for range 4 {
+		f.post("/unlock", "pin=1111", nil)
+	}
+	if rec := f.post("/lock", "", nil); rec.Code != 303 {
+		t.Fatalf("lock of a locked session: %d", rec.Code)
+	}
+	if rec := f.post("/unlock", "pin=1111", nil); rec.Code != 303 || rec.Header().Get("Location") != "/login" {
+		t.Errorf("fifth wrong PIN after a lock: %d %q, want the end of the session", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
 func TestARestartLocksEverySession(t *testing.T) {
 	f := newLockFixture(t, "15")
 	if f.isLocked() {
@@ -437,8 +452,24 @@ func TestAnUnreadableLockSettingLocksTheBrowser(t *testing.T) {
 	if !f.isLocked() {
 		t.Error("an unreadable settings file opened the session")
 	}
-	if rec := f.post("/unlock", "pin="+testPIN, nil); rec.Code != 303 || !strings.HasPrefix(rec.Header().Get("Location"), "/locked?failed=1") {
-		t.Errorf("unlock with unreadable settings: %d %q", rec.Code, rec.Header().Get("Location"))
+	// A fault of the server is not a wrong PIN: it is 500, and it is not counted, so it never ends the session.
+	for i := range 6 {
+		if rec := f.post("/unlock", "pin="+testPIN, nil); rec.Code != 500 {
+			t.Fatalf("unlock %d with unreadable settings: %d %q", i+1, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	if strings.Contains(logs.String(), "the PIN does not match") {
+		t.Errorf("a read error counted as a wrong PIN:\n%s", logs.String())
+	}
+	hash, err := core.HashPIN(testPIN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.WriteSettings(core.Settings{LockAfter: "15", LockPINHash: hash}); err != nil {
+		t.Fatal(err)
+	}
+	if rec := f.post("/unlock", "pin="+testPIN, nil); rec.Code != 303 || rec.Header().Get("Location") != "/" {
+		t.Errorf("unlock after the file is good again: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
 	if !strings.Contains(logs.String(), "cannot be read") {
 		t.Errorf("the read error is not logged:\n%s", logs.String())

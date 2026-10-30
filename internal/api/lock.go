@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -127,10 +128,16 @@ func (ss *sessions) activity(id string, now time.Time) {
 	}
 }
 
+// lock locks the session now. It keeps the count of wrong PINs: a lock must not give the tries back.
 func (ss *sessions) lock(id string, now time.Time) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.state[id] = &sessionState{active: now, seen: now, locked: true}
+	st, ok := ss.state[id]
+	if !ok {
+		st = &sessionState{}
+		ss.state[id] = st
+	}
+	st.active, st.seen, st.locked = now, now, true
 }
 
 func (ss *sessions) unlock(id string, now time.Time) {
@@ -342,11 +349,16 @@ func (p *public) unlock(w http.ResponseWriter, r *http.Request, id string, now t
 		writeError(w, r, crossOriginRefusal())
 		return
 	}
+	if cfgErr != nil {
+		// A fault of the server is not a wrong PIN: it is not counted, so it never ends the owner's session.
+		writeError(w, r, fmt.Errorf("read the lock settings: %w", cfgErr))
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	parseErr := r.ParseForm()
 	next := localPath(r.PostForm.Get("next"))
 	// With the lock off there is nothing to open: the session goes on, and a wrong PIN is not counted.
-	open := cfgErr == nil && (!lockOn || (hash != "" && parseErr == nil && core.PINMatches(hash, r.PostForm.Get("pin"))))
+	open := !lockOn || (hash != "" && parseErr == nil && core.PINMatches(hash, r.PostForm.Get("pin")))
 	if open {
 		p.sessions.unlock(id, now)
 		if next == "" {
