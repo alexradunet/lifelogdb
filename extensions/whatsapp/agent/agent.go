@@ -143,11 +143,11 @@ func (a *Agent) readCatalog(ctx context.Context) error {
 			return fmt.Errorf("the catalog has no action %q", name)
 		}
 	}
-	list2, err := toolsOf(list)
+	ts, err := toolsOf(list)
 	if err != nil {
 		return err
 	}
-	a.tools, a.actions = list2, actions
+	a.tools, a.actions = ts, actions
 	return nil
 }
 
