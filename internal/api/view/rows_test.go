@@ -22,10 +22,10 @@ func textField(name string, required bool) siren.Field {
 	return siren.Field{Name: name, Type: "text", Title: name, Required: required}
 }
 
-// TestTheQuickAddIsChosenByShape: the first action with exactly one required text field is one line at the top, and
-// it is not drawn again under Actions.
-func TestTheQuickAddIsChosenByShape(t *testing.T) {
-	add := siren.Action{Name: "app-add", Method: "POST", Href: "/with/app/items", Title: "Add it",
+// TestTheQuickAddIsTheFirstCreateAction: the first action of the class create, with exactly one required text field, is
+// one line at the top, and it is not drawn again under Actions.
+func TestTheQuickAddIsTheFirstCreateAction(t *testing.T) {
+	add := siren.Action{Name: "app-add", Method: "POST", Href: "/with/app/items", Title: "Add it", Class: []string{"create"},
 		Fields: []siren.Field{textField("text", true), {Name: "due", Type: "date"}}}
 	other := siren.Action{Name: "app-clear", Method: "POST", Href: "/with/app/clear", Title: "Clear"}
 	page := drawApp(t, &siren.Entity{Title: "App", Actions: []siren.Action{other, add}}, "/with/app/")
@@ -44,15 +44,17 @@ func TestTheQuickAddIsChosenByShape(t *testing.T) {
 	}
 }
 
-func TestTheQuickAddNeedsExactlyOneRequiredTextField(t *testing.T) {
-	two := siren.Action{Name: "two", Method: "POST", Href: "/with/app/two", Title: "Two",
+func TestTheQuickAddNeedsTheClassCreateAndExactlyOneRequiredTextField(t *testing.T) {
+	two := siren.Action{Name: "two", Method: "POST", Href: "/with/app/two", Title: "Two", Class: []string{"create"},
 		Fields: []siren.Field{textField("a", true), textField("b", true)}}
-	area := siren.Action{Name: "area", Method: "POST", Href: "/with/app/area", Title: "Area",
+	area := siren.Action{Name: "area", Method: "POST", Href: "/with/app/area", Title: "Area", Class: []string{"create"},
 		Fields: []siren.Field{{Name: "body", Type: "textarea", Required: true}}}
-	read := siren.Action{Name: "find", Method: "GET", Href: "/with/app/find", Title: "Find", Fields: []siren.Field{textField("q", true)}}
-	path := siren.Action{Name: "put", Method: "POST", Href: "/with/app/items/{id}", Title: "Put",
+	read := siren.Action{Name: "find", Method: "GET", Href: "/with/app/find", Title: "Find", Class: []string{"create"}, Fields: []siren.Field{textField("q", true)}}
+	path := siren.Action{Name: "put", Method: "POST", Href: "/with/app/items/{id}", Title: "Put", Class: []string{"create"},
 		Fields: []siren.Field{{Name: "id", Type: "number", Required: true, In: "path"}, textField("text", true)}}
-	for _, a := range []siren.Action{two, area, read, path} {
+	classless := siren.Action{Name: "classless", Method: "POST", Href: "/with/app/classless", Title: "Classless", Fields: []siren.Field{textField("text", true)}}
+	edit := siren.Action{Name: "edit", Method: "POST", Href: "/with/app/edit", Title: "Edit", Class: []string{"edit"}, Fields: []siren.Field{textField("text", true)}}
+	for _, a := range []siren.Action{two, area, read, path, classless, edit} {
 		page := drawApp(t, &siren.Entity{Title: "App", Actions: []siren.Action{a}}, "/with/app/")
 		if strings.Contains(page, `class="quick-add"`) {
 			t.Errorf("%s: drawn as a quick-add", a.Name)
@@ -64,7 +66,7 @@ func TestTheQuickAddNeedsExactlyOneRequiredTextField(t *testing.T) {
 }
 
 func TestACorePageHasNoQuickAdd(t *testing.T) {
-	add := siren.Action{Name: "add", Method: "POST", Href: "/items", Title: "Add", Fields: []siren.Field{textField("text", true)}}
+	add := siren.Action{Name: "add", Method: "POST", Href: "/items", Title: "Add", Class: []string{"create"}, Fields: []siren.Field{textField("text", true)}}
 	page := drawApp(t, &siren.Entity{Class: []string{"actions"}, Title: "Actions", Actions: []siren.Action{add}}, "/actions")
 	if strings.Contains(page, `class="quick-add"`) {
 		t.Error("a page of this server has a quick-add")
@@ -72,13 +74,14 @@ func TestACorePageHasNoQuickAdd(t *testing.T) {
 }
 
 func TestARowDrawsItsActionsAndChips(t *testing.T) {
-	round := siren.Action{Name: "app-done", Method: "POST", Href: "/with/app/items/1/done", Title: "Mark done"}
+	round := siren.Action{Name: "app-done", Method: "POST", Href: "/with/app/items/1/done", Title: "Mark done", Class: []string{"toggle"}}
+	noClass := siren.Action{Name: "app-clear", Method: "POST", Href: "/with/app/items/1/clear", Title: "Clear it"}
 	boxed := siren.Action{Name: "app-move", Method: "POST", Href: "/with/app/items/1/move", Title: "Move it",
 		Fields: []siren.Field{textField("to", true)}}
 	e := &siren.Entity{Title: "App", Entities: []siren.Link{
 		{Rel: []string{"item"}, Href: "/with/app/items/1", Title: "Buy milk",
 			Properties: map[string]any{"due": "2026-10-30", "n": 3, "flag": true, "off": false, "empty": "", "list": []any{1}},
-			Actions:    []siren.Action{round, boxed}},
+			Actions:    []siren.Action{round, boxed, noClass}},
 		{Rel: []string{"item"}, Href: "/with/app/items/2", Title: "Plain"},
 	}}
 	page := drawApp(t, e, "/with/app/")
@@ -93,8 +96,11 @@ func TestARowDrawsItsActionsAndChips(t *testing.T) {
 	if strings.Index(r, `class="round"`) > strings.Index(r, "Buy milk") || strings.Index(r, "Buy milk") > strings.Index(r, `<details class="action">`) {
 		t.Errorf("the order is not round button, title, boxed action:\n%s", r)
 	}
-	if strings.Count(r, `<details class="action">`) != 1 || !strings.Contains(r, `action="/with/app/items/1/move"`) || strings.Count(r, `class="round"`) != 1 {
-		t.Errorf("the action with a field is not the one boxed form:\n%s", r)
+	if strings.Count(r, `<details class="action">`) != 2 || !strings.Contains(r, `action="/with/app/items/1/move"`) || strings.Count(r, `class="round"`) != 1 {
+		t.Errorf("the action with a field and the action with no class are not the two boxed forms:\n%s", r)
+	}
+	if strings.Contains(r, `action="/with/app/items/1/clear" class="round"`) || !strings.Contains(r, `action="/with/app/items/1/clear"`) {
+		t.Errorf("an action with no class and no field is not boxed:\n%s", r)
 	}
 	for _, chip := range []string{"due: 2026-10-30", "flag: yes", "n: 3"} {
 		if !strings.Contains(r, `<span class="chip">`+chip+`</span>`) {

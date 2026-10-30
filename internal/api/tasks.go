@@ -85,7 +85,7 @@ func isTaskAction(name string) bool {
 // service runs (taskService.specs). The options of the field list are the names of the lists, which only the service
 // knows, so the row has none here.
 var taskCatalog = []spec{
-	{Name: "add-task", Title: "Add a task", Method: "POST", Path: "/tasks",
+	{Name: "add-task", Title: "Add a task", Class: []string{"create"}, Method: "POST", Path: "/tasks",
 		Description: "Make a task in the task service. list is the name of a list (the default list when absent). due is a day, YYYY-MM-DD.",
 		Hint:        "Make a task.",
 		Fields:      []siren.Field{req("title", "text", "Title"), opt("list", "text", "List"), opt("due", "date", "Due day"), area("notes", "Notes", 4)}},
@@ -93,10 +93,10 @@ var taskCatalog = []spec{
 		Description: "Change the title, the notes or the due day of a task. A field that is not sent stays as it is. An empty due or notes clears it.",
 		Fields: []siren.Field{path("id", "text", "Task"), opt("title", "text", "Title"), area("notes", "Notes", 4),
 			opt("due", "date", "Due day")}},
-	{Name: "complete-task", Title: "Complete a task", Method: "POST", Path: "/tasks/items/{id}/complete",
+	{Name: "complete-task", Title: "Complete a task", Class: []string{"toggle"}, Method: "POST", Path: "/tasks/items/{id}/complete",
 		Description: "Mark a task as done.",
 		Fields:      []siren.Field{path("id", "text", "Task")}},
-	{Name: "reopen-task", Title: "Reopen a task", Method: "POST", Path: "/tasks/items/{id}/reopen",
+	{Name: "reopen-task", Title: "Reopen a task", Class: []string{"toggle"}, Method: "POST", Path: "/tasks/items/{id}/reopen",
 		Description: "Mark a done task as open again.",
 		Fields:      []siren.Field{path("id", "text", "Task")}},
 	{Name: "delete-task", Title: "Delete a task", Method: "POST", Path: "/tasks/items/{id}/delete", Owner: true, Danger: true,

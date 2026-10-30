@@ -210,7 +210,19 @@ func (a *Apps) specs() []spec {
 // the row as they read a row of the static catalog.
 func specOfApp(app string, act siren.Action) spec {
 	return spec{Name: app + "-" + act.Name, Title: act.Title, Description: act.Description, Method: act.Method,
-		Path: "/with/" + app + act.Href, Fields: slices.Clone(act.Fields), Owner: act.Owner, Danger: act.Danger}
+		Path: "/with/" + app + act.Href, Fields: slices.Clone(act.Fields), Owner: act.Owner, Danger: act.Danger, Class: knownClasses(act.Class)}
+}
+
+// knownClasses keeps the classes that this server lists (siren.ActionClasses) and drops the others, so an app cannot
+// make the browser draw something it does not know. It is nil when none is left.
+func knownClasses(classes []string) []string {
+	var out []string
+	for _, c := range classes {
+		if slices.Contains(siren.ActionClasses(), c) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // mountWith gives m the routes of the apps: /with/NAME and everything under it, for every method. They go through
@@ -356,7 +368,8 @@ func forwardError(r *http.Request, who string, err error) error {
 }
 
 // inNamespace changes the answer of an app to the namespace of this server: each address that starts with a slash
-// gets the prefix /with/NAME, and each action name gets the prefix NAME-. A link, an embedded link or an action whose
+// gets the prefix /with/NAME, and each action name gets the prefix NAME-. An action keeps its classes that are in
+// siren.ActionClasses. A link, an embedded link or an action whose
 // address is not a path (it has a scheme or a host) is dropped: a connected app is on a loopback address, and
 // nothing it says leads elsewhere.
 func inNamespace(name string, e *siren.Entity) *siren.Entity {
@@ -385,7 +398,7 @@ func prefixed(prefix, name string, actions []siren.Action) []siren.Action {
 	var out []siren.Action
 	for _, a := range actions {
 		if isPath(a.Href) {
-			a.Href, a.Name = prefix+a.Href, name+"-"+a.Name
+			a.Href, a.Name, a.Class = prefix+a.Href, name+"-"+a.Name, knownClasses(a.Class)
 			out = append(out, a)
 		}
 	}

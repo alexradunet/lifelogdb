@@ -24,11 +24,11 @@ var (
 )
 
 var actions = []siren.Action{
-	{Name: "add-item", Method: "POST", Href: "/items", Title: "Add an item", Description: "Add an item with a text.",
+	{Name: "add-item", Class: []string{"create"}, Method: "POST", Href: "/items", Title: "Add an item", Description: "Add an item with a text.",
 		Fields: []siren.Field{{Name: "text", Type: "text", Title: "Text", Required: true}}},
 	{Name: "look", Method: "GET", Href: "/items/{id}", Title: "Look at an item", Description: "Read one item.",
 		Fields: []siren.Field{{Name: "id", Type: "number", Title: "Item", Required: true, In: "path"}}},
-	{Name: "done-item", Method: "POST", Href: "/items/{id}/done", Title: "Done", Description: "Mark an item done.",
+	{Name: "done-item", Class: []string{"toggle"}, Method: "POST", Href: "/items/{id}/done", Title: "Done", Description: "Mark an item done.",
 		Fields: []siren.Field{{Name: "id", Type: "number", Title: "Item", Required: true, In: "path"}}},
 	{Name: "reset", Method: "POST", Href: "/reset", Title: "Reset", Description: "Remove all items.", Owner: true},
 	{Name: "stop", Method: "POST", Href: "/stop", Title: "Stop", Description: "End the app with status 0."},
@@ -43,7 +43,7 @@ func home(*http.Request) (*siren.Entity, error) {
 	if n := len(items); n > 0 { // the last item is a row: it has a chip and a round button
 		id := strconv.Itoa(n)
 		e.Entities = []siren.Link{{Rel: []string{"item"}, Href: "/items/" + id, Title: items[n-1], Properties: map[string]any{"n": n},
-			Actions: []siren.Action{{Name: "done-item", Method: "POST", Href: "/items/" + id + "/done", Title: "Done"}}}}
+			Actions: []siren.Action{{Name: "done-item", Class: []string{"toggle"}, Method: "POST", Href: "/items/" + id + "/done", Title: "Done"}}}}
 	}
 	return e, nil
 }

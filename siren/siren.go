@@ -66,6 +66,13 @@ func Codes() []string {
 	}
 }
 
+// ActionClasses is the one list of the values that an action's class may have: what the action does to the resource
+// it is on (API.md, Action classes), never how a client draws it. The tests hold it equal to API.md. A server
+// drops a class of a connected app that is not in the list.
+func ActionClasses() []string {
+	return []string{"create", "edit", "toggle"}
+}
+
 // Entity is a Siren entity. Result is an extension: what a POST did (e.g. the wikilinks a save skipped).
 type Entity struct {
 	Class      []string `json:"class,omitempty"`
@@ -90,20 +97,21 @@ type Link struct {
 	Actions    []Action `json:"actions,omitempty"`
 }
 
-// Action is a Siren action. Description (what the action does, for an agent), Owner (the owner's alone) and
+// Action is a Siren action. Class (standard Siren) is at most one of ActionClasses: what the action does. Description (what the action does, for an agent), Owner (the owner's alone) and
 // Danger (it hides or retracts what is there) are extensions. Hint is the browser's short text for the form: it
 // is not on the wire, so a client, the CLI and the MCP tools keep reading Description.
 type Action struct {
-	Name        string  `json:"name"`
-	Owner       bool    `json:"owner,omitempty"`
-	Danger      bool    `json:"danger,omitempty"`
-	Title       string  `json:"title,omitempty"`
-	Description string  `json:"description,omitempty"`
-	Hint        string  `json:"-"`
-	Method      string  `json:"method"`
-	Href        string  `json:"href"`
-	Type        string  `json:"type,omitempty"`
-	Fields      []Field `json:"fields,omitempty"`
+	Name        string   `json:"name"`
+	Class       []string `json:"class,omitempty"`
+	Owner       bool     `json:"owner,omitempty"`
+	Danger      bool     `json:"danger,omitempty"`
+	Title       string   `json:"title,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Hint        string   `json:"-"`
+	Method      string   `json:"method"`
+	Href        string   `json:"href"`
+	Type        string   `json:"type,omitempty"`
+	Fields      []Field  `json:"fields,omitempty"`
 }
 
 // Field is a Siren field. In "path" (an extension) marks a field of the catalog's templated href; Rows (an

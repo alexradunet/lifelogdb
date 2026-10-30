@@ -147,7 +147,7 @@ All answers are Siren JSON ([API.md](../API.md#the-entity)). The app answers `GE
 
 | route | answer |
 |---|---|
-| `GET /actions` | An entity of class `actions`. Its `actions` are the actions of the app. Each has `name`, `title`, `description`, `method`, `href` and `fields`. |
+| `GET /actions` | An entity of class `actions`. Its `actions` are the actions of the app. Each has `name`, `title`, `description`, `method`, `href` and `fields`, and may have a `class` ([API.md](../API.md#action-classes)). |
 | `GET /` | The home of the app. Its `title` names the app in the rail of the browser. Without a title, the name is the title. |
 | one route for each action | The `method` and the `href` of the action. The answer is an entity. |
 | any other route | A read of a resource that the entities of the app link to. The server forwards a `GET` that matches no action as it is. |
@@ -166,8 +166,9 @@ of the app (502 `upstream`).
 
 ### How the browser draws a page of an app
 
-The browser draws the page of an app with its generic view. The view reads the shape of the entity. It reads no class
-and no name of an app. An author shapes the page with three rules.
+The browser draws the page of an app with its generic view. The view reads the shape of the entity and the `class` of
+its actions ([API.md](../API.md#action-classes)). It reads no name of an app. A server drops a class that
+`siren.ActionClasses()` does not list, so an unknown class is the same as none. An author shapes the page with three rules.
 
 ```mermaid
 flowchart LR
@@ -177,12 +178,12 @@ flowchart LR
   M --> A["the other actions, boxed"]
 ```
 
-1. **Quick-add.** On a page under `/with/NAME` or `/tasks`, the first action of the entity that writes (not a `GET`), has no path field and has exactly one
-   required field, of the type `text`, is one line at the top of the main column: that field, the button with the
+1. **Quick-add.** On a page under `/with/NAME` or `/tasks`, the first action of the entity that has the class `create`,
+   writes (not a `GET`), has no path field and has exactly one required field, of the type `text`, is one line at the top of the main column: that field, the button with the
    title of the action, and the other fields folded under "More fields". The Actions section does not draw it again.
 2. **Rows.** Each embedded link is a row. An embedded link may carry `properties` and `actions`
-   ([API.md](../API.md#the-entity)). An action of the row that has no field is a small round button before the
-   title. Its `title` is the accessible name of the button. An action with fields is a boxed form after the title.
+   ([API.md](../API.md#the-entity)). An action of the row that has the class `toggle` and no field is a small round button before the
+   title. Its `title` is the accessible name of the button. Any other action is a boxed form after the title.
    The scalar properties of the row (a string, a number, a boolean that is true) are chips after the title, each as
    `name: value`. A row with no properties and no actions is the link and its `rel`. A form of a row returns to the
    page it is on.

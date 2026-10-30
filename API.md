@@ -38,7 +38,7 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 | `properties` | the resource's own data, per class below |
 | `entities` | embedded links: `{rel, href, title, class}` each, the things this resource lists or links to. An embedded link of a connected app may also carry `properties` and `actions` (an extension of Siren): a short form of an embedded representation that keeps its `href`. The browser draws it as a [row](extensions/README.md#how-the-browser-draws-a-page-of-an-app). |
 | `links` | `{rel, href, title}`: `self`, `index` (home), `prev`/`next` (a neighbour or the next page), and the rels named per class |
-| `actions` | what may be done here: `{name, title, description, method, href, type, fields, owner, danger}`, each field `{name, type, title, value, required, options, in, rows, pages, accept}` with its current value filled in; `owner: true` marks the owner's alone and `danger: true` marks one that hides or retracts what is there, so a client can warn before it sends; `in: "path"` marks a field of a templated href (`GET /actions` only) and `rows` is how many lines a `textarea` is drawn; `pages: true` says the value is a page's title, so a client can offer the names of the pages; `accept` is what a `file` field takes (`audio/*`) |
+| `actions` | what may be done here: `{name, class, title, description, method, href, type, fields, owner, danger}`, each field `{name, type, title, value, required, options, in, rows, pages, accept}` with its current value filled in; `class` is at most one word that says what the action does ([action classes](#action-classes)); `owner: true` marks the owner's alone and `danger: true` marks one that hides or retracts what is there, so a client can warn before it sends; `in: "path"` marks a field of a templated href (`GET /actions` only) and `rows` is how many lines a `textarea` is drawn; `pages: true` says the value is a page's title, so a client can offer the names of the pages; `accept` is what a `file` field takes (`audio/*`) |
 | `result` | after a write: what it did (the result shapes below) |
 
 `GET /actions` is the catalog: every action with a templated `href` (`/pages/{id}/body`). A client fills the path
@@ -60,6 +60,22 @@ another kind is 422.
 (UTC, `2026-06-09T21:14:03.482Z`), `list`, `object`. A property marked *absent when empty* is left out of the JSON
 when it has no value. A `number` field is written in decimal digits; `mood`, `value` and `line` also take a sign, a point and an exponent (`-0.5`, `1e3`). `NaN`, `Inf`, a hexadecimal number and an underscore are refused.
 A request names only the fields of the action, and a browser's own `back`, `feedback` and `new`; any other name is 422 `invalid`. A browser form may also carry the fields of a form it shares with another action (the pick bar of a list sends the form of `file-pages` to `tombstone-pages` too); another client is refused them. A value outside a field's `options`, as `GET /actions` lists them, is 422 `invalid`. A multipart part with an unknown name is refused before its bytes are read.
+
+## Action classes
+
+The `class` of an action is the standard Siren member. It says **what the action does** to the resource it is on. It
+never says how to draw the action. The list is `siren.ActionClasses()`, and a test holds it equal to this table. An
+action has at most one class. An action with no class is any other action.
+
+| class | what the action does |
+|---|---|
+| `create` | It makes a new thing. The answer is that thing or its list. |
+| `edit` | It changes the own properties of the resource it is on. |
+| `toggle` | It flips one state of the resource it is on. It has no field, or one field with two options. |
+
+A client may ignore a class: an action with a class works as an action with none. The placement of an action is the
+choice of each client. The browser draws it by its class ([the browser and a page of an app](extensions/README.md#how-the-browser-draws-a-page-of-an-app)).
+A class that is not in the list is dropped from the action of a [connected app](#connected-apps).
 
 ## Errors
 

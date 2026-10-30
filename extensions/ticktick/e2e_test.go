@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -396,6 +397,9 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		got := map[string]string{}
 		for _, a := range actions {
 			got[a.Name] = a.Href
+			if want := map[string]string{"add-task": "create", "complete-task": "toggle"}[a.Name]; want != "" && !slices.Equal(a.Class, []string{want}) {
+				t.Errorf("the class of %s = %v, want [%s]", a.Name, a.Class, want)
+			}
 			if strings.HasPrefix(a.Name, "ticktick-") {
 				t.Errorf("the catalog has the action %s: the service has no prefix", a.Name)
 			}

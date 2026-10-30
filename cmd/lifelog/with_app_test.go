@@ -232,6 +232,9 @@ func TestTheBrowserDrawsTheRowsOfAnApp(t *testing.T) {
 	if a := home.Entities[0].Actions[0]; a.Href != "/with/testapp/items/1/done" || a.Name != "testapp-done-item" {
 		t.Errorf("the action of the row = %s %s, want testapp-done-item at /with/testapp/items/1/done", a.Name, a.Href)
 	}
+	if c := home.Entities[0].Actions[0].Class; len(c) != 1 || c[0] != "toggle" {
+		t.Errorf("the class of the action of the row = %v, want [toggle]", c)
+	}
 
 	get := func(path string) string {
 		req, err := http.NewRequestWithContext(ctx, "GET", w.base+path, nil)

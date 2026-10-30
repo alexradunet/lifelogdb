@@ -45,11 +45,11 @@ func idField() siren.Field {
 
 // actions are the six writes of the protocol. The server calls the href and not the name.
 func actions() []siren.Action {
-	byID := func(name, href, title string) siren.Action {
-		return siren.Action{Name: name, Method: "POST", Href: href, Title: title, Fields: []siren.Field{idField()}}
+	byID := func(name, href, title string, class ...string) siren.Action {
+		return siren.Action{Name: name, Class: class, Method: "POST", Href: href, Title: title, Fields: []siren.Field{idField()}}
 	}
 	return []siren.Action{
-		{Name: "add-task", Method: "POST", Href: "/tasks", Title: "Add a task",
+		{Name: "add-task", Class: []string{"create"}, Method: "POST", Href: "/tasks", Title: "Add a task",
 			Description: "Make a task. list is the id of a list; without it the task goes to the Inbox. due is a day, YYYY-MM-DD.",
 			Fields: []siren.Field{
 				{Name: "title", Type: "text", Title: "Title", Required: true},
@@ -64,8 +64,8 @@ func actions() []siren.Action {
 				{Name: "due", Type: "date", Title: "Due day"},
 				{Name: "notes", Type: "textarea", Title: "Notes", Rows: 4},
 			}},
-		byID("complete-task", "/tasks/{id}/complete", "Complete a task"),
-		byID("reopen-task", "/tasks/{id}/reopen", "Reopen a task"),
+		byID("complete-task", "/tasks/{id}/complete", "Complete a task", "toggle"),
+		byID("reopen-task", "/tasks/{id}/reopen", "Reopen a task", "toggle"),
 		byID("delete-task", "/tasks/{id}/delete", "Delete a task"),
 		{Name: "sync", Method: "POST", Href: "/sync", Title: "Sync now",
 			Description: "Read the done tasks and write each as an entry of its day, once. The service does this every poll interval too."},

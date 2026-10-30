@@ -220,8 +220,8 @@
 {{template "foot" .}}{{end}}
 
 {{/* row is an embedded link of the generic view. With no properties and no actions it is the link and its rel badge.
-     With them, an action of no field is a small round button before the title (its title is the accessible name),
-     the scalar properties are chips after it, and an action with fields is boxed. It takes v (the view) and l. */}}
+     With them, an action of the class toggle with no field is a small round button before the title (its title is the accessible name),
+     the scalar properties are chips after it, and any other action is boxed. It takes v (the view) and l. */}}
 {{define "row"}}{{$v := .v}}{{with .l}}{{$chips := rowChips .}}{{$acts := .Actions}}<li class="row">
 {{if or $chips $acts}}{{range $acts}}{{if roundAction .}}{{template "form" (form . "class" "round" "aria" .Title "back" $v.ReturnHere)}}{{end}}{{end}}<a href="{{.Href}}">{{or .Title .Href}}</a>
 {{range $chips}}<span class="chip">{{.}}</span>{{end}}{{range $acts}}{{if not (roundAction .)}}{{template "boxed" (form . "back" $v.ReturnHere)}}{{end}}{{end}}

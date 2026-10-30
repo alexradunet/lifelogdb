@@ -8,8 +8,8 @@ import (
 	"lifelog/siren"
 )
 
-// The generic view reads the shape of an entity and never a class or the name of an app. The three rules are in
-// extensions/README.md, "How the browser draws a page of an app". The code below holds them.
+// The generic view reads the shape of an entity and the class of its actions, and never the name of an app. The three
+// rules are in extensions/README.md, "How the browser draws a page of an app". The code below holds them.
 
 // drawnByShape says that the page at path is drawn by the generic view, by the shape of its entity and not by its
 // class: a page of a connected app (/with/NAME) and a page of the task service (/tasks). The class of such a page is
@@ -18,8 +18,9 @@ func drawnByShape(path string) bool {
 	return strings.HasPrefix(path, "/with/") || path == "/tasks" || strings.HasPrefix(path, "/tasks/")
 }
 
-// QuickAdd is the first action of the entity that a browser draws as one line at the top of the page: it writes
-// (it is not a GET), it has no path field, and exactly one of its fields is required and has the type text. Nil when
+// QuickAdd is the first action of the entity that a browser draws as one line at the top of the page: its class is
+// create, it writes (it is not a GET), it has no path field, and exactly one of its fields is required and has the
+// type text. Nil when
 // no action has that shape. Only a page drawn by shape (drawnByShape) has one: the catalog page of this server lists every
 // action once, in its own order.
 func (v *view) QuickAdd() *siren.Action {
@@ -35,7 +36,7 @@ func (v *view) QuickAdd() *siren.Action {
 }
 
 func quickAdd(a siren.Action) bool {
-	if a.Method == "GET" {
+	if a.Method == "GET" || !slices.Contains(a.Class, "create") {
 		return false
 	}
 	required := 0
@@ -82,8 +83,11 @@ func (v *view) IsHere(href string) bool {
 	return path == v.Path
 }
 
-// roundAction reports an action of a row that a browser draws as a small round button: it has no field to fill.
-func roundAction(a siren.Action) bool { return len(a.Fields) == 0 }
+// roundAction reports an action of a row that a browser draws as a small round button: its class is toggle, and it
+// has no field to fill. Any other action of a row is boxed.
+func roundAction(a siren.Action) bool {
+	return slices.Contains(a.Class, "toggle") && len(a.Fields) == 0
+}
 
 // rowChips are the scalar properties of an embedded link as "name: value", in the order of the names: a string that
 // is not empty, a number, a true boolean. A list, an object, a null, an empty string and false make no chip.
