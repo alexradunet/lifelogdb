@@ -393,10 +393,11 @@ small .mood{font-size:12px; padding:2px 8px}
 .meta-line{margin:0; font:400 13px/20px var(--mono); font-variant-numeric:tabular-nums; color:var(--text-muted); overflow-wrap:anywhere}
 
 /* The pencil beside the title and the create buttons of the head: each opens a popover that hangs from its button, as the
-   menu does. A button and its popover are one .pop, the popover after the button, so the one name --pop is the anchor
-   of each popover (the last one before it in the tree). An engine without anchor positioning keeps the fixed box. On a
-   phone the popover is a sheet from the bottom, as the menu is (above). */
-.pop{position:relative; display:inline-flex}
+   menu does. A button and its popover are one .pop, and anchor-scope keeps the name --pop inside it: a popover is in
+   the top layer, so with no scope every popover would hang from the last button of that name on the page. An engine
+   without anchor positioning keeps the fixed box. On a phone the popover is a sheet from the bottom, as the menu is
+   (above). */
+.pop{position:relative; display:inline-flex; anchor-scope:--pop}
 .pop>.button{anchor-name:--pop}
 .button.pencil{inline-size:var(--control-small); padding:0; color:var(--text-link)}
 .head-pop:popover-open{display:flex; flex-direction:column; gap:var(--space-3); position:fixed; z-index:30; inset:4rem var(--space-4) auto auto; margin:0; padding:var(--space-4);
