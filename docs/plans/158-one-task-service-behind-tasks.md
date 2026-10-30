@@ -9,7 +9,17 @@
 - **Priority:** P2. **Effort:** L. **Risk:** LOW for the file: nothing of `schema.sql` changes, and the file keeps no
   task ([D23](../decisions/D23-no-tasks.md)). MEDIUM for ring 2: a new section, six actions while a task service runs,
   and a new role in the handshake.
-- **Status:** PLANNED. The owner approved the plan on 2026-10-30.
+- **Status:** IN REVIEW (owner). The owner approved the plan on 2026-10-30. Built 2026-10-30 on master by two
+  sub-agents in worktrees, each reviewed before the merge: Part A `9b24aad` and `6846ccd` (an error of the task service
+  says "the task service", never the name of the child), Part B `f4a0b09` and `bbfbc40` (the edit form sends every
+  field, so the day that a task has already keeps its due with its time; a test held the fault first). Checks: root
+  `go vet ./... && go test ./...` and `go test -count=1 -shuffle=on ./...` passed, `staticcheck ./...` (2026.2.2)
+  clean, `govulncheck ./...` no vulnerabilities, `CGO_ENABLED=1 go test -race -count=1 ./cmd/lifelog -run
+  'Task|With'` passed (the sub-agent's run); in `extensions/ticktick`: `go vet`, `go test -count=1 -shuffle=on ./...`
+  (the end-to-end test ran the real `serve --with ticktick`), `go mod tidy -diff` and `staticcheck` clean; in
+  `extensions/whatsapp` and `extensions/mcp`: `go vet` and `go test -count=1 -shuffle=on ./...` passed. Not done:
+  screenshots, and the live check of reopen and of a cleared due day or notes against the real TickTick, which no
+  test can reach. Linux only.
 
 ## Context
 
