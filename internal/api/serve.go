@@ -489,6 +489,7 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			logFault(r, "the settings cannot be read", err)
 		}
 		f.Shell.Ground = ground
+		f.Shell.Lock = lockIsOn(r)
 		// A failed read draws the page with no strip: the strip is a help. The page of an error has logged its own
 		// cause, so only the page of a good answer logs this one.
 		strip, err := todayStrip(r.Context(), fr.shell, f.Shell.Today)

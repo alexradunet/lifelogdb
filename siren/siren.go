@@ -53,6 +53,8 @@ const (
 	CodeUnavailable = "unavailable"
 	// CodeUpstream is the code of an app that answered something that is not an entity (502).
 	CodeUpstream = "upstream"
+	// CodeLocked is the code of a request from a browser session that the lock holds shut (401); the PIN opens it.
+	CodeLocked = "locked"
 )
 
 // Codes is the one list of the codes. The tests hold it equal to the constants above, to API.md (Errors) and to
@@ -62,7 +64,7 @@ func Codes() []string {
 		CodeBadRequest, CodeUnauthorized, CodeForbidden, CodeNotFound, CodeConflict, CodeTooLarge,
 		CodeUnsupportedMedia, CodeInvalid, CodeTimeout, CodeInternal, CodeExists, CodeCrossOrigin,
 		CodeTokenRequired, CodeStaleVersion, CodeSnapshotRefused, CodeRestoreCheckFailed, CodeBusy,
-		CodeUnavailable, CodeUpstream,
+		CodeUnavailable, CodeUpstream, CodeLocked,
 	}
 }
 
