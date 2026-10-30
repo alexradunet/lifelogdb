@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -173,20 +174,26 @@ func (c *Client) Create(ctx context.Context, t Task) (Task, error) {
 // task on update, and a partial body would lose those fields. The live behaviour of reopen (status 0, no
 // completedTime) and of an empty dueDate is not tested against the real API: the owner checks it live.
 func (c *Client) Update(ctx context.Context, project, id string, change map[string]any) (Task, error) {
-	var raw map[string]any
+	// json.RawMessage keeps each value of TickTick byte for byte: a number does not pass through a float64.
+	var raw map[string]json.RawMessage
 	if err := c.call(ctx, http.MethodGet, "/project/"+url.PathEscape(project)+"/task/"+url.PathEscape(id), nil, &raw); err != nil {
 		return Task{}, err
 	}
 	if raw == nil {
-		raw = map[string]any{}
+		raw = map[string]json.RawMessage{}
 	}
-	raw["id"], raw["projectId"] = id, project
+	change = maps.Clone(change)
+	change["id"], change["projectId"] = id, project
 	for k, v := range change {
 		if v == nil {
 			delete(raw, k)
-		} else {
-			raw[k] = v
+			continue
 		}
+		b, err := json.Marshal(v)
+		if err != nil {
+			return Task{}, err
+		}
+		raw[k] = b
 	}
 	var out Task
 	err := c.call(ctx, http.MethodPost, "/task/"+url.PathEscape(id), raw, &out)

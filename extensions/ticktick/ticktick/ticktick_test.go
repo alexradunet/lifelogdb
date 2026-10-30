@@ -238,7 +238,7 @@ func TestExchangeRefusals(t *testing.T) {
 func TestUpdateSendsBackTheWholeTaskAsTickTickGaveIt(t *testing.T) {
 	f, c := newFake(t)
 	f.answer = `{"id":"t1","projectId":"p1","title":"A","status":2,"completedTime":"2030-03-05T12:00:00.000+0000",` +
-		`"priority":5,"tags":["x"],"reminders":["TRIGGER:PT0S"],"items":[{"title":"step"}]}`
+		`"priority":5,"tags":["x"],"reminders":["TRIGGER:PT0S"],"items":[{"title":"step"}],"sortOrder":-9007199254740993}`
 	if _, err := c.Update(context.Background(), "p1", "t1", map[string]any{"title": "B", "completedTime": nil, "status": 0}); err != nil {
 		t.Fatal(err)
 	}
@@ -251,6 +251,9 @@ func TestUpdateSendsBackTheWholeTaskAsTickTickGaveIt(t *testing.T) {
 	}
 	if _, there := sent["completedTime"]; there {
 		t.Errorf("body = %v, want no completedTime: a nil value deletes the key", sent)
+	}
+	if !strings.Contains(f.body, `"sortOrder":-9007199254740993`) { // 2^53 + 1: a float64 cannot hold it
+		t.Errorf("body = %s, want sortOrder byte for byte", f.body)
 	}
 	for _, k := range []string{"tags", "reminders", "items"} {
 		if sent[k] == nil {
