@@ -56,7 +56,23 @@ type fakeTick struct {
 	tasks        map[string]*ticktick.Task
 	noCompleted  bool
 	unauthorized bool
+	failRead     bool // when set, GET of one task answers 500
 	nextID       int
+	extra        map[string]map[string]any // the fields of a task that Task does not know
+}
+
+var knownKeys = map[string]bool{"id": true, "projectId": true, "title": true, "content": true, "status": true,
+	"completedTime": true, "dueDate": true, "startDate": true, "timeZone": true, "isAllDay": true}
+
+// wire is the task as TickTick sends it: the fields of Task and the extra ones.
+func (f *fakeTick) wire(t *ticktick.Task) map[string]any {
+	b, _ := json.Marshal(t)
+	out := map[string]any{}
+	_ = json.Unmarshal(b, &out)
+	for k, v := range f.extra[t.ID] {
+		out[k] = v
+	}
+	return out
 }
 
 var lists = []ticktick.Project{{ID: "p-home", Name: "Home"}, {ID: "p-work", Name: "Work"}}
@@ -74,16 +90,20 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET" && path == "/project":
 		_ = json.NewEncoder(w).Encode(lists)
 	case r.Method == "GET" && len(parts) == 3 && parts[2] == "data":
-		open := []ticktick.Task{}
+		open := []map[string]any{}
 		for _, t := range f.tasks {
 			if t.ProjectID == parts[1] && t.Status == 0 {
-				open = append(open, *t)
+				open = append(open, f.wire(t))
 			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"tasks": open})
 	case r.Method == "GET" && len(parts) == 4 && parts[2] == "task":
+		if f.failRead {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		if t, ok := f.tasks[parts[3]]; ok && t.ProjectID == parts[1] {
-			_ = json.NewEncoder(w).Encode(t)
+			_ = json.NewEncoder(w).Encode(f.wire(t))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -101,18 +121,27 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusNotFound)
 	case r.Method == "POST" && len(parts) == 2 && parts[0] == "task" && parts[1] != "completed":
+		raw, _ := io.ReadAll(r.Body)
 		var in ticktick.Task
-		_ = json.NewDecoder(r.Body).Decode(&in)
+		_ = json.Unmarshal(raw, &in)
+		var all map[string]any
+		_ = json.Unmarshal(raw, &all)
 		t, ok := f.tasks[parts[1]]
 		if !ok || t.ProjectID != in.ProjectID {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		t.Title, t.Content, t.Status, t.DueDate = in.Title, in.Content, in.Status, in.DueDate
-		if t.Status == 0 {
-			t.CompletedTime = ""
+		// TickTick may replace the task: a field that the body lacks is gone.
+		t.Title, t.Content, t.Status, t.DueDate, t.StartDate = in.Title, in.Content, in.Status, in.DueDate, in.StartDate
+		t.CompletedTime, t.TimeZone, t.IsAllDay = in.CompletedTime, in.TimeZone, in.IsAllDay
+		extra := map[string]any{}
+		for k, v := range all {
+			if !knownKeys[k] {
+				extra[k] = v
+			}
 		}
-		_ = json.NewEncoder(w).Encode(t)
+		f.extra[t.ID] = extra
+		_ = json.NewEncoder(w).Encode(f.wire(t))
 	case r.Method == "DELETE" && len(parts) == 4 && parts[2] == "task":
 		if t, ok := f.tasks[parts[3]]; !ok || t.ProjectID != parts[1] {
 			w.WriteHeader(http.StatusNotFound)
@@ -124,10 +153,10 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		done := []ticktick.Task{}
+		done := []map[string]any{}
 		for _, t := range f.tasks {
 			if t.Status == 2 {
-				done = append(done, *t)
+				done = append(done, f.wire(t))
 			}
 		}
 		_ = json.NewEncoder(w).Encode(done)
@@ -141,6 +170,19 @@ func (f *fakeTick) add(t ticktick.Task) {
 	defer f.mu.Unlock()
 	t.TimeZone = "UTC" // the day of a completion is then the same in the fake and in the test
 	f.tasks[t.ID] = &t
+}
+
+// keep sets fields of a task that Task does not know.
+func (f *fakeTick) keep(id string, fields map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.extra[id] = fields
+}
+
+func (f *fakeTick) raw(id string) map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.wire(f.tasks[id])
 }
 
 func (f *fakeTick) complete(id string, at time.Time) {
@@ -353,7 +395,7 @@ func TestTickTickOnTheRealLifelog(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { holdsTheWholeLine(t, b, tc.noCompleted) })
 	}
 	t.Run("a refused token ends the app with status 2", func(t *testing.T) {
-		fake := &fakeTick{tasks: map[string]*ticktick.Task{}, unauthorized: true}
+		fake := &fakeTick{extra: map[string]map[string]any{}, tasks: map[string]*ticktick.Task{}, unauthorized: true}
 		srv := httptest.NewServer(fake)
 		defer srv.Close()
 		s := startServer(t, b, srv)
@@ -367,7 +409,7 @@ func TestTickTickOnTheRealLifelog(t *testing.T) {
 func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 	now := time.Now()
 	today := now.Format("2006-01-02") // the day that the app calls today
-	fake := &fakeTick{tasks: map[string]*ticktick.Task{}, noCompleted: noCompleted}
+	fake := &fakeTick{extra: map[string]map[string]any{}, tasks: map[string]*ticktick.Task{}, noCompleted: noCompleted}
 	fake.add(ticktick.Task{ID: "t-rent", ProjectID: "p-home", Title: "Pay rent"})
 	fake.add(ticktick.Task{ID: "t-mom", ProjectID: "p-home", Title: "Call mom"})
 	fake.add(ticktick.Task{ID: "t-report", ProjectID: "p-work", Title: "Write report", DueDate: today + "T00:00:00.000+0000"})
@@ -526,9 +568,13 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 	})
 
 	t.Run("edit, reopen and delete reach TickTick", func(t *testing.T) {
+		fake.keep("t-report", map[string]any{"priority": 5.0, "tags": []any{"work"}})
 		s.act("edit-task", map[string]string{"id": "t-report", "title": "Write the report"})
 		if r, ok := fake.byTitle("Write the report"); !ok || r.DueDate != today+"T00:00:00.000+0000" {
 			t.Errorf("task in TickTick = %+v, %v, want the new title and the old due day", r, ok)
+		}
+		if raw := fake.raw("t-report"); raw["priority"] != 5.0 || raw["tags"] == nil {
+			t.Errorf("task in TickTick = %v, want the priority and the tags kept by the edit", raw)
 		}
 		s.act("reopen-task", map[string]string{"id": "t-mom"})
 		if mom, _ := fake.byTitle("Call mom"); mom.Status != 0 || mom.CompletedTime != "" {
@@ -542,14 +588,41 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 
 	t.Run("a task that TickTick does not know is not found", func(t *testing.T) {
 		actions, _ := s.client().Catalog(t.Context())
+		found := false
 		for _, a := range actions {
 			if a.Name != "complete-task" {
 				continue
 			}
+			found = true
 			_, err := s.client().Do(t.Context(), a, map[string]string{"id": "nope"})
 			if ce, ok := err.(*client.Error); !ok || ce.Status != 404 || ce.Code() != "not_found" {
 				t.Errorf("err = %v, want 404 not_found", err)
 			}
+		}
+		if !found {
+			t.Fatal("the catalog has no action complete-task")
+		}
+	})
+
+	t.Run("an error page does not name the task manager", func(t *testing.T) {
+		fake.mu.Lock()
+		fake.failRead = true
+		fake.mu.Unlock()
+		defer func() {
+			fake.mu.Lock()
+			fake.failRead = false
+			fake.mu.Unlock()
+		}()
+		// The service learned t-mom from the page of the list above, so the read of the task is the call that fails.
+		res, page := post(t, s, "/tasks/items/t-mom/reopen")
+		if res.StatusCode < 400 {
+			t.Fatalf("status %d, want an error", res.StatusCode)
+		}
+		if !strings.Contains(page, "the task manager answered 500") {
+			t.Errorf("the error page lacks the words of the status:\n%s", page)
+		}
+		if strings.Contains(strings.ToLower(page), "ticktick") {
+			t.Errorf("the error page names the task manager:\n%s", page)
 		}
 	})
 }
@@ -558,6 +631,23 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 func get(t *testing.T, s *server, path string) (*http.Response, string) {
 	t.Helper()
 	req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept", "text/html")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, _ := io.ReadAll(res.Body)
+	return res, string(raw)
+}
+
+// post sends a form as a browser does and returns the response and its body, with no redirect followed.
+func post(t *testing.T, s *server, path string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), "POST", s.base+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

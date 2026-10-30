@@ -461,12 +461,12 @@ func TestATickTickFaultIsBadGatewayWithoutItsBody(t *testing.T) {
 	env := newServiceEnv(t)
 	env.tick.unauthorized = true
 	_, err := env.c.Get(t.Context(), "/open")
-	wantError(t, err, 502, "upstream", "TickTick answered 401")
+	wantError(t, err, 502, "upstream", "the task manager refused the login (401): run the login of the task service again")
 	if !env.login {
 		t.Error("a 401 in a handler must tell Serve to stop")
 	}
 	_, err = env.do(t, "add-task", map[string]string{"title": "x"})
-	wantError(t, err, 502, "upstream", "TickTick answered 401")
+	wantError(t, err, 502, "upstream", "the task manager refused the login (401): run the login of the task service again")
 }
 
 func TestSyncPollsAndAnswersTheCount(t *testing.T) {
@@ -491,7 +491,7 @@ func TestSyncPollsAndAnswersTheCount(t *testing.T) {
 	}
 }
 
-func TestSyncAnswersALifelogFaultWithoutItsWords(t *testing.T) {
+func TestSyncAnswersALifelogFaultWithoutItsWordsOrItsCause(t *testing.T) {
 	env := newServiceEnv(t)
 	env.tick.add("t1", "p-home", "Pay rent")
 	env.tick.finish("t1", now.Add(-time.Hour))
@@ -505,7 +505,7 @@ func TestSyncAnswersALifelogFaultWithoutItsWords(t *testing.T) {
 		Message string `json:"message"`
 	}
 	reread(t, ce.Entity, &p)
-	if !strings.Contains(p.Message, "t1") || strings.Contains(p.Message, "words") {
-		t.Errorf("message = %q, want the task id and no words", p.Message)
+	if p.Message != "the poll failed" {
+		t.Errorf("message = %q, want only that the poll failed", p.Message)
 	}
 }

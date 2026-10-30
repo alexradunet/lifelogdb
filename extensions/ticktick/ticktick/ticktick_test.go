@@ -59,10 +59,10 @@ func TestEveryCallUsesItsRouteAndTheToken(t *testing.T) {
 		{"create", `{"id":"t2","title":"Milk","projectId":"p1"}`,
 			func() (any, error) { return c.Create(ctx, Task{Title: "Milk", ProjectID: "p1"}) },
 			"POST", "/open/v1/task", Task{ID: "t2", ProjectID: "p1", Title: "Milk"}, `"title":"Milk"`},
-		{"update", `{"id":"t1","title":"B","projectId":"p1"}`,
-			func() (any, error) { return c.Update(ctx, Task{ID: "t1", ProjectID: "p1", Title: "B"}) },
-			"POST", "/open/v1/task/t1", Task{ID: "t1", ProjectID: "p1", Title: "B"},
-			`"id":"t1","projectId":"p1","title":"B","content":"","status":0,"dueDate":"",`},
+		{"update", `{"id":"t1","title":"A","projectId":"p1"}`,
+			func() (any, error) { return c.Update(ctx, "p1", "t1", map[string]any{"title": "B"}) },
+			"POST", "/open/v1/task/t1", Task{ID: "t1", ProjectID: "p1", Title: "A"},
+			`"id":"t1","projectId":"p1","title":"B"`},
 		{"delete", ``, func() (any, error) { return nil, c.Delete(ctx, "p1", "t1") },
 			"DELETE", "/open/v1/project/p1/task/t1", nil, ""},
 		{"complete", ``, func() (any, error) { return nil, c.Complete(ctx, "p1", "t1") },
@@ -232,5 +232,29 @@ func TestExchangeRefusals(t *testing.T) {
 	status, answer = 200, `{}`
 	if _, err := o.Exchange(context.Background(), "c"); err == nil {
 		t.Error("an answer with no access_token must be an error")
+	}
+}
+
+func TestUpdateSendsBackTheWholeTaskAsTickTickGaveIt(t *testing.T) {
+	f, c := newFake(t)
+	f.answer = `{"id":"t1","projectId":"p1","title":"A","status":2,"completedTime":"2030-03-05T12:00:00.000+0000",` +
+		`"priority":5,"tags":["x"],"reminders":["TRIGGER:PT0S"],"items":[{"title":"step"}]}`
+	if _, err := c.Update(context.Background(), "p1", "t1", map[string]any{"title": "B", "completedTime": nil, "status": 0}); err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]any
+	if err := json.Unmarshal([]byte(f.body), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["title"] != "B" || sent["priority"] != 5.0 || sent["status"] != 0.0 || sent["id"] != "t1" || sent["projectId"] != "p1" {
+		t.Errorf("body = %v, want the new title and status and the other fields as they were", sent)
+	}
+	if _, there := sent["completedTime"]; there {
+		t.Errorf("body = %v, want no completedTime: a nil value deletes the key", sent)
+	}
+	for _, k := range []string{"tags", "reminders", "items"} {
+		if sent[k] == nil {
+			t.Errorf("body = %v, want %s kept", sent, k)
+		}
 	}
 }

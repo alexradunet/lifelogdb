@@ -28,8 +28,11 @@ type fakeTick struct {
 	entered       chan struct{} // when set, GET /project signals here before it waits
 	inFlight      int           // requests in progress now, and the most there were at once
 	maxInFlight   int
-	updates       []ticktick.Task // the bodies of POST /task/{id}, as TickTick decoded them
-	completedBody string          // the body of the last POST /task/completed
+	updates       []ticktick.Task           // the bodies of POST /task/{id}, as TickTick decoded them
+	extra         map[string]map[string]any // the fields of a task that Task does not know: priority, tags, ...
+	rawUpdates    []map[string]any          // the bodies of POST /task/{id}, as they were sent
+	failRead      bool                      // when set, GET /project/{p}/task/{id} answers 500
+	completedBody string                    // the body of the last POST /task/completed
 }
 
 func newFakeTick(t *testing.T) (*fakeTick, *ticktick.Client) {
@@ -37,6 +40,7 @@ func newFakeTick(t *testing.T) (*fakeTick, *ticktick.Client) {
 	f := &fakeTick{
 		lists: []ticktick.Project{{ID: "p-home", Name: "Home"}, {ID: "p-work", Name: "Work"}},
 		tasks: map[string]*ticktick.Task{},
+		extra: map[string]map[string]any{},
 	}
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
@@ -57,6 +61,24 @@ func (f *fakeTick) finish(id string, at time.Time) {
 	defer f.mu.Unlock()
 	t := f.tasks[id]
 	t.Status, t.CompletedTime = 2, at.UTC().Format(ticktick.TimeLayout)
+}
+
+// wire is the task as TickTick sends it: the fields of Task and the extra fields.
+func (f *fakeTick) wire(t *ticktick.Task) map[string]any {
+	b, _ := json.Marshal(t)
+	out := map[string]any{}
+	_ = json.Unmarshal(b, &out)
+	for k, v := range f.extra[t.ID] {
+		out[k] = v
+	}
+	return out
+}
+
+// keep sets fields of a task that Task does not know.
+func (f *fakeTick) keep(id string, fields map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.extra[id] = fields
 }
 
 func (f *fakeTick) callsTo(prefix string) int {
@@ -99,20 +121,24 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET" && path == "/project":
 		_ = json.NewEncoder(w).Encode(f.lists)
 	case r.Method == "GET" && len(parts) == 3 && parts[2] == "data":
-		open := []ticktick.Task{}
+		open := []map[string]any{}
 		for _, t := range f.tasks {
 			if t.ProjectID == parts[1] && t.Status == 0 {
-				open = append(open, *t)
+				open = append(open, f.wire(t))
 			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"project": map[string]string{"id": parts[1]}, "tasks": open})
 	case r.Method == "GET" && len(parts) == 4 && parts[2] == "task":
 		t, ok := f.tasks[parts[3]]
+		if f.failRead {
+			w.WriteHeader(500)
+			return
+		}
 		if !ok || t.ProjectID != parts[1] {
 			w.WriteHeader(404)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(t)
+		_ = json.NewEncoder(w).Encode(f.wire(t))
 	case r.Method == "POST" && path == "/task":
 		var in ticktick.Task
 		_ = json.NewDecoder(r.Body).Decode(&in)
@@ -134,27 +160,39 @@ func (f *fakeTick) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(404)
 			return
 		}
-		done := []ticktick.Task{}
+		done := []map[string]any{}
 		for _, t := range f.tasks {
 			if t.Status == 2 {
-				done = append(done, *t)
+				done = append(done, f.wire(t))
 			}
 		}
 		_ = json.NewEncoder(w).Encode(done)
 	case r.Method == "POST" && len(parts) == 2 && parts[0] == "task":
+		raw, _ := io.ReadAll(r.Body)
 		var in ticktick.Task
-		_ = json.NewDecoder(r.Body).Decode(&in)
+		_ = json.Unmarshal(raw, &in)
+		var all map[string]any
+		_ = json.Unmarshal(raw, &all)
 		t, ok := f.tasks[parts[1]]
 		if !ok || t.ProjectID != in.ProjectID {
 			w.WriteHeader(404)
 			return
 		}
 		f.updates = append(f.updates, in)
+		f.rawUpdates = append(f.rawUpdates, all)
+		// TickTick may replace the task: a field that the body lacks is gone.
 		t.Title, t.Content, t.Status, t.DueDate, t.StartDate, t.IsAllDay = in.Title, in.Content, in.Status, in.DueDate, in.StartDate, in.IsAllDay
-		if t.Status == 0 {
-			t.CompletedTime = ""
+		t.CompletedTime, t.TimeZone = in.CompletedTime, in.TimeZone
+		extra := map[string]any{}
+		for k, v := range all {
+			switch k {
+			case "id", "projectId", "title", "content", "status", "completedTime", "dueDate", "startDate", "timeZone", "isAllDay":
+			default:
+				extra[k] = v
+			}
 		}
-		_ = json.NewEncoder(w).Encode(t)
+		f.extra[t.ID] = extra
+		_ = json.NewEncoder(w).Encode(f.wire(t))
 	case r.Method == "DELETE" && len(parts) == 4 && parts[2] == "task":
 		if t, ok := f.tasks[parts[3]]; !ok || t.ProjectID != parts[1] {
 			w.WriteHeader(404)

@@ -127,15 +127,15 @@ restated here. This table says only how TickTick fills it.
 | `GET /done?since=` | `POST /task/completed` with an empty body, filtered here by the day of `completedTime`. `done_day` is the day that the entry of the task uses: one rule, the zone of the task. A server without that call gives an empty list. |
 | `GET /tasks/ID` | the task is looked up in the lists, then in the done tasks. |
 | `POST /tasks` | `POST /task`. `list` is a project id. Without it, the task goes to the Inbox. |
-| `POST /tasks/ID` (edit) | `POST /task/ID` with the whole task. A field that the request does not name keeps its value. |
+| `POST /tasks/ID` (edit) | `GET` the task, then `POST /task/ID` with the whole task as TickTick gave it (priority, tags, reminders and the rest stay). A field that the request does not name keeps its value. |
 | `.../complete`, `.../reopen`, `.../delete` | `POST .../complete`, `POST /task/ID` with status 0, `DELETE /project/P/task/ID`. |
 | `POST /sync` | one poll. It answers the count that it wrote. A `sync` that comes while a poll runs waits for it. |
 
 The task `list` is the project id, and `""` for the Inbox. `due` is the due day in the zone of the task. A due day that
-you set is a whole day in the zone of the program. TickTick has priorities, but the protocol has none, so they are not
+you set is a whole day: `dueDate` and `startDate` are the same instant, `isAllDay` is true. The zone name is the `timeZone` of the task when it loads; else `TZ`, else the target of `/etc/localtime`; else no `timeZone` is sent. TickTick has priorities, but the protocol has none, so they are not
 read. The refusals: a `due` that is not `YYYY-MM-DD` and a `list` that is not a list are 422; an unknown task or list is
-404; an answer of TickTick that is not 2xx is 502 `upstream` with the words `TickTick answered STATUS` and never
-TickTick's body.
+404; an answer of TickTick that is not 2xx is 502 `upstream` with the words `the task manager answered STATUS` and never
+TickTick's body or name.
 
 How you reach it:
 

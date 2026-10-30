@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"maps"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -108,15 +111,16 @@ func respond(f func(*http.Request) (*siren.Entity, error)) http.HandlerFunc {
 	}
 }
 
-// upstream turns an error of TickTick into the error of the service. TickTick's body is not in it. A nil error stays nil.
+// upstream turns an error of TickTick into the error of the service. TickTick's body is not in it, and neither is its
+// name: the app never shows which task manager runs. A nil error stays nil.
 func (s *service) upstream(err error) error {
 	err = s.p.check(err)
 	var se *ticktick.StatusError
 	switch {
 	case errors.Is(err, ErrLoginAgain):
-		return &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: "TickTick answered 401"}
+		return &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: "the task manager refused the login (401): run the login of the task service again"}
 	case errors.As(err, &se):
-		return &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: fmt.Sprintf("TickTick answered %d", se.Status)}
+		return &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: fmt.Sprintf("the task manager answered %d", se.Status)}
 	}
 	return err
 }
@@ -340,18 +344,62 @@ func (s *service) done(r *http.Request) (*siren.Entity, error) {
 	return tasksEntity(out), nil
 }
 
-// setDue puts a due day on a task, or clears it when day is "". The day is a whole day in the local zone.
-func setDue(t *ticktick.Task, day string) error {
+// zoneName is the name of the zone for a due day. It is the zone of the task when the name loads. Else it is the local
+// zone: TZ (without a leading colon) when it loads, else the target of the link /etc/localtime after "zoneinfo/" when
+// it loads, else "". The name "Local" is no zone name: TickTick would not know it. With "", the offset in dueDate
+// carries the instant.
+func zoneName(task, tz, link string) string {
+	if loads(task) {
+		return task
+	}
+	if tz = strings.TrimPrefix(tz, ":"); loads(tz) {
+		return tz
+	}
+	if _, name, ok := strings.Cut(link, "zoneinfo/"); ok && loads(name) {
+		return name
+	}
+	return ""
+}
+
+func loads(name string) bool {
+	if name == "" || name == "Local" {
+		return false
+	}
+	_, err := time.LoadLocation(name)
+	return err == nil
+}
+
+// zoneFor is zoneName with the inputs of this machine, and the zone itself (the local zone when there is no name).
+func zoneFor(task string) (string, *time.Location) {
+	link, _ := os.Readlink("/etc/localtime")
+	name := zoneName(task, os.Getenv("TZ"), link)
+	if name == "" {
+		return "", time.Local
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil { // zoneName has loaded it
+		return "", time.Local
+	}
+	return name, loc
+}
+
+// dueFields are the fields of TickTick for a due day: one instant for dueDate and startDate, all day. A day that is ""
+// clears them. taskZone is the zone of the task, "" for a new task. With no zone name, timeZone is not a field.
+func dueFields(day, taskZone string) (fields map[string]any, err error) {
 	if day == "" {
-		t.DueDate, t.StartDate, t.IsAllDay = "", "", false
-		return nil
+		return map[string]any{"dueDate": "", "startDate": "", "isAllDay": false}, nil
 	}
-	d, err := time.ParseInLocation(dayFmt, day, time.Local)
+	zone, loc := zoneFor(taskZone)
+	d, err := time.ParseInLocation(dayFmt, day, loc)
 	if err != nil {
-		return invalid("due must be a day, YYYY-MM-DD")
+		return nil, invalid("due must be a day, YYYY-MM-DD")
 	}
-	t.DueDate, t.IsAllDay, t.TimeZone = d.Format(ticktick.TimeLayout), true, time.Local.String()
-	return nil
+	at := d.Format(ticktick.TimeLayout)
+	fields = map[string]any{"dueDate": at, "startDate": at, "isAllDay": true}
+	if zone != "" {
+		fields["timeZone"] = zone
+	}
+	return fields, nil
 }
 
 func (s *service) add(r *http.Request) (*siren.Entity, error) {
@@ -364,9 +412,12 @@ func (s *service) add(r *http.Request) (*siren.Entity, error) {
 		return nil, invalid("no such list")
 	}
 	if due := r.FormValue("due"); due != "" {
-		if err := setDue(&t, due); err != nil {
+		f, err := dueFields(due, "")
+		if err != nil {
 			return nil, err
 		}
+		t.DueDate, t.StartDate, t.IsAllDay = f["dueDate"].(string), f["startDate"].(string), true
+		t.TimeZone, _ = f["timeZone"].(string)
 	}
 	made, err := s.p.TT.Create(r.Context(), t)
 	if err != nil {
@@ -389,39 +440,40 @@ func (s *service) edit(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	sent := false
+	change := map[string]any{}
 	if v, ok := r.PostForm["title"]; ok {
 		if strings.TrimSpace(v[0]) == "" {
 			return nil, invalid("title must not be blank")
 		}
-		t.Title, sent = v[0], true
+		change["title"] = v[0]
 	}
 	if v, ok := r.PostForm["notes"]; ok {
-		t.Content, sent = v[0], true
+		change["content"] = v[0]
 	}
 	// A browser form sends every field. The day the task has already keeps its due as it is, with its time.
 	if v, ok := r.PostForm["due"]; ok && v[0] != s.taskOf(t).Due {
-		if err := setDue(&t, v[0]); err != nil {
+		f, err := dueFields(v[0], t.TimeZone)
+		if err != nil {
 			return nil, err
 		}
-		sent = true
+		maps.Copy(change, f)
 	}
-	if sent {
-		if err := s.update(r.Context(), t); err != nil {
-			return nil, err
-		}
+	if len(change) == 0 {
+		return taskEntity(s.taskOf(t)), nil
 	}
-	return taskEntity(s.taskOf(t)), nil
+	return s.update(r.Context(), t, change)
 }
 
-// update sends the whole task to TickTick. The live behaviour of an empty due and of status 0 is not tested against
-// the real API (ticktick.Client.Update): the owner checks it live.
-func (s *service) update(ctx context.Context, t ticktick.Task) error {
-	_, err := s.p.TT.Update(ctx, t)
+// update sends the change to TickTick, which gets the whole task back (ticktick.Client.Update), and answers the task.
+func (s *service) update(ctx context.Context, t ticktick.Task, change map[string]any) (*siren.Entity, error) {
+	made, err := s.p.TT.Update(ctx, t.ProjectID, t.ID, change)
 	if err != nil {
-		return s.writeError(err)
+		return nil, s.writeError(err)
 	}
-	return nil
+	if made.ProjectID == "" {
+		made.ProjectID = t.ProjectID
+	}
+	return taskEntity(s.taskOf(made)), nil
 }
 
 func (s *service) complete(r *http.Request) (*siren.Entity, error) {
@@ -442,11 +494,7 @@ func (s *service) reopen(r *http.Request) (*siren.Entity, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.Status, t.CompletedTime = 0, ""
-	if err := s.update(r.Context(), t); err != nil {
-		return nil, err
-	}
-	return taskEntity(s.taskOf(t)), nil
+	return s.update(r.Context(), t, map[string]any{"status": 0, "completedTime": nil})
 }
 
 // remove deletes the task in TickTick and answers it as it was.
@@ -470,7 +518,8 @@ func (s *service) sync(r *http.Request) (*siren.Entity, error) {
 		if errors.Is(err, ErrLoginAgain) || errors.As(err, &se) {
 			return nil, s.upstream(err)
 		}
-		return nil, &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: "the poll failed: " + err.Error()}
+		log.Printf("poll failed: %v", err) // the cause may name the task manager or hold a word of the owner: the log only
+		return nil, &app.Error{Status: http.StatusBadGateway, Code: siren.CodeUpstream, Msg: "the poll failed"}
 	}
 	return &siren.Entity{Class: []string{"sync"}, Title: "Sync", Properties: map[string]any{"written": n}}, nil
 }

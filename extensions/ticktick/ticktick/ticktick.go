@@ -167,23 +167,29 @@ func (c *Client) Create(ctx context.Context, t Task) (Task, error) {
 	return out, err
 }
 
-// Update writes a task as it is: id and projectId are in the body. Unlike Create, it sends every field, empty ones
-// too, so an empty DueDate or Content clears the field and Status 0 reopens a done task. The live behaviour of
-// reopen and clear is not tested against the real API: the owner checks it live.
-func (c *Client) Update(ctx context.Context, t Task) (Task, error) {
-	body := struct {
-		ID        string `json:"id"`
-		ProjectID string `json:"projectId"`
-		Title     string `json:"title"`
-		Content   string `json:"content"`
-		Status    int    `json:"status"`
-		DueDate   string `json:"dueDate"`
-		StartDate string `json:"startDate"`
-		TimeZone  string `json:"timeZone,omitempty"`
-		IsAllDay  bool   `json:"isAllDay"`
-	}{t.ID, t.ProjectID, t.Title, t.Content, t.Status, t.DueDate, t.StartDate, t.TimeZone, t.IsAllDay}
+// Update changes a task and keeps the rest of it. It reads the task as TickTick gives it, sets the keys of change on
+// it (a nil value deletes the key) and posts the whole task back, so a field that this package does not know (the
+// priority, the tags, the reminders, a repeat rule, the checklist) comes back as it was. TickTick may replace the
+// task on update, and a partial body would lose those fields. The live behaviour of reopen (status 0, no
+// completedTime) and of an empty dueDate is not tested against the real API: the owner checks it live.
+func (c *Client) Update(ctx context.Context, project, id string, change map[string]any) (Task, error) {
+	var raw map[string]any
+	if err := c.call(ctx, http.MethodGet, "/project/"+url.PathEscape(project)+"/task/"+url.PathEscape(id), nil, &raw); err != nil {
+		return Task{}, err
+	}
+	if raw == nil {
+		raw = map[string]any{}
+	}
+	raw["id"], raw["projectId"] = id, project
+	for k, v := range change {
+		if v == nil {
+			delete(raw, k)
+		} else {
+			raw[k] = v
+		}
+	}
 	var out Task
-	err := c.call(ctx, http.MethodPost, "/task/"+url.PathEscape(t.ID), body, &out)
+	err := c.call(ctx, http.MethodPost, "/task/"+url.PathEscape(id), raw, &out)
 	return out, err
 }
 
