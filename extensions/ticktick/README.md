@@ -167,8 +167,9 @@ Each task is a row with the chips `due` (YYYY-MM-DD), `priority` (`high`, `mediu
 lists are mixed, `list`. A done row has the chip `done` (the day). The open rows are in the order of the due day (no due
 day last), then the priority (high first). TickTick's order breaks a tie.
 
-Every page has the same links after `self` and `index`: `Today`, `Next 7 days`, one link to each list and `Done`. On
-the home, each list shows its open count (`NAME · N`).
+Every page has the same links after `self`: `Today` (it is also the `index`), `Next 7 days`, one link to each list
+and `Done`. On the home, each list shows its open count (`NAME · N`). On the page of a task, the link of its list is
+also its `list` link. No page links one address twice, so the side column draws each link once.
 
 The browser draws these pages with the generic view of an app. The rules are in
 [how the browser draws a page of an app](../README.md#how-the-browser-draws-a-page-of-an-app). The app does not

@@ -214,12 +214,13 @@ func (c *catalog) taskEntity(t ticktick.Task) *siren.Entity {
 	if p := t.PriorityWord(); p != "" {
 		props["priority"] = p
 	}
-	var extra []siren.Link
-	if c.hasList(t.ProjectID) { // the Inbox has no page: TickTick does not list its tasks
-		extra = append(extra, siren.Link{Rel: []string{"list"}, Href: listHref(t.ProjectID), Title: c.listName(t.ProjectID)})
+	links := c.links(taskHref(t.ID), t.Title, nil)
+	for i := range links { // the link of the task's list in the side column is also its rel list; the Inbox has no page
+		if c.hasList(t.ProjectID) && links[i].Href == listHref(t.ProjectID) {
+			links[i].Rel = append(links[i].Rel, "list")
+		}
 	}
-	return &siren.Entity{Class: []string{"task"}, Title: t.Title, Properties: props,
-		Links: c.links(taskHref(t.ID), t.Title, nil, extra...)}
+	return &siren.Entity{Class: []string{"task"}, Title: t.Title, Properties: props, Links: links}
 }
 
 func taskHref(id string) string { return "/tasks/" + url.PathEscape(id) }
@@ -232,8 +233,7 @@ func listHref(id string) string { return "/lists/" + url.PathEscape(id) }
 func (c *catalog) links(href, title string, counts map[string]int, extra ...siren.Link) []siren.Link {
 	links := []siren.Link{
 		{Rel: []string{"self"}, Href: href, Title: title},
-		{Rel: []string{"index"}, Href: "/", Title: "TickTick"},
-		{Rel: []string{"nav"}, Href: "/", Title: "Today"},
+		{Rel: []string{"index", "nav"}, Href: "/", Title: "Today"}, // one link: the side column draws it once
 		{Rel: []string{"nav"}, Href: "/next7", Title: "Next 7 days"},
 	}
 	for _, l := range c.lists {

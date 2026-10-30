@@ -8,7 +8,15 @@
 - **Date / baseline:** 2026-10-30, `875fc5d` (master), after [plan 156](156-browse-the-tasks-through-the-catalog.md).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the generic view changes for every connected app and for every core page that it draws.
-- **Status:** IN PROGRESS. Part A on master (7183d5f), Part C on master (69554c8), Part B built by a sub-agent in a worktree, in review.
+- **Status:** IN REVIEW (owner). Built 2026-10-30 on master by three sub-agents in worktrees, each reviewed before the
+  merge: Part A `7183d5f`, Part C `1b3c8e5` and `69554c8`, Part B `8ac933f` and the commit of this line (the side
+  column linked the home twice, as TickTick and as Today, and a task page linked its list twice: each pair is one link
+  with two rels now, and the test of the side column refuses a doubled address). Checks: root `go vet ./... && go test
+  ./...` and `go test -count=1 -shuffle=on ./...` passed, `staticcheck ./...` clean, `govulncheck ./...` no
+  vulnerabilities; in `extensions/ticktick`, `extensions/mcp` and `extensions/whatsapp`: `go vet`, `go test -count=1
+  -shuffle=on ./...`, `go mod tidy -diff` and `staticcheck` clean; in `extensions/whatsapp` `go test -race ./agent/...`
+  passed (the sub-agent's run). Not done: screenshots. The session may not start a review server, so nobody has looked
+  at the new view in a browser yet; the owner sees it live first. Linux only.
 
 ## Context
 

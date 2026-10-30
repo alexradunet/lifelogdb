@@ -288,24 +288,32 @@ func titles(e *siren.Entity) []string {
 	return got
 }
 
-// wantNav checks that the links of a page are self, the index, then the side column with these "TITLE HREF" pairs.
+// wantNav checks that the links of a page are self, then the side column with these "TITLE HREF" pairs. The first
+// link of the side column is Today, which is also the index: one link, so the side column draws it once.
 func wantNav(t *testing.T, e *siren.Entity, self string, side ...string) {
 	t.Helper()
-	if len(e.Links) < 2+len(side) {
-		t.Fatalf("%q has %d links, want at least %d", e.Title, len(e.Links), 2+len(side))
+	if len(e.Links) < 1+len(side) {
+		t.Fatalf("%q has %d links, want at least %d", e.Title, len(e.Links), 1+len(side))
 	}
 	if l := e.Links[0]; !slices.Equal(l.Rel, []string{"self"}) || l.Href != self {
 		t.Errorf("first link of %q = %+v, want self %s", e.Title, l, self)
 	}
-	if l := e.Links[1]; !slices.Equal(l.Rel, []string{"index"}) || l.Href != "/" || l.Title != "TickTick" {
-		t.Errorf("second link of %q = %+v, want the index", e.Title, l)
+	if l := e.Links[1]; !slices.Equal(l.Rel, []string{"index", "nav"}) || l.Href != "/" || l.Title != "Today" {
+		t.Errorf("second link of %q = %+v, want Today, the index", e.Title, l)
 	}
 	var got []string
-	for _, l := range e.Links[2 : 2+len(side)] {
+	for _, l := range e.Links[1 : 1+len(side)] {
 		got = append(got, l.Title+" "+l.Href)
 	}
 	if !slices.Equal(got, side) {
 		t.Errorf("side column of %q = %q, want %q", e.Title, got, side)
+	}
+	seen := map[string]bool{}
+	for _, l := range e.Links[1:] {
+		if seen[l.Href] {
+			t.Errorf("%q links %s twice beside self", e.Title, l.Href)
+		}
+		seen[l.Href] = true
 	}
 }
 
