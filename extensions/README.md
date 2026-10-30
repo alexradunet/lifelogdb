@@ -175,7 +175,7 @@ flowchart LR
   N["side column: the links of the entity"] --> M["main column"]
   M --> Q["quick-add: one line"]
   M --> R["rows: the embedded links"]
-  M --> A["the other actions, boxed"]
+  M --> A["the other actions: the ⋯ menu of the head"]
 ```
 
 1. **Quick-add.** On a page under `/with/NAME` or `/tasks`, the first action of the entity that has the class `create`,
