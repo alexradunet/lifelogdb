@@ -19,13 +19,13 @@ type Shell struct {
 	Today string
 	// Ground is the floor the owner chose (settings: boards, oak, firelight or embers). The shell is built with the
 	// empty setting already read as boards, so the layout and the sheet never see an empty value.
-	Ground string
-	Zone   *time.Location // the zone of today: the words for a time use it
-	Strip  *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
-	Chat   *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
-	Apps   []AppLink      // the connected apps that run (docs/plans/154-connected-apps-through-the-catalog.md): a link each in the rail
-	Lock   bool           // the lock is on for this session (docs/plans/160-the-lock.md): the rail has the Lock button
-	Tasks  bool           // a task service runs (docs/plans/158-one-task-service-behind-tasks.md): the rail has Tasks
+	Ground      string
+	Zone        *time.Location // the zone of today: the words for a time use it
+	Strip       *Strip         // what today has: nil draws no strip (docs/plans/137-pixel-wood-and-the-focus-pass.md, part 4)
+	Chat        *Chat          // today's conversation, for the chat column: nil draws no column (docs/plans/146-settings-and-the-chat-column.md)
+	Apps        []AppLink      // the connected apps that run (docs/plans/154-connected-apps-through-the-catalog.md): a link each in the rail
+	LockMinutes int            // the minutes of lock_after when the lock is on, else 0 (docs/plans/160-the-lock.md): the rail has the Lock button and the page lock.js
+	Tasks       bool           // a task service runs (docs/plans/158-one-task-service-behind-tasks.md): the rail has Tasks
 }
 
 // AppLink is a connected app in the rail: its name, which is its address /with/NAME, and the title of its home.

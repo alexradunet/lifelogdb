@@ -227,13 +227,13 @@ func (p *public) lockConfig() (minutes int, hash string, err error) {
 	return v.LockMinutes(), v.LockPINHash, nil
 }
 
-// lockOnKey is the one request value of this file: it tells the shell that the lock is on for this session, so
-// the rail draws the Lock button.
-type lockOnKey struct{}
+// lockMinutesKey is the one request value of this file: the minutes of lock_after, put on the request once. The
+// shell reads them to draw the Lock button and the script lock.js. No value means that the lock is off.
+type lockMinutesKey struct{}
 
-func lockIsOn(r *http.Request) bool {
-	on, _ := r.Context().Value(lockOnKey{}).(bool)
-	return on
+func lockMinutesOf(r *http.Request) int {
+	m, _ := r.Context().Value(lockMinutesKey{}).(int)
+	return m
 }
 
 // countsAsActivity reports a request that the owner made, and not the page: a navigation that is not a prefetch or a
@@ -281,8 +281,8 @@ func (p *public) serveSession(w http.ResponseWriter, r *http.Request, id string)
 	// A read that failed locks the session whatever its state.
 	locked := p.sessions.locked(id, now, lockOn, idle) || err != nil
 	w.Header().Set("Cache-Control", "no-store") // a handler that sets its own (the assets) replaces it
-	if lockOn {
-		r = r.WithContext(context.WithValue(r.Context(), lockOnKey{}, true))
+	if minutes > 0 {
+		r = r.WithContext(context.WithValue(r.Context(), lockMinutesKey{}, minutes))
 	}
 	switch {
 	case r.URL.Path == "/lock" && r.Method == http.MethodPost:

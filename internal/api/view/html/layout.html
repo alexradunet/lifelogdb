@@ -23,7 +23,8 @@
      conversation, where the link is the one marked. New opens a menu of the
      kinds the same way, each made on its list (docs/plans/114-one-way-to-do-a-thing.md). The access keys (k the
      search, n New, t Today, c the capture, [ and ] the previous and next page) are the browser's own, with its
-     modifier. */}}
+     modifier. When the lock is on (docs/plans/160-the-lock.md), the Lock button joins the foot of the More sheet and l, lock
+     joins the keys. On a wide screen the sheet is part of the rail, so the access key l works there. */}}
 {{define "rail"}}{{$nav := .Nav}}<aside class="rail">
 <div class="rail-head">{{range $nav}}{{if eq .Group "home"}}<a class="brand" href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}}{{with .Today}}<span class="date">{{shortDay .}}</span>{{end}}
 <button type="button" class="rail-search-link button" commandfor="palette" command="show-modal" aria-label="Search">{{icon "search"}}</button></div>
@@ -43,6 +44,7 @@
 {{template "today-strip" .}}
 {{with .Apps}}<nav class="rail-apps" aria-label="Apps"><ul>{{range .}}<li>{{template "navlink" .}}</li>{{end}}</ul></nav>{{end}}
 <p class="rail-foot">Owner{{range $nav}}{{if eq .Group "owner"}} · <a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Title}}</a>{{end}}{{end}} · <a href="/actions?new=snapshot">Snapshot</a></p>
+{{if .Shell.LockMinutes}}<form class="rail-lock" method="POST" action="/lock"><button type="submit" class="button" accesskey="l">Lock<kbd title="The access key l, with the browser's modifier, locks this browser">l</kbd></button></form>{{end}}
 </div>
 </aside>{{end}}
 
@@ -65,16 +67,17 @@
      (docs/plans/108-the-browser-made-current.md): a modal the rail's Search opens by its command, with the search
      form inside, so a page by its title or the words of a body is one key away; Escape or a tap outside closes it. */}}
 {{define "foot"}}</main>
-<footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</small></p>{{end}}</footer>
+<footer><p>Lifelog, the one writer of <code>life.db</code>.</p>{{if .Shell}}<p class="keys"><small>Access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next{{if .Shell.LockMinutes}} · <kbd>l</kbd> lock{{end}}</small></p>{{end}}</footer>
 </div>
 {{if .Shell}}<dialog class="palette" id="palette" closedby="any" aria-label="Search">
 <search><form method="GET" action="/search"><input type="search" name="q" autocomplete="off" aria-label="Search" placeholder="A page's title, or words of a body"></form></search>
-<p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next</p>
+<p class="meta">Enter searches · <kbd>Escape</kbd> closes · access keys, with the browser's modifier: <kbd>k</kbd> search · <kbd>n</kbd> new · <kbd>c</kbd> capture · <kbd>t</kbd> today · <kbd>[</kbd> <kbd>]</kbd> previous, next{{if .Shell.LockMinutes}} · <kbd>l</kbd> lock{{end}}</p>
 </dialog>
 {{template "chat" .}}{{end}}
 </div>
 {{if .Shell}}<script src="/assets/chat.js" defer></script>
-{{end}}</body></html>{{end}}
+{{if .Shell.LockMinutes}}<script src="/assets/lock.js" data-minutes="{{.Shell.LockMinutes}}" defer></script>
+{{end}}{{end}}</body></html>{{end}}
 
 {{/* monthbox is a month as the year draws it: its name, how many of its days are written, and its
      days in the rows of a calendar, Monday first; a day with a page is tinted, today is framed. It takes href, name,
@@ -183,7 +186,7 @@
 {{else}}<label><span>{{or .Title .Name}}{{if and .Required (not .Sole)}} <small>required</small>{{end}}</span>
 {{if and .Options (not .List)}}<select name="{{.Name}}"{{if and .Required .Placeholder}} required{{end}}{{if .Focus}} autofocus{{end}}>{{$v := num .Value}}{{if and .Required .Placeholder}}<option value="">{{.Placeholder}}</option>{{else if and (not .Required) (ne (index .Options 0) "")}}<option></option>{{end}}{{range .Options}}<option{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
 {{else if eq .Type "textarea"}}<textarea name="{{.Name}}"{{with .Rows}} rows="{{.}}"{{end}}{{if .Required}} required{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{with .Key}} accesskey="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}{{if .Send}} enterkeyhint="send"{{end}}>{{num .Value}}</textarea>
-{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if eq .Type "password"}} autocomplete="off"{{end}}{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
+{{else}}<input type="{{.Type}}" name="{{.Name}}" value="{{num .Value}}"{{if eq .Type "password"}} autocomplete="new-password"{{end}}{{if .Required}} required{{end}}{{with .Pattern}} pattern="{{.}}"{{end}}{{if eq .Type "number"}} step="any" inputmode="decimal"{{end}}{{with .Accept}} accept="{{.}}"{{end}}{{with .List}} list="{{.}}"{{end}}{{with .Placeholder}} placeholder="{{.}}"{{end}}{{if .Focus}} autofocus{{end}}>{{with .List}}<datalist id="{{.}}">{{$labels := $.Labels}}{{range $.Options}}{{$o := .}}{{with index $labels $o}}<option value="{{$o}}">{{.}}{{else}}<option value="{{$o}}">{{end}}{{end}}</datalist>{{end}}{{end}}</label>
 {{end}}{{end}}
 
 {{/* boxed is an action as a button that opens its form (the ActionForm of the design system): with no script, a

@@ -95,8 +95,8 @@ span.icon{display:inline-block; flex:none; inline-size:20px; block-size:20px; ba
 .rail-head{display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); padding:0 var(--space-2);
   & .brand{font:400 26px/28px var(--display); letter-spacing:.02em; color:var(--rail-accent);
     &[aria-current=page]{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px}}}
-/* The rail's search is a button that opens the search dialog: it looks like the box it opens. */
-.rail .rail-search{display:flex; align-items:center; justify-content:flex-start; gap:var(--space-2); inline-size:100%; block-size:var(--control);
+/* The rail's search is a button that opens the search dialog: it looks like the box it opens. The Lock button of the More sheet (docs/plans/160-the-lock.md) is drawn the same way and stays on a phone. */
+.rail .rail-search,.rail .rail-lock button{display:flex; align-items:center; justify-content:flex-start; gap:var(--space-2); inline-size:100%; block-size:var(--control);
   padding:0 10px; font-weight:400; color:var(--rail-ink); background:var(--rail-deep); border:2px solid var(--outline); box-shadow:var(--bevel-in);
   & kbd{margin-inline-start:auto}}
 /* New is a wood slab with gold words, not the loud button: that one is the page's main write. */

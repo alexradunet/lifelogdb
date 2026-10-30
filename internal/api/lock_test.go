@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -585,5 +586,67 @@ func TestPINHash(t *testing.T) {
 		if core.PINMatches(bad, "0042") {
 			t.Errorf("%q matches", bad)
 		}
+	}
+}
+
+// TestThePageDrawsTheLockOnlyWhenTheLockIsOn: the Lock button, its access key, the script with the minutes and the
+// key in the two lists are all there with the lock on, and none of them with it off.
+func TestThePageDrawsTheLockOnlyWhenTheLockIsOn(t *testing.T) {
+	marks := []string{
+		`<form class="rail-lock" method="POST" action="/lock">`, `accesskey="l"`,
+		`<script src="/assets/lock.js" data-minutes="5" defer></script>`,
+		`<kbd>l</kbd> lock`,
+	}
+	on := newLockFixture(t, "5").browse("/days/"+secretDay, nil)
+	if on.Code != 200 {
+		t.Fatalf("page with the lock on: %d", on.Code)
+	}
+	for _, m := range marks {
+		if !strings.Contains(on.Body.String(), m) {
+			t.Errorf("lock on: the page lacks %s", m)
+		}
+	}
+	if n := strings.Count(on.Body.String(), `<kbd>l</kbd> lock`); n != 2 {
+		t.Errorf("lock on: %d lists of access keys have l, want 2 (the footer and the search palette)", n)
+	}
+	off := newLockFixture(t, "").browse("/days/"+secretDay, nil)
+	for _, m := range []string{`action="/lock"`, `accesskey="l"`, "lock.js", `<kbd>l</kbd>`} {
+		if strings.Contains(off.Body.String(), m) {
+			t.Errorf("lock off: the page holds %s", m)
+		}
+	}
+}
+
+func TestLockJSIsServedLikeChatJS(t *testing.T) {
+	f := newLockFixture(t, "5")
+	rec := request(f.h, "GET", "/assets/lock.js", "", map[string]string{"Cookie": f.cookie})
+	if rec.Code != 200 || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/javascript") ||
+		rec.Header().Get("Cache-Control") != "public, max-age=300" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("GET /assets/lock.js: %d %v", rec.Code, rec.Header())
+	}
+	for _, want := range []string{"/awake", "/lock", "localStorage", "prerendering"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("lock.js does not mention %s", want)
+		}
+	}
+}
+
+// TestOnlyTheLoginFieldOffersTheSavedLogin: a browser fills an empty password field with the saved login, and the
+// settings form then sends the token as lock_pin. The settings form says new-password; the login form keeps current-password.
+func TestOnlyTheLoginFieldOffersTheSavedLogin(t *testing.T) {
+	f := newLockFixture(t, "5")
+	page := f.browse("/settings", nil).Body.String()
+	pw := regexp.MustCompile(`<input type="password"[^>]*>`).FindAllString(page, -1)
+	if len(pw) < 2 {
+		t.Fatalf("the settings page has %d password fields, want model_key and lock_pin", len(pw))
+	}
+	for _, in := range pw {
+		if !strings.Contains(in, `autocomplete="new-password"`) {
+			t.Errorf("a password field of the settings form may take the saved login: %s", in)
+		}
+	}
+	login := request(f.h, "GET", "/login", "", map[string]string{"Accept": "text/html"}).Body.String()
+	if !strings.Contains(login, `name="token" required autocomplete="current-password"`) {
+		t.Error("the login field lost current-password")
 	}
 }

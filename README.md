@@ -255,7 +255,7 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   sheet of sections is a popover; the toast is an open `dialog` in the flow of the page, which Escape and its own
   Close close. The keys are the browser's **access keys**, with its own modifier (Alt in Chromium, Alt+Shift in
   Firefox, Ctrl+Alt on a Mac): `k` the search, `n` New, `t` Today, `c` the capture, `[` and `]` the previous and
-  next page; the footer and the dialog say so. A form that writes a body offers **Preview**, a second button that
+  next page, and `l` the Lock button when the lock is on; the footer and the dialog say so. A form that writes a body offers **Preview**, a second button that
   sends it to `POST /render` in a new tab (`formaction`, `formtarget`), where the body shows as its page will show
   it, and the form keeps its words. The list that deletes several rows counts the checked boxes on its button by a
   CSS counter. A page of the shell carries the `Speculation-Rules` header, so Chromium draws the previous and next page on
@@ -518,7 +518,13 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   prefetch or a prerender), a form post and `POST /awake`; the poll of the chat column does not count. `/lock`,
   `/unlock`, `/locked` and `/awake` are routes of the listener beside `/login` and `/logout`, not actions of the
   catalog: they are about one browser, not about the data. `/lock` with the lock off is 409. The server cannot
-  clear a screen by itself: a page without the script stays on the screen until its next request.
+  clear a screen by itself: the script `/assets/lock.js`, which the layout adds only when the lock is on, does it. It
+  keeps the time of the last input of the owner in `localStorage`, shared by every tab, and a load of the page counts
+  as input. It sends `POST /awake` at most once in 30 seconds while the owner types, clicks or scrolls. When the idle
+  time is over, it sends `POST /lock` and replaces the page with the lock page, in every tab. The Lock button does
+  the same at once, and the other tabs follow at their next check. A page without the script stays on the screen
+  until its next request. The Lock button is in the foot of the More sheet of the rail, which is part of the rail on
+  a wide screen, so the access key `l` works there; on a phone it is two taps away.
 
 ## Every action on every surface
 

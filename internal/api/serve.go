@@ -164,6 +164,7 @@ func newServer(s *core.Store) *server {
 	// check, which a hover must not run. A browser without speculation rules ignores the header.
 	m.HandleFunc("GET /assets/speculation.json", install("speculation.json", "application/speculationrules+json", "public, max-age=3600"))
 	m.HandleFunc("GET /assets/chat.js", install("chat.js", "text/javascript; charset=utf-8", "public, max-age=300"))
+	m.HandleFunc("GET /assets/lock.js", install("lock.js", "text/javascript; charset=utf-8", "public, max-age=300"))
 	m.HandleFunc("GET /assets/icon.svg", install("icon.svg", "image/svg+xml", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-192.png", install("icon-192.png", "image/png", "public, max-age=31536000, immutable"))
 	m.HandleFunc("GET /assets/icon-512.png", install("icon-512.png", "image/png", "public, max-age=31536000, immutable"))
@@ -489,7 +490,7 @@ func pageAnswer(r *http.Request, status int, e *siren.Entity, fr frame) (int, []
 			logFault(r, "the settings cannot be read", err)
 		}
 		f.Shell.Ground = ground
-		f.Shell.Lock = lockIsOn(r)
+		f.Shell.LockMinutes = lockMinutesOf(r)
 		// A failed read draws the page with no strip: the strip is a help. The page of an error has logged its own
 		// cause, so only the page of a good answer logs this one.
 		strip, err := todayStrip(r.Context(), fr.shell, f.Shell.Today)

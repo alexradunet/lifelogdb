@@ -32,8 +32,8 @@ import (
 // this app's own vocabulary needs (the shell, its components, .wikilink, .chart), and a test keeps the two apart.
 // The two are one cascade in four layers (tokens, base, components, utilities), declared once in base.css, and
 // every rule is in logical properties (docs/plans/108-the-browser-made-current.md).
-// The three faces are embedded files that /assets/fonts/ serves. There is one script, chat.js, which helps the chat
-// column and returns the focus to the ⋯ button; every form works without it (docs/plans/146-settings-and-the-chat-column.md). What a page does beyond its
+// The three faces are embedded files that /assets/fonts/ serves. There are two scripts. chat.js helps the chat
+// column and returns the focus to the ⋯ button; lock.js (docs/plans/160-the-lock.md) is on the page only when the lock is on. Every form works without them (docs/plans/146-settings-and-the-chat-column.md). What a page does beyond its
 // links and forms, the browser does by itself (docs/plans/108-the-browser-made-current.md).
 //
 // Files are the files of html/: the templates, the two stylesheets, the script, the icons (one SVG and two PNG), the manifest,

@@ -3,7 +3,7 @@
 // form that the page's link asked for, to its head button (close does not bubble: one listener, capture phase). On the
 // chat column (#chat) and the chat screen (#conversation) it polls while the agent has not answered, posts the
 // composer in place, and lets Enter send (Shift+Enter breaks a line). The thread is a reversed column, so after a swap
-// it is still at its newest turn. The column remembers whether its popover is open. Any error leaves the page as it is.
+// it is still at its newest turn. A 401 locked answer of the poll (docs/plans/160-the-lock.md) shows the lock page. The column remembers whether its popover is open. Any error leaves the page as it is.
 // A prerendered page runs it too; it guards showPopover.
 (() => {
   document.addEventListener('close', (e) => {
@@ -13,8 +13,7 @@
   }, true);
   const chat = document.getElementById('chat') || document.getElementById('conversation');
   if (!chat) return;
-  const same = { credentials: 'same-origin' }, KEY = 'lifelog.chat.open';
-  let timer;
+  const same = { credentials: 'same-origin' }, KEY = 'lifelog.chat.open'; let timer;
 
   // swap replaces the column's content with the one in a page's HTML, keeps a draft that is being typed, and gives the
   // new box the focus that the old one had.
@@ -38,7 +37,8 @@
     timer = setTimeout(async () => {
       try {
         const r = await fetch(`/days/${chat.dataset.day}/conversation`, { ...same, headers: { Accept: 'application/vnd.siren+json' } });
-        const version = ((await r.json()).properties || {}).version || '';
+        const props = (await r.json()).properties || {}, version = props.version || '';
+        if (r.status === 401) { if (props.code === 'locked') location.replace('/locked?next=' + encodeURIComponent(location.pathname + location.search)); return; } // the lock page, and no more polls
         if (version !== chat.dataset.version) {
           const page = await fetch(location.href, { ...same, headers: { Accept: 'text/html' } });
           if (page.ok) { swap(await page.text()); return; }

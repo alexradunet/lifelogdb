@@ -34,7 +34,7 @@ func TestTheSettingsPageDrawsTheThreeFieldsInOneForm(t *testing.T) {
 	page := browse(t, h, "/settings")
 	form := regexp.MustCompile(`(?s)<form method="POST" action="/settings" autocomplete="off" data-action="settings">.*?</form>`).FindString(page)
 	for _, want := range []string{`<input type="text" name="model_url" value="">`, `<input type="text" name="model" value="">`, `<input type="text" name="owner_number" value="">`,
-		`<input type="password" name="model_key" value="" autocomplete="off">`, `<button class="primary">Save</button>`} {
+		`<input type="password" name="model_key" value="" autocomplete="new-password">`, `<button class="primary">Save</button>`} {
 		if !strings.Contains(form, want) {
 			t.Errorf("the form of /settings lacks %s:\n%s", want, form)
 		}
@@ -48,7 +48,7 @@ func TestTheSettingsPageDrawsTheThreeFieldsInOneForm(t *testing.T) {
 	}
 	page = browse(t, h, rec.Header().Get("Location"))
 	for _, want := range []string{`class="toast"`, "Settings saved.", `<input type="text" name="model_url" value="http://127.0.0.1:1234/v1">`,
-		`<input type="text" name="model" value="synthetic-model">`, `<input type="text" name="owner_number" value="40712345678">`, `<input type="password" name="model_key" value="synthetic-key" autocomplete="off">`} {
+		`<input type="text" name="model" value="synthetic-model">`, `<input type="text" name="owner_number" value="40712345678">`, `<input type="password" name="model_key" value="synthetic-key" autocomplete="new-password">`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("/settings after a save lacks %s", want)
 		}
