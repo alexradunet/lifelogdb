@@ -19,6 +19,15 @@
   open, Back after a lock, Alt+L on a wide screen, the More sheet on a phone. Not known: whether the prerender of the
   speculation rules still works under `no-store` (headless Chromium did not prerender, with or without it); a real
   saved login in the settings form (only the attribute was checked). Linux only.
+  Counter-review 2026-10-30 (Opus; Fable was at its usage limit), against the real `serve --public` with curl and
+  Chromium. A blocker and three more, all fixed with a test that held the fault first: (1) held or parallel `/unlock`
+  requests compared every PIN, because the try was counted after the compare and an end gave the count back; a try is
+  now counted before the compare, under the mutex, and an ended session compares no PIN and gets no state again; (2)
+  a preview kept its year of cache, so a locked browser showed it from the cache; every answer of a session but
+  `/assets/` is `no-store` now; (3) `next` echoed the query, such as the words of a search; it is the path alone; (4)
+  the old `lifelog_token` cookie stayed in a browser that did not log in again; any request that carries it clears it.
+  Known and written in the README: a restart, or a day with no request, gives 5 tries again; the browser's history
+  keeps the titles of the pages.
 
 ## Context
 

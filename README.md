@@ -507,14 +507,19 @@ These are this application's own engineering decisions ([D14](docs/decisions/D14
   TLS, valid for one year so that an installed app stays logged in; a new token file ends it) and `POST /logout`
   ends the session and clears the cookie; cross-site forms with the cookie are what the origin guard refuses. The
   cookie holds a random id and its HMAC, not the token. The older cookie `lifelog_token` is not a credential
-  any more: a browser that has only it logs in again. Pages of a session carry `Cache-Control: no-store`. The CLI and
+  any more: a browser that has only it logs in again, and any request that carries it gets it cleared. Every answer
+  of a session carries `Cache-Control: no-store`, the pictures too; only `/assets/` keeps its cache. The CLI and
   the MCP server with `--url` send `LIFELOG_TOKEN` as a bearer header, and a bearer request never locks.
   **The lock** ([plan 160](docs/plans/160-the-lock.md)): when the settings `lock_after` and `lock_pin` are set, the
   listener locks a browser session that is idle for `lock_after` minutes plus one, and one that the owner locked with
   `POST /lock`. A locked session gets nothing of the database: an HTML `GET` goes to `/locked?next=PATH`, which asks
-  for the PIN, and any other request is 401 `locked`. `POST /unlock` with the right PIN opens the session; the fifth
-  wrong PIN in a row ends it, and the browser logs in with the token again. A restart of the server locks every
-  session, because the state of the sessions is in memory. The server counts as activity a navigation (not a
+  for the PIN, and any other request is 401 `locked`. `next` is the path alone: a query, such as the words of a
+  search, would show on the lock page. `POST /unlock` with the right PIN opens the session; the fifth
+  wrong PIN in a row ends it, and the browser logs in with the token again. A try is counted before the PIN is
+  compared, so requests sent at once or held open get no more tries together. A restart of the server locks every
+  session, because the state of the sessions is in memory; it also gives a session that it does not know 5 tries
+  again, and so does a day with no request of that session. The lock hides the pages, not the browser's own history:
+  the titles of the pages that were open stay in the history and in the suggestions of the address bar. The server counts as activity a navigation (not a
   prefetch or a prerender), a form post and `POST /awake`; the poll of the chat column does not count. `/lock`,
   `/unlock`, `/locked` and `/awake` are routes of the listener beside `/login` and `/logout`, not actions of the
   catalog: they are about one browser, not about the data. `/lock` with the lock off is 409. The server cannot

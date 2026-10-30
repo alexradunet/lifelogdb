@@ -154,6 +154,9 @@ func (p *public) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if _, err := r.Cookie(legacyCookie); err == nil {
+		p.clearLegacy(w) // it holds the token in clear: no browser keeps it
+	}
 	switch {
 	case r.URL.Path == "/login" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 		p.login(w, r)
@@ -224,7 +227,6 @@ func (p *public) login(w http.ResponseWriter, r *http.Request) {
 	}
 	p.sessions.open(id, p.store.Now())
 	p.setSession(w, value, loginMaxAge)
-	p.clearLegacy(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
@@ -237,6 +239,5 @@ func (p *public) logout(w http.ResponseWriter, r *http.Request) {
 		p.sessions.end(id, p.store.Now())
 	}
 	p.setSession(w, "", -1)
-	p.clearLegacy(w)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }

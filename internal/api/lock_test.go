@@ -2,6 +2,8 @@ package api_test
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -118,7 +120,8 @@ func (f *lockFixture) isLocked() bool {
 func TestSessionCookie(t *testing.T) {
 	for _, tls := range []bool{false, true} {
 		h, _ := publicHandler(t, api.PublicOptions{Token: testToken, TLS: tls})
-		rec := request(h, "POST", "/login", "token="+url.QueryEscape(testToken), map[string]string{"Sec-Fetch-Site": "same-origin"})
+		// The browser still has the cookie of an older login, which held the token itself.
+		rec := request(h, "POST", "/login", "token="+url.QueryEscape(testToken), map[string]string{"Sec-Fetch-Site": "same-origin", "Cookie": "lifelog_token=" + testToken})
 		var session, legacy *http.Cookie
 		for _, c := range rec.Result().Cookies() {
 			switch c.Name {
@@ -193,6 +196,99 @@ func TestSessionPagesAreNotCachedAndAssetsKeepTheirHeaders(t *testing.T) {
 	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "public, max-age=300" {
 		t.Errorf("an asset: %d Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
+	// A picture of the journal is not kept either, though its route asks for a long cache: a locked browser would
+	// show it from the cache.
+	path, sum := jpegFile(t, "lake.jpg", 40, 30)
+	pic, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := f.s.AddFile(t.Context(), "cli", core.FileIn{Title: "lake.jpg", MIME: "image/jpeg", SHA256: sum, Day: secretDay, Preview: pic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = request(f.h, "GET", fmt.Sprintf("/pages/%d/preview", k.ID), "", map[string]string{"Cookie": f.cookie})
+	if rec.Code != 200 || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("a preview of a session: %d Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+	// A program keeps the long cache: the bearer header never locks.
+	rec = request(f.h, "GET", fmt.Sprintf("/pages/%d/preview", k.ID), "", map[string]string{"Authorization": "Bearer " + testToken})
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
+		t.Errorf("a preview of a program: %d Cache-Control %q", rec.Code, rec.Header().Get("Cache-Control"))
+	}
+}
+
+// The lock page and its address hold the path of the page, never its query: a search's words are the owner's.
+func TestTheLockPageKeepsThePathOnly(t *testing.T) {
+	f := newLockFixture(t, "15")
+	f.post("/lock", "", nil)
+	rec := f.browse("/search?q=PurpleOctopus", nil)
+	if rec.Code != 303 || rec.Header().Get("Location") != "/locked?next="+url.QueryEscape("/search") {
+		t.Errorf("a locked search: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+// The old cookie held the token in clear: any request that still carries it gets it cleared.
+func TestTheOldCookieIsClearedOnAnyRequest(t *testing.T) {
+	f := newLockFixture(t, "")
+	rec := request(f.h, "GET", "/", "", map[string]string{"Accept": "text/html", "Cookie": "lifelog_token=" + testToken + "; " + f.cookie})
+	cleared := false
+	for _, c := range rec.Result().Cookies() {
+		cleared = cleared || (c.Name == "lifelog_token" && c.MaxAge < 0)
+	}
+	if !cleared {
+		t.Errorf("the old cookie is not cleared: %d %v", rec.Code, rec.Header().Values("Set-Cookie"))
+	}
+}
+
+// Requests that the server holds while their bodies come (or that come at once) get no more tries than the limit:
+// a try is counted before the PIN is compared, and an ended session compares no PIN.
+func TestHeldUnlocksGetNoMoreThanFiveTries(t *testing.T) {
+	logs := &bytes.Buffer{}
+	log.SetOutput(logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	f := newLockFixture(t, "15")
+	f.post("/lock", "", nil)
+	pins := []string{"1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", testPIN}
+	type held struct {
+		body *io.PipeWriter
+		done chan *httptest.ResponseRecorder
+	}
+	var all []held
+	for range pins {
+		r, w := io.Pipe()
+		req := httptest.NewRequest("POST", "/unlock", r)
+		for k, v := range map[string]string{"Content-Type": "application/x-www-form-urlencoded", "Cookie": f.cookie, "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate"} {
+			req.Header.Set(k, v)
+		}
+		h := held{w, make(chan *httptest.ResponseRecorder, 1)}
+		go func() { rec := httptest.NewRecorder(); f.h.ServeHTTP(rec, req); h.done <- rec }()
+		all = append(all, h)
+	}
+	// Every request has passed the check of its cookie and waits for its body. The bodies come one by one.
+	var last *httptest.ResponseRecorder
+	for i, h := range all {
+		if _, err := io.WriteString(h.body, "pin="+pins[i]); err != nil {
+			t.Fatal(err)
+		}
+		h.body.Close()
+		last = <-h.done
+	}
+	if got := strings.Count(logs.String(), "the PIN does not match"); got > 5 {
+		t.Errorf("%d PINs were compared, want at most 5:\n%s", got, logs.String())
+	}
+	if loc := last.Header().Get("Location"); last.Code == 303 && loc == "/" {
+		t.Errorf("the right PIN opened the session after %d wrong ones", len(pins)-1)
+	}
+	if !f.isEnded() {
+		t.Error("the session is not ended")
+	}
+}
+
+func (f *lockFixture) isEnded() bool {
+	f.t.Helper()
+	rec := f.browse("/", nil)
+	return rec.Code == 303 && rec.Header().Get("Location") == "/login"
 }
 
 func TestLockAfterTheIdleMinutes(t *testing.T) {
@@ -203,7 +299,7 @@ func TestLockAfterTheIdleMinutes(t *testing.T) {
 	}
 	f.now = f.now.Add(6*time.Minute + time.Second)
 	rec := f.browse("/days/"+secretDay+"?x=1", nil)
-	if want := "/locked?next=" + url.QueryEscape("/days/"+secretDay+"?x=1"); rec.Code != 303 || rec.Header().Get("Location") != want {
+	if want := "/locked?next=" + url.QueryEscape("/days/"+secretDay); rec.Code != 303 || rec.Header().Get("Location") != want {
 		t.Fatalf("idle session: %d %q, want %q", rec.Code, rec.Header().Get("Location"), want)
 	}
 	if !f.isLocked() {

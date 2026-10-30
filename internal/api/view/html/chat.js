@@ -38,7 +38,7 @@
       try {
         const r = await fetch(`/days/${chat.dataset.day}/conversation`, { ...same, headers: { Accept: 'application/vnd.siren+json' } });
         const props = (await r.json()).properties || {}, version = props.version || '';
-        if (r.status === 401) { if (props.code === 'locked') location.replace('/locked?next=' + encodeURIComponent(location.pathname + location.search)); return; } // the lock page, and no more polls
+        if (r.status === 401) { if (props.code === 'locked') location.replace('/locked?next=' + encodeURIComponent(location.pathname)); return; } // the lock page, and no more polls
         if (version !== chat.dataset.version) {
           const page = await fetch(location.href, { ...same, headers: { Accept: 'text/html' } });
           if (page.ok) { swap(await page.text()); return; }

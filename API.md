@@ -871,7 +871,9 @@ beside `/login` and `/logout`, outside the catalog: `POST /lock` locks the sessi
 lock is off), `GET /locked` is the page with the PIN field (`next` is a path of this origin, else dropped), `POST /unlock`
 with `pin` and `next` opens the session (a wrong PIN goes back to `/locked?failed=1`; the fifth wrong PIN in a row ends
 the session and goes to `/login`), and `POST /awake` says that the owner is active (204). A locked session gets a 303 to
-`/locked?next=` for an HTML `GET`, and 401 `locked` for any other request.
+`/locked?next=PATH` for an HTML `GET` (the path alone, never the query), and 401 `locked` for any other request. A
+try is counted before the PIN is compared, so requests sent at once get no more than five tries together. Every answer
+of a session carries `Cache-Control: no-store`, except `/assets/`.
 
 | property | type | meaning |
 |---|---|---|

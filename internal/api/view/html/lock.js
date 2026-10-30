@@ -15,7 +15,7 @@
   const show = () => {
     if (gone) return;
     gone = true;
-    location.replace('/locked?next=' + encodeURIComponent(location.pathname + location.search));
+    location.replace('/locked?next=' + encodeURIComponent(location.pathname));
   };
 
   // check locks when the idle time is over. The server must lock first: the lock page sends an open session back.

@@ -128,10 +128,14 @@ func (ss *sessions) activity(id string, now time.Time) {
 	}
 }
 
-// lock locks the session now. It keeps the count of wrong PINs: a lock must not give the tries back.
+// lock locks the session now. It keeps the count of wrong PINs: a lock must not give the tries back. An ended
+// session gets no state again: a request that was held while it ended must not bring it back.
 func (ss *sessions) lock(id string, now time.Time) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
+	if _, ended := ss.ended[id]; ended {
+		return
+	}
 	st, ok := ss.state[id]
 	if !ok {
 		st = &sessionState{}
@@ -140,24 +144,57 @@ func (ss *sessions) lock(id string, now time.Time) {
 	st.active, st.seen, st.locked = now, now, true
 }
 
-func (ss *sessions) unlock(id string, now time.Time) {
+// tryPIN counts a try before the PIN is compared. Requests that the server holds while their bodies come, or that
+// come at once, then get no more than wrongPINLimit tries together. It is false for an ended session and for one that
+// has used its tries.
+func (ss *sessions) tryPIN(id string, now time.Time) bool {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
-	ss.state[id] = &sessionState{active: now, seen: now}
-}
-
-// wrongPIN counts a wrong PIN and returns the count since the last unlock.
-func (ss *sessions) wrongPIN(id string, now time.Time) int {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
+	if _, ended := ss.ended[id]; ended {
+		return false
+	}
 	st, ok := ss.state[id]
 	if !ok {
 		st = &sessionState{locked: true}
 		ss.state[id] = st
 	}
 	st.seen = now
+	if st.wrong >= wrongPINLimit {
+		return false
+	}
 	st.wrong++
-	return st.wrong
+	return true
+}
+
+// opened opens the session after the right PIN, and gives the tries back. It is false when the session ended while
+// the PIN was compared.
+func (ss *sessions) opened(id string, now time.Time) bool {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if _, ended := ss.ended[id]; ended {
+		return false
+	}
+	ss.state[id] = &sessionState{active: now, seen: now}
+	return true
+}
+
+// failed records a wrong PIN, whose try tryPIN has counted. It returns the count, and ends the session when the
+// tries are used up.
+func (ss *sessions) failed(id string, now time.Time) (n int, ended bool) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if _, done := ss.ended[id]; done {
+		return wrongPINLimit, true
+	}
+	if st, ok := ss.state[id]; ok {
+		n = st.wrong
+	}
+	if n >= wrongPINLimit {
+		delete(ss.state, id)
+		ss.ended[id] = now
+		return n, true
+	}
+	return n, false
 }
 
 func (ss *sessions) end(id string, now time.Time) {
@@ -280,7 +317,9 @@ func (p *public) serveSession(w http.ResponseWriter, r *http.Request, id string)
 	idle := time.Duration(minutes)*time.Minute + idleSlack
 	// A read that failed locks the session whatever its state.
 	locked := p.sessions.locked(id, now, lockOn, idle) || err != nil
-	w.Header().Set("Cache-Control", "no-store") // a handler that sets its own (the assets) replaces it
+	if !strings.HasPrefix(r.URL.Path, "/assets/") { // the assets are the same for every browser: they keep their cache
+		w = &noStore{ResponseWriter: w}
+	}
 	if minutes > 0 {
 		r = r.WithContext(context.WithValue(r.Context(), lockMinutesKey{}, minutes))
 	}
@@ -300,7 +339,8 @@ func (p *public) serveSession(w http.ResponseWriter, r *http.Request, id string)
 	}
 	if locked {
 		if r.Method == http.MethodGet && wantsHTML(r) {
-			http.Redirect(w, r, "/locked?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusSeeOther)
+			// next is the path alone: a query, such as the words of a search, is the owner's and would show on the lock page.
+			http.Redirect(w, r, "/locked?next="+url.QueryEscape(r.URL.EscapedPath()), http.StatusSeeOther)
 			return
 		}
 		writeError(w, r, &core.Error{Status: http.StatusUnauthorized, Msg: "locked: unlock this browser with the PIN at /locked", Code: siren.CodeLocked})
@@ -357,22 +397,43 @@ func (p *public) unlock(w http.ResponseWriter, r *http.Request, id string, now t
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	parseErr := r.ParseForm()
 	next := localPath(r.PostForm.Get("next"))
-	// With the lock off there is nothing to open: the session goes on, and a wrong PIN is not counted.
-	open := !lockOn || (hash != "" && parseErr == nil && core.PINMatches(hash, r.PostForm.Get("pin")))
-	if open {
-		p.sessions.unlock(id, now)
-		if next == "" {
-			next = "/"
-		}
-		http.Redirect(w, r, next, http.StatusSeeOther)
-		return
+	open := next // where the right PIN goes
+	if open == "" {
+		open = "/"
 	}
-	n := p.sessions.wrongPIN(id, now)
-	log.Printf("lifelog: %s %s: the PIN does not match (%d of %d)", r.Method, r.URL.Path, n, wrongPINLimit)
-	if n >= wrongPINLimit {
+	// The session can end while this request waits for its body (another request, a logout): each step below asks
+	// the memory of the sessions again, under its mutex.
+	ended := func() {
 		p.sessions.end(id, now)
 		p.setSession(w, "", -1)
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+	// With the lock off there is nothing to open: the session goes on, and no try is counted.
+	if !lockOn {
+		if !p.sessions.opened(id, now) {
+			ended()
+			return
+		}
+		http.Redirect(w, r, open, http.StatusSeeOther)
+		return
+	}
+	if !p.sessions.tryPIN(id, now) {
+		log.Printf("lifelog: %s %s: no tries left, the session ends", r.Method, r.URL.Path)
+		ended()
+		return
+	}
+	if hash != "" && parseErr == nil && core.PINMatches(hash, r.PostForm.Get("pin")) {
+		if !p.sessions.opened(id, now) {
+			ended()
+			return
+		}
+		http.Redirect(w, r, open, http.StatusSeeOther)
+		return
+	}
+	n, done := p.sessions.failed(id, now)
+	log.Printf("lifelog: %s %s: the PIN does not match (%d of %d)", r.Method, r.URL.Path, n, wrongPINLimit)
+	if done {
+		ended()
 		return
 	}
 	to := "/locked?failed=1"
@@ -396,3 +457,28 @@ func (p *public) awake(w http.ResponseWriter, r *http.Request, id string, now ti
 	p.sessions.activity(id, now)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// noStore makes every answer of a session uncacheable, whatever its handler set: a picture that its route keeps for a
+// year would show from the cache in a locked browser. The header is set at the first WriteHeader or Write.
+type noStore struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (n *noStore) WriteHeader(code int) {
+	if !n.wrote {
+		n.wrote = true
+		n.Header().Set("Cache-Control", "no-store")
+	}
+	n.ResponseWriter.WriteHeader(code)
+}
+
+func (n *noStore) Write(b []byte) (int, error) {
+	if !n.wrote {
+		n.WriteHeader(http.StatusOK)
+	}
+	return n.ResponseWriter.Write(b)
+}
+
+// Unwrap lets http.ResponseController reach the connection (the deadlines of serve.go).
+func (n *noStore) Unwrap() http.ResponseWriter { return n.ResponseWriter }
