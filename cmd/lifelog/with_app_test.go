@@ -61,7 +61,7 @@ func startWithAppServer(t *testing.T) *withServer {
 	w := newWithServer(t)
 	withAppAs(t, w.dir, "testapp")
 	w.start(t, []string{"--db", w.db, "serve", "--addr", "127.0.0.1:0", "--with", "testapp"}, nil)
-	w.waitFor(t, "with testapp: a catalog of 5 actions on 127.0.0.1:")
+	w.waitFor(t, "with testapp: a catalog of 6 actions on 127.0.0.1:")
 	return w
 }
 
@@ -211,7 +211,88 @@ func TestAConnectedAppIsInTheCatalogOfTheServer(t *testing.T) {
 	})
 }
 
-// TestAConnectedAppIsReadAgainAfterARestart: a child that ends with status 1 is started again at a new address, and
+// TestTheBrowserDrawsTheRowsOfAnApp: an embedded link of an app carries a properties and an action; the server puts
+// the action in its namespace, and the generic view draws the quick-add, the row with its round button, and the side
+// column. The form of the row posts through /with/testapp and the app runs the action.
+func TestTheBrowserDrawsTheRowsOfAnApp(t *testing.T) {
+	w := startWithAppServer(t)
+	ctx := t.Context()
+	e, _, _ := testEnv(t)
+	if err := runArgs(ctx, e, []string{"do", "testapp-add-item", "text=milk", "--url", w.base}); err != nil {
+		t.Fatalf("do: %v", err)
+	}
+
+	home, err := client.Remote(w.base, "", "").Get(ctx, "/with/testapp/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(home.Entities) != 1 || len(home.Entities[0].Actions) != 1 {
+		t.Fatalf("the home embeds %+v, want one item with one action", home.Entities)
+	}
+	if a := home.Entities[0].Actions[0]; a.Href != "/with/testapp/items/1/done" || a.Name != "testapp-done-item" {
+		t.Errorf("the action of the row = %s %s, want testapp-done-item at /with/testapp/items/1/done", a.Name, a.Href)
+	}
+
+	get := func(path string) string {
+		req, err := http.NewRequestWithContext(ctx, "GET", w.base+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "text/html")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		b, _ := io.ReadAll(res.Body)
+		if res.StatusCode != 200 {
+			t.Fatalf("GET %s: status %d\n%s", path, res.StatusCode, b)
+		}
+		return string(b)
+	}
+	page := get("/with/testapp/")
+	for _, want := range []string{
+		`<form method="POST" action="/with/testapp/items/1/done" class="round">`, `aria-label="Done"`,
+		`<span class="chip">n: 1</span>`, `<nav class="side" aria-label="Links">`, `aria-current="page"`, `class="quick-add"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the page does not hold %q", want)
+		}
+	}
+	if n := strings.Count(page, `action="/with/testapp/items"`); n != 1 {
+		t.Errorf("add-item is drawn %d times, want once (the quick-add, not Actions again)", n)
+	}
+	if strings.Index(page, `class="quick-add"`) > strings.Index(page, `aria-label="Properties"`) {
+		t.Error("the quick-add is not at the top of the main column")
+	}
+
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	res, err := noRedirect.PostForm(w.base+"/with/testapp/items/1/done", map[string][]string{"back": {"/with/testapp/"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 && (res.StatusCode < 300 || res.StatusCode > 399) {
+		t.Errorf("the form of the row: status %d, want 200 or a redirect", res.StatusCode)
+	}
+	if p, _ := countsOf(t, w)["done"].(interface{ Float64() (float64, error) }); p == nil {
+		t.Error("the home has no done count")
+	} else if f, _ := p.Float64(); f != 1 {
+		t.Errorf("done = %v, want 1: the app did not run the action", f)
+	}
+}
+
+func countsOf(t *testing.T, w *withServer) map[string]any {
+	t.Helper()
+	e, err := client.Remote(w.base, "", "").Get(t.Context(), "/with/testapp/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := e.Properties.(map[string]any)
+	return p
+}
+
+// TestAConnectedAppIsReadAgainAfterARestart:a child that ends with status 1 is started again at a new address, and
 // the server reads its catalog again. The new process has no state.
 func TestAConnectedAppIsReadAgainAfterARestart(t *testing.T) {
 	w := startWithAppServer(t)
@@ -225,7 +306,7 @@ func TestAConnectedAppIsReadAgainAfterARestart(t *testing.T) {
 	w.waitFor(t, "with testapp: ended with status 1, started again in ")
 	// The first catalog line is the one of the first start: wait for a second one.
 	waitUntil(t, func() (struct{}, bool) {
-		return struct{}{}, strings.Count(w.stderr.String(), "with testapp: a catalog of 5 actions on 127.0.0.1:") == 2
+		return struct{}{}, strings.Count(w.stderr.String(), "with testapp: a catalog of 6 actions on 127.0.0.1:") == 2
 	}, "the catalog of the second start")
 	if _, ok := catalogOf(t, w, "")["testapp-add-item"]; !ok {
 		t.Error("testapp-add-item is not in the catalog after the restart")

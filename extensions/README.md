@@ -163,6 +163,31 @@ An error is an entity of class `error` with the properties `status`, `code` and 
 `status`. The server passes it on with the same status and code. Any other answer to a call of the server is a fault
 of the app (502 `upstream`).
 
+### How the browser draws a page of an app
+
+The browser draws the page of an app with its generic view. The view reads the shape of the entity. It reads no class
+and no name of an app. An author shapes the page with three rules.
+
+```mermaid
+flowchart LR
+  N["side column: the links of the entity"] --> M["main column"]
+  M --> Q["quick-add: one line"]
+  M --> R["rows: the embedded links"]
+  M --> A["the other actions, boxed"]
+```
+
+1. **Quick-add.** On a page under `/with/NAME`, the first action of the entity that writes (not a `GET`), has no path field and has exactly one
+   required field, of the type `text`, is one line at the top of the main column: that field, the button with the
+   title of the action, and the other fields folded under "More fields". The Actions section does not draw it again.
+2. **Rows.** Each embedded link is a row. An embedded link may carry `properties` and `actions`
+   ([API.md](../API.md#the-entity)). An action of the row that has no field is a small round button before the
+   title. Its `title` is the accessible name of the button. An action with fields is a boxed form after the title.
+   The scalar properties of the row (a string, a number, a boolean that is true) are chips after the title, each as
+   `name: value`. A row with no properties and no actions is the link and its `rel`. A form of a row returns to the
+   page it is on.
+3. **Two panes.** On a wide screen the links of the entity, except `self`, are a side column beside the main column.
+   The link whose path is the path of the page is marked current. On a narrow screen they are a row under the title.
+
 ### What the server does with a request
 
 The route is `/with/NAME` and everything under it, for every method. The path after `/with/NAME` is the `href` of the

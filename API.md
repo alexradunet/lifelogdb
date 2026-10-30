@@ -36,7 +36,7 @@ Every answer is one [Siren](https://github.com/kevinswiber/siren) entity:
 | `class` | the kind of resource: one of the classes below, sometimes with a second word (`day-page`, `deleted`, `dry-run`) |
 | `title` | a human title |
 | `properties` | the resource's own data, per class below |
-| `entities` | embedded links: `{rel, href, title, class}` each, the things this resource lists or links to |
+| `entities` | embedded links: `{rel, href, title, class}` each, the things this resource lists or links to. An embedded link of a connected app may also carry `properties` and `actions` (an extension of Siren): a short form of an embedded representation that keeps its `href`. The browser draws it as a [row](extensions/README.md#how-the-browser-draws-a-page-of-an-app). |
 | `links` | `{rel, href, title}`: `self`, `index` (home), `prev`/`next` (a neighbour or the next page), and the rels named per class |
 | `actions` | what may be done here: `{name, title, description, method, href, type, fields, owner, danger}`, each field `{name, type, title, value, required, options, in, rows, pages, accept}` with its current value filled in; `owner: true` marks the owner's alone and `danger: true` marks one that hides or retracts what is there, so a client can warn before it sends; `in: "path"` marks a field of a templated href (`GET /actions` only) and `rows` is how many lines a `textarea` is drawn; `pages: true` says the value is a page's title, so a client can offer the names of the pages; `accept` is what a `file` field takes (`audio/*`) |
 | `result` | after a write: what it did (the result shapes below) |
@@ -98,6 +98,7 @@ flowchart LR
   `new`. Any other method that matches no action is 404.
 - **The writer** of the app's request is the writer of yours (`Lifelog-Source`). The app gets no cookie and no token.
 - **The answer** is the entity of the app, with `/with/NAME` before each `href` and `NAME-` before each action name.
+  The actions of an embedded link get the same prefixes.
   A link or an action whose `href` has a scheme or a host is dropped. A `POST` from a browser is answered 303 to the
   `self` link of the answer.
 

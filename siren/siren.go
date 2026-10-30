@@ -78,11 +78,16 @@ type Entity struct {
 }
 
 // Link is a Siren link, also used as an embedded link (a sub-entity that is only a reference).
+// Properties and Actions are an extension of Siren, for an embedded link only: an embedded link that carries them
+// is a short form of an embedded representation that keeps its href. The browser draws it as a row
+// (extensions/README.md, "How the browser draws a page of an app").
 type Link struct {
-	Rel   []string `json:"rel"`
-	Href  string   `json:"href"`
-	Title string   `json:"title,omitempty"`
-	Class []string `json:"class,omitempty"`
+	Rel        []string `json:"rel"`
+	Href       string   `json:"href"`
+	Title      string   `json:"title,omitempty"`
+	Class      []string `json:"class,omitempty"`
+	Properties any      `json:"properties,omitempty"`
+	Actions    []Action `json:"actions,omitempty"`
 }
 
 // Action is a Siren action. Description (what the action does, for an agent), Owner (the owner's alone) and

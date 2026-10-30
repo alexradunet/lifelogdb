@@ -20,12 +20,15 @@ import (
 var (
 	mu    sync.Mutex
 	items []string // the text of item n is items[n-1]
+	done  int      // how many times a done-item ran
 )
 
 var actions = []siren.Action{
 	{Name: "add-item", Method: "POST", Href: "/items", Title: "Add an item", Description: "Add an item with a text.",
 		Fields: []siren.Field{{Name: "text", Type: "text", Title: "Text", Required: true}}},
 	{Name: "look", Method: "GET", Href: "/items/{id}", Title: "Look at an item", Description: "Read one item.",
+		Fields: []siren.Field{{Name: "id", Type: "number", Title: "Item", Required: true, In: "path"}}},
+	{Name: "done-item", Method: "POST", Href: "/items/{id}/done", Title: "Done", Description: "Mark an item done.",
 		Fields: []siren.Field{{Name: "id", Type: "number", Title: "Item", Required: true, In: "path"}}},
 	{Name: "reset", Method: "POST", Href: "/reset", Title: "Reset", Description: "Remove all items.", Owner: true},
 	{Name: "stop", Method: "POST", Href: "/stop", Title: "Stop", Description: "End the app with status 0."},
@@ -35,7 +38,14 @@ var actions = []siren.Action{
 func home(*http.Request) (*siren.Entity, error) {
 	mu.Lock()
 	defer mu.Unlock()
-	return &siren.Entity{Class: []string{"testapp"}, Title: "Test app", Properties: map[string]any{"count": len(items)}, Actions: actions}, nil
+	e := &siren.Entity{Class: []string{"testapp"}, Title: "Test app", Properties: map[string]any{"count": len(items), "done": done}, Actions: actions}
+	e.Links = []siren.Link{{Rel: []string{"collection"}, Href: "/", Title: "Items"}}
+	if n := len(items); n > 0 { // the last item is a row: it has a chip and a round button
+		id := strconv.Itoa(n)
+		e.Entities = []siren.Link{{Rel: []string{"item"}, Href: "/items/" + id, Title: items[n-1], Properties: map[string]any{"n": n},
+			Actions: []siren.Action{{Name: "done-item", Method: "POST", Href: "/items/" + id + "/done", Title: "Done"}}}}
+	}
+	return e, nil
 }
 
 func addItem(r *http.Request) (*siren.Entity, error) {
@@ -65,6 +75,18 @@ func item(n int, text string) *siren.Entity {
 		Links: []siren.Link{{Rel: []string{"self"}, Href: "/items/" + strconv.Itoa(n), Title: text}}}
 }
 
+func doneItem(r *http.Request) (*siren.Entity, error) {
+	mu.Lock()
+	n, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || n < 1 || n > len(items) {
+		mu.Unlock()
+		return nil, &app.Error{Status: http.StatusNotFound, Code: "not_found", Msg: "no such item"}
+	}
+	done++
+	mu.Unlock()
+	return home(r)
+}
+
 func reset(r *http.Request) (*siren.Entity, error) {
 	mu.Lock()
 	items = nil
@@ -87,7 +109,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	h := app.Catalog("Test app", home, actions, map[string]func(*http.Request) (*siren.Entity, error){
-		"add-item": addItem, "look": look, "reset": reset, "stop": endAfterAnswer(0), "crash": endAfterAnswer(1),
+		"add-item": addItem, "look": look, "done-item": doneItem, "reset": reset, "stop": endAfterAnswer(0), "crash": endAfterAnswer(1),
 	})
 	if err := app.Listen(ctx, h); err != nil {
 		fmt.Fprintln(os.Stderr, "withapp:", err)

@@ -318,25 +318,32 @@ func forwardError(r *http.Request, name string, err error) error {
 // nothing it says leads elsewhere.
 func inNamespace(name string, e *siren.Entity) *siren.Entity {
 	prefix := "/with/" + name
-	e.Links = relinked(prefix, e.Links)
-	e.Entities = relinked(prefix, e.Entities)
-	var acts []siren.Action
-	for _, a := range e.Actions {
-		if isPath(a.Href) {
-			a.Href, a.Name = prefix+a.Href, name+"-"+a.Name
-			acts = append(acts, a)
-		}
-	}
-	e.Actions = acts
+	e.Links = relinked(prefix, name, e.Links)
+	e.Entities = relinked(prefix, name, e.Entities)
+	e.Actions = prefixed(prefix, name, e.Actions)
 	return e
 }
 
-func relinked(prefix string, links []siren.Link) []siren.Link {
+// relinked keeps the links with a path. It also rewrites the actions of an embedded link, as the actions of the entity.
+func relinked(prefix, name string, links []siren.Link) []siren.Link {
 	var out []siren.Link
 	for _, l := range links {
 		if isPath(l.Href) {
 			l.Href = prefix + l.Href
+			l.Actions = prefixed(prefix, name, l.Actions)
 			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// prefixed gives each action with a path the prefix of its address and of its name, and drops the others.
+func prefixed(prefix, name string, actions []siren.Action) []siren.Action {
+	var out []siren.Action
+	for _, a := range actions {
+		if isPath(a.Href) {
+			a.Href, a.Name = prefix+a.Href, name+"-"+a.Name
+			out = append(out, a)
 		}
 	}
 	return out

@@ -204,11 +204,25 @@
 </section>{{end}}{{end}}{{end}}
 
 {{/* generic is the view of any class without a template of its own: the whole entity, and every action it offers.
-     An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). */}}
+     An action is drawn by its name, so a link with ?new=<action> opens its form (the rail's Snapshot). It reads the
+     shape of the entity only, never a class or the name of an app. The three rules (the quick-add, the rows, the two
+     panes) are in extensions/README.md, "How the browser draws a page of an app". */}}
 {{define "generic"}}{{template "head" .}}
-<header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1>
-{{with .Links}}<p class="sub">{{range .}}<a href="{{.Href}}" rel="{{rel .Rel}}">{{or .Title .Href}}</a>{{end}}</p>{{end}}</div></header>
+<header class="page-head"><div class="what">{{with .Class}}<span class="kind">{{rel .}}</span>{{end}}<h1>{{.Title}}</h1></div></header>
+<div class="panes">
+{{with .SideLinks}}<nav class="side" aria-label="Links"><ul>{{range .}}<li><a href="{{.Href}}" rel="{{rel .Rel}}"{{if $.IsHere .Href}} aria-current="page"{{end}}>{{or .Title .Href}}</a></li>{{end}}</ul></nav>{{end}}
+<div class="pane-main">
+{{with .QuickAdd}}{{template "form" (form ($.Action .Name) "more" "*" "class" "quick-add" "back" $.ReturnHere)}}{{end}}
 {{with .Properties}}<section class="panel" aria-label="Properties"><h2>Properties</h2><div class="scroll">{{$.Value .}}</div></section>{{end}}
-{{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}<li><a href="{{.Href}}">{{or .Title .Href}}</a> <span class="badge">{{rel .Rel}}</span></li>{{end}}</ul></section>{{end}}
-{{with .Actions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form ($.Action .Name))}}{{end}}</div></section>{{end}}
+{{with .Entities}}<section class="section" aria-label="Links"><h2>Links</h2><ul class="plain">{{range .}}{{template "row" (dict "v" $ "l" .)}}{{end}}</ul></section>{{end}}
+{{with .OtherActions}}<section class="section" aria-label="Actions"><h2>Actions</h2><div class="actions">{{range .}}{{template "boxed" (form ($.Action .Name))}}{{end}}</div></section>{{end}}
+</div></div>
 {{template "foot" .}}{{end}}
+
+{{/* row is an embedded link of the generic view. With no properties and no actions it is the link and its rel badge.
+     With them, an action of no field is a small round button before the title (its title is the accessible name),
+     the scalar properties are chips after it, and an action with fields is boxed. It takes v (the view) and l. */}}
+{{define "row"}}{{$v := .v}}{{with .l}}{{$chips := rowChips .}}{{$acts := .Actions}}<li class="row">
+{{if or $chips $acts}}{{range $acts}}{{if roundAction .}}{{template "form" (form . "class" "round" "aria" .Title "back" $v.ReturnHere)}}{{end}}{{end}}<a href="{{.Href}}">{{or .Title .Href}}</a>
+{{range $chips}}<span class="chip">{{.}}</span>{{end}}{{range $acts}}{{if not (roundAction .)}}{{template "boxed" (form . "back" $v.ReturnHere)}}{{end}}{{end}}
+{{else}}<a href="{{.Href}}">{{or .Title .Href}}</a> <span class="badge">{{rel .Rel}}</span>{{end}}</li>{{end}}{{end}}

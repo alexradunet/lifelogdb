@@ -1018,6 +1018,36 @@ details.metric-sub>summary>h3::after{content:none} /* a small group has no stitc
 /* The tools of a head in a narrow column are the small buttons, so a row of three fits on a phone's line
    (docs/plans/119-the-finish.md, rule 6). */
 @container column (max-width:607px){.page-head .tools :is(a.button,details.action>summary.button):not(.step){block-size:var(--control-small); min-block-size:0; padding:0 var(--space-3); font-size:13px}}
+
+/* The generic view of an entity (extensions/README.md, "How the browser draws a page of an app"). Two panes: the links
+   of the entity are a row under the title, and on a wide column a side column beside the main one. */
+.panes{display:flex; flex-direction:column; gap:var(--space-4)}
+.pane-main{display:flex; flex-direction:column; gap:var(--space-4); min-inline-size:0}
+nav.side>ul{display:flex; flex-wrap:wrap; gap:2px 14px; margin:0; padding:0; list-style:none; font-size:14px; line-height:20px;
+  & li+li{margin:0}
+  & a[aria-current=page]{font-weight:700; color:var(--text-strong)}}
+@container column (min-width:868px){
+  .panes{display:grid; grid-template-columns:minmax(150px,220px) minmax(0,1fr); align-items:start}
+  nav.side>ul{flex-direction:column; gap:var(--space-1); font-size:15px; line-height:22px;
+    & a{display:block; padding:var(--space-1) var(--space-2)}
+    & a[aria-current=page]{background:var(--accent-tint); box-shadow:inset 3px 0 0 var(--primary)}}}
+
+/* The quick-add: the one required text field and the button on one line; the other fields are folded under More. */
+form.quick-add{display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--space-2);
+  &>label{flex:1 1 12rem; min-inline-size:0}
+  &>details.more-fields{flex:1 0 100%}}
+
+/* A row of the generic view: an optional round button, the title, chips, boxed actions. */
+ul.plain>li.row{display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2) var(--space-3);
+  &>a:first-of-type{flex:1 1 auto; min-inline-size:0; overflow-wrap:anywhere}
+  & .chip{display:inline-block; padding:0 var(--space-2); font:400 12px/18px var(--mono); color:var(--text-muted); border:1px solid var(--line-soft); white-space:nowrap}}
+/* The round button of a row: drawn with the tokens, a ring that shows a tick on hover and focus. */
+form.round button{box-sizing:border-box; inline-size:var(--control-small); block-size:var(--control-small); padding:0; border-radius:50%; overflow:hidden;
+  font-size:0; background:var(--surface); border:2px solid var(--edge); box-shadow:none;
+  &::before{content:""; inline-size:5px; block-size:10px; margin-block-end:2px; border:solid var(--link); border-width:0 2px 2px 0; transform:rotate(45deg); opacity:0}
+  &:is(:hover,:focus-visible)::before{opacity:1}
+  &:hover{background:var(--accent-tint); filter:none}
+  &:active{transform:none}}
 }
 
 /* The utilities: a class with one purpose that no component restyles, so it may come last in the cascade. */
