@@ -52,6 +52,20 @@ type Task struct {
 	StartDate     string `json:"startDate,omitempty"`
 	TimeZone      string `json:"timeZone,omitempty"`
 	IsAllDay      bool   `json:"isAllDay,omitempty"`
+	Priority      int    `json:"priority,omitempty"` // 0 none, 1 low, 3 medium, 5 high
+}
+
+// PriorityWord is the priority as a word: high, medium or low. It is "" for none.
+func (t Task) PriorityWord() string {
+	switch {
+	case t.Priority >= 5:
+		return "high"
+	case t.Priority >= 3:
+		return "medium"
+	case t.Priority >= 1:
+		return "low"
+	}
+	return ""
 }
 
 // Done is the instant of completion, in the zone of the task (else in the local zone). It is false when the task has

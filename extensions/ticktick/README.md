@@ -136,24 +136,47 @@ A `sync` that comes while a poll runs waits for it. The timer and the action sha
 
 ## Browse the tasks
 
-The app serves more than the home. The home links to the lists, a list links to its tasks, and a task links back to its
-list. Any surface can follow these links, because they are plain resources of the catalog.
+The app serves pages, not only the home. Every page links to the others, and any surface can follow the links,
+because they are plain resources of the catalog. The home is Today.
 
 ```mermaid
 flowchart LR
-  H["/ home: lists, due today, done"] --> L["/lists/{id}: the open tasks of one list, add-task prefilled"]
-  L --> T["/tasks/{id}: the task, its list, complete-task"]
-  H --> T
-  H --> D["/done: the done tasks of the last 30 days"]
-  D --> T
+  H["/ Today: open tasks due today or before"] --> N["/next7: due in the next 7 days"]
+  H --> L["/lists/{id}: the open tasks of one list"]
+  L --> LD["/lists/{id}/done: done in this list"]
+  H --> D["/done: done in the last 30 days"]
+  L --> T["/tasks/{id}: one task"]
+  H -->|"round button of a row"| C["complete-task"]
+  L -->|"round button of a row"| C
+  N -->|"round button of a row"| C
 ```
 
 | route | what it answers |
 |---|---|
-| `GET /` | the counts `open` and `overdue`, one link to each list (`NAME · N`, N is its open count), the tasks due today or before, the link `Done`, and the actions `add-task` and `sync` |
-| `GET /lists/{id}` | the name of the list, `open` and `overdue`, its open tasks in the order of TickTick (`TITLE · due YYYY-MM-DD` when due), and `add-task` with the list filled in. An unknown id is 404 `not_found`. |
-| `GET /tasks/{id}` | one task, a link to its list, and `complete-task` when it is open. A done task answers `done: true` and has no `complete-task`. |
-| `GET /done` | the tasks done in the last 30 days, newest first (`YYYY-MM-DD · TITLE · LIST`), and their `count`. A server without `/task/completed` answers an empty list and the `note` "the server has no list of done tasks". |
+| `GET /` | Today: the counts `open` and `overdue`, the open tasks due today or before from every list, and the actions `add-task` (with `due` set to today) and `sync`. |
+| `GET /next7` | the open tasks with a due day from today to six days later, from every list, and `add-task`. |
+| `GET /lists/{id}` | the open tasks of one list, `open` and `overdue`, `add-task` with the list filled in, and the link `Done in this list`. An unknown id is 404 `not_found`. |
+| `GET /lists/{id}/done` | the tasks of that list done in the last 30 days, newest first. An unknown id is 404 `not_found`. |
+| `GET /tasks/{id}` | one task: `done`, `due`, `priority`, `notes`, and a link to its list. It has no action. |
+| `GET /done` | the tasks done in the last 30 days, newest first, and their `count`. |
+
+A server without `/task/completed` answers `/done` and `/lists/{id}/done` with no task and the `note` "the server has no
+list of done tasks".
+
+Each task is a row with the chips `due` (YYYY-MM-DD), `priority` (`high`, `medium`, `low`) and, where the rows of many
+lists are mixed, `list`. A done row has the chip `done` (the day). The open rows are in the order of the due day (no due
+day last), then the priority (high first). TickTick's order breaks a tie.
+
+Every page has the same links after `self` and `index`: `Today`, `Next 7 days`, one link to each list and `Done`. On
+the home, each list shows its open count (`NAME · N`).
+
+The browser draws these pages with the generic view of an app. The rules are in
+[how the browser draws a page of an app](../README.md#how-the-browser-draws-a-page-of-an-app). The app does not
+restate them. In short, the action `add-task` is the quick-add line, the links are the side column, and the tasks are
+rows.
+
+Complete is the round button of an open row. It is the action `complete-task` of the row, and it returns to the page.
+The catalog action `complete-task` stays for the CLI, the MCP and WhatsApp. The page of a task has no button.
 
 How to reach them:
 

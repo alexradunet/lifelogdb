@@ -8,7 +8,7 @@
 - **Date / baseline:** 2026-10-30, `875fc5d` (master), after [plan 156](156-browse-the-tasks-through-the-catalog.md).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for the
   browser: the generic view changes for every connected app and for every core page that it draws.
-- **Status:** PLANNED, approved by the owner 2026-10-30 ("implement all"). Not started.
+- **Status:** IN PROGRESS. Part A on master (7183d5f), Part C on master (69554c8), Part B built by a sub-agent in a worktree, in review.
 
 ## Context
 

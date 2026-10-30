@@ -228,3 +228,11 @@ func TestExchangeRefusals(t *testing.T) {
 		t.Error("an answer with no access_token must be an error")
 	}
 }
+
+func TestThePriorityIsAWord(t *testing.T) {
+	for priority, want := range map[int]string{0: "", 1: "low", 3: "medium", 5: "high"} {
+		if got := (Task{Priority: priority}).PriorityWord(); got != want {
+			t.Errorf("priority %d = %q, want %q", priority, got, want)
+		}
+	}
+}

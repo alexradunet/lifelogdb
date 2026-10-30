@@ -500,6 +500,56 @@ func holdsTheWholeLine(t *testing.T, b bins, noCompleted bool) {
 		}
 	})
 
+	t.Run("a row of a list has the round Complete button, and the page has the quick-add and the side column", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(t.Context(), "GET", s.base+"/with/ticktick/lists/p-home", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "text/html")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		raw, _ := io.ReadAll(res.Body)
+		page := string(raw)
+		round := `<form method="POST" action="/with/ticktick/tasks/t-mom/complete" class="round">`
+		if !strings.Contains(page, round) {
+			t.Fatalf("the page has no round form %s:\n%s", round, page)
+		}
+		quick := regexp.MustCompile(`(?s)<form[^>]*action="/with/ticktick/tasks"[^>]*class="quick-add"|<form[^>]*class="quick-add"[^>]*action="/with/ticktick/tasks"`)
+		at := quick.FindStringIndex(page)
+		if at == nil {
+			t.Fatalf("the page has no quick-add form that posts to /with/ticktick/tasks:\n%s", page)
+		}
+		if at[0] > strings.Index(page, round) {
+			t.Error("the quick-add is not before the rows")
+		}
+		nav := regexp.MustCompile(`(?s)<nav class="side"[^>]*>.*?</nav>`).FindString(page)
+		if !strings.Contains(nav, `href="/with/ticktick/next7"`) {
+			t.Errorf("the side column has no link to /with/ticktick/next7:\n%s", nav)
+		}
+
+		// The owner posts the form of the row: a browser POST is answered with a redirect, and TickTick has the task done.
+		post, err := http.NewRequestWithContext(t.Context(), "POST", s.base+"/with/ticktick/tasks/t-mom/complete", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		post.Header.Set("Accept", "text/html")
+		noFollow := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		done, err := noFollow.Do(post)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done.Body.Close()
+		if done.StatusCode != http.StatusSeeOther {
+			t.Errorf("the form answered %d, want 303", done.StatusCode)
+		}
+		if mom, _ := fake.byTitle("Call mom"); mom.Status != 2 {
+			t.Errorf("Call mom in TickTick has status %d, want 2", mom.Status)
+		}
+	})
+
 	t.Run("a task that TickTick does not know is not found", func(t *testing.T) {
 		actions, _ := s.client().Catalog(t.Context())
 		for _, a := range actions {

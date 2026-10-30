@@ -114,61 +114,6 @@ func TestTheCatalogListsThreeActionsWithTheirFields(t *testing.T) {
 	}
 }
 
-func TestTheHomeCountsTheTasksAndEmbedsTheOnesDueTodayOrBefore(t *testing.T) {
-	env := newCatalogEnv(t)
-	due := func(day string) string { return day + "T00:00:00.000+0000" }
-	env.tick.add("late", "p-home", "Overdue").DueDate = due("2030-03-01")
-	env.tick.add("today", "p-work", "Due today").DueDate = due("2030-03-05")
-	env.tick.add("later", "p-work", "Due later").DueDate = due("2030-03-09")
-	env.tick.add("nodue", "p-home", "No due day")
-
-	home, err := env.c.Get(t.Context(), "/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(home.Class, []string{"ticktick"}) || home.Title != "TickTick" {
-		t.Errorf("home = %v %q, want class ticktick, title TickTick", home.Class, home.Title)
-	}
-	p := props(t, home)
-	if p["open"].(interface{ String() string }).String() != "4" || p["overdue"].(interface{ String() string }).String() != "1" {
-		t.Errorf("open = %v, overdue = %v, want 4 and 1", p["open"], p["overdue"])
-	}
-	if lists, _ := p["lists"].([]any); len(lists) != 2 || lists[0] != "Home" || lists[1] != "Work" {
-		t.Errorf("lists = %v, want Home Work", p["lists"])
-	}
-	var hrefs, lists []string
-	for _, l := range home.Entities {
-		if !slices.Contains(l.Rel, "item") {
-			t.Errorf("embedded %+v, want rel item", l)
-		}
-		if slices.Contains(l.Class, "list") {
-			lists = append(lists, l.Href+" "+l.Title)
-			continue
-		}
-		if !slices.Contains(l.Class, "task") {
-			t.Errorf("embedded %+v, want class list or task", l)
-		}
-		hrefs = append(hrefs, l.Href)
-	}
-	slices.Sort(hrefs)
-	if want := []string{"/tasks/late", "/tasks/today"}; !slices.Equal(hrefs, want) {
-		t.Errorf("embedded tasks = %v, want %v", hrefs, want)
-	}
-	if want := []string{"/lists/p-home Home · 2", "/lists/p-work Work · 2"}; !slices.Equal(lists, want) {
-		t.Errorf("embedded lists = %v, want %v", lists, want)
-	}
-	if l := home.LinkByRel("done"); l == nil || l.Href != "/done" || l.Title != "Done" {
-		t.Errorf("done link = %+v, want /done titled Done", l)
-	}
-	var acts []string
-	for _, a := range home.Actions {
-		acts = append(acts, a.Name)
-	}
-	if want := []string{"add-task", "sync"}; !slices.Equal(acts, want) {
-		t.Errorf("home actions = %v, want %v", acts, want)
-	}
-}
-
 func TestAddTaskMakesTheTaskInTheListAndAnswersWithIt(t *testing.T) {
 	env := newCatalogEnv(t)
 	e, err := env.c.Do(t.Context(), env.action(t, "add-task"),
@@ -187,8 +132,8 @@ func TestAddTaskMakesTheTaskInTheListAndAnswersWithIt(t *testing.T) {
 	if self := e.LinkByRel("self"); self == nil || self.Href != "/tasks/new1" {
 		t.Errorf("self = %+v, want /tasks/new1", self)
 	}
-	if len(e.Actions) != 1 || e.Actions[0].Name != "complete-task" || e.Actions[0].Href != "/tasks/new1/complete" {
-		t.Errorf("actions = %+v, want complete-task at /tasks/new1/complete", e.Actions)
+	if len(e.Actions) != 0 {
+		t.Errorf("actions = %+v, want none: Complete is the button of the row", e.Actions)
 	}
 }
 
@@ -265,22 +210,6 @@ func TestAnUnknownTaskIsNotFound(t *testing.T) {
 	wantError(t, err, 404, "not_found", "no such task")
 }
 
-func TestATaskIsAResourceWithItsCompleteAction(t *testing.T) {
-	env := newCatalogEnv(t)
-	env.tick.add("t1", "p-work", "Write report")
-	e, err := env.c.Get(t.Context(), "/tasks/t1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := props(t, e)
-	if e.Title != "Write report" || p["list"] != "Work" || p["done"] != false {
-		t.Errorf("task = %q %v", e.Title, p)
-	}
-	if len(e.Actions) != 1 || e.Actions[0].Name != "complete-task" {
-		t.Errorf("actions = %+v, want complete-task", e.Actions)
-	}
-}
-
 func TestATickTickFaultIsBadGatewayWithoutItsBody(t *testing.T) {
 	env := newCatalogEnv(t)
 	env.tick.unauthorized = true
@@ -328,7 +257,163 @@ func TestTheSyncActionAnswersALifelogFaultWithoutItsWords(t *testing.T) {
 	}
 }
 
-func TestAListShowsItsOpenTasksAndPrefillsAddTask(t *testing.T) {
+func TestAnUnknownListIsNotFound(t *testing.T) {
+	env := newCatalogEnv(t)
+	_, err := env.c.Get(t.Context(), "/lists/nope")
+	wantError(t, err, 404, "not_found", "no such list")
+}
+
+// num is a number property: the client decodes numbers as json.Number.
+func num(t *testing.T, e *siren.Entity, key string) string {
+	t.Helper()
+	n, ok := props(t, e)[key].(interface{ String() string })
+	if !ok {
+		t.Fatalf("property %s of %q = %v, want a number", key, e.Title, props(t, e)[key])
+	}
+	return n.String()
+}
+
+// rowProps are the properties of a row as strings, "" when it has none.
+func rowProps(l siren.Link) map[string]any {
+	m, _ := l.Properties.(map[string]any)
+	return m
+}
+
+// titles are the titles of the embedded rows, in order.
+func titles(e *siren.Entity) []string {
+	var got []string
+	for _, l := range e.Entities {
+		got = append(got, l.Title)
+	}
+	return got
+}
+
+// wantNav checks that the links of a page are self, the index, then the side column with these "TITLE HREF" pairs.
+func wantNav(t *testing.T, e *siren.Entity, self string, side ...string) {
+	t.Helper()
+	if len(e.Links) < 2+len(side) {
+		t.Fatalf("%q has %d links, want at least %d", e.Title, len(e.Links), 2+len(side))
+	}
+	if l := e.Links[0]; !slices.Equal(l.Rel, []string{"self"}) || l.Href != self {
+		t.Errorf("first link of %q = %+v, want self %s", e.Title, l, self)
+	}
+	if l := e.Links[1]; !slices.Equal(l.Rel, []string{"index"}) || l.Href != "/" || l.Title != "TickTick" {
+		t.Errorf("second link of %q = %+v, want the index", e.Title, l)
+	}
+	var got []string
+	for _, l := range e.Links[2 : 2+len(side)] {
+		got = append(got, l.Title+" "+l.Href)
+	}
+	if !slices.Equal(got, side) {
+		t.Errorf("side column of %q = %q, want %q", e.Title, got, side)
+	}
+}
+
+var sideWithoutCounts = []string{"Today /", "Next 7 days /next7", "Home /lists/p-home", "Work /lists/p-work", "Done /done"}
+
+func TestTheHomeIsTodayWithTheRowsDueTodayOrBefore(t *testing.T) {
+	env := newCatalogEnv(t)
+	due := func(day string) string { return day + "T00:00:00.000+0000" }
+	env.tick.add("late", "p-home", "Overdue").DueDate = due("2030-03-01")
+	hi := env.tick.add("hi", "p-home", "Due today, high")
+	hi.DueDate, hi.Priority = due("2030-03-05"), 5
+	env.tick.add("today", "p-work", "Due today").DueDate = due("2030-03-05")
+	env.tick.add("later", "p-work", "Due later").DueDate = due("2030-03-09")
+	env.tick.add("nodue", "p-home", "No due day")
+
+	home, err := env.c.Get(t.Context(), "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(home.Class, []string{"ticktick"}) || home.Title != "TickTick" {
+		t.Errorf("home = %v %q, want class ticktick, title TickTick", home.Class, home.Title)
+	}
+	if num(t, home, "open") != "5" || num(t, home, "overdue") != "1" {
+		t.Errorf("open = %v, overdue = %v, want 5 and 1", props(t, home)["open"], props(t, home)["overdue"])
+	}
+	if lists, _ := props(t, home)["lists"].([]any); len(lists) != 2 || lists[0] != "Home" || lists[1] != "Work" {
+		t.Errorf("lists = %v, want Home Work", props(t, home)["lists"])
+	}
+	// The row of the due day 2030-03-01 comes first, then the high one of 2030-03-05, then the one with no priority.
+	if want := []string{"Overdue", "Due today, high", "Due today"}; !slices.Equal(titles(home), want) {
+		t.Errorf("rows = %q, want %q", titles(home), want)
+	}
+	for _, l := range home.Entities {
+		if slices.Contains(l.Class, "list") || !slices.Contains(l.Class, "task") {
+			t.Errorf("embedded %+v, want only task rows", l)
+		}
+		if rowProps(l)["list"] == nil {
+			t.Errorf("row %q has no list chip: the rows of many lists are mixed", l.Title)
+		}
+	}
+	wantNav(t, home, "/", "Today /", "Next 7 days /next7", "Home · 3 /lists/p-home", "Work · 2 /lists/p-work", "Done /done")
+	var acts []string
+	for _, a := range home.Actions {
+		acts = append(acts, a.Name)
+	}
+	if want := []string{"add-task", "sync"}; !slices.Equal(acts, want) {
+		t.Fatalf("home actions = %v, want %v", acts, want)
+	}
+	if f := home.Actions[0].Field("due"); f == nil || f.Value != "2030-03-05" {
+		t.Errorf("due field = %+v, want the value 2030-03-05 (today)", f)
+	}
+}
+
+func TestARowHasItsChipsAndTheCompleteButtonOfAnOpenTask(t *testing.T) {
+	env := newCatalogEnv(t)
+	a := env.tick.add("a", "p-work", "Write report")
+	a.DueDate, a.Priority = "2030-03-09T00:00:00.000+0000", 3
+	env.tick.add("b", "p-work", "Plain")
+
+	e, err := env.c.Get(t.Context(), "/lists/p-work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Write report", "Plain"}; !slices.Equal(titles(e), want) {
+		t.Fatalf("rows = %q, want %q: plain titles", titles(e), want)
+	}
+	row, plain := e.Entities[0], e.Entities[1]
+	if !slices.Equal(row.Rel, []string{"item"}) || !slices.Equal(row.Class, []string{"task"}) || row.Href != "/tasks/a" {
+		t.Errorf("row = %+v, want rel item, class task, href /tasks/a", row)
+	}
+	want := map[string]any{"due": "2030-03-09", "priority": "medium"}
+	if got := rowProps(row); len(got) != 2 || got["due"] != want["due"] || got["priority"] != want["priority"] {
+		t.Errorf("properties = %v, want %v (no list chip on the page of a list)", got, want)
+	}
+	if len(row.Actions) != 1 || row.Actions[0].Name != "complete-task" || row.Actions[0].Method != "POST" ||
+		row.Actions[0].Href != "/tasks/a/complete" || row.Actions[0].Title != "Complete" || len(row.Actions[0].Fields) != 0 {
+		t.Errorf("actions = %+v, want complete-task, POST /tasks/a/complete, Complete, no field", row.Actions)
+	}
+	if plain.Properties != nil {
+		t.Errorf("a row with no chip has properties %v, want none", plain.Properties)
+	}
+}
+
+func TestTheRowsAreSortedByDueDayThenPriority(t *testing.T) {
+	env := newCatalogEnv(t)
+	set := func(id, due string, priority int) {
+		task := env.tick.add(id, "p-work", id)
+		task.Priority = priority
+		if due != "" {
+			task.DueDate = due + "T00:00:00.000+0000"
+		}
+	}
+	set("nodue-high", "", 5)
+	set("d9-low", "2030-03-09", 1)
+	set("d7-none", "2030-03-07", 0)
+	set("d9-high", "2030-03-09", 5)
+	set("nodue-none", "", 0)
+	e, err := env.c.Get(t.Context(), "/lists/p-work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"d7-none", "d9-high", "d9-low", "nodue-high", "nodue-none"}
+	if got := titles(e); !slices.Equal(got, want) {
+		t.Errorf("rows = %q, want %q", got, want)
+	}
+}
+
+func TestAListHasItsRowsAddTaskWithTheListAndALinkToItsDoneTasks(t *testing.T) {
 	env := newCatalogEnv(t)
 	env.tick.add("a", "p-work", "Write report").DueDate = "2030-03-09T00:00:00.000+0000"
 	env.tick.add("b", "p-home", "Pay rent")
@@ -343,26 +428,20 @@ func TestAListShowsItsOpenTasksAndPrefillsAddTask(t *testing.T) {
 	if !slices.Equal(e.Class, []string{"list"}) || e.Title != "Work" {
 		t.Errorf("list = %v %q, want class list, title Work", e.Class, e.Title)
 	}
-	p := props(t, e)
-	if p["open"].(interface{ String() string }).String() != "2" || p["overdue"].(interface{ String() string }).String() != "1" {
-		t.Errorf("open = %v, overdue = %v, want 2 and 1", p["open"], p["overdue"])
+	if num(t, e, "open") != "2" || num(t, e, "overdue") != "1" {
+		t.Errorf("open = %v, overdue = %v, want 2 and 1", props(t, e)["open"], props(t, e)["overdue"])
 	}
-	got := map[string]string{}
+	if want := []string{"Old task", "Write report"}; !slices.Equal(titles(e), want) {
+		t.Errorf("rows = %q, want %q", titles(e), want)
+	}
 	for _, l := range e.Entities {
-		if !slices.Contains(l.Rel, "item") || !slices.Contains(l.Class, "task") {
-			t.Errorf("embedded %+v, want rel item, class task", l)
+		if rowProps(l)["list"] != nil {
+			t.Errorf("row %q has a list chip, want none on the page of its list", l.Title)
 		}
-		got[l.Href] = l.Title
 	}
-	want := map[string]string{"/tasks/a": "Write report · due 2030-03-09", "/tasks/c": "Old task · due 2030-03-01"}
-	if len(got) != 2 || got["/tasks/a"] != want["/tasks/a"] || got["/tasks/c"] != want["/tasks/c"] {
-		t.Errorf("tasks = %v, want %v", got, want)
-	}
-	if l := e.LinkByRel("self"); l == nil || l.Href != "/lists/p-work" {
-		t.Errorf("self = %+v", l)
-	}
-	if l := e.LinkByRel("index"); l == nil || l.Href != "/" || l.Title != "TickTick" {
-		t.Errorf("index = %+v", l)
+	wantNav(t, e, "/lists/p-work", sideWithoutCounts...)
+	if l := e.Links[len(e.Links)-1]; l.Href != "/lists/p-work/done" || l.Title != "Done in this list" {
+		t.Errorf("last link = %+v, want Done in this list", l)
 	}
 	if len(e.Actions) != 1 || e.Actions[0].Name != "add-task" {
 		t.Fatalf("actions = %+v, want add-task only", e.Actions)
@@ -372,10 +451,35 @@ func TestAListShowsItsOpenTasksAndPrefillsAddTask(t *testing.T) {
 	}
 }
 
-func TestAnUnknownListIsNotFound(t *testing.T) {
-	env := newCatalogEnv(t)
-	_, err := env.c.Get(t.Context(), "/lists/nope")
-	wantError(t, err, 404, "not_found", "no such list")
+func TestNext7KeepsTheDaysFromTodayToSixDaysLater(t *testing.T) {
+	env := newCatalogEnv(t) // today is 2030-03-05: the week ends 2030-03-11
+	due := func(day string) string { return day + "T00:00:00.000+0000" }
+	env.tick.add("d11", "p-work", "In 6 days").DueDate = due("2030-03-11")
+	env.tick.add("d12", "p-work", "In 7 days").DueDate = due("2030-03-12")
+	env.tick.add("d5", "p-home", "Today").DueDate = due("2030-03-05")
+	env.tick.add("d4", "p-home", "Yesterday").DueDate = due("2030-03-04")
+	env.tick.add("nodue", "p-home", "No due day")
+
+	e, err := env.c.Get(t.Context(), "/next7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(e.Class, []string{"next7"}) || e.Title != "Next 7 days" {
+		t.Errorf("page = %v %q, want class next7, title Next 7 days", e.Class, e.Title)
+	}
+	if want := []string{"Today", "In 6 days"}; !slices.Equal(titles(e), want) {
+		t.Errorf("rows = %q, want %q", titles(e), want)
+	}
+	if rowProps(e.Entities[1])["list"] != "Work" {
+		t.Errorf("row = %+v, want the list chip Work", e.Entities[1])
+	}
+	if num(t, e, "open") != "2" {
+		t.Errorf("open = %v, want 2", props(t, e)["open"])
+	}
+	if len(e.Actions) != 1 || e.Actions[0].Name != "add-task" || e.Actions[0].Field("due").Value != nil {
+		t.Errorf("actions = %+v, want add-task with no prefill", e.Actions)
+	}
+	wantNav(t, e, "/next7", sideWithoutCounts...)
 }
 
 func TestDoneListsTheTasksOfTheWindowNewestFirst(t *testing.T) {
@@ -395,50 +499,87 @@ func TestDoneListsTheTasksOfTheWindowNewestFirst(t *testing.T) {
 	if !slices.Equal(e.Class, []string{"done"}) || e.Title != "Done" {
 		t.Errorf("done = %v %q", e.Class, e.Title)
 	}
-	var got []string
-	for _, l := range e.Entities {
-		if !slices.Contains(l.Rel, "item") || !slices.Contains(l.Class, "task") {
-			t.Errorf("embedded %+v, want rel item, class task", l)
+	if want := []string{"Write report", "Pay rent"}; !slices.Equal(titles(e), want) {
+		t.Errorf("rows = %q, want %q", titles(e), want)
+	}
+	for i, want := range []map[string]string{{"done": "2030-03-04", "list": "Work"}, {"done": "2030-03-02", "list": "Home"}} {
+		l := e.Entities[i]
+		if got := rowProps(l); len(got) != 2 || got["done"] != want["done"] || got["list"] != want["list"] {
+			t.Errorf("properties of %q = %v, want %v", l.Title, got, want)
 		}
-		got = append(got, l.Href+" "+l.Title)
-	}
-	want := []string{"/tasks/t2 2030-03-04 · Write report · Work", "/tasks/t1 2030-03-02 · Pay rent · Home"}
-	if !slices.Equal(got, want) {
-		t.Errorf("done = %q, want %q", got, want)
-	}
-	if n := props(t, e)["count"].(interface{ String() string }).String(); n != "2" {
-		t.Errorf("count = %s, want 2", n)
-	}
-	for _, rel := range []string{"self", "index"} {
-		if e.LinkByRel(rel) == nil {
-			t.Errorf("no %s link", rel)
+		if len(l.Actions) != 0 {
+			t.Errorf("done row %q has actions %+v, want none", l.Title, l.Actions)
 		}
 	}
+	if num(t, e, "count") != "2" {
+		t.Errorf("count = %v, want 2", props(t, e)["count"])
+	}
+	wantNav(t, e, "/done", sideWithoutCounts...)
 }
 
-func TestDoneWithoutTheCompletedCallIsEmptyWithANote(t *testing.T) {
+func TestTheDoneTasksOfAListAreOnlyThatListNewestFirst(t *testing.T) {
 	env := newCatalogEnv(t)
-	env.tick.noCompleted = true
-	e, err := env.c.Get(t.Context(), "/done")
+	for id, list := range map[string]string{"t1": "p-home", "t2": "p-work", "t3": "p-home", "t4": "p-home"} {
+		env.tick.add(id, list, "task "+id)
+	}
+	env.tick.finish("t1", time.Date(2030, 3, 2, 9, 0, 0, 0, time.UTC))
+	env.tick.finish("t2", time.Date(2030, 3, 4, 10, 0, 0, 0, time.UTC))
+	env.tick.finish("t3", time.Date(2030, 3, 3, 10, 0, 0, 0, time.UTC))
+	env.tick.finish("t4", time.Date(2030, 1, 1, 10, 0, 0, 0, time.UTC)) // out of the window
+
+	e, err := env.c.Get(t.Context(), "/lists/p-home/done")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := props(t, e)
-	if len(e.Entities) != 0 || p["note"] != "the server has no list of done tasks" {
-		t.Errorf("done = %+v %v, want no tasks and the note", e.Entities, p)
+	if !slices.Equal(e.Class, []string{"done"}) || e.Title != "Done · Home" {
+		t.Errorf("page = %v %q, want class done, title Done · Home", e.Class, e.Title)
+	}
+	if want := []string{"task t3", "task t1"}; !slices.Equal(titles(e), want) {
+		t.Errorf("rows = %q, want %q", titles(e), want)
+	}
+	if got := rowProps(e.Entities[0]); len(got) != 1 || got["done"] != "2030-03-03" {
+		t.Errorf("properties = %v, want only done 2030-03-03", got)
+	}
+	wantNav(t, e, "/lists/p-home/done", sideWithoutCounts...)
+
+	_, err = env.c.Get(t.Context(), "/lists/nope/done")
+	wantError(t, err, 404, "not_found", "no such list")
+}
+
+func TestTheDoneListsWithoutTheCompletedCallAreEmptyWithANote(t *testing.T) {
+	env := newCatalogEnv(t)
+	env.tick.noCompleted = true
+	for _, path := range []string{"/done", "/lists/p-home/done"} {
+		e, err := env.c.Get(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(e.Entities) != 0 || props(t, e)["note"] != "the server has no list of done tasks" {
+			t.Errorf("%s = %+v %v, want no tasks and the note", path, e.Entities, e.Properties)
+		}
 	}
 }
 
-func TestATaskLinksItsListAndADoneTaskHasNoCompleteAction(t *testing.T) {
+func TestATaskPageHasNoActionAndLinksItsList(t *testing.T) {
 	env := newCatalogEnv(t)
-	env.tick.add("t1", "p-work", "Write report")
+	task := env.tick.add("t1", "p-work", "Write report")
+	task.Content, task.Priority, task.DueDate = "the notes", 5, "2030-03-09T00:00:00.000+0000"
 	e, err := env.c.Get(t.Context(), "/tasks/t1")
 	if err != nil {
 		t.Fatal(err)
 	}
+	p := props(t, e)
+	if e.Title != "Write report" || p["list"] != "Work" || p["done"] != false || p["due"] != "2030-03-09" ||
+		p["priority"] != "high" || p["notes"] != "the notes" {
+		t.Errorf("task = %q %v", e.Title, p)
+	}
+	if len(e.Actions) != 0 {
+		t.Errorf("actions = %+v, want none: Complete is the button of the row", e.Actions)
+	}
 	if l := e.LinkByRel("list"); l == nil || l.Href != "/lists/p-work" || l.Title != "Work" {
 		t.Errorf("list link = %+v, want /lists/p-work titled Work", l)
 	}
+	wantNav(t, e, "/tasks/t1", sideWithoutCounts...)
 
 	// The app has not learned this task: it is not in the open tasks, so it is found among the done ones.
 	env.tick.add("t2", "p-home", "Pay rent")
@@ -456,4 +597,22 @@ func TestATaskLinksItsListAndADoneTaskHasNoCompleteAction(t *testing.T) {
 	if env.tick.callsTo("POST /task/completed") != 1 {
 		t.Errorf("the done tasks were read %d times, want 1", env.tick.callsTo("POST /task/completed"))
 	}
+}
+
+func TestEveryPageHasTheSideColumnAfterSelf(t *testing.T) {
+	env := newCatalogEnv(t)
+	env.tick.add("t1", "p-home", "Pay rent")
+	for _, path := range []string{"/next7", "/lists/p-home", "/lists/p-home/done", "/done", "/tasks/t1"} {
+		e, err := env.c.Get(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantNav(t, e, path, sideWithoutCounts...)
+	}
+	// The answer of the action sync is the home, with the counts.
+	e, err := env.c.Do(t.Context(), env.action(t, "sync"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNav(t, e, "/", "Today /", "Next 7 days /next7", "Home · 1 /lists/p-home", "Work · 0 /lists/p-work", "Done /done")
 }

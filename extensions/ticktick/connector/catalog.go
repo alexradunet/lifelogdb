@@ -54,8 +54,8 @@ func actions(lists []ticktick.Project) []siren.Action {
 	}
 }
 
-// Catalog is the handler of the app. Its title is TickTick. It serves the home, the three actions, and the resources
-// that the home links to: GET /lists/{id}, GET /tasks/{id} and GET /done.
+// Catalog is the handler of the app. Its title is TickTick. It serves the home (Today), the three actions, and the
+// resources that the pages link to: GET /next7, /lists/{id}, /lists/{id}/done, /tasks/{id} and /done.
 // lists are the lists that TickTick reported at the start.
 func Catalog(p *Poller, lists []ticktick.Project) http.Handler {
 	c := &catalog{p: p, lists: lists, project: map[string]string{}}
@@ -72,6 +72,14 @@ func Catalog(p *Poller, lists []ticktick.Project) http.Handler {
 	})
 	mux.HandleFunc("GET /lists/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e, err := c.showList(r)
+		respond(w, e, err)
+	})
+	mux.HandleFunc("GET /next7", func(w http.ResponseWriter, r *http.Request) {
+		e, err := c.showNext7(r)
+		respond(w, e, err)
+	})
+	mux.HandleFunc("GET /lists/{id}/done", func(w http.ResponseWriter, r *http.Request) {
+		e, err := c.showListDone(r)
 		respond(w, e, err)
 	})
 	mux.HandleFunc("GET /done", func(w http.ResponseWriter, r *http.Request) {
@@ -193,25 +201,50 @@ func (c *catalog) find(ctx context.Context, id string) (ticktick.Task, error) {
 	return ticktick.Task{}, noTask()
 }
 
-// taskEntity is a task as an entity. An open task carries its complete-task action, with the id filled in.
+// taskEntity is a task as a page. It has no action: Complete is the round button of the row, and the catalog action
+// complete-task stays for the CLI, the MCP and WhatsApp.
 func (c *catalog) taskEntity(t ticktick.Task) *siren.Entity {
 	props := map[string]any{"id": t.ID, "title": t.Title, "list": c.listName(t.ProjectID), "done": t.Status == 2}
 	if t.Content != "" {
 		props["notes"] = t.Content
 	}
-	if due, ok := t.Due(); ok {
-		props["due"] = due.Format(dayFmt)
+	if due, ok := dueDay(t); ok {
+		props["due"] = due
 	}
-	href := "/tasks/" + url.PathEscape(t.ID)
-	e := &siren.Entity{Class: []string{"task"}, Title: t.Title, Properties: props,
-		Links: []siren.Link{{Rel: []string{"self"}, Href: href, Title: t.Title}, {Rel: []string{"index"}, Href: "/", Title: "TickTick"}}}
+	if p := t.PriorityWord(); p != "" {
+		props["priority"] = p
+	}
+	var extra []siren.Link
 	if c.hasList(t.ProjectID) { // the Inbox has no page: TickTick does not list its tasks
-		e.Links = append(e.Links, siren.Link{Rel: []string{"list"}, Href: "/lists/" + url.PathEscape(t.ProjectID), Title: c.listName(t.ProjectID)})
+		extra = append(extra, siren.Link{Rel: []string{"list"}, Href: listHref(t.ProjectID), Title: c.listName(t.ProjectID)})
 	}
-	if t.Status != 2 {
-		e.Actions = []siren.Action{{Name: "complete-task", Method: "POST", Href: href + "/complete", Title: "Complete"}}
+	return &siren.Entity{Class: []string{"task"}, Title: t.Title, Properties: props,
+		Links: c.links(taskHref(t.ID), t.Title, nil, extra...)}
+}
+
+func taskHref(id string) string { return "/tasks/" + url.PathEscape(id) }
+
+func listHref(id string) string { return "/lists/" + url.PathEscape(id) }
+
+// links are the links of every page: self, the index, then the side column of the generic view (Today, Next 7 days,
+// one link for each list, Done), then the links that only this page has. counts are the open tasks of each list by
+// list id. A page that did not read every list passes nil, and the lists show no count.
+func (c *catalog) links(href, title string, counts map[string]int, extra ...siren.Link) []siren.Link {
+	links := []siren.Link{
+		{Rel: []string{"self"}, Href: href, Title: title},
+		{Rel: []string{"index"}, Href: "/", Title: "TickTick"},
+		{Rel: []string{"nav"}, Href: "/", Title: "Today"},
+		{Rel: []string{"nav"}, Href: "/next7", Title: "Next 7 days"},
 	}
-	return e
+	for _, l := range c.lists {
+		name := l.Name
+		if n, ok := counts[l.ID]; ok {
+			name = fmt.Sprintf("%s · %d", name, n)
+		}
+		links = append(links, siren.Link{Rel: []string{"nav"}, Class: []string{"list"}, Href: listHref(l.ID), Title: name})
+	}
+	links = append(links, siren.Link{Rel: []string{"done"}, Href: "/done", Title: "Done"})
+	return append(links, extra...)
 }
 
 func (c *catalog) showTask(r *http.Request) (*siren.Entity, error) {
@@ -222,7 +255,7 @@ func (c *catalog) showTask(r *http.Request) (*siren.Entity, error) {
 	return c.taskEntity(t), nil
 }
 
-// home counts the open tasks and embeds those due today or before.
+// home is Today: the open tasks due today or before.
 func (c *catalog) home(r *http.Request) (*siren.Entity, error) {
 	return c.homeEntity(r.Context(), -1)
 }
@@ -237,6 +270,21 @@ func (c *catalog) openTasks(ctx context.Context, l ticktick.Project) ([]ticktick
 	return tasks, nil
 }
 
+// allOpen reads the open tasks of every list, list by list, and counts them by list id.
+func (c *catalog) allOpen(ctx context.Context) ([]ticktick.Task, map[string]int, error) {
+	var all []ticktick.Task
+	counts := map[string]int{}
+	for _, l := range c.lists {
+		tasks, err := c.openTasks(ctx, l)
+		if err != nil {
+			return nil, nil, err
+		}
+		counts[l.ID] = len(tasks)
+		all = append(all, tasks...)
+	}
+	return all, counts, nil
+}
+
 // dueDay is the due day of a task, YYYY-MM-DD.
 func dueDay(t ticktick.Task) (string, bool) {
 	due, ok := t.Due()
@@ -246,114 +294,221 @@ func dueDay(t ticktick.Task) (string, bool) {
 	return due.Format(dayFmt), true
 }
 
-func taskLink(t ticktick.Task, title string) siren.Link {
-	return siren.Link{Rel: []string{"item"}, Class: []string{"task"}, Href: "/tasks/" + url.PathEscape(t.ID), Title: title}
+// sortOpen sorts open tasks by due day (no due day last), then by priority (high first). A task that ties keeps the
+// order of TickTick.
+func sortOpen(tasks []ticktick.Task) {
+	slices.SortStableFunc(tasks, func(a, b ticktick.Task) int {
+		da, oka := dueDay(a)
+		db, okb := dueDay(b)
+		switch {
+		case oka && okb && da != db:
+			return strings.Compare(da, db)
+		case oka != okb:
+			if oka {
+				return -1
+			}
+			return 1
+		}
+		return b.Priority - a.Priority
+	})
 }
 
-// homeEntity is the home: a link to each list with its open count, the tasks due today or before, and the link to the
-// done tasks. written >= 0 adds the count that a sync wrote.
+// taskRow is a task as a row of a list. The chips are its due day, its priority and, when the rows of many lists are
+// mixed, its list. An open task has the round button Complete.
+func (c *catalog) taskRow(t ticktick.Task, withList bool) siren.Link {
+	href := taskHref(t.ID)
+	row := siren.Link{Rel: []string{"item"}, Class: []string{"task"}, Href: href, Title: t.Title}
+	props := map[string]any{}
+	if day, ok := dueDay(t); ok {
+		props["due"] = day
+	}
+	if p := t.PriorityWord(); p != "" {
+		props["priority"] = p
+	}
+	if withList {
+		props["list"] = c.listName(t.ProjectID)
+	}
+	if len(props) > 0 {
+		row.Properties = props
+	}
+	if t.Status != 2 {
+		row.Actions = []siren.Action{{Name: "complete-task", Method: "POST", Href: href + "/complete", Title: "Complete"}}
+	}
+	return row
+}
+
+func (c *catalog) rows(tasks []ticktick.Task, withList bool) []siren.Link {
+	var rows []siren.Link
+	for _, t := range tasks {
+		rows = append(rows, c.taskRow(t, withList))
+	}
+	return rows
+}
+
+// addTaskWith is the action add-task of the catalog, with the value of one field given.
+func (c *catalog) addTaskWith(field, value string) siren.Action {
+	add := actions(c.lists)[0]
+	for i := range add.Fields {
+		if add.Fields[i].Name == field {
+			add.Fields[i].Value = value
+		}
+	}
+	return add
+}
+
+// homeEntity is Today: the tasks due today or before across the lists, with add-task (due today) and sync.
+// written >= 0 adds the count that a sync wrote.
 func (c *catalog) homeEntity(ctx context.Context, written int) (*siren.Entity, error) {
 	today := c.p.Now().Format(dayFmt)
 	names := make([]string, 0, len(c.lists))
-	var lists, due []siren.Link
-	open, overdue := 0, 0
 	for _, l := range c.lists {
 		names = append(names, l.Name)
-		tasks, err := c.openTasks(ctx, l)
-		if err != nil {
-			return nil, err
-		}
-		open += len(tasks)
-		lists = append(lists, siren.Link{Rel: []string{"item"}, Class: []string{"list"},
-			Href: "/lists/" + url.PathEscape(l.ID), Title: fmt.Sprintf("%s · %d", l.Name, len(tasks))})
-		for _, t := range tasks {
-			day, ok := dueDay(t)
-			if !ok || day > today {
-				continue
-			}
-			if day < today {
-				overdue++
-			}
-			due = append(due, taskLink(t, t.Title))
-		}
 	}
-	props := map[string]any{"lists": names, "open": open, "overdue": overdue}
+	tasks, counts, err := c.allOpen(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var due []ticktick.Task
+	overdue := 0
+	for _, t := range tasks {
+		day, ok := dueDay(t)
+		if !ok || day > today {
+			continue
+		}
+		if day < today {
+			overdue++
+		}
+		due = append(due, t)
+	}
+	sortOpen(due)
+	props := map[string]any{"lists": names, "open": len(tasks), "overdue": overdue}
 	if written >= 0 {
 		props["written"] = written
 	}
-	all := actions(c.lists)
-	return &siren.Entity{Class: []string{"ticktick"}, Title: "TickTick", Properties: props, Entities: append(lists, due...),
-		Actions: []siren.Action{all[0], all[2]},
-		Links: []siren.Link{{Rel: []string{"self"}, Href: "/", Title: "TickTick"},
-			{Rel: []string{"done"}, Href: "/done", Title: "Done"}}}, nil
+	return &siren.Entity{Class: []string{"ticktick"}, Title: "TickTick", Properties: props, Entities: c.rows(due, true),
+		Actions: []siren.Action{c.addTaskWith("due", today), actions(c.lists)[2]},
+		Links:   c.links("/", "TickTick", counts)}, nil
 }
 
-// showList is the open tasks of one list, in TickTick's order, with add-task and the list filled in.
-func (c *catalog) showList(r *http.Request) (*siren.Entity, error) {
+// showNext7 is the open tasks due from today to six days later, across the lists.
+func (c *catalog) showNext7(r *http.Request) (*siren.Entity, error) {
+	now := c.p.Now()
+	first, last := now.Format(dayFmt), now.AddDate(0, 0, 6).Format(dayFmt)
+	tasks, _, err := c.allOpen(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	var week []ticktick.Task
+	for _, t := range tasks {
+		if day, ok := dueDay(t); ok && day >= first && day <= last {
+			week = append(week, t)
+		}
+	}
+	sortOpen(week)
+	return &siren.Entity{Class: []string{"next7"}, Title: "Next 7 days",
+		Properties: map[string]any{"open": len(week)}, Entities: c.rows(week, true),
+		Actions: []siren.Action{actions(c.lists)[0]},
+		Links:   c.links("/next7", "Next 7 days", nil)}, nil
+}
+
+// findList is the list of the request, or 404.
+func (c *catalog) findList(r *http.Request) (ticktick.Project, error) {
 	i := slices.IndexFunc(c.lists, func(l ticktick.Project) bool { return l.ID == r.PathValue("id") })
 	if i < 0 {
-		return nil, noList()
+		return ticktick.Project{}, noList()
 	}
-	l := c.lists[i]
+	return c.lists[i], nil
+}
+
+// showList is the open tasks of one list, with add-task and the list filled in.
+func (c *catalog) showList(r *http.Request) (*siren.Entity, error) {
+	l, err := c.findList(r)
+	if err != nil {
+		return nil, err
+	}
 	tasks, err := c.openTasks(r.Context(), l)
 	if err != nil {
 		return nil, err
 	}
 	today := c.p.Now().Format(dayFmt)
 	overdue := 0
-	var items []siren.Link
 	for _, t := range tasks {
-		title := t.Title
-		if day, ok := dueDay(t); ok {
-			title += " · due " + day
-			if day < today {
-				overdue++
-			}
-		}
-		items = append(items, taskLink(t, title))
-	}
-	add := actions(c.lists)[0]
-	for i := range add.Fields {
-		if add.Fields[i].Name == "list" {
-			add.Fields[i].Value = l.Name
+		if day, ok := dueDay(t); ok && day < today {
+			overdue++
 		}
 	}
-	href := "/lists/" + url.PathEscape(l.ID)
+	sortOpen(tasks)
+	done := siren.Link{Rel: []string{"done"}, Href: listHref(l.ID) + "/done", Title: "Done in this list"}
 	return &siren.Entity{Class: []string{"list"}, Title: l.Name,
-		Properties: map[string]any{"open": len(tasks), "overdue": overdue}, Entities: items,
-		Actions: []siren.Action{add},
-		Links:   []siren.Link{{Rel: []string{"self"}, Href: href, Title: l.Name}, {Rel: []string{"index"}, Href: "/", Title: "TickTick"}}}, nil
+		Properties: map[string]any{"open": len(tasks), "overdue": overdue}, Entities: c.rows(tasks, false),
+		Actions: []siren.Action{c.addTaskWith("list", l.Name)},
+		Links:   c.links(listHref(l.ID), l.Name, nil, done)}, nil
 }
 
-// showDone is the tasks done in the last firstWindow, newest first. A server without the call has none, and says so.
-func (c *catalog) showDone(r *http.Request) (*siren.Entity, error) {
-	e := &siren.Entity{Class: []string{"done"}, Title: "Done",
-		Links: []siren.Link{{Rel: []string{"self"}, Href: "/done", Title: "Done"}, {Rel: []string{"index"}, Href: "/", Title: "TickTick"}}}
-	tasks, err := c.p.TT.Completed(r.Context())
+// finished is a done task and the instant of its completion.
+type finished struct {
+	t  ticktick.Task
+	at time.Time
+}
+
+// recentDone is the tasks done in the last firstWindow, newest first. listID limits them to one list; "" is all. It
+// returns ticktick.ErrNoCompletedEndpoint when the server has no call for done tasks.
+func (c *catalog) recentDone(ctx context.Context, listID string) ([]finished, error) {
+	tasks, err := c.p.TT.Completed(ctx)
+	if err != nil {
+		if errors.Is(err, ticktick.ErrNoCompletedEndpoint) {
+			return nil, err
+		}
+		return nil, c.upstream(err)
+	}
+	since := c.p.Now().Add(-firstWindow)
+	var recent []finished
+	for _, t := range tasks {
+		if at, ok := t.Done(); ok && !at.Before(since) && (listID == "" || t.ProjectID == listID) {
+			recent = append(recent, finished{t, at})
+		}
+	}
+	slices.SortStableFunc(recent, func(a, b finished) int { return b.at.Compare(a.at) })
+	return recent, nil
+}
+
+// doneEntity is a page of done tasks. A server without the call has none, and says so.
+func (c *catalog) doneEntity(ctx context.Context, href, title, listID string) (*siren.Entity, error) {
+	e := &siren.Entity{Class: []string{"done"}, Title: title, Links: c.links(href, title, nil)}
+	recent, err := c.recentDone(ctx, listID)
 	if errors.Is(err, ticktick.ErrNoCompletedEndpoint) {
 		e.Properties = map[string]any{"count": 0, "note": "the server has no list of done tasks"}
 		return e, nil
 	}
 	if err != nil {
-		return nil, c.upstream(err)
+		return nil, err
 	}
-	since := c.p.Now().Add(-firstWindow)
-	type finished struct {
-		t  ticktick.Task
-		at time.Time
-	}
-	var recent []finished
-	for _, t := range tasks {
-		if at, ok := t.Done(); ok && !at.Before(since) {
-			recent = append(recent, finished{t, at})
-		}
-	}
-	slices.SortStableFunc(recent, func(a, b finished) int { return b.at.Compare(a.at) })
 	for _, f := range recent {
-		e.Entities = append(e.Entities, taskLink(f.t, f.at.Format(dayFmt)+" · "+f.t.Title+" · "+c.listName(f.t.ProjectID)))
+		row := c.taskRow(f.t, listID == "")
+		props, _ := row.Properties.(map[string]any)
+		if props == nil {
+			props = map[string]any{}
+		}
+		props["done"] = f.at.Format(dayFmt)
+		row.Properties = props
+		e.Entities = append(e.Entities, row)
 	}
 	e.Properties = map[string]any{"count": len(recent)}
 	return e, nil
+}
+
+// showDone is the tasks done in the last firstWindow, newest first.
+func (c *catalog) showDone(r *http.Request) (*siren.Entity, error) {
+	return c.doneEntity(r.Context(), "/done", "Done", "")
+}
+
+// showListDone is the same for one list.
+func (c *catalog) showListDone(r *http.Request) (*siren.Entity, error) {
+	l, err := c.findList(r)
+	if err != nil {
+		return nil, err
+	}
+	return c.doneEntity(r.Context(), listHref(l.ID)+"/done", "Done · "+l.Name, l.ID)
 }
 
 func (c *catalog) addTask(r *http.Request) (*siren.Entity, error) {
