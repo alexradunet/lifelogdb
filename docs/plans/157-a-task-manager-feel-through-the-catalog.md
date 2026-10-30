@@ -17,6 +17,9 @@
   -shuffle=on ./...`, `go mod tidy -diff` and `staticcheck` clean; in `extensions/whatsapp` `go test -race ./agent/...`
   passed (the sub-agent's run). Not done: screenshots. The session may not start a review server, so nobody has looked
   at the new view in a browser yet; the owner sees it live first. Linux only.
+  Live 2026-10-30: the owner rebuilt `~/.local/bin/lifelog`, `lifelog-ticktick` and `lifelog-whatsapp` and restarted
+  the service at 14:53:14; the log says `with ticktick: a catalog of 3 actions on 127.0.0.1:42919`, and the first poll
+  wrote 0 entries.
 
 ## Context
 
