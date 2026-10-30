@@ -125,7 +125,7 @@ func TestAPlaceholderIsAnExampleInTheDescription(t *testing.T) {
 	}
 	props, _ := list[0].Schema["properties"].(map[string]any)
 	name, _ := props["name"].(map[string]any)
-	if name["description"] != "Name Example: Weight, Mood, Walk." {
+	if name["description"] != "Name Placeholder: Weight, Mood, Walk." {
 		t.Errorf("the description of name: %v", name["description"])
 	}
 	if note, _ := props["note"].(map[string]any); note["description"] != nil || note["examples"] != nil {

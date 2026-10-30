@@ -28,7 +28,7 @@ func listActions(ctx context.Context, e env) error {
 				s = "[" + s + "]"
 			}
 			if f.Placeholder != "" {
-				s += " (e.g. " + f.Placeholder + ")"
+				s += ` ("` + f.Placeholder + `")`
 			}
 			fs = append(fs, s)
 		}

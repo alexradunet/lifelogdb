@@ -109,7 +109,7 @@ func TestActionsShowThePlaceholderAfterTheField(t *testing.T) {
 		if err := runArgs(t.Context(), e, argv); err != nil {
 			t.Fatal(err)
 		}
-		if argv[0] == "actions" && !strings.Contains(stdout.String(), "name (e.g. Weight, Mood, Walk)") {
+		if argv[0] == "actions" && !strings.Contains(stdout.String(), `name ("Weight, Mood, Walk")`) {
 			t.Errorf("the placeholder of name is not shown:\n%s", stdout.String())
 		}
 	}

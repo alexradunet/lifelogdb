@@ -119,7 +119,8 @@ type Action struct {
 // extension) is how many lines a browser draws of a textarea; Pages (an extension) says the value is a page's
 // title, so a browser can offer the names of the pages as it does after [[; Accept (an extension) is what a file
 // field takes, as the accept attribute of a browser's file input ("audio/*");
-// Placeholder (an extension, the name of HAL-FORMS and Ion) is an example of a value, which a client may show in an empty field and may ignore.
+// Placeholder (an extension, the name of HAL-FORMS and Ion) is the words that a client may show in an empty field:
+// an example of a value or a short prompt. A client may ignore it.
 type Field struct {
 	Name        string   `json:"name"`
 	Type        string   `json:"type"`

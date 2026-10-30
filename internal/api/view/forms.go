@@ -57,8 +57,8 @@ func (v *view) shown(a siren.Action) *shownAction {
 // field that the action does not require), "group" names the exclusive group of a boxed form (the browser keeps one form of a name open), "send" (any word) marks the text areas as the ones whose Enter key sends (enterkeyhint), "lead" (any word) makes boxed draw the button as the primary one, "back" is the
 // page the browser returns to after the write (no field of the action: the server reads it, see backOf), "label"
 // ("field=words") gives a field a title in this form only (the score form calls its unit Range), "key"
-// ("field=letter") gives a field its access key (the example text of a field is its Placeholder in the catalog; Prompt
-// replaces it for one form), "required" lists fields
+// ("field=letter") gives a field its access key (the words of an empty field are its Placeholder in the catalog; Prompt
+// replaces them for one form), "required" lists fields
 // that the form requires though the action does not, "pattern" ("field=regexp") is what the browser accepts in a
 // field (a score's range), "aria" is the aria-label of an icon-only
 // button that removes something (the × of a list: the button then has the class remove), and any other name fixes a
@@ -88,7 +88,7 @@ type formView struct {
 	labels        map[string]map[string]string // field name to the words of each of its options (Labels)
 }
 
-// Prompt gives a field the example text that this form shows in its empty box, in place of the catalog's: the unit
+// Prompt gives a field the words that this form shows in its empty box, in place of the catalog's: the unit
 // of a metric is known to the page only.
 func (f *formView) Prompt(field, words string) *formView {
 	if f.prompts == nil {
@@ -274,7 +274,7 @@ func parseFormOptions(pairs []string) (formOptions, error) {
 				perField[name][field] = words
 			}
 		case "placeholder":
-			return formOptions{}, fmt.Errorf("the option placeholder is gone: the example text of a field is its Placeholder in the catalog")
+			return formOptions{}, fmt.Errorf("placeholder is no option: the words of an empty field are its Placeholder in the catalog, or Prompt for one form")
 		case "options":
 			if field, list, ok := strings.Cut(v, "="); ok {
 				o.options[field] = strings.Split(list, ",")
