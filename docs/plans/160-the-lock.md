@@ -8,7 +8,17 @@
 - **Date / baseline:** 2026-10-30, `ff0f1c7` (master).
 - **Priority:** P2. **Effort:** M. **Risk:** LOW for the file: nothing of `schema.sql` changes. MEDIUM for ring 2:
   the browser's cookie changes, so every browser logs in with the token once more.
-- **Status:** APPROVED. The owner approved the plan on 2026-10-30; the answers are below.
+- **Status:** BUILT 2026-10-30, not yet live. Part A `6d43b9e` (the session cookie, the routes, the settings) and its
+  review `107a48e` (a lock kept giving back the wrong-PIN tries; a settings read error counted as a wrong PIN; tests
+  held both faults first); Part B `6f665f3` (the Lock button in the foot of the rail, access key l; `lock.js`; the
+  lock page; `new-password` on the form's password fields). Checks on the merge with master: `go vet ./... && go
+  test ./...`, `go test -count=1 -shuffle=on ./internal/... ./cmd/...`, `staticcheck ./...` (2026.2.2) clean,
+  `govulncheck ./...` no vulnerabilities, `CGO_ENABLED=1 go test -race` on the lock tests of `internal/api`; in
+  `extensions/mcp`, `whatsapp` and `ticktick`: `go vet` and `go test -count=1 ./...` passed. Chromium (Playwright,
+  Linux, a synthetic file): 23 checks passed, with fake time for the idle lock, two tabs, typing that keeps a tab
+  open, Back after a lock, Alt+L on a wide screen, the More sheet on a phone. Not known: whether the prerender of the
+  speculation rules still works under `no-store` (headless Chromium did not prerender, with or without it); a real
+  saved login in the settings form (only the attribute was checked). Linux only.
 
 ## Context
 
