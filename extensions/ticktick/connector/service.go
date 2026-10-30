@@ -399,7 +399,8 @@ func (s *service) edit(r *http.Request) (*siren.Entity, error) {
 	if v, ok := r.PostForm["notes"]; ok {
 		t.Content, sent = v[0], true
 	}
-	if v, ok := r.PostForm["due"]; ok {
+	// A browser form sends every field. The day the task has already keeps its due as it is, with its time.
+	if v, ok := r.PostForm["due"]; ok && v[0] != s.taskOf(t).Due {
 		if err := setDue(&t, v[0]); err != nil {
 			return nil, err
 		}

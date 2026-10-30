@@ -580,7 +580,7 @@ the icon and the pictures), which the CLI and the MCP server do not carry.
 | `client/tools` | the catalog as the functions of a model: a tool for each action that is not the owner's, its JSON Schema from the fields, the arguments flattened to form values; public: the MCP server and the chat agent build their lists from it | its table tests |
 | `extensions/mcp` | its own module, `lifelog-mcp`: the catalog as MCP tools, over HTTP; it imports `lifelog/siren`, `lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and nothing of `lifelog/internal` | `mcp.New` on a fake catalog (`go test ./...` in the folder); `TestTheMCPServerOnTheRealLifelog` builds the real `lifelog` and `lifelog-mcp` and runs `lifelog mcp --agent test` |
 | `extensions/whatsapp` | its own module, `lifelog-whatsapp`: an always-on agent; the owner writes on WhatsApp, a model answers through the action catalog; it imports `lifelog/siren`, `lifelog/client` and `lifelog/client/tools` of the root module (a `replace` directive), and nothing of `lifelog/internal` | the tests of its packages (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog` |
-| `extensions/ticktick` | its own module, `lifelog-ticktick`: TickTick, the first connected app; it polls the done tasks into the day pages as `import:ticktick` and serves a catalog of its own (`ticktick-add-task`, `ticktick-complete-task`, `ticktick-sync`); it imports `lifelog/siren`, `lifelog/client` and `lifelog/app` of the root module (a `replace` directive), and nothing of `lifelog/internal` | the tests of its packages against a fake TickTick (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog` and runs `lifelog serve --with ticktick` |
+| `extensions/ticktick` | its own module, `lifelog-ticktick`: TickTick, the task service ([a task service](extensions/README.md#a-task-service)); it polls the done tasks into the day pages as `import:ticktick` and serves the task protocol, which `lifelog` draws under `/tasks`; it imports `lifelog/siren`, `lifelog/client` and `lifelog/app` of the root module (a `replace` directive), and nothing of `lifelog/internal` | the tests of its packages against a fake TickTick (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog` and runs `lifelog serve --with ticktick` |
 | `extensions/agentic` | its own module, `lifelog-agentic`: `lifelog agentic-init`, the texts and MCP configs for a coding agent opened in the folder of the program; it reads `LIFELOG_EXE` and `LIFELOG_DB`, and imports nothing of `lifelog/internal` | `agentic.Files` and `agentic.Init` on the `Paths` of a temporary folder (`go test ./...` in the folder); `e2e_test.go` builds the real `lifelog`, `lifelog-mcp` and `lifelog-agentic-init` |
 | `internal/scaletest` | the synthetic personas and the lifetime workload of `tools/lifescale`: generators, an oracle and the timed checks | `scaletest.Run` with the profile `small`, in the baseline |
 | `tools/lifescale` | the lifetime and stress runner over `internal/scaletest` ([tests/README.md](tests/README.md)) | `internal/scaletest`: the runner has no test of its own |
@@ -623,9 +623,9 @@ the program `LIFELOG_URL` (the API of the file), `LIFELOG_EXE` and `LIFELOG_DB`.
 - [`extensions/whatsapp`](extensions/whatsapp/README.md): an always-on agent on WhatsApp, `lifelog whatsapp`. It answers
   the owner's number through a model at an OpenAI-compatible endpoint and writes through the catalog as
   `agent:whatsapp`.
-- [`extensions/ticktick`](extensions/ticktick/README.md): TickTick, the first connected app. What you finish in
-  TickTick comes back as a `Done:` entry of its day, once. Its catalog adds `ticktick-add-task`,
-  `ticktick-complete-task` and `ticktick-sync` to every surface. Run it with `lifelog serve --with ticktick`.
+- [`extensions/ticktick`](extensions/ticktick/README.md): TickTick, the task service. What you finish in
+  TickTick comes back as a `Done:` entry of its day, once. It is the task service:
+  `lifelog` draws its tasks under `/tasks`, with `add-task` and the other actions of [Tasks](API.md#tasks). Run it with `lifelog serve --with ticktick`.
 
 ## Engineering references
 

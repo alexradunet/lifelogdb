@@ -364,6 +364,20 @@ func TestEditChangesOnlyTheFieldsThatTheRequestNames(t *testing.T) {
 	}
 }
 
+// A browser form sends every field, the due day too. The same day keeps the due of TickTick as it is, with its time.
+func TestEditWithTheSameDueDayKeepsTheTimeOfTheDue(t *testing.T) {
+	env := newServiceEnv(t)
+	tk := env.tick.add("t1", "p-home", "Call the bank")
+	tk.DueDate, tk.StartDate, tk.TimeZone, tk.IsAllDay = "2030-03-09T14:30:00.000+0000", "2030-03-09T14:30:00.000+0000", "UTC", false
+
+	if _, err := env.do(t, "edit-task", map[string]string{"id": "t1", "title": "Call the bank at 2", "notes": "", "due": "2030-03-09"}); err != nil {
+		t.Fatal(err)
+	}
+	if tk.Title != "Call the bank at 2" || tk.DueDate != "2030-03-09T14:30:00.000+0000" || tk.StartDate != "2030-03-09T14:30:00.000+0000" || tk.IsAllDay {
+		t.Errorf("after an edit with the same due day: %+v, want the new title and the due at 14:30 kept", tk)
+	}
+}
+
 func TestEditWithNoFieldCallsNothing(t *testing.T) {
 	env := newServiceEnv(t)
 	env.tick.add("t1", "p-home", "Pay rent")
