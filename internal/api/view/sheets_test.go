@@ -2,6 +2,8 @@ package view
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/color"
@@ -602,15 +604,37 @@ func TestTheSheetReadsTheSpriteCellsWhereTheyAre(t *testing.T) {
 	}
 }
 
+// TestTheSheetNamesEachPictureByItsVersion: /assets/ serves a picture as immutable for a year, so the sheet names it
+// with ?v= and the first 12 hex digits of the SHA-256 of the embedded file. A new picture has a new address, and a
+// browser that keeps the old one fetches it. Without it, a browser drew the new icon positions on the old icon sheet.
+func TestTheSheetNamesEachPictureByItsVersion(t *testing.T) {
+	refs := regexp.MustCompile(`url\(/assets/([^)?]+)(\?v=[0-9a-f]+)?\)`).FindAllStringSubmatch(string(appCSS), -1)
+	if len(refs) == 0 {
+		t.Fatal("app.css names no picture of /assets/")
+	}
+	for _, m := range refs {
+		b, err := Files.ReadFile("html/" + m[1])
+		if err != nil {
+			t.Errorf("app.css names /assets/%s, which is not an embedded file: %v", m[1], err)
+			continue
+		}
+		sum := sha256.Sum256(b)
+		if want := "?v=" + hex.EncodeToString(sum[:6]); m[2] != want {
+			t.Errorf("url(/assets/%s) has the version %q, want %q", m[1], m[2], want)
+		}
+	}
+}
+
 // TestTheSheetReadsTheIconCellsWhereTheyAre: the same guard for the icon sheet. Each icon has one position at 2 screen
 // pixels a pixel (the span is 20 by 20) and one in a tile at 4 (40 by 40), and the mask sizes are the sheet at those
 // scales.
 func TestTheSheetReadsTheIconCellsWhereTheyAre(t *testing.T) {
 	app := cssComments.ReplaceAllString(string(appCSS), "")
 	n := len(pixelart.IconNames)
+	sheetSum := sha256.Sum256(MustFile("icons.png"))
 	want := []string{
-		fmt.Sprintf("inline-size:%dpx; block-size:%dpx; background-color:currentColor;\n  mask-image:url(/assets/icons.png); mask-size:%dpx %dpx;",
-			pixelart.IconSize*2, pixelart.IconSize*2, n*pixelart.CellSize*2, pixelart.CellSize*2),
+		fmt.Sprintf("inline-size:%dpx; block-size:%dpx; background-color:currentColor;\n  mask-image:url(/assets/icons.png?v=%x); mask-size:%dpx %dpx;",
+			pixelart.IconSize*2, pixelart.IconSize*2, sheetSum[:6], n*pixelart.CellSize*2, pixelart.CellSize*2),
 		fmt.Sprintf(".tile-blank span.icon{inline-size:%dpx; block-size:%dpx; mask-size:%dpx %dpx}",
 			pixelart.IconSize*4, pixelart.IconSize*4, n*pixelart.CellSize*4, pixelart.CellSize*4),
 	}

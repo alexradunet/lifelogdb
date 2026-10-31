@@ -160,6 +160,13 @@ func TestTheManifestAndTheIconAreServed(t *testing.T) {
 		}
 	}
 
+	// The sheet names a picture with its version (?v=); the route reads the path only, and the picture stays public.
+	for name, hh := range map[string]http.Handler{"the local listener": h, "a public listener": pub} {
+		if r := get(hh, "GET", "/assets/icons.png?v=0123456789ab", nil); r.Code != http.StatusOK || r.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: GET /assets/icons.png?v=...: %d %q", name, r.Code, r.Header().Get("Content-Type"))
+		}
+	}
+
 	// The share target: a POST of text to /days/today/capture writes on the local day.
 	// It posts with the enctype that the manifest declares: a phone sends exactly that.
 	req := httptest.NewRequest("POST", m.ShareTarget.Action, strings.NewReader(url.Values{"text": {"Shared from a phone"}}.Encode()))

@@ -7,11 +7,13 @@ package view
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -45,8 +47,22 @@ var Files embed.FS
 // baseCSS and appCSS are the two stylesheets, in that order: the look of ordinary HTML, then this app's own.
 var (
 	baseCSS = template.CSS(MustFile("base.css"))
-	appCSS  = template.CSS(MustFile("app.css"))
+	appCSS  = template.CSS(versioned(MustFile("app.css")))
 )
+
+// assetURL is a picture of app.css: url(/assets/NAME), with NAME a file of html/.
+var assetURL = regexp.MustCompile(`url\(/assets/([a-z0-9-]+\.png)\)`)
+
+// versioned adds ?v= and the first 12 hex digits of the SHA-256 of the file to each picture of a sheet. /assets/
+// serves a picture as immutable for a year at its name, so a new picture needs a new address: without one, a browser
+// draws the positions of a new icon sheet on the old sheet that it keeps. The route reads the path only.
+func versioned(css []byte) string {
+	return assetURL.ReplaceAllStringFunc(string(css), func(u string) string {
+		name := assetURL.FindStringSubmatch(u)[1]
+		sum := sha256.Sum256(MustFile(name))
+		return fmt.Sprintf("url(/assets/%s?v=%x)", name, sum[:6])
+	})
+}
 
 // MustFile is the file of Files that has the name name in html/.
 func MustFile(name string) []byte {
